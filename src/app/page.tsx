@@ -1,4 +1,3 @@
-import type { PostgrestError } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -109,22 +108,105 @@ function withMatchTeams(matches: Row[], teams: Row[]) {
   });
 }
 
-function logSupabaseError(source: string, error: PostgrestError | null) {
+function supabaseEnvDiagnostics() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  return {
+    supabaseUrlExists: Boolean(supabaseUrl),
+    supabaseUrlStartsWithHttps: supabaseUrl?.startsWith("https://") ?? false,
+    supabaseAnonKeyExists: Boolean(supabaseAnonKey),
+    supabaseAnonKeyLength: supabaseAnonKey?.length ?? 0,
+  };
+}
+
+function errorName(error: unknown) {
+  if (error instanceof Error) {
+    return error.name;
+  }
+
+  if (error && typeof error === "object" && "name" in error) {
+    const name = error.name;
+    if (typeof name === "string") {
+      return name;
+    }
+  }
+
+  return "SupabaseError";
+}
+
+function errorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (error && typeof error === "object" && "message" in error) {
+    const message = error.message;
+    if (typeof message === "string") {
+      return message;
+    }
+  }
+
+  return String(error);
+}
+
+function errorCauseMessage(error: unknown) {
+  if (!error || typeof error !== "object" || !("cause" in error)) {
+    return undefined;
+  }
+
+  const cause = error.cause;
+  if (cause instanceof Error) {
+    return cause.message;
+  }
+  if (cause && typeof cause === "object" && "message" in cause) {
+    const message = cause.message;
+    return typeof message === "string" ? message : undefined;
+  }
+  if (typeof cause === "string") {
+    return cause;
+  }
+
+  return undefined;
+}
+
+function logSupabaseError(source: string, error: unknown) {
   if (!error) {
     return;
   }
 
   console.error("Supabase homepage query failed", {
     source,
-    code: error.code,
-    message: error.message,
+    errorName: errorName(error),
+    errorMessage: errorMessage(error),
+    errorCauseMessage: errorCauseMessage(error),
+    ...supabaseEnvDiagnostics(),
   });
+}
+
+async function runSupabaseQuery<T>(
+  source: string,
+  query: PromiseLike<{ data: T[] | null; error: unknown }>,
+) {
+  try {
+    const result = await query;
+    logSupabaseError(source, result.error);
+    return result.data ?? [];
+  } catch (error) {
+    logSupabaseError(source, error);
+    return [];
+  }
 }
 
 async function loadHomeData() {
   const supabase = getSupabase();
 
   if (!supabase) {
+    console.error("Supabase homepage client unavailable", {
+      source: "supabase_client",
+      ...supabaseEnvDiagnostics(),
+    });
+
     return {
       configured: false,
       teams: [] as Row[],
@@ -135,30 +217,30 @@ async function loadHomeData() {
   }
 
   const [teams, allTeams, standings, matches, sponsors] = await Promise.all([
-    supabase.from("teams").select(teamColumns).eq("is_ksw", true),
-    supabase.from("teams").select(teamColumns),
-    supabase.from("league_standings_view").select(standingsColumns),
-    supabase.from("matches").select(matchColumns),
-    supabase
-      .from("sponsors")
-      .select(sponsorColumns)
-      .order("sort_order", { ascending: true, nullsFirst: false }),
+    runSupabaseQuery("teams", supabase.from("teams").select(teamColumns).eq("is_ksw", true)),
+    runSupabaseQuery("teams_all", supabase.from("teams").select(teamColumns)),
+    runSupabaseQuery(
+      "league_standings_view",
+      supabase.from("league_standings_view").select(standingsColumns),
+    ),
+    runSupabaseQuery("matches", supabase.from("matches").select(matchColumns)),
+    runSupabaseQuery(
+      "sponsors",
+      supabase
+        .from("sponsors")
+        .select(sponsorColumns)
+        .order("sort_order", { ascending: true, nullsFirst: false }),
+    ),
   ]);
 
-  logSupabaseError("teams", teams.error);
-  logSupabaseError("teams_all", allTeams.error);
-  logSupabaseError("league_standings_view", standings.error);
-  logSupabaseError("matches", matches.error);
-  logSupabaseError("sponsors", sponsors.error);
-
-  const teamRows = allTeams.data ?? teams.data ?? [];
+  const teamRows = allTeams.length ? allTeams : teams;
 
   return {
     configured: true,
-    teams: teams.data ?? [],
-    standings: standings.data ?? [],
-    matches: sortMatches(withMatchTeams(matches.data ?? [], teamRows)),
-    sponsors: sponsors.data ?? [],
+    teams,
+    standings,
+    matches: sortMatches(withMatchTeams(matches, teamRows)),
+    sponsors,
   };
 }
 
