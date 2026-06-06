@@ -1,65 +1,274 @@
-import Image from "next/image";
+import { getSupabase } from "@/lib/supabase";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+type Row = Record<string, unknown>;
+
+const statColumns = ["P", "W", "D", "L", "GF", "GA", "GD", "PTS"];
+
+function text(row: Row | undefined, keys: string[], fallback = "TBC") {
+  if (!row) {
+    return fallback;
+  }
+
+  for (const key of keys) {
+    const value = row[key];
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+    if (typeof value === "number") {
+      return String(value);
+    }
+  }
+
+  return fallback;
+}
+
+function number(row: Row, keys: string[]) {
+  for (const key of keys) {
+    const value = row[key];
+    if (typeof value === "number") {
+      return value;
+    }
+    if (typeof value === "string" && value.trim() && !Number.isNaN(Number(value))) {
+      return Number(value);
+    }
+  }
+
+  return 0;
+}
+
+function formatMatchDate(value: unknown) {
+  if (typeof value !== "string" || !value) {
+    return "Date TBC";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
+async function loadHomeData() {
+  const supabase = getSupabase();
+
+  if (!supabase) {
+    return {
+      configured: false,
+      teams: [] as Row[],
+      standings: [] as Row[],
+      matches: [] as Row[],
+      sponsors: [] as Row[],
+    };
+  }
+
+  const [teams, standings, matches, sponsors] = await Promise.all([
+    supabase.from("teams").select("*").eq("is_ksw", true),
+    supabase.from("league_standings_view").select("*"),
+    supabase.from("matches").select("*").order("match_date", { ascending: false }),
+    supabase.from("sponsors").select("*"),
+  ]);
+
+  return {
+    configured: true,
+    teams: teams.data ?? [],
+    standings: standings.data ?? [],
+    matches: matches.data ?? [],
+    sponsors: sponsors.data ?? [],
+  };
+}
+
+export default async function Home() {
+  const { configured, teams, standings, matches, sponsors } = await loadHomeData();
+  const club = teams[0];
+
+  const sortedStandings = [...standings].sort((a, b) => {
+    const positionA = number(a, ["position", "pos", "rank"]);
+    const positionB = number(b, ["position", "pos", "rank"]);
+
+    if (positionA || positionB) {
+      return positionA - positionB;
+    }
+
+    return number(b, ["points", "pts"]) - number(a, ["points", "pts"]);
+  });
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <main className="min-h-screen overflow-x-hidden bg-[#061426] text-slate-100">
+      <section className="relative overflow-hidden border-b border-[#d8ad45]/30">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.2),transparent_34%),linear-gradient(135deg,rgba(6,20,38,0.96),rgba(9,31,57,0.88))]" />
+        <div className="relative mx-auto grid min-h-[480px] w-full max-w-7xl items-center gap-8 px-4 py-12 sm:px-6 sm:py-16 md:min-h-[560px] md:grid-cols-[1.1fr_0.9fr] lg:px-10">
+          <div className="min-w-0">
+            <p className="mb-4 text-xs font-bold uppercase tracking-[0.22em] text-[#d8ad45] sm:text-sm sm:tracking-[0.28em]">
+              KSW L.C.
+            </p>
+            <h1 className="max-w-4xl text-4xl font-black leading-[1.03] tracking-tight text-white sm:text-5xl md:text-7xl">
+              Bangkok football with navy steel and gold ambition.
+            </h1>
+            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300 sm:mt-6 sm:text-lg sm:leading-8">
+              Matchdays, standings, results, and club partners from the KSW
+              Supabase data room.
+            </p>
+            {!configured ? (
+              <p className="mt-6 inline-flex max-w-full rounded-md border border-[#d8ad45]/50 bg-[#d8ad45]/10 px-4 py-3 text-sm text-[#f4d58a] sm:mt-8">
+                Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY
+                to load live club data.
+              </p>
+            ) : null}
+          </div>
+
+          <div className="min-w-0 rounded-lg border border-white/10 bg-white/[0.06] p-4 shadow-2xl shadow-black/30 sm:p-6">
+            <div className="flex aspect-square items-center justify-center rounded-md border border-[#d8ad45]/40 bg-[#071b31]">
+              <div className="text-center">
+                <p className="text-6xl font-black text-[#d8ad45] sm:text-8xl">KSW</p>
+                <p className="mt-3 text-xs font-bold uppercase tracking-[0.24em] text-slate-300 sm:text-sm sm:tracking-[0.35em]">
+                  Law Club
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto grid w-full max-w-7xl gap-5 px-4 py-8 sm:px-6 sm:py-10 md:grid-cols-3 lg:px-10">
+        <div className="min-w-0 rounded-lg border border-white/10 bg-white/[0.05] p-5 sm:p-6 md:col-span-1">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#d8ad45] sm:text-sm sm:tracking-[0.22em]">
+            Club
           </p>
+          <h2 className="mt-3 break-words text-2xl font-black text-white sm:text-3xl">
+            {text(club, ["name", "team_name", "club_name"], "KSW L.C.")}
+          </h2>
+          <dl className="mt-6 space-y-4 text-sm text-slate-300">
+            <div>
+              <dt className="font-bold text-slate-500">Home</dt>
+              <dd>{text(club, ["home_ground", "stadium", "venue"], "Bangkok")}</dd>
+            </div>
+            <div>
+              <dt className="font-bold text-slate-500">Founded</dt>
+              <dd>{text(club, ["founded", "founded_year"], "Club data pending")}</dd>
+            </div>
+            <div>
+              <dt className="font-bold text-slate-500">Identity</dt>
+              <dd>{text(club, ["nickname", "description"], "Navy and gold")}</dd>
+            </div>
+          </dl>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        <div className="min-w-0 overflow-hidden rounded-lg border border-white/10 bg-white/[0.05] md:col-span-2">
+          <div className="flex items-center justify-between gap-4 border-b border-white/10 px-4 py-4 sm:px-5">
+            <h2 className="text-xl font-black text-white">League Table</h2>
+            <span className="text-xs font-bold uppercase tracking-[0.2em] text-[#d8ad45]">
+              Live
+            </span>
+          </div>
+          <div className="overflow-x-auto overscroll-x-contain [scrollbar-color:#d8ad45_#081b31]">
+            <table className="w-full min-w-[680px] text-left text-sm">
+              <thead className="bg-[#081b31] text-xs uppercase tracking-wider text-slate-400">
+                <tr>
+                  <th className="px-4 py-3">Pos</th>
+                  <th className="px-4 py-3">Team</th>
+                  {statColumns.map((column) => (
+                    <th key={column} className="px-3 py-3 text-right">
+                      {column}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/10">
+                {sortedStandings.length ? (
+                  sortedStandings.map((row, index) => (
+                    <tr key={text(row, ["id", "team_id", "team_name", "name"], String(index))}>
+                      <td className="px-4 py-4 font-bold text-[#d8ad45]">
+                        {text(row, ["position", "pos", "rank"], String(index + 1))}
+                      </td>
+                      <td className="px-4 py-4 font-bold text-white">
+                        {text(row, ["team_name", "name", "team"])}
+                      </td>
+                      <td className="px-3 py-4 text-right">{number(row, ["played", "p"])}</td>
+                      <td className="px-3 py-4 text-right">{number(row, ["won", "w"])}</td>
+                      <td className="px-3 py-4 text-right">{number(row, ["drawn", "draws", "d"])}</td>
+                      <td className="px-3 py-4 text-right">{number(row, ["lost", "l"])}</td>
+                      <td className="px-3 py-4 text-right">{number(row, ["goals_for", "gf"])}</td>
+                      <td className="px-3 py-4 text-right">{number(row, ["goals_against", "ga"])}</td>
+                      <td className="px-3 py-4 text-right">{number(row, ["goal_difference", "gd"])}</td>
+                      <td className="px-3 py-4 text-right font-black text-white">
+                        {number(row, ["points", "pts"])}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td className="px-4 py-8 text-center text-slate-400" colSpan={10}>
+                      No league table rows available.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </main>
-    </div>
+      </section>
+
+      <section className="mx-auto grid w-full max-w-7xl gap-5 px-4 pb-10 sm:px-6 sm:pb-12 md:grid-cols-[1.4fr_0.6fr] lg:px-10">
+        <div className="min-w-0 rounded-lg border border-white/10 bg-white/[0.05]">
+          <div className="border-b border-white/10 px-4 py-4 sm:px-5">
+            <h2 className="text-xl font-black text-white">Fixtures / Results</h2>
+          </div>
+          <div className="divide-y divide-white/10">
+            {matches.length ? (
+              matches.slice(0, 8).map((match, index) => (
+                <div
+                  className="grid min-w-0 gap-3 px-4 py-4 sm:grid-cols-[120px_1fr_auto] sm:items-center sm:px-5"
+                  key={text(match, ["id", "match_id"], String(index))}
+                >
+                  <p className="text-sm font-bold text-[#d8ad45]">
+                    {formatMatchDate(match.match_date ?? match.date ?? match.kickoff_at)}
+                  </p>
+                  <p className="min-w-0 break-words font-bold text-white">
+                    {text(match, ["home_team", "home_team_name", "opponent"], "KSW L.C.")}{" "}
+                    <span className="text-slate-500">vs</span>{" "}
+                    {text(match, ["away_team", "away_team_name"], "Opponent TBC")}
+                  </p>
+                  <p className="justify-self-start rounded-md bg-[#d8ad45]/10 px-3 py-2 text-center text-sm font-black text-[#f4d58a] sm:justify-self-auto">
+                    {text(match, ["score", "result", "status"], "Fixture")}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="px-4 py-8 text-slate-400 sm:px-5">No fixtures or results available.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="min-w-0 rounded-lg border border-white/10 bg-white/[0.05] p-5">
+          <h2 className="text-xl font-black text-white">Sponsors</h2>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 md:grid-cols-1">
+            {sponsors.length ? (
+              sponsors.map((sponsor, index) => (
+                <div
+                  className="min-w-0 rounded-md border border-[#d8ad45]/20 bg-[#081b31] p-4"
+                  key={text(sponsor, ["id", "name"], String(index))}
+                >
+                  <p className="break-words font-black text-white">
+                    {text(sponsor, ["name", "sponsor_name"])}
+                  </p>
+                  <p className="mt-1 break-words text-sm text-slate-400">
+                    {text(sponsor, ["tier", "category", "description"], "Club partner")}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="text-slate-400">No sponsors available.</p>
+            )}
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }
