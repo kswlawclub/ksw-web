@@ -7,6 +7,13 @@ export const revalidate = 0;
 type Row = Record<string, unknown>;
 
 const statColumns = ["P", "W", "D", "L", "GF", "GA", "GD", "PTS"];
+const teamColumns = "id, name, short_name, logo_url, is_ksw";
+const standingsColumns =
+  "team_id, league_id, team_name, short_name, logo_url, is_ksw, played, won, drawn, lost, goals_for, goals_against, goal_difference, points";
+const matchColumns =
+  "id, league_id, match_date, home_team_id, away_team_id, home_score, away_score, venue, status, match_type";
+const sponsorColumns =
+  "id, name, logo_url, website_url, tier, sort_order, is_active";
 
 function text(row: Row | undefined, keys: string[], fallback = "TBC") {
   if (!row) {
@@ -74,6 +81,34 @@ function sortMatches(matches: Row[]) {
   });
 }
 
+function teamNameById(teams: Row[]) {
+  return new Map(
+    teams.map((team) => [
+      text(team, ["id"], ""),
+      text(team, ["name", "short_name"], "Team TBC"),
+    ]),
+  );
+}
+
+function withMatchTeams(matches: Row[], teams: Row[]) {
+  const names = teamNameById(teams);
+
+  return matches.map((match) => {
+    const homeTeamId = text(match, ["home_team_id"], "");
+    const awayTeamId = text(match, ["away_team_id"], "");
+    const homeScore = match.home_score;
+    const awayScore = match.away_score;
+    const hasScore = typeof homeScore === "number" && typeof awayScore === "number";
+
+    return {
+      ...match,
+      home_team_name: names.get(homeTeamId) ?? "Home team TBC",
+      away_team_name: names.get(awayTeamId) ?? "Away team TBC",
+      score: hasScore ? `${homeScore} - ${awayScore}` : text(match, ["status"], "Fixture"),
+    };
+  });
+}
+
 function logSupabaseError(source: string, error: PostgrestError | null) {
   if (!error) {
     return;
@@ -99,23 +134,30 @@ async function loadHomeData() {
     };
   }
 
-  const [teams, standings, matches, sponsors] = await Promise.all([
-    supabase.from("teams").select("*").eq("is_ksw", true),
-    supabase.from("league_standings_view").select("*"),
-    supabase.from("matches").select("*"),
-    supabase.from("sponsors").select("*"),
+  const [teams, allTeams, standings, matches, sponsors] = await Promise.all([
+    supabase.from("teams").select(teamColumns).eq("is_ksw", true),
+    supabase.from("teams").select(teamColumns),
+    supabase.from("league_standings_view").select(standingsColumns),
+    supabase.from("matches").select(matchColumns),
+    supabase
+      .from("sponsors")
+      .select(sponsorColumns)
+      .order("sort_order", { ascending: true, nullsFirst: false }),
   ]);
 
   logSupabaseError("teams", teams.error);
+  logSupabaseError("teams_all", allTeams.error);
   logSupabaseError("league_standings_view", standings.error);
   logSupabaseError("matches", matches.error);
   logSupabaseError("sponsors", sponsors.error);
+
+  const teamRows = allTeams.data ?? teams.data ?? [];
 
   return {
     configured: true,
     teams: teams.data ?? [],
     standings: standings.data ?? [],
-    matches: sortMatches(matches.data ?? []),
+    matches: sortMatches(withMatchTeams(matches.data ?? [], teamRows)),
     sponsors: sponsors.data ?? [],
   };
 }
