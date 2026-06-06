@@ -1,4 +1,4 @@
-import { getSupabase } from "@/lib/supabase";
+import { getSupabase, getSupabaseConfig } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -109,15 +109,7 @@ function withMatchTeams(matches: Row[], teams: Row[]) {
 }
 
 function supabaseEnvDiagnostics() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  return {
-    supabaseUrlExists: Boolean(supabaseUrl),
-    supabaseUrlStartsWithHttps: supabaseUrl?.startsWith("https://") ?? false,
-    supabaseAnonKeyExists: Boolean(supabaseAnonKey),
-    supabaseAnonKeyLength: supabaseAnonKey?.length ?? 0,
-  };
+  return getSupabaseConfig().diagnostics;
 }
 
 function errorName(error: unknown) {
