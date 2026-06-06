@@ -1,6 +1,8 @@
+import type { PostgrestError } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 type Row = Record<string, unknown>;
 
@@ -55,6 +57,35 @@ function formatMatchDate(value: unknown) {
   }).format(date);
 }
 
+function isString(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function sortMatches(matches: Row[]) {
+  return [...matches].sort((a, b) => {
+    const dateA = new Date(text(a, ["match_date", "date", "kickoff_at"], "")).getTime();
+    const dateB = new Date(text(b, ["match_date", "date", "kickoff_at"], "")).getTime();
+
+    if (Number.isNaN(dateA) || Number.isNaN(dateB)) {
+      return 0;
+    }
+
+    return dateB - dateA;
+  });
+}
+
+function logSupabaseError(source: string, error: PostgrestError | null) {
+  if (!error) {
+    return;
+  }
+
+  console.error("Supabase homepage query failed", {
+    source,
+    code: error.code,
+    message: error.message,
+  });
+}
+
 async function loadHomeData() {
   const supabase = getSupabase();
 
@@ -71,15 +102,20 @@ async function loadHomeData() {
   const [teams, standings, matches, sponsors] = await Promise.all([
     supabase.from("teams").select("*").eq("is_ksw", true),
     supabase.from("league_standings_view").select("*"),
-    supabase.from("matches").select("*").order("match_date", { ascending: false }),
+    supabase.from("matches").select("*"),
     supabase.from("sponsors").select("*"),
   ]);
+
+  logSupabaseError("teams", teams.error);
+  logSupabaseError("league_standings_view", standings.error);
+  logSupabaseError("matches", matches.error);
+  logSupabaseError("sponsors", sponsors.error);
 
   return {
     configured: true,
     teams: teams.data ?? [],
     standings: standings.data ?? [],
-    matches: matches.data ?? [],
+    matches: sortMatches(matches.data ?? []),
     sponsors: sponsors.data ?? [],
   };
 }
@@ -87,6 +123,7 @@ async function loadHomeData() {
 export default async function Home() {
   const { configured, teams, standings, matches, sponsors } = await loadHomeData();
   const club = teams[0];
+  const logoUrl = club?.logo_url;
 
   const sortedStandings = [...standings].sort((a, b) => {
     const positionA = number(a, ["position", "pos", "rank"]);
@@ -109,11 +146,13 @@ export default async function Home() {
               KSW L.C.
             </p>
             <h1 className="max-w-4xl text-4xl font-black leading-[1.03] tracking-tight text-white sm:text-5xl md:text-7xl">
-              Bangkok football with navy steel and gold ambition.
+              KSW L.C.
             </h1>
+            <p className="mt-4 max-w-2xl text-xl font-bold leading-7 text-[#f4d58a] sm:text-2xl">
+              Khlong Sam Wa Lawyers Club
+            </p>
             <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300 sm:mt-6 sm:text-lg sm:leading-8">
-              Matchdays, standings, results, and club partners from the KSW
-              Supabase data room.
+              Football community of legal professionals.
             </p>
             {!configured ? (
               <p className="mt-6 inline-flex max-w-full rounded-md border border-[#d8ad45]/50 bg-[#d8ad45]/10 px-4 py-3 text-sm text-[#f4d58a] sm:mt-8">
@@ -125,12 +164,21 @@ export default async function Home() {
 
           <div className="min-w-0 rounded-lg border border-white/10 bg-white/[0.06] p-4 shadow-2xl shadow-black/30 sm:p-6">
             <div className="flex aspect-square items-center justify-center rounded-md border border-[#d8ad45]/40 bg-[#071b31]">
-              <div className="text-center">
-                <p className="text-6xl font-black text-[#d8ad45] sm:text-8xl">KSW</p>
-                <p className="mt-3 text-xs font-bold uppercase tracking-[0.24em] text-slate-300 sm:text-sm sm:tracking-[0.35em]">
-                  Law Club
-                </p>
-              </div>
+              {isString(logoUrl) ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  alt="KSW L.C. logo"
+                  className="h-full max-h-72 w-full object-contain p-6"
+                  src={logoUrl}
+                />
+              ) : (
+                <div className="text-center">
+                  <p className="text-6xl font-black text-[#d8ad45] sm:text-8xl">KSW</p>
+                  <p className="mt-3 text-xs font-bold uppercase tracking-[0.24em] text-slate-300 sm:text-sm sm:tracking-[0.35em]">
+                    Law Club
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
