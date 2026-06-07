@@ -369,17 +369,18 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="relative overflow-hidden border-b border-white/10 bg-gradient-to-br from-[#081b31] via-[#0b2745] to-[#061426]">
-        <div className="absolute inset-y-0 right-0 w-1/2 bg-[radial-gradient(circle_at_center,rgba(155,28,31,0.16),transparent_55%)]" />
-        <div className="relative mx-auto grid w-full max-w-7xl gap-8 px-4 py-12 sm:px-6 md:grid-cols-[1.18fr_0.82fr] lg:px-10">
+      <section className="relative overflow-hidden border-b border-slate-200 bg-[#f6f2ea] shadow-inner shadow-slate-900/5">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#d8ad45]/55 to-transparent" />
+        <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
+        <div className="grid gap-8 rounded-lg border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-900/10 sm:p-7 md:grid-cols-[1.18fr_0.82fr]">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#d8ad45]">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">
               ABOUT KSW
             </p>
-            <h2 className="mt-3 max-w-5xl text-2xl font-black leading-snug text-white sm:text-3xl lg:text-4xl lg:whitespace-nowrap">
+            <h2 className="mt-3 max-w-5xl text-2xl font-black leading-snug text-[#061426] sm:text-3xl lg:text-4xl lg:whitespace-nowrap">
               สโมสรฟุตบอลนักกฎหมายคลองสามวา
             </h2>
-            <p className="mt-5 max-w-3xl text-base leading-8 text-slate-300">
+            <p className="mt-5 max-w-3xl text-base leading-8 text-slate-700">
               KSW L.C. คือพื้นที่ของนักกฎหมายที่รักฟุตบอล ใช้กีฬาเป็นสะพานเชื่อมมิตรภาพ
               เครือข่ายวิชาชีพ กิจกรรมเพื่อสังคม และการแข่งขันในรายการของวงการทนายความ
             </p>
@@ -392,16 +393,17 @@ export default async function Home() {
             ].map(([value, label]) => (
               <div
                 key={label}
-                className="rounded-lg border border-[#d8ad45]/20 bg-gradient-to-br from-[#123153]/80 to-white/[0.04] p-4 shadow-lg shadow-black/15 backdrop-blur"
+                className="rounded-lg border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4 shadow-lg shadow-slate-900/5"
               >
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#d8ad45]">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#d8ad45]">
                   KSW
                 </p>
-                <p className="mt-2 text-2xl font-black text-white">{value}</p>
-                <p className="mt-1 text-sm font-semibold text-slate-300">{label}</p>
+                <p className="mt-2 text-2xl font-black text-[#061426]">{value}</p>
+                <p className="mt-1 text-sm font-semibold text-slate-600">{label}</p>
               </div>
             ))}
           </div>
+        </div>
         </div>
       </section>
 
