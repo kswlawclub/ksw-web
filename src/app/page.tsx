@@ -339,18 +339,18 @@ export default async function Home() {
             ) : null}
           </div>
 
-          <div className="mx-auto flex aspect-[0.98] w-full max-w-xs min-w-0 items-center justify-center rounded-lg bg-white p-4 shadow-2xl shadow-black/35 sm:max-w-sm sm:p-5 md:max-w-md">
+          <div className="mx-auto flex w-full max-w-xs min-w-0 items-center justify-center sm:max-w-sm md:max-w-md">
               {isString(logoUrl) ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   alt="KSW L.C. logo"
-                  className="h-full max-h-[360px] w-full object-contain"
+                  className="max-h-[360px] w-full object-contain drop-shadow-[0_18px_45px_rgba(216,173,69,0.22)]"
                   src={logoUrl}
                 />
               ) : (
                 <div className="text-center">
-                  <p className="text-7xl font-black text-[#061426] sm:text-9xl">KSW</p>
-                  <p className="mt-3 text-xs font-bold uppercase tracking-[0.24em] text-[#9b1c1f] sm:text-sm sm:tracking-[0.35em]">
+                  <p className="text-7xl font-black text-[#d8ad45] drop-shadow-[0_18px_45px_rgba(216,173,69,0.25)] sm:text-9xl">KSW</p>
+                  <p className="mt-3 text-xs font-bold uppercase tracking-[0.24em] text-slate-300 sm:text-sm sm:tracking-[0.35em]">
                     Law Club
                   </p>
                 </div>
@@ -359,23 +359,37 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="mx-auto grid w-full max-w-7xl gap-4 px-4 py-8 sm:grid-cols-2 sm:px-6 md:grid-cols-4 lg:px-10">
-        {[
-          ["Founded", "2019"],
-          ["Home", "Bangkok"],
-          ["Members", "50+"],
-          ["League", "Thai Lawyers League Season 6"],
-        ].map(([label, value]) => (
-          <div
-            key={label}
-            className="rounded-lg border border-[#d8ad45]/20 bg-gradient-to-br from-[#0c2744] to-[#123153] p-5 shadow-lg shadow-black/15"
-          >
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#d8ad45]">
-              {label}
+      <section className="relative overflow-hidden border-b border-white/10 bg-gradient-to-br from-[#081b31] via-[#0b2745] to-[#061426]">
+        <div className="absolute inset-y-0 right-0 w-1/2 bg-[radial-gradient(circle_at_center,rgba(155,28,31,0.16),transparent_55%)]" />
+        <div className="relative mx-auto grid w-full max-w-7xl gap-8 px-4 py-10 sm:px-6 md:grid-cols-[1.1fr_0.9fr] lg:px-10">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#d8ad45]">
+              KSW Club Identity
             </p>
-            <p className="mt-3 text-lg font-black text-white">{value}</p>
+            <h2 className="mt-3 max-w-3xl text-3xl font-black leading-tight text-white sm:text-4xl">
+              KSW L.C. คือชุมชนฟุตบอลของนักกฎหมาย
+            </h2>
+            <p className="mt-5 max-w-3xl text-base leading-8 text-slate-300">
+              ชมรมทนายความคลองสามวาไม่ได้เป็นเพียงทีมฟุตบอล แต่เป็นพื้นที่ของมิตรภาพ
+              เครือข่ายวิชาชีพ และการแข่งขันที่เชื่อมโยงนักกฎหมายเข้าด้วยกัน
+            </p>
           </div>
-        ))}
+          <div className="grid gap-3 sm:grid-cols-3 md:grid-cols-1">
+            {[
+              ["2019", "ก่อตั้งชมรม"],
+              ["50+", "สมาชิกในเครือข่าย"],
+              ["Season 6", "เข้าร่วม Thai Lawyers League"],
+            ].map(([value, label]) => (
+              <div
+                key={label}
+                className="rounded-lg border border-[#d8ad45]/20 bg-white/[0.07] p-4 shadow-lg shadow-black/15"
+              >
+                <p className="text-2xl font-black text-white">{value}</p>
+                <p className="mt-1 text-sm font-semibold text-slate-300">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
       <section className="bg-slate-100">
