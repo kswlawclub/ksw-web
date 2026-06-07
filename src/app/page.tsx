@@ -481,16 +481,12 @@ export default async function Home() {
             <table className="w-full table-fixed text-left text-xs sm:text-sm">
               <thead className="bg-[#081b31] text-[10px] uppercase tracking-wider text-slate-400 sm:text-xs">
                 <tr>
-                  <th className="w-10 px-2 py-3 sm:w-14 sm:px-4">Pos</th>
-                  <th className="px-2 py-3 sm:px-4">Team</th>
+                  <th className="w-8 px-1 py-3 sm:w-14 sm:px-4">Pos</th>
+                  <th className="px-1 py-3 sm:px-4">Team</th>
                   {statColumns.map((column) => (
                     <th
                       key={column}
-                      className={`w-10 px-1.5 py-3 text-right sm:w-11 sm:px-3 ${
-                        column === "W" || column === "D" || column === "L"
-                          ? "hidden sm:table-cell"
-                          : ""
-                      } ${
+                      className={`w-7 px-1 py-3 text-right sm:w-11 sm:px-3 ${
                         column === "GF" || column === "GA" ? "hidden md:table-cell" : ""
                       }`}
                     >
@@ -507,32 +503,36 @@ export default async function Home() {
                       key={text(row, ["id", "team_id", "team_name", "name"], String(index))}
                     >
                       <td
-                        className={`px-2 py-3 font-bold sm:px-4 ${
+                        className={`px-1 py-3 font-bold sm:px-4 ${
                           index < 3 ? "text-[#f4d58a]" : "text-slate-300"
                         }`}
                       >
                         {index + 1}
                       </td>
-                      <td className="min-w-0 px-2 py-3 text-white sm:px-4">
-                        <div className="flex min-w-0 items-center gap-2">
+                      <td className="min-w-0 px-1 py-3 text-white sm:px-4">
+                        <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
                           <TeamLogo
+                            className="size-[22px] sm:size-7 md:size-8"
                             initials={teamInitials(row)}
                             logoUrl={text(row, ["logo_url"], "")}
                             teamName={text(row, ["team_name", "name", "team"])}
                           />
-                          <span className="min-w-0 truncate font-bold leading-5">
+                          <span className="min-w-0 truncate font-bold leading-5 sm:hidden">
+                            {text(row, ["short_name"], teamInitials(row))}
+                          </span>
+                          <span className="hidden min-w-0 truncate font-bold leading-5 sm:inline">
                             {text(row, ["team_name", "name", "team"])}
                           </span>
                         </div>
                       </td>
-                      <td className="px-1.5 py-3 text-right sm:px-3">{number(row, ["played", "p"])}</td>
-                      <td className="hidden px-1.5 py-3 text-right sm:table-cell sm:px-3">{number(row, ["won", "w"])}</td>
-                      <td className="hidden px-1.5 py-3 text-right sm:table-cell sm:px-3">{number(row, ["drawn", "draws", "d"])}</td>
-                      <td className="hidden px-1.5 py-3 text-right sm:table-cell sm:px-3">{number(row, ["lost", "l"])}</td>
-                      <td className="hidden px-1.5 py-3 text-right md:table-cell sm:px-3">{number(row, ["goals_for", "gf"])}</td>
-                      <td className="hidden px-1.5 py-3 text-right md:table-cell sm:px-3">{number(row, ["goals_against", "ga"])}</td>
-                      <td className="px-1.5 py-3 text-right sm:px-3">{number(row, ["goal_difference", "gd"])}</td>
-                      <td className="px-1.5 py-3 text-right font-black text-white sm:px-3">
+                      <td className="px-1 py-3 text-right sm:px-3">{number(row, ["played", "p"])}</td>
+                      <td className="px-1 py-3 text-right sm:px-3">{number(row, ["won", "w"])}</td>
+                      <td className="px-1 py-3 text-right sm:px-3">{number(row, ["drawn", "draws", "d"])}</td>
+                      <td className="px-1 py-3 text-right sm:px-3">{number(row, ["lost", "l"])}</td>
+                      <td className="hidden px-1 py-3 text-right md:table-cell sm:px-3">{number(row, ["goals_for", "gf"])}</td>
+                      <td className="hidden px-1 py-3 text-right md:table-cell sm:px-3">{number(row, ["goals_against", "ga"])}</td>
+                      <td className="px-1 py-3 text-right sm:px-3">{number(row, ["goal_difference", "gd"])}</td>
+                      <td className="px-1 py-3 text-right font-black text-white sm:px-3">
                         {number(row, ["points", "pts"])}
                       </td>
                     </tr>
