@@ -1,3 +1,4 @@
+import { TeamLogo } from "@/components/team-logo";
 import { getSupabase, getSupabaseConfig } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -65,6 +66,20 @@ function formatMatchDate(value: unknown) {
 
 function isString(value: unknown) {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function teamInitials(row: Row) {
+  const shortName = text(row, ["short_name"], "");
+  if (shortName) {
+    return shortName.slice(0, 3).toUpperCase();
+  }
+
+  return text(row, ["team_name", "name", "team"], "FC")
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 3)
+    .toUpperCase();
 }
 
 function sortMatches(matches: Row[]) {
@@ -242,14 +257,18 @@ export default async function Home() {
   const logoUrl = club?.logo_url;
 
   const sortedStandings = [...standings].sort((a, b) => {
-    const positionA = number(a, ["position", "pos", "rank"]);
-    const positionB = number(b, ["position", "pos", "rank"]);
+    const pointsDiff = number(b, ["points", "pts"]) - number(a, ["points", "pts"]);
+    if (pointsDiff) return pointsDiff;
 
-    if (positionA || positionB) {
-      return positionA - positionB;
-    }
+    const goalDiff = number(b, ["goal_difference", "gd"]) - number(a, ["goal_difference", "gd"]);
+    if (goalDiff) return goalDiff;
 
-    return number(b, ["points", "pts"]) - number(a, ["points", "pts"]);
+    const goalsForDiff = number(b, ["goals_for", "gf"]) - number(a, ["goals_for", "gf"]);
+    if (goalsForDiff) return goalsForDiff;
+
+    return text(a, ["team_name", "name", "team"]).localeCompare(
+      text(b, ["team_name", "name", "team"]),
+    );
   });
 
   return (
@@ -347,12 +366,32 @@ export default async function Home() {
               <tbody className="divide-y divide-white/10">
                 {sortedStandings.length ? (
                   sortedStandings.map((row, index) => (
-                    <tr key={text(row, ["id", "team_id", "team_name", "name"], String(index))}>
+                    <tr
+                      className={`cursor-pointer border-l-4 transition-colors hover:bg-white/[0.08] ${
+                        row.is_ksw === true
+                          ? "border-l-[#d8ad45] bg-[#d8ad45]/10"
+                          : "border-l-transparent"
+                      }`}
+                      key={text(row, ["id", "team_id", "team_name", "name"], String(index))}
+                    >
                       <td className="px-4 py-4 font-bold text-[#d8ad45]">
-                        {text(row, ["position", "pos", "rank"], String(index + 1))}
+                        {index + 1}
                       </td>
-                      <td className="px-4 py-4 font-bold text-white">
-                        {text(row, ["team_name", "name", "team"])}
+                      <td className="px-4 py-4 text-white">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <TeamLogo
+                            initials={teamInitials(row)}
+                            logoUrl={text(row, ["logo_url"], "")}
+                            teamName={text(row, ["team_name", "name", "team"])}
+                          />
+                          <span
+                            className={`min-w-0 truncate ${
+                              row.is_ksw === true ? "font-black" : "font-bold"
+                            }`}
+                          >
+                            {text(row, ["team_name", "name", "team"])}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-3 py-4 text-right">{number(row, ["played", "p"])}</td>
                       <td className="px-3 py-4 text-right">{number(row, ["won", "w"])}</td>
