@@ -320,16 +320,10 @@ export default async function Home() {
       awayTeam: findLeagueTeam(["ทนายความกรุงเทพ BKK Lawyer", "BKK"]),
     },
     {
-      homeName: "ทนายความมหานคร",
-      awayName: "ทนายความกรุงเทพ BKK Lawyer",
-      homeTeam: findLeagueTeam(["ทนายความมหานคร"]),
-      awayTeam: findLeagueTeam(["ทนายความกรุงเทพ BKK Lawyer", "BKK"]),
-    },
-    {
-      homeName: "สโมสรทนายความจังหวัดชลบุรี",
-      awayName: "ทนายเมืองชล",
-      homeTeam: findLeagueTeam(["สโมสรทนายความจังหวัดชลบุรี", "CHON"]),
-      awayTeam: findLeagueTeam(["ทนายเมืองชล"]),
+      homeName: "KSW L.C.",
+      awayName: "TBC",
+      homeTeam: findLeagueTeam(["KSW L.C.", "KSW"]),
+      awayTeam: undefined,
     },
   ];
 
@@ -551,13 +545,17 @@ export default async function Home() {
                         teamInitials(fixture.awayTeam ?? { team_name: fixture.awayName }),
                       )}
                     </span>
-                    <TeamLogo
-                      initials={teamInitials(
-                        fixture.awayTeam ?? { team_name: fixture.awayName },
-                      )}
-                      logoUrl={text(fixture.awayTeam, ["logo_url"], "")}
-                      teamName={fixture.awayName}
-                    />
+                    {fixture.awayTeam ? (
+                      <TeamLogo
+                        initials={teamInitials(fixture.awayTeam)}
+                        logoUrl={text(fixture.awayTeam, ["logo_url"], "")}
+                        teamName={fixture.awayName}
+                      />
+                    ) : (
+                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-slate-300 bg-slate-100 text-[10px] font-black text-slate-500 sm:size-7 md:size-8">
+                        TBC
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
