@@ -344,20 +344,30 @@ export default async function Home() {
         </div>
 
         <div className="min-w-0 overflow-hidden rounded-lg border border-white/10 bg-white/[0.05] md:col-span-2">
-          <div className="flex items-center justify-between gap-4 border-b border-white/10 px-4 py-4 sm:px-5">
-            <h2 className="text-xl font-black text-white">League Table</h2>
+          <div className="flex items-center justify-between gap-4 border-b border-white/10 px-4 py-3 sm:px-5">
+            <div>
+              <h2 className="text-xl font-black text-white">League Table</h2>
+              <p className="mt-1 text-xs font-semibold text-slate-400">
+                Thai Lawyers League Season 6
+              </p>
+            </div>
             <span className="text-xs font-bold uppercase tracking-[0.2em] text-[#d8ad45]">
               Live
             </span>
           </div>
           <div className="overflow-x-auto overscroll-x-contain [scrollbar-color:#d8ad45_#081b31]">
-            <table className="w-full min-w-[680px] text-left text-sm">
+            <table className="w-full min-w-[560px] text-left text-sm sm:min-w-[680px]">
               <thead className="bg-[#081b31] text-xs uppercase tracking-wider text-slate-400">
                 <tr>
-                  <th className="px-4 py-3">Pos</th>
-                  <th className="px-4 py-3">Team</th>
+                  <th className="px-3 py-3 sm:px-4">Pos</th>
+                  <th className="px-3 py-3 sm:px-4">Team</th>
                   {statColumns.map((column) => (
-                    <th key={column} className="px-3 py-3 text-right">
+                    <th
+                      key={column}
+                      className={`px-2 py-3 text-right sm:px-3 ${
+                        column === "GF" || column === "GA" ? "hidden sm:table-cell" : ""
+                      }`}
+                    >
                       {column}
                     </th>
                   ))}
@@ -367,40 +377,36 @@ export default async function Home() {
                 {sortedStandings.length ? (
                   sortedStandings.map((row, index) => (
                     <tr
-                      className={`cursor-pointer border-l-4 transition-colors hover:bg-white/[0.08] ${
-                        row.is_ksw === true
-                          ? "border-l-[#d8ad45] bg-[#d8ad45]/10"
-                          : "border-l-transparent"
-                      }`}
+                      className="cursor-pointer transition-colors hover:bg-white/[0.08]"
                       key={text(row, ["id", "team_id", "team_name", "name"], String(index))}
                     >
-                      <td className="px-4 py-4 font-bold text-[#d8ad45]">
+                      <td
+                        className={`px-3 py-3 font-bold sm:px-4 ${
+                          index < 3 ? "text-[#f4d58a]" : "text-slate-300"
+                        }`}
+                      >
                         {index + 1}
                       </td>
-                      <td className="px-4 py-4 text-white">
-                        <div className="flex min-w-0 items-center gap-3">
+                      <td className="max-w-[250px] px-3 py-3 text-white sm:max-w-none sm:px-4">
+                        <div className="flex min-w-0 items-center gap-2.5">
                           <TeamLogo
                             initials={teamInitials(row)}
                             logoUrl={text(row, ["logo_url"], "")}
                             teamName={text(row, ["team_name", "name", "team"])}
                           />
-                          <span
-                            className={`min-w-0 truncate ${
-                              row.is_ksw === true ? "font-black" : "font-bold"
-                            }`}
-                          >
+                          <span className="min-w-0 truncate font-bold leading-5">
                             {text(row, ["team_name", "name", "team"])}
                           </span>
                         </div>
                       </td>
-                      <td className="px-3 py-4 text-right">{number(row, ["played", "p"])}</td>
-                      <td className="px-3 py-4 text-right">{number(row, ["won", "w"])}</td>
-                      <td className="px-3 py-4 text-right">{number(row, ["drawn", "draws", "d"])}</td>
-                      <td className="px-3 py-4 text-right">{number(row, ["lost", "l"])}</td>
-                      <td className="px-3 py-4 text-right">{number(row, ["goals_for", "gf"])}</td>
-                      <td className="px-3 py-4 text-right">{number(row, ["goals_against", "ga"])}</td>
-                      <td className="px-3 py-4 text-right">{number(row, ["goal_difference", "gd"])}</td>
-                      <td className="px-3 py-4 text-right font-black text-white">
+                      <td className="px-2 py-3 text-right sm:px-3">{number(row, ["played", "p"])}</td>
+                      <td className="px-2 py-3 text-right sm:px-3">{number(row, ["won", "w"])}</td>
+                      <td className="px-2 py-3 text-right sm:px-3">{number(row, ["drawn", "draws", "d"])}</td>
+                      <td className="px-2 py-3 text-right sm:px-3">{number(row, ["lost", "l"])}</td>
+                      <td className="hidden px-2 py-3 text-right sm:table-cell sm:px-3">{number(row, ["goals_for", "gf"])}</td>
+                      <td className="hidden px-2 py-3 text-right sm:table-cell sm:px-3">{number(row, ["goals_against", "ga"])}</td>
+                      <td className="px-2 py-3 text-right sm:px-3">{number(row, ["goal_difference", "gd"])}</td>
+                      <td className="px-2 py-3 text-right font-black text-white sm:px-3">
                         {number(row, ["points", "pts"])}
                       </td>
                     </tr>
