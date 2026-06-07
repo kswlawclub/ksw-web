@@ -297,6 +297,41 @@ export default async function Home() {
       text(b, ["team_name", "name", "team"]),
     );
   });
+  const latestResults = matches
+    .filter(
+      (match) =>
+        typeof match.home_score === "number" && typeof match.away_score === "number",
+    )
+    .slice(0, 6);
+  const findLeagueTeam = (names: string[]) =>
+    leagueTeams.find((team) => {
+      const teamName = text(team, ["team_name", "name", "team"], "");
+      const shortName = text(team, ["short_name"], "");
+
+      return names.some(
+        (name) => teamName === name || teamName.includes(name) || shortName === name,
+      );
+    });
+  const mockFixtures = [
+    {
+      homeName: "KSW L.C.",
+      awayName: "Lawyer All Stars",
+      homeTeam: findLeagueTeam(["KSW L.C.", "KSW"]),
+      awayTeam: findLeagueTeam(["Lawyer All Stars", "LAS"]),
+    },
+    {
+      homeName: "ทนายความมหานคร",
+      awayName: "ทนายความกรุงเทพ BKK Lawyer",
+      homeTeam: findLeagueTeam(["ทนายความมหานคร"]),
+      awayTeam: findLeagueTeam(["ทนายความกรุงเทพ BKK Lawyer", "BKK"]),
+    },
+    {
+      homeName: "สโมสรทนายความจังหวัดชลบุรี",
+      awayName: "ทนายเมืองชล",
+      homeTeam: findLeagueTeam(["สโมสรทนายความจังหวัดชลบุรี", "CHON"]),
+      awayTeam: findLeagueTeam(["ทนายเมืองชล"]),
+    },
+  ];
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#061426] text-slate-100">
@@ -411,11 +446,11 @@ export default async function Home() {
         <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
         <div className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
           <div className="border-b border-slate-200 px-4 py-4 sm:px-5">
-            <h2 className="text-xl font-black text-[#061426]">Latest Result / Fixtures</h2>
+            <h2 className="text-xl font-black text-[#061426]">Latest Results</h2>
           </div>
           <div className="divide-y divide-slate-200">
-            {matches.length ? (
-              matches.slice(0, 8).map((match, index) => (
+            {latestResults.length ? (
+              latestResults.map((match, index) => (
                 <div
                   className="grid min-w-0 gap-3 px-4 py-4 transition-colors hover:bg-slate-50 sm:px-5"
                   key={text(match, ["id", "match_id"], String(index))}
@@ -457,8 +492,76 @@ export default async function Home() {
                 </div>
               ))
             ) : (
-              <p className="px-4 py-8 text-slate-600 sm:px-5">No fixtures or results available.</p>
+              <p className="px-4 py-8 text-slate-600 sm:px-5">No finished results available.</p>
             )}
+          </div>
+        </div>
+        <div className="mt-6 min-w-0 rounded-lg border border-dashed border-[#d8ad45]/55 bg-[#fffdf7] shadow-xl shadow-slate-900/10">
+          <div className="border-b border-dashed border-[#d8ad45]/40 px-4 py-4 sm:px-5">
+            <h2 className="text-xl font-black text-[#061426]">Next Fixtures</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Upcoming match schedule will be confirmed soon.
+            </p>
+          </div>
+          <div className="divide-y divide-dashed divide-[#d8ad45]/30">
+            {mockFixtures.map((fixture) => (
+              <div
+                className="grid min-w-0 gap-3 px-4 py-4 transition-colors hover:bg-[#fff8e3]/50 sm:px-5"
+                key={`${fixture.homeName}-${fixture.awayName}`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-[#9b1c1f]">
+                    To be announced
+                  </p>
+                  <span className="rounded-full border border-[#d8ad45]/45 bg-[#fff8e3] px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-[#061426]">
+                    TBC
+                  </span>
+                </div>
+                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_64px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_78px_minmax(0,1fr)] sm:gap-4">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <TeamLogo
+                      initials={teamInitials(
+                        fixture.homeTeam ?? { team_name: fixture.homeName },
+                      )}
+                      logoUrl={text(fixture.homeTeam, ["logo_url"], "")}
+                      teamName={fixture.homeName}
+                    />
+                    <span className="min-w-0 truncate text-sm font-bold leading-5 text-[#061426] sm:hidden">
+                      {text(
+                        fixture.homeTeam,
+                        ["short_name"],
+                        teamInitials(fixture.homeTeam ?? { team_name: fixture.homeName }),
+                      )}
+                    </span>
+                    <span className="hidden min-w-0 text-wrap text-base font-bold leading-5 text-[#061426] sm:inline">
+                      {fixture.homeName}
+                    </span>
+                  </div>
+                  <div className="rounded-md border border-[#d8ad45]/45 bg-white px-2 py-2 text-center text-sm font-black text-[#061426] shadow-sm sm:text-base">
+                    VS
+                  </div>
+                  <div className="flex min-w-0 items-center justify-end gap-2.5 text-right">
+                    <span className="hidden min-w-0 text-wrap text-base font-bold leading-5 text-[#061426] sm:inline">
+                      {fixture.awayName}
+                    </span>
+                    <span className="min-w-0 truncate text-sm font-bold leading-5 text-[#061426] sm:hidden">
+                      {text(
+                        fixture.awayTeam,
+                        ["short_name"],
+                        teamInitials(fixture.awayTeam ?? { team_name: fixture.awayName }),
+                      )}
+                    </span>
+                    <TeamLogo
+                      initials={teamInitials(
+                        fixture.awayTeam ?? { team_name: fixture.awayName },
+                      )}
+                      logoUrl={text(fixture.awayTeam, ["logo_url"], "")}
+                      teamName={fixture.awayName}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
         </div>
