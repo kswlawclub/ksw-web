@@ -82,6 +82,16 @@ function teamInitials(row: Row) {
     .toUpperCase();
 }
 
+function initialsFromName(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 3)
+    .toUpperCase();
+}
+
 function sortMatches(matches: Row[]) {
   return [...matches].sort((a, b) => {
     const dateA = new Date(text(a, ["match_date", "date", "kickoff_at"], "")).getTime();
@@ -329,13 +339,13 @@ export default async function Home() {
             ) : null}
           </div>
 
-          <div className="min-w-0 rounded-lg border border-white/10 bg-white/[0.06] p-4 shadow-2xl shadow-black/30 sm:p-6">
-            <div className="flex aspect-square items-center justify-center rounded-md border border-[#d8ad45]/40 bg-[#071b31]">
+          <div className="mx-auto w-full max-w-sm min-w-0 rounded-lg border border-[#d8ad45]/25 bg-white/[0.08] p-3 shadow-2xl shadow-black/30 sm:p-5 md:max-w-md">
+            <div className="flex aspect-[1.08] items-center justify-center rounded-md border border-[#d8ad45]/40 bg-gradient-to-br from-[#071b31] to-[#123153] p-5">
               {isString(logoUrl) ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   alt="KSW L.C. logo"
-                  className="h-full max-h-72 w-full object-contain p-6"
+                  className="max-h-64 w-full object-contain"
                   src={logoUrl}
                 />
               ) : (
@@ -355,10 +365,13 @@ export default async function Home() {
         {[
           ["Founded", "2019"],
           ["Home", "Bangkok"],
-          ["Identity", "Navy / Gold / Legal Football Community"],
+          ["Members", "50+"],
           ["League", "Thai Lawyers League Season 6"],
         ].map(([label, value]) => (
-          <div key={label} className="rounded-lg border border-white/10 bg-white/[0.05] p-5">
+          <div
+            key={label}
+            className="rounded-lg border border-[#d8ad45]/20 bg-gradient-to-br from-[#0c2744] to-[#123153] p-5 shadow-lg shadow-black/15"
+          >
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#d8ad45]">
               {label}
             </p>
@@ -367,16 +380,17 @@ export default async function Home() {
         ))}
       </section>
 
-      <section className="mx-auto w-full max-w-7xl px-4 pb-8 sm:px-6 lg:px-10">
-        <div className="min-w-0 rounded-lg border border-white/10 bg-white/[0.05]">
-          <div className="border-b border-white/10 px-4 py-4 sm:px-5">
-            <h2 className="text-xl font-black text-white">Latest Result / Fixtures</h2>
+      <section className="bg-slate-100">
+        <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
+        <div className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
+          <div className="border-b border-slate-200 px-4 py-4 sm:px-5">
+            <h2 className="text-xl font-black text-[#061426]">Latest Result / Fixtures</h2>
           </div>
-          <div className="divide-y divide-white/10">
+          <div className="divide-y divide-slate-200">
             {matches.length ? (
               matches.slice(0, 8).map((match, index) => (
                 <div
-                  className="grid min-w-0 gap-3 px-4 py-4 transition-colors hover:bg-white/[0.06] sm:px-5"
+                  className="grid min-w-0 gap-3 px-4 py-4 transition-colors hover:bg-slate-50 sm:px-5"
                   key={text(match, ["id", "match_id"], String(index))}
                 >
                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#d8ad45]">
@@ -392,7 +406,7 @@ export default async function Home() {
                         logoUrl={text(match, ["home_team_logo_url"], "")}
                         teamName={text(match, ["home_team_name"])}
                       />
-                      <span className="min-w-0 text-wrap text-sm font-bold leading-5 text-white sm:text-base">
+                      <span className="min-w-0 text-wrap text-sm font-bold leading-5 text-[#061426] sm:text-base">
                         {text(match, ["home_team_name"])}
                       </span>
                     </div>
@@ -400,7 +414,7 @@ export default async function Home() {
                       {text(match, ["score"], "VS")}
                     </div>
                     <div className="flex min-w-0 items-center justify-end gap-2.5 text-right">
-                      <span className="min-w-0 text-wrap text-sm font-bold leading-5 text-white sm:text-base">
+                      <span className="min-w-0 text-wrap text-sm font-bold leading-5 text-[#061426] sm:text-base">
                         {text(match, ["away_team_name"])}
                       </span>
                       <TeamLogo
@@ -416,9 +430,10 @@ export default async function Home() {
                 </div>
               ))
             ) : (
-              <p className="px-4 py-8 text-slate-400 sm:px-5">No fixtures or results available.</p>
+              <p className="px-4 py-8 text-slate-600 sm:px-5">No fixtures or results available.</p>
             )}
           </div>
+        </div>
         </div>
       </section>
 
@@ -504,12 +519,13 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-7xl px-4 pb-8 sm:px-6 lg:px-10">
-        <div className="rounded-lg border border-white/10 bg-white/[0.05] p-5">
+      <section className="bg-[#e9eef4]">
+        <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="text-xl font-black text-white">League Teams</h2>
-              <p className="mt-1 text-sm text-slate-400">13 clubs across the legal football community.</p>
+              <h2 className="text-xl font-black text-[#061426]">League Teams</h2>
+              <p className="mt-1 text-sm text-slate-600">13 clubs across the legal football community.</p>
             </div>
           </div>
           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
@@ -517,8 +533,8 @@ export default async function Home() {
               <div
                 className={`min-w-0 rounded-lg border p-4 ${
                   team.is_ksw === true
-                    ? "border-[#d8ad45]/60 bg-[#d8ad45]/10 sm:col-span-2"
-                    : "border-white/10 bg-[#081b31]"
+                    ? "border-[#d8ad45]/60 bg-[#fff7df] sm:col-span-2"
+                    : "border-slate-200 bg-slate-50"
                 }`}
                 key={text(team, ["team_id", "id", "team_name"], String(index))}
               >
@@ -528,7 +544,7 @@ export default async function Home() {
                     logoUrl={text(team, ["logo_url"], "")}
                     teamName={text(team, ["team_name", "name", "team"])}
                   />
-                  <p className="min-w-0 text-wrap text-sm font-black leading-5 text-white">
+                  <p className="min-w-0 text-wrap text-sm font-black leading-5 text-[#061426]">
                     {text(team, ["team_name", "name", "team"])}
                   </p>
                 </div>
@@ -536,33 +552,52 @@ export default async function Home() {
             ))}
           </div>
         </div>
+        </div>
       </section>
 
-      <section id="sponsors" className="mx-auto w-full max-w-7xl px-4 pb-12 sm:px-6 lg:px-10">
-        <div className="min-w-0 rounded-lg border border-white/10 bg-white/[0.05] p-5">
-          <h2 className="text-xl font-black text-white">Sponsors</h2>
-          <p className="mt-2 text-sm text-[#f4d58a]">
-            ร่วมเป็นส่วนหนึ่งของชุมชนฟุตบอลนักกฎหมาย
+      <section id="sponsors" className="bg-gradient-to-br from-[#071b31] via-[#0b2745] to-[#061426]">
+        <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
+        <div className="min-w-0 rounded-lg border border-[#d8ad45]/25 bg-white/[0.07] p-6 shadow-2xl shadow-black/30">
+          <h2 className="text-2xl font-black text-white">Partners & Supporters</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#f4d58a]">
+            พื้นที่สนับสนุนแบรนด์ที่ต้องการเติบโตไปกับชุมชนฟุตบอลนักกฎหมาย
           </p>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 md:grid-cols-1">
-            {sponsors.length ? (
-              sponsors.map((sponsor, index) => (
+          <div className="mt-7 grid grid-cols-3 gap-4 sm:grid-cols-4 lg:grid-cols-6">
+            {Array.from({ length: 12 }).map((_, index) => {
+              const sponsor = sponsors[index];
+              const sponsorName = text(sponsor, ["name", "sponsor_name"], "SPONSOR");
+              const sponsorLogo = text(sponsor, ["logo_url"], "");
+
+              return (
                 <div
-                  className="min-w-0 rounded-md border border-[#d8ad45]/20 bg-[#081b31] p-4"
+                  className="flex aspect-square items-center justify-center rounded-full border border-[#d8ad45]/30 bg-white p-3 text-center shadow-lg shadow-black/20"
                   key={text(sponsor, ["id", "name"], String(index))}
                 >
-                  <p className="break-words font-black text-white">
-                    {text(sponsor, ["name", "sponsor_name"])}
-                  </p>
-                  <p className="mt-1 break-words text-sm text-slate-400">
-                    {text(sponsor, ["tier", "category", "description"], "Club partner")}
-                  </p>
+                  {isString(sponsorLogo) ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      alt={`${sponsorName} logo`}
+                      className="max-h-full max-w-full object-contain"
+                      src={sponsorLogo}
+                    />
+                  ) : (
+                    <span className="text-[10px] font-black uppercase tracking-wide text-[#061426] sm:text-xs">
+                      {sponsor ? initialsFromName(sponsorName) || "SPONSOR" : "SPONSOR"}
+                    </span>
+                  )}
                 </div>
-              ))
-            ) : (
-              <p className="text-slate-400">No sponsors available.</p>
-            )}
+              );
+            })}
           </div>
+          <div className="mt-8">
+            <a
+              className="inline-flex items-center justify-center rounded-md bg-[#d8ad45] px-5 py-3 text-sm font-black text-[#061426] transition-colors hover:bg-[#f4d58a]"
+              href="mailto:partners@kswlc.com"
+            >
+              Become a KSW Partner
+            </a>
+          </div>
+        </div>
         </div>
       </section>
     </main>
