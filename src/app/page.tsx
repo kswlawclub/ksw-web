@@ -302,10 +302,10 @@ export default async function Home() {
     <main className="min-h-screen overflow-x-hidden bg-[#061426] text-slate-100">
       <section className="relative overflow-hidden border-b border-[#d8ad45]/30">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.2),transparent_34%),linear-gradient(135deg,rgba(6,20,38,0.96),rgba(9,31,57,0.88))]" />
-        <div className="relative mx-auto grid min-h-[540px] w-full max-w-7xl items-center gap-8 px-4 py-12 sm:px-6 sm:py-16 md:grid-cols-[1.08fr_0.92fr] lg:px-10">
+        <div className="relative mx-auto grid min-h-[500px] w-full max-w-7xl items-center gap-8 px-4 py-10 sm:px-6 sm:py-12 md:grid-cols-[1.12fr_0.88fr] lg:px-10">
           <div className="min-w-0">
             <p className="mb-4 text-xs font-bold uppercase tracking-[0.22em] text-[#d8ad45] sm:text-sm sm:tracking-[0.28em]">
-              Khlong Sam Wa Lawyers Club
+              KHLONG SAM WA LAWYERS CLUB
             </p>
             <h1 className="max-w-4xl text-4xl font-black leading-[1.03] tracking-tight text-white sm:text-5xl md:text-7xl">
               KSW L.C.
@@ -314,10 +314,10 @@ export default async function Home() {
               Khlong Sam Wa Lawyers Club
             </p>
             <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300 sm:mt-6 sm:text-lg sm:leading-8">
-              ชมรมทนายความคลองสามวา พื้นที่รวมตัวของนักกฎหมายที่รักฟุตบอล
-              มิตรภาพ และการแข่งขัน
+              ชมรมฟุตบอลของนักกฎหมายที่รวมมิตรภาพ เครือข่ายวิชาชีพ
+              และจิตวิญญาณการแข่งขันไว้ในสนามเดียวกัน
             </p>
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <a
                 className="inline-flex items-center justify-center rounded-md bg-[#d8ad45] px-5 py-3 text-sm font-black text-[#061426] transition-colors hover:bg-[#f4d58a]"
                 href="#league-table"
@@ -328,7 +328,7 @@ export default async function Home() {
                 className="inline-flex items-center justify-center rounded-md border border-[#d8ad45]/50 px-5 py-3 text-sm font-black text-[#f4d58a] transition-colors hover:bg-[#d8ad45]/10"
                 href="#sponsors"
               >
-                Become a Sponsor
+                Partner With KSW
               </a>
             </div>
             {!configured ? (
@@ -339,17 +339,17 @@ export default async function Home() {
             ) : null}
           </div>
 
-          <div className="mx-auto flex w-full max-w-xs min-w-0 items-center justify-center sm:max-w-sm md:max-w-md">
+          <div className="mx-auto flex w-full max-w-[17rem] min-w-0 items-center justify-center sm:max-w-xs md:max-w-sm">
               {isString(logoUrl) ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   alt="KSW L.C. logo"
-                  className="max-h-[360px] w-full object-contain drop-shadow-[0_18px_45px_rgba(216,173,69,0.22)]"
+                  className="max-h-[305px] w-full object-contain drop-shadow-[0_18px_40px_rgba(216,173,69,0.2)]"
                   src={logoUrl}
                 />
               ) : (
                 <div className="text-center">
-                  <p className="text-7xl font-black text-[#d8ad45] drop-shadow-[0_18px_45px_rgba(216,173,69,0.25)] sm:text-9xl">KSW</p>
+                  <p className="text-6xl font-black text-[#d8ad45] drop-shadow-[0_18px_40px_rgba(216,173,69,0.22)] sm:text-8xl">KSW</p>
                   <p className="mt-3 text-xs font-bold uppercase tracking-[0.24em] text-slate-300 sm:text-sm sm:tracking-[0.35em]">
                     Law Club
                   </p>
@@ -361,30 +361,33 @@ export default async function Home() {
 
       <section className="relative overflow-hidden border-b border-white/10 bg-gradient-to-br from-[#081b31] via-[#0b2745] to-[#061426]">
         <div className="absolute inset-y-0 right-0 w-1/2 bg-[radial-gradient(circle_at_center,rgba(155,28,31,0.16),transparent_55%)]" />
-        <div className="relative mx-auto grid w-full max-w-7xl gap-8 px-4 py-10 sm:px-6 md:grid-cols-[1.1fr_0.9fr] lg:px-10">
+        <div className="relative mx-auto grid w-full max-w-7xl gap-8 px-4 py-8 sm:px-6 md:grid-cols-[1.18fr_0.82fr] lg:px-10">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#d8ad45]">
-              KSW Club Identity
+              ABOUT KSW
             </p>
-            <h2 className="mt-3 max-w-3xl text-3xl font-black leading-tight text-white sm:text-4xl">
-              KSW L.C. คือชุมชนฟุตบอลของนักกฎหมาย
+            <h2 className="mt-3 max-w-5xl text-2xl font-black leading-snug text-white sm:text-3xl lg:text-4xl lg:whitespace-nowrap">
+              สโมสรฟุตบอลนักกฎหมายคลองสามวา
             </h2>
             <p className="mt-5 max-w-3xl text-base leading-8 text-slate-300">
-              ชมรมทนายความคลองสามวาไม่ได้เป็นเพียงทีมฟุตบอล แต่เป็นพื้นที่ของมิตรภาพ
-              เครือข่ายวิชาชีพ และการแข่งขันที่เชื่อมโยงนักกฎหมายเข้าด้วยกัน
+              KSW L.C. คือพื้นที่ของนักกฎหมายที่รักฟุตบอล ใช้กีฬาเป็นสะพานเชื่อมมิตรภาพ
+              เครือข่ายวิชาชีพ กิจกรรมเพื่อสังคม และการแข่งขันในรายการของวงการทนายความ
             </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3 md:grid-cols-1">
+          <div className="grid gap-3 md:grid-cols-1">
             {[
               ["2019", "ก่อตั้งชมรม"],
               ["50+", "สมาชิกในเครือข่าย"],
-              ["Season 6", "เข้าร่วม Thai Lawyers League"],
+              ["13", "ทีมในลีกการแข่งขัน"],
             ].map(([value, label]) => (
               <div
                 key={label}
-                className="rounded-lg border border-[#d8ad45]/20 bg-white/[0.07] p-4 shadow-lg shadow-black/15"
+                className="rounded-lg border border-[#d8ad45]/20 bg-gradient-to-br from-white/[0.09] to-white/[0.04] p-4 shadow-lg shadow-black/15"
               >
-                <p className="text-2xl font-black text-white">{value}</p>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#d8ad45]">
+                  KSW
+                </p>
+                <p className="mt-2 text-2xl font-black text-white">{value}</p>
                 <p className="mt-1 text-sm font-semibold text-slate-300">{label}</p>
               </div>
             ))}
