@@ -339,24 +339,22 @@ export default async function Home() {
             ) : null}
           </div>
 
-          <div className="mx-auto w-full max-w-sm min-w-0 rounded-lg border border-[#d8ad45]/25 bg-white/[0.08] p-3 shadow-2xl shadow-black/30 sm:p-5 md:max-w-md">
-            <div className="flex aspect-[1.08] items-center justify-center rounded-md border border-[#d8ad45]/40 bg-gradient-to-br from-[#071b31] to-[#123153] p-5">
+          <div className="mx-auto flex aspect-[0.98] w-full max-w-xs min-w-0 items-center justify-center rounded-lg bg-white p-4 shadow-2xl shadow-black/35 sm:max-w-sm sm:p-5 md:max-w-md">
               {isString(logoUrl) ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   alt="KSW L.C. logo"
-                  className="max-h-64 w-full object-contain"
+                  className="h-full max-h-[360px] w-full object-contain"
                   src={logoUrl}
                 />
               ) : (
                 <div className="text-center">
-                  <p className="text-6xl font-black text-[#d8ad45] sm:text-8xl">KSW</p>
-                  <p className="mt-3 text-xs font-bold uppercase tracking-[0.24em] text-slate-300 sm:text-sm sm:tracking-[0.35em]">
+                  <p className="text-7xl font-black text-[#061426] sm:text-9xl">KSW</p>
+                  <p className="mt-3 text-xs font-bold uppercase tracking-[0.24em] text-[#9b1c1f] sm:text-sm sm:tracking-[0.35em]">
                     Law Club
                   </p>
                 </div>
               )}
-            </div>
           </div>
         </div>
       </section>
@@ -393,7 +391,7 @@ export default async function Home() {
                   className="grid min-w-0 gap-3 px-4 py-4 transition-colors hover:bg-slate-50 sm:px-5"
                   key={text(match, ["id", "match_id"], String(index))}
                 >
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#d8ad45]">
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-[#9b1c1f]">
                     {formatMatchDate(match.match_date ?? match.date ?? match.kickoff_at)}
                   </p>
                   <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_64px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_78px_minmax(0,1fr)] sm:gap-4">
@@ -410,7 +408,7 @@ export default async function Home() {
                         {text(match, ["home_team_name"])}
                       </span>
                     </div>
-                    <div className="rounded-md border border-[#d8ad45]/30 bg-[#d8ad45]/10 px-2 py-2 text-center text-sm font-black text-[#f4d58a] sm:text-base">
+                    <div className="rounded-md border border-[#d8ad45]/45 bg-[#fff8e3] px-2 py-2 text-center text-sm font-black text-[#061426] shadow-sm sm:text-base">
                       {text(match, ["score"], "VS")}
                     </div>
                     <div className="flex min-w-0 items-center justify-end gap-2.5 text-right">
@@ -531,11 +529,7 @@ export default async function Home() {
           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
             {leagueTeams.map((team, index) => (
               <div
-                className={`min-w-0 rounded-lg border p-4 ${
-                  team.is_ksw === true
-                    ? "border-[#d8ad45]/60 bg-[#fff7df] sm:col-span-2"
-                    : "border-slate-200 bg-slate-50"
-                }`}
+                className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-[#d8ad45]/50 hover:bg-white"
                 key={text(team, ["team_id", "id", "team_name"], String(index))}
               >
                 <div className="flex min-w-0 items-center gap-3">
@@ -557,12 +551,12 @@ export default async function Home() {
 
       <section id="sponsors" className="bg-gradient-to-br from-[#071b31] via-[#0b2745] to-[#061426]">
         <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
-        <div className="min-w-0 rounded-lg border border-[#d8ad45]/25 bg-white/[0.07] p-6 shadow-2xl shadow-black/30">
+        <div className="min-w-0 rounded-lg border border-[#d8ad45]/25 bg-white/[0.08] p-6 shadow-2xl shadow-black/30 sm:p-8">
           <h2 className="text-2xl font-black text-white">Partners & Supporters</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#f4d58a]">
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-200">
             พื้นที่สนับสนุนแบรนด์ที่ต้องการเติบโตไปกับชุมชนฟุตบอลนักกฎหมาย
           </p>
-          <div className="mt-7 grid grid-cols-3 gap-4 sm:grid-cols-4 lg:grid-cols-6">
+          <div className="mt-8 grid grid-cols-3 gap-4 sm:grid-cols-4 sm:gap-5 lg:grid-cols-6">
             {Array.from({ length: 12 }).map((_, index) => {
               const sponsor = sponsors[index];
               const sponsorName = text(sponsor, ["name", "sponsor_name"], "SPONSOR");
@@ -570,7 +564,7 @@ export default async function Home() {
 
               return (
                 <div
-                  className="flex aspect-square items-center justify-center rounded-full border border-[#d8ad45]/30 bg-white p-3 text-center shadow-lg shadow-black/20"
+                  className="flex aspect-square items-center justify-center rounded-full border border-[#d8ad45]/25 bg-white p-3 text-center shadow-lg shadow-black/25 ring-1 ring-white/10"
                   key={text(sponsor, ["id", "name"], String(index))}
                 >
                   {isString(sponsorLogo) ? (
