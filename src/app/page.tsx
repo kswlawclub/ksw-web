@@ -300,9 +300,20 @@ export default async function Home() {
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#061426] text-slate-100">
+      <style>
+        {`
+          @keyframes kswFloat {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+          }
+          .ksw-float-logo {
+            animation: kswFloat 7s ease-in-out infinite;
+          }
+        `}
+      </style>
       <section className="relative overflow-hidden border-b border-[#d8ad45]/30">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.2),transparent_34%),linear-gradient(135deg,rgba(6,20,38,0.96),rgba(9,31,57,0.88))]" />
-        <div className="relative mx-auto grid min-h-[500px] w-full max-w-7xl items-center gap-8 px-4 py-10 sm:px-6 sm:py-12 md:grid-cols-[1.12fr_0.88fr] lg:px-10">
+        <div className="relative mx-auto grid min-h-[540px] w-full max-w-7xl items-center gap-8 px-4 py-10 sm:px-6 sm:py-14 md:grid-cols-[1.12fr_0.88fr] lg:px-10">
           <div className="min-w-0">
             <p className="mb-4 text-xs font-bold uppercase tracking-[0.22em] text-[#d8ad45] sm:text-sm sm:tracking-[0.28em]">
               KHLONG SAM WA LAWYERS CLUB
@@ -310,22 +321,21 @@ export default async function Home() {
             <h1 className="max-w-4xl text-4xl font-black leading-[1.03] tracking-tight text-white sm:text-5xl md:text-7xl">
               KSW L.C.
             </h1>
-            <p className="mt-4 max-w-2xl text-xl font-bold leading-7 text-[#f4d58a] sm:text-2xl">
-              Khlong Sam Wa Lawyers Club
+            <p className="mt-4 max-w-2xl text-lg font-black uppercase leading-7 tracking-wide text-[#f4d58a] sm:text-2xl">
+              WHERE LAWYERS PLAY BEYOND THE COURTROOM
             </p>
             <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300 sm:mt-6 sm:text-lg sm:leading-8">
-              ชมรมฟุตบอลของนักกฎหมายที่รวมมิตรภาพ เครือข่ายวิชาชีพ
-              และจิตวิญญาณการแข่งขันไว้ในสนามเดียวกัน
+              ชุมชนฟุตบอลนักกฎหมายที่รวมการแข่งขัน มิตรภาพ และเครือข่ายวิชาชีพไว้ในสนามเดียวกัน
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <a
-                className="inline-flex items-center justify-center rounded-md bg-[#d8ad45] px-5 py-3 text-sm font-black text-[#061426] transition-colors hover:bg-[#f4d58a]"
+                className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/15 transition-transform hover:scale-[1.02]"
                 href="#league-table"
               >
                 View League Table
               </a>
               <a
-                className="inline-flex items-center justify-center rounded-md border border-[#d8ad45]/50 px-5 py-3 text-sm font-black text-[#f4d58a] transition-colors hover:bg-[#d8ad45]/10"
+                className="inline-flex items-center justify-center rounded-md border border-[#d8ad45]/50 bg-white/[0.03] px-5 py-3 text-sm font-black text-[#f4d58a] backdrop-blur transition-colors hover:bg-[#d8ad45]/10"
                 href="#sponsors"
               >
                 Partner With KSW
@@ -339,12 +349,12 @@ export default async function Home() {
             ) : null}
           </div>
 
-          <div className="mx-auto flex w-full max-w-[17rem] min-w-0 items-center justify-center sm:max-w-xs md:max-w-sm">
+          <div className="ksw-float-logo mx-auto flex w-full max-w-[17rem] min-w-0 items-center justify-center sm:max-w-xs md:max-w-sm">
               {isString(logoUrl) ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   alt="KSW L.C. logo"
-                  className="max-h-[305px] w-full object-contain drop-shadow-[0_18px_40px_rgba(216,173,69,0.2)]"
+                  className="max-h-[305px] w-full object-contain drop-shadow-[0_22px_48px_rgba(216,173,69,0.28)]"
                   src={logoUrl}
                 />
               ) : (
@@ -361,7 +371,7 @@ export default async function Home() {
 
       <section className="relative overflow-hidden border-b border-white/10 bg-gradient-to-br from-[#081b31] via-[#0b2745] to-[#061426]">
         <div className="absolute inset-y-0 right-0 w-1/2 bg-[radial-gradient(circle_at_center,rgba(155,28,31,0.16),transparent_55%)]" />
-        <div className="relative mx-auto grid w-full max-w-7xl gap-8 px-4 py-8 sm:px-6 md:grid-cols-[1.18fr_0.82fr] lg:px-10">
+        <div className="relative mx-auto grid w-full max-w-7xl gap-8 px-4 py-12 sm:px-6 md:grid-cols-[1.18fr_0.82fr] lg:px-10">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#d8ad45]">
               ABOUT KSW
@@ -382,7 +392,7 @@ export default async function Home() {
             ].map(([value, label]) => (
               <div
                 key={label}
-                className="rounded-lg border border-[#d8ad45]/20 bg-gradient-to-br from-white/[0.09] to-white/[0.04] p-4 shadow-lg shadow-black/15"
+                className="rounded-lg border border-[#d8ad45]/20 bg-gradient-to-br from-[#123153]/80 to-white/[0.04] p-4 shadow-lg shadow-black/15 backdrop-blur"
               >
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#d8ad45]">
                   KSW
@@ -546,11 +556,12 @@ export default async function Home() {
           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
             {leagueTeams.map((team, index) => (
               <div
-                className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-[#d8ad45]/50 hover:bg-white"
+                className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4 shadow-sm transition-all duration-300 hover:scale-[1.03] hover:border-[#d8ad45]/60 hover:bg-white hover:shadow-xl hover:shadow-slate-900/10"
                 key={text(team, ["team_id", "id", "team_name"], String(index))}
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <TeamLogo
+                    className="size-7 sm:size-8 md:size-9"
                     initials={teamInitials(team)}
                     logoUrl={text(team, ["logo_url"], "")}
                     teamName={text(team, ["team_name", "name", "team"])}
@@ -573,15 +584,18 @@ export default async function Home() {
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-200">
             พื้นที่สนับสนุนแบรนด์ที่ต้องการเติบโตไปกับชุมชนฟุตบอลนักกฎหมาย
           </p>
-          <div className="mt-8 grid grid-cols-3 gap-4 sm:grid-cols-4 sm:gap-5 lg:grid-cols-6">
+          <div className="mt-8 grid grid-cols-3 items-center gap-4 sm:grid-cols-4 sm:gap-5 lg:grid-cols-6">
             {Array.from({ length: 12 }).map((_, index) => {
               const sponsor = sponsors[index];
               const sponsorName = text(sponsor, ["name", "sponsor_name"], "SPONSOR");
               const sponsorLogo = text(sponsor, ["logo_url"], "");
+              const isPrimaryRow = index < 6;
 
               return (
                 <div
-                  className="flex aspect-square items-center justify-center rounded-full border border-[#d8ad45]/25 bg-white p-3 text-center shadow-lg shadow-black/25 ring-1 ring-white/10"
+                  className={`flex aspect-square items-center justify-center rounded-full border border-[#d8ad45]/25 bg-white text-center shadow-lg shadow-black/25 ring-1 ring-white/10 transition-all duration-300 hover:scale-105 hover:border-[#d8ad45]/70 hover:shadow-[#d8ad45]/20 ${
+                    isPrimaryRow ? "p-3.5 sm:p-4" : "scale-90 p-3 opacity-90"
+                  }`}
                   key={text(sponsor, ["id", "name"], String(index))}
                 >
                   {isString(sponsorLogo) ? (
