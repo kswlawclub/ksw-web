@@ -315,9 +315,9 @@ export default async function Home() {
   const mockFixtures = [
     {
       homeName: "KSW L.C.",
-      awayName: "Lawyer All Stars",
+      awayName: "ทนายความกรุงเทพ BKK Lawyer",
       homeTeam: findLeagueTeam(["KSW L.C.", "KSW"]),
-      awayTeam: findLeagueTeam(["Lawyer All Stars", "LAS"]),
+      awayTeam: findLeagueTeam(["ทนายความกรุงเทพ BKK Lawyer", "BKK"]),
     },
     {
       homeName: "ทนายความมหานคร",
