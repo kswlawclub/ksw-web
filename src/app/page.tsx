@@ -95,30 +95,40 @@ function sortMatches(matches: Row[]) {
   });
 }
 
-function teamNameById(teams: Row[]) {
+function teamById(teams: Row[]) {
   return new Map(
     teams.map((team) => [
       text(team, ["id"], ""),
-      text(team, ["name", "short_name"], "Team TBC"),
+      {
+        name: text(team, ["name", "short_name"], "Team TBC"),
+        shortName: text(team, ["short_name"], ""),
+        logoUrl: text(team, ["logo_url"], ""),
+      },
     ]),
   );
 }
 
 function withMatchTeams(matches: Row[], teams: Row[]) {
-  const names = teamNameById(teams);
+  const teamsById = teamById(teams);
 
   return matches.map((match) => {
     const homeTeamId = text(match, ["home_team_id"], "");
     const awayTeamId = text(match, ["away_team_id"], "");
+    const homeTeam = teamsById.get(homeTeamId);
+    const awayTeam = teamsById.get(awayTeamId);
     const homeScore = match.home_score;
     const awayScore = match.away_score;
     const hasScore = typeof homeScore === "number" && typeof awayScore === "number";
 
     return {
       ...match,
-      home_team_name: names.get(homeTeamId) ?? "Home team TBC",
-      away_team_name: names.get(awayTeamId) ?? "Away team TBC",
-      score: hasScore ? `${homeScore} - ${awayScore}` : text(match, ["status"], "Fixture"),
+      home_team_name: homeTeam?.name ?? "Home team TBC",
+      home_team_short_name: homeTeam?.shortName ?? "",
+      home_team_logo_url: homeTeam?.logoUrl ?? "",
+      away_team_name: awayTeam?.name ?? "Away team TBC",
+      away_team_short_name: awayTeam?.shortName ?? "",
+      away_team_logo_url: awayTeam?.logoUrl ?? "",
+      score: hasScore ? `${homeScore} - ${awayScore}` : "VS",
     };
   });
 }
@@ -433,20 +443,43 @@ export default async function Home() {
             {matches.length ? (
               matches.slice(0, 8).map((match, index) => (
                 <div
-                  className="grid min-w-0 gap-3 px-4 py-4 sm:grid-cols-[120px_1fr_auto] sm:items-center sm:px-5"
+                  className="grid min-w-0 gap-3 px-4 py-4 transition-colors hover:bg-white/[0.06] sm:px-5"
                   key={text(match, ["id", "match_id"], String(index))}
                 >
-                  <p className="text-sm font-bold text-[#d8ad45]">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#d8ad45]">
                     {formatMatchDate(match.match_date ?? match.date ?? match.kickoff_at)}
                   </p>
-                  <p className="min-w-0 break-words font-bold text-white">
-                    {text(match, ["home_team", "home_team_name", "opponent"], "KSW L.C.")}{" "}
-                    <span className="text-slate-500">vs</span>{" "}
-                    {text(match, ["away_team", "away_team_name"], "Opponent TBC")}
-                  </p>
-                  <p className="justify-self-start rounded-md bg-[#d8ad45]/10 px-3 py-2 text-center text-sm font-black text-[#f4d58a] sm:justify-self-auto">
-                    {text(match, ["score", "result", "status"], "Fixture")}
-                  </p>
+                  <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_64px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_78px_minmax(0,1fr)] sm:gap-4">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <TeamLogo
+                        initials={teamInitials({
+                          short_name: text(match, ["home_team_short_name"], ""),
+                          team_name: text(match, ["home_team_name"]),
+                        })}
+                        logoUrl={text(match, ["home_team_logo_url"], "")}
+                        teamName={text(match, ["home_team_name"])}
+                      />
+                      <span className="min-w-0 text-wrap text-sm font-bold leading-5 text-white sm:text-base">
+                        {text(match, ["home_team_name"])}
+                      </span>
+                    </div>
+                    <div className="rounded-md border border-[#d8ad45]/30 bg-[#d8ad45]/10 px-2 py-2 text-center text-sm font-black text-[#f4d58a] sm:text-base">
+                      {text(match, ["score"], "VS")}
+                    </div>
+                    <div className="flex min-w-0 items-center justify-end gap-2.5 text-right">
+                      <span className="min-w-0 text-wrap text-sm font-bold leading-5 text-white sm:text-base">
+                        {text(match, ["away_team_name"])}
+                      </span>
+                      <TeamLogo
+                        initials={teamInitials({
+                          short_name: text(match, ["away_team_short_name"], ""),
+                          team_name: text(match, ["away_team_name"]),
+                        })}
+                        logoUrl={text(match, ["away_team_logo_url"], "")}
+                        teamName={text(match, ["away_team_name"])}
+                      />
+                    </div>
+                  </div>
                 </div>
               ))
             ) : (
