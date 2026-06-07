@@ -686,23 +686,66 @@ export default async function Home() {
 
       <section id="sponsors" className="bg-gradient-to-br from-[#071b31] via-[#0b2745] to-[#061426]">
         <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
-        <div className="min-w-0 rounded-lg border border-[#d8ad45]/25 bg-white/[0.08] p-6 shadow-2xl shadow-black/30 sm:p-8">
-          <h2 className="text-2xl font-black text-white">Partners & Supporters</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-200">
-            พื้นที่สนับสนุนแบรนด์ที่ต้องการเติบโตไปกับชุมชนฟุตบอลนักกฎหมาย
+        <div className="min-w-0 rounded-lg border border-[#d8ad45]/25 bg-white/[0.08] p-6 shadow-2xl shadow-black/30 backdrop-blur sm:p-8">
+          <div className="grid gap-8 lg:grid-cols-[0.92fr_1.08fr] lg:items-start">
+          <div>
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]">
+            KSW Partnership
           </p>
-          <div className="mt-8 grid grid-cols-3 items-center gap-4 sm:grid-cols-4 sm:gap-5 lg:grid-cols-6">
+          <h2 className="mt-3 text-3xl font-black text-white">Partners & Supporters</h2>
+          <p className="mt-4 max-w-xl text-sm leading-7 text-slate-200">
+            สนับสนุน KSW L.C. คือการเป็นส่วนหนึ่งของชุมชนฟุตบอลนักกฎหมายที่เชื่อมโยงมิตรภาพ
+            เครือข่ายวิชาชีพ และกิจกรรมการแข่งขันตลอดฤดูกาล
+          </p>
+          <div className="mt-6 grid gap-3">
+            {[
+              [
+                "Brand Visibility",
+                "โลโก้ปรากฏบนเว็บไซต์ทางการและสื่อกิจกรรมของทีม",
+              ],
+              [
+                "Legal Community Network",
+                "เข้าถึงกลุ่มนักกฎหมาย ผู้บริหาร และผู้ประกอบการ",
+              ],
+              [
+                "Matchday Presence",
+                "เชื่อมแบรนด์เข้ากับกิจกรรมการแข่งขันและภาพลักษณ์ของสโมสร",
+              ],
+            ].map(([title, body]) => (
+              <div
+                className="rounded-lg border border-white/10 bg-white/[0.07] p-4 shadow-lg shadow-black/15"
+                key={title}
+              >
+                <div className="mb-3 h-0.5 w-10 rounded-full bg-[#d8ad45]" />
+                <h3 className="font-black text-white">{title}</h3>
+                <p className="mt-1 text-sm leading-6 text-slate-300">{body}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-7">
+            <a
+              className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/20 transition-transform hover:scale-[1.02]"
+              href="mailto:partners@kswlc.com"
+            >
+              Become a KSW Partner
+            </a>
+          </div>
+          </div>
+          <div className="grid grid-cols-3 items-center justify-items-center gap-4 sm:grid-cols-4 sm:gap-5 lg:grid-cols-4">
             {Array.from({ length: 12 }).map((_, index) => {
               const sponsor = sponsors[index];
-              const sponsorName = text(sponsor, ["name", "sponsor_name"], "SPONSOR");
+              const sponsorName = text(sponsor, ["name", "sponsor_name"], "YOUR LOGO");
               const sponsorLogo = text(sponsor, ["logo_url"], "");
-              const isPrimaryRow = index < 6;
+              const circleSize =
+                index === 0
+                  ? "size-28 sm:size-32 lg:size-36"
+                  : index < 4
+                    ? "size-24 sm:size-28"
+                    : "size-20 sm:size-24";
 
               return (
                 <div
-                  className={`flex aspect-square items-center justify-center rounded-full border border-[#d8ad45]/25 bg-white text-center shadow-lg shadow-black/25 ring-1 ring-white/10 transition-all duration-300 hover:scale-105 hover:border-[#d8ad45]/70 hover:shadow-[#d8ad45]/20 ${
-                    isPrimaryRow ? "p-3.5 sm:p-4" : "scale-90 p-3 opacity-90"
-                  }`}
+                  className={`flex ${circleSize} items-center justify-center rounded-full border border-[#d8ad45]/25 bg-white p-3 text-center shadow-xl shadow-black/25 ring-1 ring-white/10 transition-all duration-300 hover:scale-105 hover:border-[#d8ad45]/70 hover:shadow-[#d8ad45]/25`}
                   key={text(sponsor, ["id", "name"], String(index))}
                 >
                   {isString(sponsorLogo) ? (
@@ -714,20 +757,13 @@ export default async function Home() {
                     />
                   ) : (
                     <span className="text-[10px] font-black uppercase tracking-wide text-[#061426] sm:text-xs">
-                      {sponsor ? initialsFromName(sponsorName) || "SPONSOR" : "SPONSOR"}
+                      {sponsor ? initialsFromName(sponsorName) || "YOUR LOGO" : "YOUR LOGO"}
                     </span>
                   )}
                 </div>
               );
             })}
           </div>
-          <div className="mt-8">
-            <a
-              className="inline-flex items-center justify-center rounded-md bg-[#d8ad45] px-5 py-3 text-sm font-black text-[#061426] transition-colors hover:bg-[#f4d58a]"
-              href="mailto:partners@kswlc.com"
-            >
-              Become a KSW Partner
-            </a>
           </div>
         </div>
         </div>
