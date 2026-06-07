@@ -280,15 +280,22 @@ export default async function Home() {
       text(b, ["team_name", "name", "team"]),
     );
   });
+  const leagueTeams = [...sortedStandings].sort((a, b) => {
+    if (a.is_ksw === true) return -1;
+    if (b.is_ksw === true) return 1;
+    return text(a, ["team_name", "name", "team"]).localeCompare(
+      text(b, ["team_name", "name", "team"]),
+    );
+  });
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#061426] text-slate-100">
       <section className="relative overflow-hidden border-b border-[#d8ad45]/30">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.2),transparent_34%),linear-gradient(135deg,rgba(6,20,38,0.96),rgba(9,31,57,0.88))]" />
-        <div className="relative mx-auto grid min-h-[480px] w-full max-w-7xl items-center gap-8 px-4 py-12 sm:px-6 sm:py-16 md:min-h-[560px] md:grid-cols-[1.1fr_0.9fr] lg:px-10">
+        <div className="relative mx-auto grid min-h-[540px] w-full max-w-7xl items-center gap-8 px-4 py-12 sm:px-6 sm:py-16 md:grid-cols-[1.08fr_0.92fr] lg:px-10">
           <div className="min-w-0">
             <p className="mb-4 text-xs font-bold uppercase tracking-[0.22em] text-[#d8ad45] sm:text-sm sm:tracking-[0.28em]">
-              KSW L.C.
+              Khlong Sam Wa Lawyers Club
             </p>
             <h1 className="max-w-4xl text-4xl font-black leading-[1.03] tracking-tight text-white sm:text-5xl md:text-7xl">
               KSW L.C.
@@ -297,8 +304,23 @@ export default async function Home() {
               Khlong Sam Wa Lawyers Club
             </p>
             <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300 sm:mt-6 sm:text-lg sm:leading-8">
-              Football community of legal professionals.
+              ชมรมทนายความคลองสามวา พื้นที่รวมตัวของนักกฎหมายที่รักฟุตบอล
+              มิตรภาพ และการแข่งขัน
             </p>
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+              <a
+                className="inline-flex items-center justify-center rounded-md bg-[#d8ad45] px-5 py-3 text-sm font-black text-[#061426] transition-colors hover:bg-[#f4d58a]"
+                href="#league-table"
+              >
+                View League Table
+              </a>
+              <a
+                className="inline-flex items-center justify-center rounded-md border border-[#d8ad45]/50 px-5 py-3 text-sm font-black text-[#f4d58a] transition-colors hover:bg-[#d8ad45]/10"
+                href="#sponsors"
+              >
+                Become a Sponsor
+              </a>
+            </div>
             {!configured ? (
               <p className="mt-6 inline-flex max-w-full rounded-md border border-[#d8ad45]/50 bg-[#d8ad45]/10 px-4 py-3 text-sm text-[#f4d58a] sm:mt-8">
                 Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -329,31 +351,79 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="mx-auto grid w-full max-w-7xl gap-5 px-4 py-8 sm:px-6 sm:py-10 md:grid-cols-3 lg:px-10">
-        <div className="min-w-0 rounded-lg border border-white/10 bg-white/[0.05] p-5 sm:p-6 md:col-span-1">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#d8ad45] sm:text-sm sm:tracking-[0.22em]">
-            Club
-          </p>
-          <h2 className="mt-3 break-words text-2xl font-black text-white sm:text-3xl">
-            {text(club, ["name", "team_name", "club_name"], "KSW L.C.")}
-          </h2>
-          <dl className="mt-6 space-y-4 text-sm text-slate-300">
-            <div>
-              <dt className="font-bold text-slate-500">Home</dt>
-              <dd>{text(club, ["home_ground", "stadium", "venue"], "Bangkok")}</dd>
-            </div>
-            <div>
-              <dt className="font-bold text-slate-500">Founded</dt>
-              <dd>{text(club, ["founded", "founded_year"], "Club data pending")}</dd>
-            </div>
-            <div>
-              <dt className="font-bold text-slate-500">Identity</dt>
-              <dd>{text(club, ["nickname", "description"], "Navy and gold")}</dd>
-            </div>
-          </dl>
-        </div>
+      <section className="mx-auto grid w-full max-w-7xl gap-4 px-4 py-8 sm:grid-cols-2 sm:px-6 md:grid-cols-4 lg:px-10">
+        {[
+          ["Founded", "2019"],
+          ["Home", "Bangkok"],
+          ["Identity", "Navy / Gold / Legal Football Community"],
+          ["League", "Thai Lawyers League Season 6"],
+        ].map(([label, value]) => (
+          <div key={label} className="rounded-lg border border-white/10 bg-white/[0.05] p-5">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#d8ad45]">
+              {label}
+            </p>
+            <p className="mt-3 text-lg font-black text-white">{value}</p>
+          </div>
+        ))}
+      </section>
 
-        <div className="min-w-0 overflow-hidden rounded-lg border border-white/10 bg-white/[0.05] md:col-span-2">
+      <section className="mx-auto w-full max-w-7xl px-4 pb-8 sm:px-6 lg:px-10">
+        <div className="min-w-0 rounded-lg border border-white/10 bg-white/[0.05]">
+          <div className="border-b border-white/10 px-4 py-4 sm:px-5">
+            <h2 className="text-xl font-black text-white">Latest Result / Fixtures</h2>
+          </div>
+          <div className="divide-y divide-white/10">
+            {matches.length ? (
+              matches.slice(0, 8).map((match, index) => (
+                <div
+                  className="grid min-w-0 gap-3 px-4 py-4 transition-colors hover:bg-white/[0.06] sm:px-5"
+                  key={text(match, ["id", "match_id"], String(index))}
+                >
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#d8ad45]">
+                    {formatMatchDate(match.match_date ?? match.date ?? match.kickoff_at)}
+                  </p>
+                  <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_64px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_78px_minmax(0,1fr)] sm:gap-4">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <TeamLogo
+                        initials={teamInitials({
+                          short_name: text(match, ["home_team_short_name"], ""),
+                          team_name: text(match, ["home_team_name"]),
+                        })}
+                        logoUrl={text(match, ["home_team_logo_url"], "")}
+                        teamName={text(match, ["home_team_name"])}
+                      />
+                      <span className="min-w-0 text-wrap text-sm font-bold leading-5 text-white sm:text-base">
+                        {text(match, ["home_team_name"])}
+                      </span>
+                    </div>
+                    <div className="rounded-md border border-[#d8ad45]/30 bg-[#d8ad45]/10 px-2 py-2 text-center text-sm font-black text-[#f4d58a] sm:text-base">
+                      {text(match, ["score"], "VS")}
+                    </div>
+                    <div className="flex min-w-0 items-center justify-end gap-2.5 text-right">
+                      <span className="min-w-0 text-wrap text-sm font-bold leading-5 text-white sm:text-base">
+                        {text(match, ["away_team_name"])}
+                      </span>
+                      <TeamLogo
+                        initials={teamInitials({
+                          short_name: text(match, ["away_team_short_name"], ""),
+                          team_name: text(match, ["away_team_name"]),
+                        })}
+                        logoUrl={text(match, ["away_team_logo_url"], "")}
+                        teamName={text(match, ["away_team_name"])}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="px-4 py-8 text-slate-400 sm:px-5">No fixtures or results available.</p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section id="league-table" className="mx-auto w-full max-w-7xl px-4 pb-8 sm:px-6 lg:px-10">
+        <div className="min-w-0 overflow-hidden rounded-lg border border-white/10 bg-white/[0.05]">
           <div className="flex items-center justify-between gap-4 border-b border-white/10 px-4 py-3 sm:px-5">
             <div>
               <h2 className="text-xl font-black text-white">League Table</h2>
@@ -434,62 +504,46 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="mx-auto grid w-full max-w-7xl gap-5 px-4 pb-10 sm:px-6 sm:pb-12 md:grid-cols-[1.4fr_0.6fr] lg:px-10">
-        <div className="min-w-0 rounded-lg border border-white/10 bg-white/[0.05]">
-          <div className="border-b border-white/10 px-4 py-4 sm:px-5">
-            <h2 className="text-xl font-black text-white">Fixtures / Results</h2>
+      <section className="mx-auto w-full max-w-7xl px-4 pb-8 sm:px-6 lg:px-10">
+        <div className="rounded-lg border border-white/10 bg-white/[0.05] p-5">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-xl font-black text-white">League Teams</h2>
+              <p className="mt-1 text-sm text-slate-400">13 clubs across the legal football community.</p>
+            </div>
           </div>
-          <div className="divide-y divide-white/10">
-            {matches.length ? (
-              matches.slice(0, 8).map((match, index) => (
-                <div
-                  className="grid min-w-0 gap-3 px-4 py-4 transition-colors hover:bg-white/[0.06] sm:px-5"
-                  key={text(match, ["id", "match_id"], String(index))}
-                >
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#d8ad45]">
-                    {formatMatchDate(match.match_date ?? match.date ?? match.kickoff_at)}
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            {leagueTeams.map((team, index) => (
+              <div
+                className={`min-w-0 rounded-lg border p-4 ${
+                  team.is_ksw === true
+                    ? "border-[#d8ad45]/60 bg-[#d8ad45]/10 sm:col-span-2"
+                    : "border-white/10 bg-[#081b31]"
+                }`}
+                key={text(team, ["team_id", "id", "team_name"], String(index))}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <TeamLogo
+                    initials={teamInitials(team)}
+                    logoUrl={text(team, ["logo_url"], "")}
+                    teamName={text(team, ["team_name", "name", "team"])}
+                  />
+                  <p className="min-w-0 text-wrap text-sm font-black leading-5 text-white">
+                    {text(team, ["team_name", "name", "team"])}
                   </p>
-                  <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_64px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_78px_minmax(0,1fr)] sm:gap-4">
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      <TeamLogo
-                        initials={teamInitials({
-                          short_name: text(match, ["home_team_short_name"], ""),
-                          team_name: text(match, ["home_team_name"]),
-                        })}
-                        logoUrl={text(match, ["home_team_logo_url"], "")}
-                        teamName={text(match, ["home_team_name"])}
-                      />
-                      <span className="min-w-0 text-wrap text-sm font-bold leading-5 text-white sm:text-base">
-                        {text(match, ["home_team_name"])}
-                      </span>
-                    </div>
-                    <div className="rounded-md border border-[#d8ad45]/30 bg-[#d8ad45]/10 px-2 py-2 text-center text-sm font-black text-[#f4d58a] sm:text-base">
-                      {text(match, ["score"], "VS")}
-                    </div>
-                    <div className="flex min-w-0 items-center justify-end gap-2.5 text-right">
-                      <span className="min-w-0 text-wrap text-sm font-bold leading-5 text-white sm:text-base">
-                        {text(match, ["away_team_name"])}
-                      </span>
-                      <TeamLogo
-                        initials={teamInitials({
-                          short_name: text(match, ["away_team_short_name"], ""),
-                          team_name: text(match, ["away_team_name"]),
-                        })}
-                        logoUrl={text(match, ["away_team_logo_url"], "")}
-                        teamName={text(match, ["away_team_name"])}
-                      />
-                    </div>
-                  </div>
                 </div>
-              ))
-            ) : (
-              <p className="px-4 py-8 text-slate-400 sm:px-5">No fixtures or results available.</p>
-            )}
+              </div>
+            ))}
           </div>
         </div>
+      </section>
 
+      <section id="sponsors" className="mx-auto w-full max-w-7xl px-4 pb-12 sm:px-6 lg:px-10">
         <div className="min-w-0 rounded-lg border border-white/10 bg-white/[0.05] p-5">
           <h2 className="text-xl font-black text-white">Sponsors</h2>
+          <p className="mt-2 text-sm text-[#f4d58a]">
+            ร่วมเป็นส่วนหนึ่งของชุมชนฟุตบอลนักกฎหมาย
+          </p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 md:grid-cols-1">
             {sponsors.length ? (
               sponsors.map((sponsor, index) => (
