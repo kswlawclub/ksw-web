@@ -436,6 +436,83 @@ export default async function Home() {
         </div>
       </section>
 
+      <section id="gallery" className="bg-gradient-to-br from-[#071b31] via-[#0b2745] to-[#061426]">
+        <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
+          <div className="mb-7 max-w-3xl">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]">
+              KSW HIGHLIGHTS
+            </p>
+            <h2 className="mt-3 text-3xl font-black text-white sm:text-4xl">
+              Life at KSW
+            </h2>
+            <p className="mt-3 text-base leading-7 text-slate-300">
+              ภาพบรรยากาศการแข่งขัน มิตรภาพ และชีวิตของชมรมฟุตบอลนักกฎหมายคลองสามวา
+            </p>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-[1.35fr_0.85fr]">
+            <article className="group relative min-h-[360px] overflow-hidden rounded-lg border border-[#d8ad45]/25 shadow-2xl shadow-black/30">
+              <img
+                alt="KSW matchday action"
+                className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105"
+                src="/images/ksw-highlights/highlight-action.jpg"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#061426]/92 via-[#061426]/25 to-transparent" />
+              <div className="absolute inset-x-0 bottom-0 p-5 sm:p-7">
+                <div className="mb-4 h-0.5 w-14 rounded-full bg-[#d8ad45]" />
+                <h3 className="text-2xl font-black text-white">Matchday Intensity</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-200">
+                  จังหวะการแข่งขันที่สะท้อนหัวใจของทีม
+                </p>
+              </div>
+            </article>
+            <div className="grid gap-4">
+              {[
+                [
+                  "/images/ksw-highlights/highlight-matchday.jpg",
+                  "Sideline Energy",
+                  "บรรยากาศข้างสนามและแรงสนับสนุนจากทีม",
+                ],
+                [
+                  "/images/ksw-highlights/highlight-team-huddle.jpg",
+                  "Team Spirit",
+                  "รวมพลัง ก่อนลงสนาม",
+                ],
+                [
+                  "/images/ksw-highlights/highlight-celebration.jpg",
+                  "Beyond The Game",
+                  "มิตรภาพที่เกิดขึ้นนอกเหนือจากการแข่งขัน",
+                ],
+              ].map(([image, title, caption]) => (
+                <article
+                  className="group relative min-h-[180px] overflow-hidden rounded-lg border border-white/10 shadow-xl shadow-black/20 transition-shadow hover:shadow-[#d8ad45]/15"
+                  key={title}
+                >
+                  <img
+                    alt={title}
+                    className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    src={image}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-r from-[#061426]/90 via-[#061426]/40 to-transparent" />
+                  <div className="absolute inset-y-0 left-0 flex max-w-[80%] flex-col justify-end p-4">
+                    <div className="mb-3 h-0.5 w-10 rounded-full bg-[#d8ad45]" />
+                    <h3 className="text-lg font-black text-white">{title}</h3>
+                    <p className="mt-1 text-sm leading-6 text-slate-200">{caption}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+          <div className="mt-7">
+            <a
+              className="inline-flex items-center justify-center rounded-md border border-[#d8ad45]/55 bg-white/[0.04] px-5 py-3 text-sm font-black text-[#f4d58a] shadow-lg shadow-black/15 transition-colors hover:bg-[#d8ad45]/10"
+              href="#gallery"
+            >
+              View Gallery
+            </a>
+          </div>
+        </div>
+      </section>
+
       <section className="bg-slate-100">
         <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
         <div className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
