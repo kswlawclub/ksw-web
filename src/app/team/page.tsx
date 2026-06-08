@@ -85,11 +85,28 @@ export default async function TeamPage() {
                   className="flex flex-col items-center justify-start px-2 py-2 text-center"
                   key={fileName}
                 >
-                  <div className="mx-auto size-28 overflow-hidden rounded-full border-2 border-[#d8ad45] shadow-lg shadow-slate-900/15 sm:size-32">
+                  <div
+                    className="mx-auto shadow-lg shadow-slate-900/15"
+                    style={{
+                      width: "130px",
+                      height: "130px",
+                      borderRadius: "50%",
+                      overflow: "hidden",
+                      border: "2px solid #d8ad45",
+                    }}
+                  >
                     <img
                       alt={name}
-                      className="size-full scale-[1.75] object-cover object-[center_58%]"
+                      className="block"
                       src={imagePath(fileName)}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        objectPosition: "center 30%",
+                        transform: "scale(1.9)",
+                        transformOrigin: "center center",
+                      }}
                     />
                   </div>
                   <h3 className="mt-4 min-h-10 text-sm font-black leading-5 text-[#061426] sm:text-base">
