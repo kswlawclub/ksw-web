@@ -1,4 +1,5 @@
 import { TeamLogo } from "@/components/team-logo";
+import { SectionHeading } from "@/components/section-heading";
 import { getSupabase, getSupabaseConfig } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -350,18 +351,14 @@ export default async function Home() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.2),transparent_34%),linear-gradient(135deg,rgba(6,20,38,0.96),rgba(9,31,57,0.88))]" />
         <div className="relative mx-auto grid min-h-[540px] w-full max-w-7xl items-center gap-8 px-4 py-10 sm:px-6 sm:py-14 md:grid-cols-[1.12fr_0.88fr] lg:px-10">
           <div className="min-w-0">
-            <p className="mb-4 text-xs font-bold uppercase tracking-[0.22em] text-[#d8ad45] sm:text-sm sm:tracking-[0.28em]">
-              KHLONG SAM WA LAWYERS CLUB
-            </p>
-            <h1 className="max-w-4xl text-4xl font-black leading-[1.03] tracking-tight text-white sm:text-5xl md:text-7xl">
-              KSW L.C.
-            </h1>
-            <p className="mt-4 max-w-2xl text-lg font-black uppercase leading-7 tracking-wide text-[#f4d58a] sm:text-2xl">
-              WHERE LAWYERS PLAY BEYOND THE COURTROOM
-            </p>
-            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300 sm:mt-6 sm:text-lg sm:leading-8">
-              ชุมชนฟุตบอลนักกฎหมายที่รวมการแข่งขัน มิตรภาพ และเครือข่ายวิชาชีพไว้ในสนามเดียวกัน
-            </p>
+            <SectionHeading
+              align="left"
+              as="h1"
+              description="ชุมชนฟุตบอลนักกฎหมายที่รวมการแข่งขัน มิตรภาพ และเครือข่ายวิชาชีพไว้ในสนามเดียวกัน"
+              eyebrow="KHLONG SAM WA LAWYERS CLUB"
+              subtitle="WHERE LAWYERS PLAY BEYOND THE COURTROOM"
+              title="KSW L.C."
+            />
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <a
                 className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/15 transition-transform hover:scale-[1.02]"
@@ -408,18 +405,13 @@ export default async function Home() {
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#d8ad45]/55 to-transparent" />
         <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
         <div className="grid gap-8 rounded-lg border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-900/10 sm:p-7 md:grid-cols-[1.18fr_0.82fr]">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">
-              ABOUT KSW
-            </p>
-            <h2 className="mt-3 max-w-5xl text-2xl font-black leading-snug text-[#061426] sm:text-3xl lg:text-4xl lg:whitespace-nowrap">
-              สโมสรฟุตบอลนักกฎหมายคลองสามวา
-            </h2>
-            <p className="mt-5 max-w-3xl text-base leading-8 text-slate-700">
-              KSW L.C. คือพื้นที่ของนักกฎหมายที่รักฟุตบอล ใช้กีฬาเป็นสะพานเชื่อมมิตรภาพ
-              เครือข่ายวิชาชีพ กิจกรรมเพื่อสังคม และการแข่งขันในรายการของวงการทนายความ
-            </p>
-          </div>
+          <SectionHeading
+            align="left"
+            description="KSW L.C. คือพื้นที่ของนักกฎหมายที่รักฟุตบอล ใช้กีฬาเป็นสะพานเชื่อมมิตรภาพ เครือข่ายวิชาชีพ กิจกรรมเพื่อสังคม และการแข่งขันในรายการของวงการทนายความ"
+            eyebrow="ABOUT KSW"
+            theme="light"
+            title="สโมสรฟุตบอลนักกฎหมายคลองสามวา"
+          />
           <div className="grid gap-3 md:grid-cols-1">
             {[
               ["2019", "ก่อตั้งชมรม"],
@@ -444,17 +436,12 @@ export default async function Home() {
 
       <section id="gallery" className="bg-gradient-to-br from-[#071b31] via-[#0b2745] to-[#061426]">
         <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
-          <div className="mb-7 max-w-3xl">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]">
-              KSW HIGHLIGHTS
-            </p>
-            <h2 className="mt-3 text-3xl font-black text-white sm:text-4xl">
-              Life at KSW
-            </h2>
-            <p className="mt-3 text-base leading-7 text-slate-300">
-              ภาพบรรยากาศการแข่งขัน มิตรภาพ และชีวิตของชมรมฟุตบอลนักกฎหมายคลองสามวา
-            </p>
-          </div>
+          <SectionHeading
+            className="mb-7"
+            description="ภาพบรรยากาศการแข่งขัน มิตรภาพ และชีวิตของชมรมฟุตบอลนักกฎหมายคลองสามวา"
+            eyebrow="KSW HIGHLIGHTS"
+            title="Life at KSW"
+          />
           <div className="grid gap-4 lg:grid-cols-[1.35fr_0.85fr]">
             <article className="group relative min-h-[360px] overflow-hidden rounded-lg border border-[#d8ad45]/25 shadow-2xl shadow-black/30">
               <img
@@ -772,14 +759,12 @@ export default async function Home() {
         <div className="min-w-0 rounded-lg border border-[#d8ad45]/25 bg-white/[0.08] p-6 shadow-2xl shadow-black/30 backdrop-blur sm:p-8">
           <div className="grid gap-8 lg:grid-cols-[0.92fr_1.08fr] lg:items-start">
           <div>
-          <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]">
-            KSW Partnership
-          </p>
-          <h2 className="mt-3 text-3xl font-black text-white">Partners & Supporters</h2>
-          <p className="mt-4 max-w-xl text-sm leading-7 text-slate-200">
-            สนับสนุน KSW L.C. คือการเป็นส่วนหนึ่งของชุมชนฟุตบอลนักกฎหมายที่เชื่อมโยงมิตรภาพ
-            เครือข่ายวิชาชีพ และกิจกรรมการแข่งขันตลอดฤดูกาล
-          </p>
+          <SectionHeading
+            align="left"
+            description="สนับสนุน KSW L.C. คือการเป็นส่วนหนึ่งของชุมชนฟุตบอลนักกฎหมายที่เชื่อมโยงมิตรภาพ เครือข่ายวิชาชีพ และกิจกรรมการแข่งขันตลอดฤดูกาล"
+            eyebrow="KSW Partnership"
+            title="Partners & Supporters"
+          />
           <div className="mt-6 grid gap-3">
             {[
               [

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getSupabase } from "@/lib/supabase";
+import { SectionHeading } from "@/components/section-heading";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -122,19 +123,15 @@ export default async function PartnersPage() {
             <Link className="text-sm font-black text-[#f4d58a] hover:text-white" href="/">
               Home {">"} Partners
             </Link>
-            <p className="mt-8 text-xs font-black uppercase tracking-[0.24em] text-[#d8ad45]">
-              KSW Partnership
-            </p>
-            <h1 className="mt-3 max-w-4xl text-4xl font-black tracking-tight text-white sm:text-6xl">
-              Partner With KSW L.C.
-            </h1>
-            <p className="mt-4 text-xl font-black uppercase tracking-wide text-[#f4d58a]">
-              Support the lawyers football community
-            </p>
-            <p className="mt-5 max-w-3xl text-base leading-8 text-slate-300 sm:text-lg">
-              ร่วมสนับสนุนชมรมทนายความคลองสามวา และเป็นส่วนหนึ่งของชุมชนฟุตบอลนักกฎหมายที่เชื่อมโยงมิตรภาพ
-              เครือข่ายวิชาชีพ และกิจกรรมการแข่งขันตลอดฤดูกาล
-            </p>
+            <SectionHeading
+              align="left"
+              as="h1"
+              className="mt-8"
+              description="ร่วมสนับสนุนชมรมทนายความคลองสามวา และเป็นส่วนหนึ่งของชุมชนฟุตบอลนักกฎหมายที่เชื่อมโยงมิตรภาพ เครือข่ายวิชาชีพ และกิจกรรมการแข่งขันตลอดฤดูกาล"
+              eyebrow="KSW Partnership"
+              subtitle="Support the lawyers football community"
+              title="Partner With KSW L.C."
+            />
             <a
               className="mt-8 inline-flex rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/20 transition-transform hover:scale-[1.02]"
               href="mailto:kswlawclub@gmail.com"
@@ -164,9 +161,10 @@ export default async function PartnersPage() {
       </section>
 
       <section className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
-        <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]">
-          Why Partner With KSW
-        </p>
+        <SectionHeading
+          className="mb-7"
+          title="Why Partner With KSW"
+        />
         <div className="mt-5 grid gap-4 md:grid-cols-3">
           {valueCards.map(([title, body]) => (
             <article
@@ -183,11 +181,12 @@ export default async function PartnersPage() {
 
       <section className="bg-[#f6f2ea]">
         <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
-          <h2 className="text-3xl font-black text-[#061426]">Partnership Opportunities</h2>
-          <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-700">
-            Select a partnership level that fits your brand presence across club media,
-            matchdays, and legal community activities. Prices are discussed privately.
-          </p>
+          <SectionHeading
+            className="mb-7"
+            description="Select a partnership level that fits your brand presence across club media, matchdays, and legal community activities. Prices are discussed privately."
+            theme="light"
+            title="Partnership Opportunities"
+          />
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {tiers.map((tier) => (
               <article
@@ -212,10 +211,11 @@ export default async function PartnersPage() {
 
       <section className="bg-gradient-to-br from-[#071b31] via-[#0b2745] to-[#061426]">
         <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
-          <h2 className="text-3xl font-black text-white">Sponsor Wall</h2>
-          <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">
-            พื้นที่แสดงโลโก้ผู้สนับสนุนของชมรม แบ่งระดับการมองเห็นตามรูปแบบความร่วมมือ
-          </p>
+          <SectionHeading
+            className="mb-8"
+            description="พื้นที่แสดงโลโก้ผู้สนับสนุนของชมรม แบ่งระดับการมองเห็นตามรูปแบบความร่วมมือ"
+            title="Sponsor Wall"
+          />
           <div className="mt-8 grid grid-cols-3 items-center justify-items-center gap-4 sm:grid-cols-4 sm:gap-5 lg:grid-cols-6">
             {Array.from({ length: 12 }).map((_, index) => {
               const sponsor = sponsors[index];

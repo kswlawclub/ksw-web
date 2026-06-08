@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { GalleryGrid, type GalleryImage } from "@/components/gallery-grid";
+import { SectionHeading } from "@/components/section-heading";
 
 const galleryImages: GalleryImage[] = [
   {
@@ -76,19 +77,14 @@ export default function GalleryPage() {
           >
             Home {">"} Gallery
           </Link>
-          <p className="mt-8 text-xs font-black uppercase tracking-[0.24em] text-[#d8ad45]">
-            KSW L.C.
-          </p>
-          <h1 className="mt-3 text-4xl font-black tracking-tight text-white sm:text-6xl">
-            KSW Gallery
-          </h1>
-          <p className="mt-4 text-xl font-black uppercase tracking-wide text-[#f4d58a]">
-            Moments On And Off The Pitch
-          </p>
-          <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
-            A collection of memorable moments from matches, team activities, and
-            the KSW community.
-          </p>
+          <SectionHeading
+            as="h1"
+            className="mt-8"
+            description="A collection of memorable moments from matches, team activities, and the KSW community."
+            eyebrow="KSW L.C."
+            subtitle="Moments On And Off The Pitch"
+            title="KSW Gallery"
+          />
         </div>
       </section>
 
