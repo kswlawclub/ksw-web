@@ -79,7 +79,7 @@ export default function GalleryPage() {
           <p className="mt-8 text-xs font-black uppercase tracking-[0.24em] text-[#d8ad45]">
             KSW L.C.
           </p>
-          <h1 className="mt-3 text-4xl font-black tracking-tight text-white sm:text-6xl">
+          <h1 className="mt-3 text-4xl font-black leading-[1.05] tracking-normal text-white sm:text-6xl">
             KSW Gallery
           </h1>
           <p className="mt-4 text-xl font-black uppercase tracking-wide text-[#f4d58a]">
