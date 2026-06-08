@@ -216,7 +216,7 @@ export default async function TeamPage() {
           </article>
 
           <article className="mt-14 overflow-hidden rounded-lg border border-[#d8ad45]/30 border-t-[#d8ad45]/45 bg-white pt-8 shadow-xl shadow-slate-900/10 sm:grid sm:grid-cols-[40%_60%]">
-            <div className="relative min-h-[260px] overflow-hidden bg-[#f5f1e8] sm:min-h-full">
+            <div className="relative min-h-[260px] overflow-hidden bg-white sm:min-h-full">
               <img
                 alt="Solomon Ukutu"
                 className="absolute inset-0 size-full object-contain object-center"
