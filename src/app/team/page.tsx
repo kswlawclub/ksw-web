@@ -1,11 +1,59 @@
 import Link from "next/link";
-import { readdir } from "node:fs/promises";
-import path from "node:path";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const teamMembersDir = path.join(process.cwd(), "public/images/team-members");
+const teamMemberRenameMap = [
+  { name: "ทนายกบ", oldImage: "/images/team-members/กบ.png", image: "/images/team-members/member-01.png" },
+  { name: "ทนายกรานต์", oldImage: "/images/team-members/กรานต์.png", image: "/images/team-members/member-02.png" },
+  { name: "ทนายจักร", oldImage: "/images/team-members/จักร.png", image: "/images/team-members/member-03.png" },
+  { name: "ทนายซีค", oldImage: "/images/team-members/ซีค.png", image: "/images/team-members/member-04.png" },
+  { name: "ทนายซ้ง", oldImage: "/images/team-members/ซ้ง.png", image: "/images/team-members/member-05.png" },
+  { name: "ทนายดำ", oldImage: "/images/team-members/ดำ.png", image: "/images/team-members/member-06.png" },
+  { name: "ทนายนัท", oldImage: "/images/team-members/นัท.png", image: "/images/team-members/member-07.png" },
+  { name: "ทนายบอย", oldImage: "/images/team-members/บอย.png", image: "/images/team-members/member-08.png" },
+  { name: "ทนายบั้ม", oldImage: "/images/team-members/บั้ม.png", image: "/images/team-members/member-09.png" },
+  { name: "ทนายบาส.", oldImage: "/images/team-members/บาส..png", image: "/images/team-members/member-10.png" },
+  { name: "ทนายบาส", oldImage: "/images/team-members/บาส.png", image: "/images/team-members/member-11.png" },
+  { name: "ทนายบี", oldImage: "/images/team-members/บี.png", image: "/images/team-members/member-12.png" },
+  { name: "ทนายบู๊", oldImage: "/images/team-members/บู๊.png", image: "/images/team-members/member-13.png" },
+  { name: "ทนายปรีดี", oldImage: "/images/team-members/ปรีดี.png", image: "/images/team-members/member-14.png" },
+  { name: "ทนายปั๊ก", oldImage: "/images/team-members/ปั๊ก.png", image: "/images/team-members/member-15.png" },
+  { name: "ทนายพงษ์", oldImage: "/images/team-members/พงษ์.png", image: "/images/team-members/member-16.png" },
+  { name: "ทนายพร", oldImage: "/images/team-members/พร.png", image: "/images/team-members/member-17.png" },
+  { name: "ทนายพัฒน์", oldImage: "/images/team-members/พัฒน์.png", image: "/images/team-members/member-18.png" },
+  { name: "ทนายฟงหวิน", oldImage: "/images/team-members/ฟงหวิน.png", image: "/images/team-members/member-19.png" },
+  { name: "ทนายภพ", oldImage: "/images/team-members/ภพ.png", image: "/images/team-members/member-20.png" },
+  { name: "ทนายยศ", oldImage: "/images/team-members/ยศ.png", image: "/images/team-members/member-21.png" },
+  { name: "ทนายวิท", oldImage: "/images/team-members/วิท.png", image: "/images/team-members/member-22.png" },
+  { name: "ทนายวิน", oldImage: "/images/team-members/วิน.png", image: "/images/team-members/member-23.png" },
+  { name: "ทนายวุฒิ(จอร์นวุฒิ)", oldImage: "/images/team-members/วุฒิ(จอร์นวุฒิ).png", image: "/images/team-members/member-24.png" },
+  { name: "ทนายวุฒิ", oldImage: "/images/team-members/วุฒิ.png", image: "/images/team-members/member-25.png" },
+  { name: "ทนายหรั่ง", oldImage: "/images/team-members/หรั่ง.png", image: "/images/team-members/member-26.png" },
+  { name: "ทนายอาร์ท.", oldImage: "/images/team-members/อาร์ท..png", image: "/images/team-members/member-27.png" },
+  { name: "ทนายอาร์ท", oldImage: "/images/team-members/อาร์ท.png", image: "/images/team-members/member-28.png" },
+  { name: "ทนายอเล็กซ์", oldImage: "/images/team-members/อเล็กซ์.png", image: "/images/team-members/member-29.png" },
+  { name: "ทนายอ๋อน", oldImage: "/images/team-members/อ๋อน.png", image: "/images/team-members/member-30.png" },
+  { name: "ทนายเก่ง", oldImage: "/images/team-members/เก่ง.png", image: "/images/team-members/member-31.png" },
+  { name: "ทนายเจ๋ง", oldImage: "/images/team-members/เจ๋ง.png", image: "/images/team-members/member-32.png" },
+  { name: "ทนายเบิร์ด", oldImage: "/images/team-members/เบิร์ด.png", image: "/images/team-members/member-33.png" },
+  { name: "ทนายเป้า", oldImage: "/images/team-members/เป้า.png", image: "/images/team-members/member-34.png" },
+  { name: "ทนายเป๊ก", oldImage: "/images/team-members/เป๊ก.png", image: "/images/team-members/member-35.png" },
+  { name: "ทนายเมสซี่", oldImage: "/images/team-members/เมสซี่.png", image: "/images/team-members/member-36.png" },
+  { name: "ทนายเสริฐ", oldImage: "/images/team-members/เสริฐ.png", image: "/images/team-members/member-37.png" },
+  { name: "ทนายเอก", oldImage: "/images/team-members/เอก.png", image: "/images/team-members/member-38.png" },
+  { name: "ทนายเอ๋", oldImage: "/images/team-members/เอ๋.png", image: "/images/team-members/member-39.png" },
+  { name: "ทนายแขก", oldImage: "/images/team-members/แขก.png", image: "/images/team-members/member-40.png" },
+  { name: "ทนายแตง", oldImage: "/images/team-members/แตง.png", image: "/images/team-members/member-41.png" },
+  { name: "ทนายโก้", oldImage: "/images/team-members/โก้.png", image: "/images/team-members/member-42.png" },
+  { name: "ทนายโจ", oldImage: "/images/team-members/โจ.png", image: "/images/team-members/member-43.png" },
+  { name: "ทนายโชค", oldImage: "/images/team-members/โชค.png", image: "/images/team-members/member-44.png" },
+  { name: "ทนายโอ", oldImage: "/images/team-members/โอ.png", image: "/images/team-members/member-45.png" },
+  { name: "ทนายโอเว่น", oldImage: "/images/team-members/โอเว่น.png", image: "/images/team-members/member-46.png" },
+  { name: "ทนายโอ๊ต", oldImage: "/images/team-members/โอ๊ต.png", image: "/images/team-members/member-47.png" },
+  { name: "ทนายไอซ์", oldImage: "/images/team-members/ไอซ์.png", image: "/images/team-members/member-48.png" },
+];
+const teamMembers = teamMemberRenameMap.map(({ name, image }) => ({ name, image }));
 const coachBio = [
   "อดีตเยาวชนทีมชาติไทย",
   "อดีตนักฟุตบอลทีมทนายไทย",
@@ -43,25 +91,6 @@ const teamStaff = [
   ["เด่น", "/images/staff/den.png"],
 ];
 
-function displayName(fileName: string) {
-  const name = fileName
-    .replace(/\.[^.]+$/, "")
-    .replace(/[-_]+/g, " ")
-    .trim();
-
-  return `ทนาย${name.replace(/\b[a-z]/gi, (letter) => letter.toUpperCase())}`;
-}
-
-function imagePath(fileName: string) {
-  return `/images/team-members/${encodeURIComponent(fileName)}`;
-}
-
-async function getMemberFiles() {
-  const files = await readdir(teamMembersDir);
-
-  return files.filter((fileName) => /\.(png|jpe?g|webp|avif)$/i.test(fileName));
-}
-
 function shuffle<T>(items: T[]) {
   const shuffled = [...items];
 
@@ -74,7 +103,7 @@ function shuffle<T>(items: T[]) {
 }
 
 export default async function TeamPage() {
-  const members = shuffle(await getMemberFiles());
+  const members = shuffle(teamMembers);
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#061426] text-slate-100">
@@ -112,13 +141,11 @@ export default async function TeamPage() {
             <h2 className="mt-3 text-3xl font-black text-[#061426]">Team Members</h2>
           </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-7 sm:gap-x-5 md:grid-cols-3 lg:grid-cols-4">
-            {members.map((fileName) => {
-              const name = displayName(fileName);
-
+            {members.map((member) => {
               return (
                 <article
                   className="flex flex-col items-center justify-start px-2 py-2 text-center"
-                  key={fileName}
+                  key={member.image}
                 >
                   <div
                     className="mx-auto shadow-lg shadow-slate-900/15"
@@ -131,9 +158,9 @@ export default async function TeamPage() {
                     }}
                   >
                     <img
-                      alt={name}
+                      alt={member.name}
                       className="block"
-                      src={imagePath(fileName)}
+                      src={member.image}
                       style={{
                         width: "100%",
                         height: "100%",
@@ -145,7 +172,7 @@ export default async function TeamPage() {
                     />
                   </div>
                   <h3 className="mt-4 min-h-10 text-sm font-black leading-5 text-[#061426] sm:text-base">
-                    {name}
+                    {member.name}
                   </h3>
                 </article>
               );
