@@ -15,7 +15,7 @@ const matchColumns =
 const sponsorColumns =
   "id, name, logo_url, website_url, tier, sort_order, is_active";
 
-function text(row: Row | undefined, keys: string[], fallback = "TBC") {
+function text(row: Row | undefined, keys: string[], fallback = "") {
   if (!row) {
     return fallback;
   }
@@ -49,7 +49,7 @@ function number(row: Row, keys: string[]) {
 
 function formatMatchDate(value: unknown) {
   if (typeof value !== "string" || !value) {
-    return "Date TBC";
+    return "Date unavailable";
   }
 
   const date = new Date(value);
@@ -110,7 +110,7 @@ function teamById(teams: Row[]) {
     teams.map((team) => [
       text(team, ["id"], ""),
       {
-        name: text(team, ["name", "short_name"], "Team TBC"),
+        name: text(team, ["name", "short_name"], "Team unavailable"),
         shortName: text(team, ["short_name"], ""),
         logoUrl: text(team, ["logo_url"], ""),
       },
@@ -132,10 +132,10 @@ function withMatchTeams(matches: Row[], teams: Row[]) {
 
     return {
       ...match,
-      home_team_name: homeTeam?.name ?? "Home team TBC",
+      home_team_name: homeTeam?.name ?? "Home team unavailable",
       home_team_short_name: homeTeam?.shortName ?? "",
       home_team_logo_url: homeTeam?.logoUrl ?? "",
-      away_team_name: awayTeam?.name ?? "Away team TBC",
+      away_team_name: awayTeam?.name ?? "Away team unavailable",
       away_team_short_name: awayTeam?.shortName ?? "",
       away_team_logo_url: awayTeam?.logoUrl ?? "",
       score: hasScore ? `${homeScore} - ${awayScore}` : "VS",
@@ -314,16 +314,22 @@ export default async function Home() {
     });
   const mockFixtures = [
     {
+      date: "13 Jun 2026",
+      time: "17:20",
+      status: "Scheduled",
       homeName: "KSW L.C.",
       awayName: "ทนายความกรุงเทพ BKK Lawyer",
       homeTeam: findLeagueTeam(["KSW L.C.", "KSW"]),
       awayTeam: findLeagueTeam(["ทนายความกรุงเทพ BKK Lawyer", "BKK"]),
     },
     {
+      date: "13 Jun 2026",
+      time: "19:40",
+      status: "Scheduled",
       homeName: "KSW L.C.",
-      awayName: "TBC",
+      awayName: "Lawyer Club",
       homeTeam: findLeagueTeam(["KSW L.C.", "KSW"]),
-      awayTeam: undefined,
+      awayTeam: findLeagueTeam(["Lawyer Club"]),
     },
   ];
 
@@ -571,7 +577,7 @@ export default async function Home() {
           <div className="border-b border-dashed border-[#d8ad45]/40 px-4 py-4 sm:px-5">
             <h2 className="text-xl font-black text-[#061426]">Next Fixtures</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Upcoming match schedule will be confirmed soon.
+              Upcoming KSW match schedule.
             </p>
           </div>
           <div className="divide-y divide-dashed divide-[#d8ad45]/30">
@@ -582,10 +588,10 @@ export default async function Home() {
               >
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs font-black uppercase tracking-[0.16em] text-[#9b1c1f]">
-                    To be announced
+                    {fixture.date} · {fixture.time}
                   </p>
                   <span className="rounded-full border border-[#d8ad45]/45 bg-[#fff8e3] px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-[#061426]">
-                    TBC
+                    {fixture.status}
                   </span>
                 </div>
                 <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_64px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_78px_minmax(0,1fr)] sm:gap-4">
@@ -630,7 +636,7 @@ export default async function Home() {
                       />
                     ) : (
                       <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-slate-300 bg-slate-100 text-[10px] font-black text-slate-500 sm:size-7 md:size-8">
-                        TBC
+                        TBD
                       </span>
                     )}
                   </div>
