@@ -101,7 +101,7 @@ export default async function PartnersPage() {
           </p>
           <a
             className="mt-8 inline-flex rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/20 transition-transform hover:scale-[1.02]"
-            href="mailto:partners@kswlc.com"
+            href="mailto:kswlawclub@gmail.com"
           >
             Become a KSW Partner
           </a>
@@ -201,7 +201,7 @@ export default async function PartnersPage() {
             </p>
             <a
               className="mt-7 inline-flex rounded-md bg-[#061426] px-5 py-3 text-sm font-black text-[#f4d58a] transition-colors hover:bg-[#0b2745]"
-              href="mailto:partners@kswlc.com"
+              href="mailto:kswlawclub@gmail.com"
             >
               Contact KSW
             </a>

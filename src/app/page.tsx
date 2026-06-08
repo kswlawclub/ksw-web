@@ -365,7 +365,7 @@ export default async function Home() {
               </a>
               <a
                 className="inline-flex items-center justify-center rounded-md border border-[#d8ad45]/50 bg-white/[0.03] px-5 py-3 text-sm font-black text-[#f4d58a] backdrop-blur transition-colors hover:bg-[#d8ad45]/10"
-                href="/partners"
+                href="mailto:kswlawclub@gmail.com"
               >
                 Partner With KSW
               </a>
@@ -802,7 +802,7 @@ export default async function Home() {
           <div className="mt-7">
             <a
               className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/20 transition-transform hover:scale-[1.02]"
-              href="/partners"
+              href="mailto:kswlawclub@gmail.com"
             >
               Become a KSW Partner
             </a>
