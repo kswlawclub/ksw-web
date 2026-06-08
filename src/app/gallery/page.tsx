@@ -3,6 +3,11 @@ import { GalleryGrid, type GalleryImage } from "@/components/gallery-grid";
 
 const galleryImages: GalleryImage[] = [
   {
+    src: "/images/gallery/team-photo-01.jpg",
+    title: "KSW Team Photo",
+    category: "Team Photo",
+  },
+  {
     src: "/images/gallery/matchday-01.jpg",
     title: "Matchday Focus",
     category: "Matchday",
@@ -56,11 +61,6 @@ const galleryImages: GalleryImage[] = [
     src: "/images/gallery/community-03.jpg",
     title: "Club Connections",
     category: "Community",
-  },
-  {
-    src: "/images/gallery/team-photo-01.jpg",
-    title: "KSW Team Photo",
-    category: "Team Photo",
   },
 ];
 

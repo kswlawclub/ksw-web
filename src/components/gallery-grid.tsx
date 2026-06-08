@@ -12,7 +12,7 @@ type GalleryGridProps = {
   images: GalleryImage[];
 };
 
-const filters = ["All", "Matchday", "Team Spirit", "Sideline", "Community", "Team Photo"];
+const filters = ["All", "Team Photo", "Matchday", "Team Spirit", "Sideline", "Community"];
 
 export function GalleryGrid({ images }: GalleryGridProps) {
   const [activeFilter, setActiveFilter] = useState("All");
@@ -42,12 +42,10 @@ export function GalleryGrid({ images }: GalleryGridProps) {
         ))}
       </div>
 
-      <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        {filteredImages.map((image, index) => (
+      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
+        {filteredImages.map((image) => (
           <button
-            className={`group relative min-h-44 overflow-hidden rounded-lg border border-white/10 bg-white/[0.05] text-left shadow-xl shadow-black/20 ${
-              index % 5 === 0 ? "lg:row-span-2 lg:min-h-[360px]" : "lg:min-h-48"
-            }`}
+            className="group relative aspect-video overflow-hidden rounded-lg border border-white/10 bg-white/[0.05] text-left shadow-xl shadow-black/20 transition-shadow hover:shadow-[#d8ad45]/15"
             key={image.src}
             onClick={() => setActiveImage(image)}
             type="button"
