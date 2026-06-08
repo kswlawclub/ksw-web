@@ -505,7 +505,7 @@ export default async function Home() {
           <div className="mt-7">
             <a
               className="inline-flex items-center justify-center rounded-md border border-[#d8ad45]/55 bg-white/[0.04] px-5 py-3 text-sm font-black text-[#f4d58a] shadow-lg shadow-black/15 transition-colors hover:bg-[#d8ad45]/10"
-              href="#gallery"
+              href="/gallery"
             >
               View Gallery
             </a>
