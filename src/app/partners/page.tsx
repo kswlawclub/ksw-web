@@ -26,13 +26,48 @@ const valueCards = [
   ],
 ];
 
-const tiers = ["Main Partner", "Official Partner", "Matchday Partner", "Community Supporter"];
-
-const tierBenefits = [
-  "logo visibility",
-  "website placement",
-  "social/content mention",
-  "matchday/activity exposure",
+const tiers = [
+  {
+    name: "Main Partner",
+    accent: "from-[#d8ad45] to-[#f4d58a]",
+    benefits: [
+      "Top logo position",
+      "Largest sponsor placement",
+      "Homepage sponsor wall visibility",
+      "Partner mention in key club updates",
+      "Matchday/activity exposure",
+    ],
+  },
+  {
+    name: "Official Partner",
+    accent: "from-[#9b1c1f] to-[#d8ad45]",
+    benefits: [
+      "Logo placement on sponsor wall",
+      "Gallery / activity page visibility",
+      "Partner mention in selected updates",
+      "Event and community exposure",
+    ],
+  },
+  {
+    name: "Matchday Partner",
+    accent: "from-[#0b2745] to-[#d8ad45]",
+    benefits: [
+      "Matchday content visibility",
+      "Fixture/result post mention",
+      "Activity-specific sponsor credit",
+      "Website sponsor slot",
+    ],
+  },
+  {
+    name: "Community Supporter",
+    accent: "from-slate-500 to-[#d8ad45]",
+    benefits: [
+      "Supporter logo slot",
+      "Community activity recognition",
+      "Website supporter visibility",
+      "Thank-you mention in club updates",
+    ],
+  },
 ];
 
 function initials(name: string) {
@@ -82,29 +117,49 @@ export default async function PartnersPage() {
     <main className="min-h-screen overflow-x-hidden bg-[#061426] text-slate-100">
       <section className="relative overflow-hidden border-b border-[#d8ad45]/25">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.2),transparent_34%),linear-gradient(135deg,#061426,#0b2745_58%,#071b31)]" />
-        <div className="relative mx-auto w-full max-w-7xl px-4 py-14 sm:px-6 sm:py-18 lg:px-10">
-          <Link className="text-sm font-black text-[#f4d58a] hover:text-white" href="/">
-            Home {">"} Partners
-          </Link>
-          <p className="mt-8 text-xs font-black uppercase tracking-[0.24em] text-[#d8ad45]">
-            KSW Partnership
-          </p>
-          <h1 className="mt-3 max-w-4xl text-4xl font-black tracking-tight text-white sm:text-6xl">
-            Partner With KSW L.C.
-          </h1>
-          <p className="mt-4 text-xl font-black uppercase tracking-wide text-[#f4d58a]">
-            Support the lawyers football community
-          </p>
-          <p className="mt-5 max-w-3xl text-base leading-8 text-slate-300 sm:text-lg">
-            ร่วมสนับสนุนชมรมทนายความคลองสามวา และเป็นส่วนหนึ่งของชุมชนฟุตบอลนักกฎหมายที่เชื่อมโยงมิตรภาพ
-            เครือข่ายวิชาชีพ และกิจกรรมการแข่งขันตลอดฤดูกาล
-          </p>
-          <a
-            className="mt-8 inline-flex rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/20 transition-transform hover:scale-[1.02]"
-            href="mailto:kswlawclub@gmail.com"
-          >
-            Become a KSW Partner
-          </a>
+        <div className="relative mx-auto grid w-full max-w-7xl gap-10 px-4 py-14 sm:px-6 sm:py-18 lg:grid-cols-[1.02fr_0.98fr] lg:items-center lg:px-10">
+          <div>
+            <Link className="text-sm font-black text-[#f4d58a] hover:text-white" href="/">
+              Home {">"} Partners
+            </Link>
+            <p className="mt-8 text-xs font-black uppercase tracking-[0.24em] text-[#d8ad45]">
+              KSW Partnership
+            </p>
+            <h1 className="mt-3 max-w-4xl text-4xl font-black tracking-tight text-white sm:text-6xl">
+              Partner With KSW L.C.
+            </h1>
+            <p className="mt-4 text-xl font-black uppercase tracking-wide text-[#f4d58a]">
+              Support the lawyers football community
+            </p>
+            <p className="mt-5 max-w-3xl text-base leading-8 text-slate-300 sm:text-lg">
+              ร่วมสนับสนุนชมรมทนายความคลองสามวา และเป็นส่วนหนึ่งของชุมชนฟุตบอลนักกฎหมายที่เชื่อมโยงมิตรภาพ
+              เครือข่ายวิชาชีพ และกิจกรรมการแข่งขันตลอดฤดูกาล
+            </p>
+            <a
+              className="mt-8 inline-flex rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/20 transition-transform hover:scale-[1.02]"
+              href="mailto:kswlawclub@gmail.com"
+            >
+              Become a KSW Partner
+            </a>
+          </div>
+          <div className="relative">
+            <div className="absolute -inset-4 rounded-2xl bg-[#d8ad45]/20 blur-2xl" />
+            <div className="relative overflow-hidden rounded-xl border border-[#d8ad45]/35 bg-[#061426] shadow-2xl shadow-black/40">
+              <img
+                alt="KSW team partnership visual"
+                className="aspect-[4/3] w-full object-cover"
+                src="/images/ksw-highlights/hero-team-main.jpg"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#061426] via-[#061426]/45 to-[#061426]/10" />
+              <div className="absolute inset-x-0 bottom-0 p-5 sm:p-7">
+                <div className="mb-4 h-0.5 w-14 rounded-full bg-[#d8ad45]" />
+                <p className="text-2xl font-black text-white">Official KSW Partnership</p>
+                <p className="mt-2 max-w-sm text-sm font-semibold leading-6 text-slate-200">
+                  Build visibility with the lawyers football community
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -137,12 +192,12 @@ export default async function PartnersPage() {
             {tiers.map((tier) => (
               <article
                 className="rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10"
-                key={tier}
+                key={tier.name}
               >
-                <div className="mb-4 h-0.5 w-12 rounded-full bg-[#9b1c1f]" />
-                <h3 className="text-xl font-black text-[#061426]">{tier}</h3>
+                <div className={`mb-4 h-0.5 w-12 rounded-full bg-gradient-to-r ${tier.accent}`} />
+                <h3 className="text-xl font-black text-[#061426]">{tier.name}</h3>
                 <ul className="mt-5 space-y-3">
-                  {tierBenefits.map((benefit) => (
+                  {tier.benefits.map((benefit) => (
                     <li className="flex gap-2 text-sm font-semibold text-slate-700" key={benefit}>
                       <span className="mt-1 size-1.5 shrink-0 rounded-full bg-[#d8ad45]" />
                       {benefit}
@@ -158,11 +213,16 @@ export default async function PartnersPage() {
       <section className="bg-gradient-to-br from-[#071b31] via-[#0b2745] to-[#061426]">
         <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
           <h2 className="text-3xl font-black text-white">Sponsor Wall</h2>
+          <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">
+            พื้นที่แสดงโลโก้ผู้สนับสนุนของชมรม แบ่งระดับการมองเห็นตามรูปแบบความร่วมมือ
+          </p>
           <div className="mt-8 grid grid-cols-3 items-center justify-items-center gap-4 sm:grid-cols-4 sm:gap-5 lg:grid-cols-6">
             {Array.from({ length: 12 }).map((_, index) => {
               const sponsor = sponsors[index];
               const name = sponsor?.name ?? "YOUR LOGO";
               const logoUrl = sponsor?.logo_url;
+              const tierLabel =
+                index === 0 ? "Main Partner" : index < 4 ? "Official Partner" : "Supporter";
               const size =
                 index === 0
                   ? "size-28 sm:size-32"
@@ -171,17 +231,21 @@ export default async function PartnersPage() {
                     : "size-20 sm:size-24";
 
               return (
-                <div
-                  className={`flex ${size} items-center justify-center rounded-full border border-[#d8ad45]/25 bg-white p-3 text-center shadow-xl shadow-black/25 ring-1 ring-white/10`}
-                  key={sponsor?.id ?? index}
-                >
-                  {logoUrl ? (
-                    <img alt={`${name} logo`} className="max-h-full max-w-full object-contain" src={logoUrl} />
-                  ) : (
-                    <span className="text-[10px] font-black uppercase tracking-wide text-[#061426] sm:text-xs">
-                      {sponsor ? initials(name) || "YOUR LOGO" : "YOUR LOGO"}
-                    </span>
-                  )}
+                <div className="flex flex-col items-center gap-2" key={sponsor?.id ?? index}>
+                  <div
+                    className={`flex ${size} items-center justify-center rounded-full border border-[#d8ad45]/25 bg-white p-3 text-center shadow-xl shadow-black/25 ring-1 ring-white/10 transition duration-300 hover:border-[#d8ad45]/70 hover:shadow-[#d8ad45]/20`}
+                  >
+                    {logoUrl ? (
+                      <img alt={`${name} logo`} className="max-h-full max-w-full object-contain" src={logoUrl} />
+                    ) : (
+                      <span className="text-[10px] font-black uppercase tracking-wide text-[#061426] sm:text-xs">
+                        {sponsor ? initials(name) || "YOUR LOGO" : "YOUR LOGO"}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-center text-[10px] font-black uppercase tracking-wide text-[#f4d58a]/80">
+                    {tierLabel}
+                  </span>
                 </div>
               );
             })}
@@ -193,7 +257,7 @@ export default async function PartnersPage() {
         <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
           <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-900/10 sm:p-8">
             <h2 className="text-3xl font-black text-[#061426]">
-              ร่วมสร้างฤดูกาลของ KSW ไปด้วยกัน
+              ร่วมเป็นส่วนหนึ่งของ KSW L.C.
             </h2>
             <p className="mt-4 max-w-3xl text-base leading-8 text-slate-700">
               หากท่านหรือองค์กรของท่านต้องการสนับสนุนกิจกรรมของชมรม สามารถติดต่อทีมงาน KSW
@@ -203,8 +267,9 @@ export default async function PartnersPage() {
               className="mt-7 inline-flex rounded-md bg-[#061426] px-5 py-3 text-sm font-black text-[#f4d58a] transition-colors hover:bg-[#0b2745]"
               href="mailto:kswlawclub@gmail.com"
             >
-              Contact KSW
+              Email KSW
             </a>
+            <p className="mt-3 text-sm font-bold text-slate-700">kswlawclub@gmail.com</p>
           </div>
         </div>
       </section>
