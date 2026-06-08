@@ -15,12 +15,24 @@ const coachExperience = [
   "ผู้ช่วยผู้ฝึกสอน ลพบุรี UTD",
   "ผู้ช่วยผู้ฝึกสอน BFB พัทยาซิตี้ T3",
 ];
-const coachLicenses = ["AFC C License", "AFC G License"];
+const coachLicenses = ["AFC C License", "กำลังศึกษา AFC B License", "AFC G License"];
 const coachAchievements = [
   "แชมป์ Asia Lawyer 2019–2023",
   "Assistant Coach – Lawyer All Star 2019–2024",
   "แชมป์ Lawyers Cup",
   "แชมป์ Thai Lawyers League 2022–2025",
+];
+const assistantPlayerExperience = [
+  "BEC Tero 2009–2011",
+  "Bangkok FC 2012–2015",
+  "Trat FC 2016",
+  "Yala FC 2017",
+  "Samut Sakhon City 2018",
+];
+const assistantCoachingExperience = [
+  "Assistant Coach – Samut Sakhon City 2019",
+  "Assistant Coach – Rayong FC 2020",
+  "Assistant Coach – Kabin United / Kabinburi City 2021–2022",
 ];
 const staffRoles = ["Team Staff", "Matchday Support", "Operations Support"];
 
@@ -145,9 +157,9 @@ export default async function TeamPage() {
           <article className="mt-7 overflow-hidden rounded-lg border border-[#d8ad45]/35 bg-white shadow-2xl shadow-slate-900/10 md:grid md:grid-cols-[0.9fr_1.1fr]">
             <div className="relative min-h-[280px] overflow-hidden md:min-h-full">
               <img
-                alt="Coach Nat coaching demo"
+                alt="Coach Nat"
                 className="absolute inset-0 size-full object-cover"
-                src="/images/ksw-highlights/highlight-matchday.jpg"
+                src="/images/staff/head-coach.jpg"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#061426]/75 via-transparent to-transparent md:bg-gradient-to-r" />
             </div>
@@ -203,9 +215,9 @@ export default async function TeamPage() {
           <article className="mt-5 overflow-hidden rounded-lg border border-[#d8ad45]/30 bg-white shadow-xl shadow-slate-900/10 sm:grid sm:grid-cols-[220px_1fr]">
             <div className="relative min-h-[180px] overflow-hidden">
               <img
-                alt="Assistant coach demo"
+                alt="Solomon Ukutu"
                 className="absolute inset-0 size-full object-cover"
-                src="/images/ksw-highlights/highlight-team-huddle.jpg"
+                src="/images/staff/assistant-coach.jpg"
               />
               <div className="absolute inset-0 bg-[#061426]/25" />
             </div>
@@ -217,11 +229,33 @@ export default async function TeamPage() {
                 </span>
               </div>
               <p className="mt-2 text-sm font-black uppercase tracking-wide text-[#9b1c1f]">
-                DEMO ASSISTANT COACH
+                Solomon Ukutu
               </p>
               <p className="mt-4 max-w-3xl text-sm font-semibold leading-7 text-slate-700">
-                ผู้ช่วยผู้ฝึกสอนที่สนับสนุนการวางแผน การซ้อม และการจัดการทีมในวันแข่งขัน
+                Solomon Ukutu เป็นอดีตนักฟุตบอลอาชีพที่มีประสบการณ์ในลีกไทยหลายสโมสร
+                ทั้งในฐานะผู้เล่นและผู้ช่วยผู้ฝึกสอน
               </p>
+              <div className="mt-5 grid gap-5 md:grid-cols-3">
+                {[
+                  ["Player Experience", assistantPlayerExperience],
+                  ["Coaching Experience", assistantCoachingExperience],
+                  ["Current", ["Assistant Coach – ชมรมทนายความคลองสามวา"]],
+                ].map(([title, items]) => (
+                  <div key={title as string}>
+                    <h4 className="text-xs font-black uppercase tracking-[0.18em] text-[#d8ad45]">
+                      {title as string}
+                    </h4>
+                    <ul className="mt-3 space-y-2">
+                      {(items as string[]).map((item) => (
+                        <li className="flex gap-2 text-sm font-semibold leading-6 text-slate-700" key={item}>
+                          <span className="mt-2 size-1.5 shrink-0 rounded-full bg-[#9b1c1f]" />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
             </div>
           </article>
 
