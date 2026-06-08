@@ -68,13 +68,13 @@ export default async function TeamPage() {
         </div>
       </section>
 
-      <section className="bg-gradient-to-br from-[#071b31] via-[#0b2745] to-[#061426]">
+      <section className="bg-[#FFFFFF]">
         <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
           <div className="mb-7">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">
               KSW Community
             </p>
-            <h2 className="mt-3 text-3xl font-black text-white">Team Members</h2>
+            <h2 className="mt-3 text-3xl font-black text-[#061426]">Team Members</h2>
           </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-7 sm:gap-x-5 md:grid-cols-3 lg:grid-cols-4">
             {members.map((fileName) => {
@@ -82,13 +82,13 @@ export default async function TeamPage() {
 
               return (
                 <article
-                  className="flex min-h-44 flex-col items-center justify-start rounded-lg bg-white px-3 py-5 text-center shadow-md shadow-black/10 transition duration-300 hover:shadow-[#d8ad45]/15"
+                  className="flex flex-col items-center justify-start px-2 py-2 text-center"
                   key={fileName}
                 >
                   <div className="mx-auto size-28 overflow-hidden rounded-full border-2 border-[#d8ad45] shadow-lg shadow-slate-900/15 sm:size-32">
                     <img
                       alt={name}
-                      className="size-full object-cover object-center"
+                      className="size-full scale-[1.55] object-cover object-center"
                       src={imagePath(fileName)}
                     />
                   </div>
