@@ -83,12 +83,12 @@ const assistantCoachingExperience = [
   "Assistant Coach – Kabin United / Kabinburi City 2021–2022",
 ];
 const teamStaff = [
-  ["เฟี๊ยต", "/images/staff/pied.png"],
-  ["เหงี่ยม", "/images/staff/ngiam.png"],
-  ["พาสต้า", "/images/staff/pasta.png"],
-  ["โก้", "/images/staff/ko.png"],
-  ["หม่อมโจอี้", "/images/staff/mhomchoei.png"],
-  ["เด่น", "/images/staff/den.png"],
+  ["เฟี๊ยต", "/images/staff/staff-01.png"],
+  ["เหงี่ยม", "/images/staff/staff-02.png"],
+  ["พาสต้า", "/images/staff/staff-03.png"],
+  ["โก้", "/images/staff/staff-04.png"],
+  ["หม่อมโจอี้", "/images/staff/staff-05.png"],
+  ["เด่น", "/images/staff/staff-06.png"],
 ];
 
 function shuffle<T>(items: T[]) {
