@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { SectionHeading } from "@/components/section-heading";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -117,25 +116,30 @@ export default async function TeamPage() {
           >
             Home {">"} Team
           </Link>
-          <SectionHeading
-            as="h1"
-            className="mt-8"
-            description="สมาชิกชมรมทนายความคลองสามวา ผู้ร่วมสร้างมิตรภาพ เครือข่าย และชีวิตฟุตบอลของ KSW L.C."
-            eyebrow="KSW L.C."
-            subtitle="Different roles. One club."
-            title="KSW Team Members"
-          />
+          <p className="mt-8 text-xs font-black uppercase tracking-[0.24em] text-[#d8ad45]">
+            KSW L.C.
+          </p>
+          <h1 className="mt-3 text-4xl font-black tracking-tight text-white sm:text-6xl">
+            KSW Team Members
+          </h1>
+          <p className="mt-4 text-xl font-black uppercase tracking-wide text-[#f4d58a]">
+            Different roles. One club.
+          </p>
+          <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
+            สมาชิกชมรมทนายความคลองสามวา ผู้ร่วมสร้างมิตรภาพ เครือข่าย
+            และชีวิตฟุตบอลของ KSW L.C.
+          </p>
         </div>
       </section>
 
       <section className="bg-[#FFFFFF]">
         <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
-          <SectionHeading
-            className="mb-7"
-            eyebrow="KSW Community"
-            theme="light"
-            title="Team Members"
-          />
+          <div className="mb-7">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">
+              KSW Community
+            </p>
+            <h2 className="mt-3 text-3xl font-black text-[#061426]">Team Members</h2>
+          </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-7 sm:gap-x-5 md:grid-cols-3 lg:grid-cols-4">
             {members.map((member) => {
               return (
@@ -182,14 +186,12 @@ export default async function TeamPage() {
 
       <section className="bg-[#f6f2ea]">
         <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
-          <SectionHeading
-            className="mb-7"
-            eyebrow="CLUB OPERATIONS"
-            theme="light"
-            title="Coaching Staff"
-          />
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">
+            CLUB OPERATIONS
+          </p>
+          <h2 className="mt-3 text-3xl font-black text-[#061426]">Coaching Staff</h2>
 
-          <article className="overflow-hidden rounded-lg border border-[#d8ad45]/35 bg-white shadow-2xl shadow-slate-900/10 md:grid md:grid-cols-[0.9fr_1.1fr]">
+          <article className="mt-7 overflow-hidden rounded-lg border border-[#d8ad45]/35 bg-white shadow-2xl shadow-slate-900/10 md:grid md:grid-cols-[0.9fr_1.1fr]">
             <div className="relative min-h-[280px] overflow-hidden md:min-h-full">
               <img
                 alt="Coach Nat"
