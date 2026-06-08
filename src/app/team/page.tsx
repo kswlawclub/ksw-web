@@ -35,12 +35,12 @@ const assistantCoachingExperience = [
   "Assistant Coach – Kabin United / Kabinburi City 2021–2022",
 ];
 const teamStaff = [
-  ["เฟี๊ยต", "/images/team-staff/pied.png"],
-  ["เหงี่ยม", "/images/team-staff/ngiam.png"],
-  ["พาสต้า", "/images/team-staff/pasta.png"],
-  ["โก้", "/images/team-staff/ko.png"],
-  ["หม่อมโจอี้", "/images/team-staff/mhomchoei.png"],
-  ["เด่น", "/images/team-staff/den.png"],
+  ["เฟี๊ยต", "/images/staff/pied.png"],
+  ["เหงี่ยม", "/images/staff/ngiam.png"],
+  ["พาสต้า", "/images/staff/pasta.png"],
+  ["โก้", "/images/staff/ko.png"],
+  ["หม่อมโจอี้", "/images/staff/mhomchoei.png"],
+  ["เด่น", "/images/staff/den.png"],
 ];
 
 function displayName(fileName: string) {
