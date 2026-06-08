@@ -1,61 +1,12 @@
 import Link from "next/link";
+import { readdir } from "node:fs/promises";
+import path from "node:path";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const memberFiles = [
-  "อเล็กซ์.png",
-  "บอสกราน.png",
-  "ไอซ์.png",
-  "เบิร์ด.png",
-  "โก้มีสทีน.png",
-  "บาสเล็ก.png",
-  "จ เจ๋ง.png",
-  "เทพปั๊ก.png",
-  "พี่ชีคของน้องๆ.png",
-  "อาร์ทหล่อ.png",
-  "พี่แขก.png",
-  "ดำ.png",
-  "ฟงหวิน.png",
-  "นัทสายคลอง.png",
-  "ภพ.png",
-  "กบบินได้.png",
-  "เด่น.png",
-  "พร.png",
-  "โอ๊ต.png",
-  "ป๋าหรั่ง.png",
-  "ปอเป๊ก.png",
-  "อ๋อน.png",
-  "จอร์นวุฒิ.png",
-  "เก่ง.png",
-  "อาร์ทสายสังสรรค์.png",
-  "พัฒน์.png",
-  "sugar daddy.png",
-  "จักรวาล.png",
-  "เมสซี่น้อย.png",
-  "พงษ์.png",
-  "เทพเป้า.png",
-  "พี่โอเว่น.png",
-  "เอ๋ สารคาม.png",
-  "พี่ปรีดี.png",
-  "เสี่ยบอย.png",
-  "โจ.png",
-  "เทพบั้มสายคลอง.png",
-  "บี.png",
-  "บู๊ซาวน์.png",
-  "บาสสูง.png",
-  "โอ.png",
-  "วุฒิ.png",
-  "เทพวิท.png",
-  "ยศ.png",
-  "วิน.png",
-  "โชคน้อย.png",
-  "เอกจิวยี่.png",
-  "แตง.png",
-  "ป๋าซ้ง.png",
-];
-
-const staffRoles = ["Team Manager", "Coaching Staff", "Team Staff"];
+const teamMembersDir = path.join(process.cwd(), "public/images/team-members");
+const staffRoles = ["Coaching Staff", "Assistant Coach", "Team Staff"];
 
 function displayName(fileName: string) {
   return fileName
@@ -66,6 +17,12 @@ function displayName(fileName: string) {
 
 function imagePath(fileName: string) {
   return `/images/team-members/${encodeURIComponent(fileName)}`;
+}
+
+async function getMemberFiles() {
+  const files = await readdir(teamMembersDir);
+
+  return files.filter((fileName) => /\.(png|jpe?g|webp|avif)$/i.test(fileName));
 }
 
 function shuffle<T>(items: T[]) {
@@ -79,8 +36,8 @@ function shuffle<T>(items: T[]) {
   return shuffled;
 }
 
-export default function TeamPage() {
-  const members = shuffle(memberFiles);
+export default async function TeamPage() {
+  const members = shuffle(await getMemberFiles());
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#061426] text-slate-100">
