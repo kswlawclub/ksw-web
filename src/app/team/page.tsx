@@ -160,6 +160,8 @@ export default async function TeamPage() {
                     <img
                       alt={member.name}
                       className="block"
+                      height={130}
+                      loading="lazy"
                       src={member.image}
                       style={{
                         width: "100%",
@@ -169,6 +171,7 @@ export default async function TeamPage() {
                         transform: "scale(1.9)",
                         transformOrigin: "center center",
                       }}
+                      width={130}
                     />
                   </div>
                   <h3 className="mt-4 min-h-10 text-sm font-black leading-5 text-[#061426] sm:text-base">
@@ -193,10 +196,14 @@ export default async function TeamPage() {
               <img
                 alt="Coach Nat"
                 className="absolute inset-0 size-full object-cover"
+                fetchPriority="high"
+                height={1305}
+                loading="eager"
                 src="/images/staff/head-coach.jpg"
                 style={{
                   objectPosition: "center 25%",
                 }}
+                width={1044}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#061426]/75 via-transparent to-transparent md:bg-gradient-to-r" />
             </div>
@@ -254,7 +261,11 @@ export default async function TeamPage() {
               <img
                 alt="Solomon Ukutu"
                 className="absolute inset-0 size-full object-contain object-center"
+                fetchPriority="high"
+                height={1469}
+                loading="eager"
                 src="/images/staff/assistant-coach.jpg"
+                width={720}
               />
             </div>
             <div className="p-5">
@@ -327,6 +338,8 @@ export default async function TeamPage() {
                     <img
                       alt={name}
                       className="block"
+                      height={130}
+                      loading="eager"
                       src={src}
                       style={{
                         width: "100%",
@@ -336,6 +349,7 @@ export default async function TeamPage() {
                         transform: "scale(1.9)",
                         transformOrigin: "center center",
                       }}
+                      width={130}
                     />
                   </div>
                   <h4 className="mt-4 min-h-10 text-sm font-black leading-5 text-[#061426] sm:text-base">
