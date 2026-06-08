@@ -34,7 +34,14 @@ const assistantCoachingExperience = [
   "Assistant Coach – Rayong FC 2020",
   "Assistant Coach – Kabin United / Kabinburi City 2021–2022",
 ];
-const staffRoles = ["Club Operations", "Matchday Operations", "Media & Communications"];
+const teamStaff = [
+  ["เฟี๊ยต", "/images/team-staff/pied.png"],
+  ["เหงี่ยม", "/images/team-staff/ngiam.png"],
+  ["พาสต้า", "/images/team-staff/pasta.png"],
+  ["โก้", "/images/team-staff/ko.png"],
+  ["หม่อมโจอี้", "/images/team-staff/mhomchoei.png"],
+  ["เด่น", "/images/team-staff/den.png"],
+];
 
 function displayName(fileName: string) {
   const name = fileName
@@ -272,22 +279,44 @@ export default async function TeamPage() {
             </div>
           </article>
 
-          <div className="mt-5 grid gap-4 md:grid-cols-3">
-            {staffRoles.map((role) => (
-              <article
-                className="rounded-lg border border-[#d8ad45]/30 bg-white p-5 text-center shadow-xl shadow-slate-900/10"
-                key={role}
-              >
-                <div className="mx-auto flex size-20 items-center justify-center rounded-full border border-[#d8ad45]/40 bg-[#061426] p-3 shadow-lg shadow-[#061426]/20">
-                  <img
-                    alt="KSW L.C. logo"
-                    className="max-h-full max-w-full object-contain"
-                    src="/team-logos/ksw-lc.png"
-                  />
-                </div>
-                <h3 className="mt-4 text-lg font-black text-[#061426]">{role}</h3>
-              </article>
-            ))}
+          <div className="mt-12 border-t border-[#d8ad45]/25 pt-8">
+            <h3 className="text-2xl font-black text-[#061426]">Team Staff</h3>
+            <div className="mt-7 grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-3 sm:gap-x-5 lg:grid-cols-6">
+              {teamStaff.map(([name, src]) => (
+                <article
+                  className="flex flex-col items-center justify-start px-2 py-2 text-center"
+                  key={name}
+                >
+                  <div
+                    className="mx-auto shadow-lg shadow-slate-900/15"
+                    style={{
+                      width: "130px",
+                      height: "130px",
+                      borderRadius: "50%",
+                      overflow: "hidden",
+                      border: "2px solid #d8ad45",
+                    }}
+                  >
+                    <img
+                      alt={name}
+                      className="block"
+                      src={src}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        objectPosition: "center 30%",
+                        transform: "scale(1.9)",
+                        transformOrigin: "center center",
+                      }}
+                    />
+                  </div>
+                  <h4 className="mt-4 min-h-10 text-sm font-black leading-5 text-[#061426] sm:text-base">
+                    {name}
+                  </h4>
+                </article>
+              ))}
+            </div>
           </div>
         </div>
       </section>
