@@ -9,10 +9,12 @@ const teamMembersDir = path.join(process.cwd(), "public/images/team-members");
 const staffRoles = ["Coaching Staff", "Assistant Coach", "Team Staff"];
 
 function displayName(fileName: string) {
-  return fileName
+  const name = fileName
     .replace(/\.[^.]+$/, "")
     .replace(/[-_]+/g, " ")
     .trim();
+
+  return `ทนาย${name.replace(/\b[a-z]/gi, (letter) => letter.toUpperCase())}`;
 }
 
 function imagePath(fileName: string) {
@@ -66,33 +68,6 @@ export default async function TeamPage() {
         </div>
       </section>
 
-      <section className="bg-[#f6f2ea]">
-        <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
-          <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">
-            Club Operations
-          </p>
-          <h2 className="mt-3 text-3xl font-black text-[#061426]">Team Staff</h2>
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
-            {staffRoles.map((role) => (
-              <article
-                className="rounded-lg border border-slate-200 bg-white p-5 text-center shadow-xl shadow-slate-900/10"
-                key={role}
-              >
-                <div className="mx-auto flex size-24 items-center justify-center rounded-full border border-[#d8ad45]/40 bg-[#061426] p-3 shadow-lg shadow-[#061426]/20">
-                  <img
-                    alt="KSW L.C. logo"
-                    className="max-h-full max-w-full object-contain"
-                    src="/team-logos/ksw-lc.png"
-                  />
-                </div>
-                <h3 className="mt-4 text-lg font-black text-[#061426]">{role}</h3>
-                <p className="mt-2 text-sm font-semibold text-slate-600">Coming Soon</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
       <section className="bg-gradient-to-br from-[#071b31] via-[#0b2745] to-[#061426]">
         <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
           <div className="mb-7">
@@ -107,23 +82,46 @@ export default async function TeamPage() {
 
               return (
                 <article
-                  className="rounded-lg border border-white/10 bg-white/[0.06] p-4 text-center shadow-xl shadow-black/20 backdrop-blur transition duration-300 hover:border-[#d8ad45]/55 hover:bg-white/[0.09] hover:shadow-[#d8ad45]/10"
+                  className="flex min-h-48 flex-col items-center justify-start rounded-lg border border-[#d8ad45]/45 bg-[#fffdf7] p-4 text-center shadow-xl shadow-black/15 transition duration-300 hover:border-[#d8ad45] hover:shadow-[#d8ad45]/15"
                   key={fileName}
                 >
                   <img
                     alt={name}
-                    className="mx-auto size-24 rounded-full border-2 border-[#d8ad45]/45 object-cover shadow-lg shadow-black/25 sm:size-28"
+                    className="mx-auto size-24 rounded-full border-2 border-[#d8ad45]/65 object-cover shadow-lg shadow-slate-900/15 sm:size-28"
                     src={imagePath(fileName)}
                   />
-                  <h3 className="mt-4 min-h-10 text-sm font-black leading-5 text-white sm:text-base">
+                  <h3 className="mt-4 min-h-10 text-sm font-black leading-5 text-[#061426] sm:text-base">
                     {name}
                   </h3>
-                  <p className="mt-2 text-xs font-bold uppercase tracking-wide text-[#f4d58a]">
-                    Coming Soon
-                  </p>
                 </article>
               );
             })}
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-[#f6f2ea]">
+        <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">
+            Club Operations
+          </p>
+          <h2 className="mt-3 text-3xl font-black text-[#061426]">Team Staff</h2>
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            {staffRoles.map((role) => (
+              <article
+                className="rounded-lg border border-[#d8ad45]/35 bg-white p-5 text-center shadow-xl shadow-slate-900/10"
+                key={role}
+              >
+                <div className="mx-auto flex size-24 items-center justify-center rounded-full border border-[#d8ad45]/40 bg-[#061426] p-3 shadow-lg shadow-[#061426]/20">
+                  <img
+                    alt="KSW L.C. logo"
+                    className="max-h-full max-w-full object-contain"
+                    src="/team-logos/ksw-lc.png"
+                  />
+                </div>
+                <h3 className="mt-4 text-lg font-black text-[#061426]">{role}</h3>
+              </article>
+            ))}
           </div>
         </div>
       </section>
