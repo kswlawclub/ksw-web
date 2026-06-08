@@ -82,14 +82,16 @@ export default async function TeamPage() {
 
               return (
                 <article
-                  className="flex min-h-48 flex-col items-center justify-start rounded-lg border border-[#d8ad45]/45 bg-[#fffdf7] p-4 text-center shadow-xl shadow-black/15 transition duration-300 hover:border-[#d8ad45] hover:shadow-[#d8ad45]/15"
+                  className="flex min-h-48 flex-col items-center justify-start rounded-lg border border-[#d8ad45]/45 bg-[#FFFFFF] p-4 text-center shadow-lg shadow-black/15 transition duration-300 hover:border-[#d8ad45] hover:shadow-[#d8ad45]/15"
                   key={fileName}
                 >
-                  <img
-                    alt={name}
-                    className="mx-auto size-24 rounded-full border-2 border-[#d8ad45]/65 object-cover shadow-lg shadow-slate-900/15 sm:size-28"
-                    src={imagePath(fileName)}
-                  />
+                  <div className="mx-auto size-24 overflow-hidden rounded-full border-2 border-[#d8ad45]/65 bg-[#061426] shadow-lg shadow-slate-900/15 sm:size-28">
+                    <img
+                      alt={name}
+                      className="size-full object-cover object-center"
+                      src={imagePath(fileName)}
+                    />
+                  </div>
                   <h3 className="mt-4 min-h-10 text-sm font-black leading-5 text-[#061426] sm:text-base">
                     {name}
                   </h3>
