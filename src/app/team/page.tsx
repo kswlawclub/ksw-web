@@ -34,7 +34,7 @@ const assistantCoachingExperience = [
   "Assistant Coach – Rayong FC 2020",
   "Assistant Coach – Kabin United / Kabinburi City 2021–2022",
 ];
-const staffRoles = ["Team Staff", "Matchday Support", "Operations Support"];
+const staffRoles = ["Club Operations", "Matchday Operations", "Media & Communications"];
 
 function displayName(fileName: string) {
   const name = fileName
@@ -160,6 +160,9 @@ export default async function TeamPage() {
                 alt="Coach Nat"
                 className="absolute inset-0 size-full object-cover"
                 src="/images/staff/head-coach.jpg"
+                style={{
+                  objectPosition: "center 25%",
+                }}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#061426]/75 via-transparent to-transparent md:bg-gradient-to-r" />
             </div>
@@ -212,8 +215,8 @@ export default async function TeamPage() {
             </div>
           </article>
 
-          <article className="mt-5 overflow-hidden rounded-lg border border-[#d8ad45]/30 bg-white shadow-xl shadow-slate-900/10 sm:grid sm:grid-cols-[220px_1fr]">
-            <div className="relative min-h-[180px] overflow-hidden">
+          <article className="mt-14 overflow-hidden rounded-lg border border-[#d8ad45]/30 border-t-[#d8ad45]/45 bg-white pt-8 shadow-xl shadow-slate-900/10 sm:grid sm:grid-cols-[40%_60%]">
+            <div className="relative min-h-[260px] overflow-hidden sm:min-h-full">
               <img
                 alt="Solomon Ukutu"
                 className="absolute inset-0 size-full object-cover"
@@ -222,24 +225,27 @@ export default async function TeamPage() {
               <div className="absolute inset-0 bg-[#061426]/25" />
             </div>
             <div className="p-5">
-              <div className="flex flex-wrap items-center gap-3">
-                <h3 className="text-xl font-black text-[#061426]">Assistant Coach</h3>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-2xl font-black uppercase tracking-wide text-[#061426]">
+                    Solomon Ukutu
+                  </h3>
+                  <p className="mt-1 text-sm font-black text-[#9b1c1f]">
+                    Assistant Coach
+                  </p>
+                </div>
                 <span className="rounded-full border border-[#d8ad45]/45 bg-[#fff8e3] px-3 py-1 text-xs font-black uppercase tracking-wide text-[#061426]">
                   AFC C License
                 </span>
               </div>
-              <p className="mt-2 text-sm font-black uppercase tracking-wide text-[#9b1c1f]">
-                Solomon Ukutu
-              </p>
               <p className="mt-4 max-w-3xl text-sm font-semibold leading-7 text-slate-700">
                 Solomon Ukutu เป็นอดีตนักฟุตบอลอาชีพที่มีประสบการณ์ในลีกไทยหลายสโมสร
                 ทั้งในฐานะผู้เล่นและผู้ช่วยผู้ฝึกสอน
               </p>
-              <div className="mt-5 grid gap-5 md:grid-cols-3">
+              <div className="mt-5 grid gap-5 md:grid-cols-2">
                 {[
                   ["Player Experience", assistantPlayerExperience],
                   ["Coaching Experience", assistantCoachingExperience],
-                  ["Current", ["Assistant Coach – ชมรมทนายความคลองสามวา"]],
                 ].map(([title, items]) => (
                   <div key={title as string}>
                     <h4 className="text-xs font-black uppercase tracking-[0.18em] text-[#d8ad45]">
@@ -255,6 +261,14 @@ export default async function TeamPage() {
                     </ul>
                   </div>
                 ))}
+              </div>
+              <div className="mt-5 rounded-lg border border-[#d8ad45]/25 bg-[#fffdf7] p-4">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#9b1c1f]">
+                  Current
+                </p>
+                <p className="mt-2 text-sm font-bold text-[#061426]">
+                  Assistant Coach – ชมรมทนายความคลองสามวา
+                </p>
               </div>
             </div>
           </article>
