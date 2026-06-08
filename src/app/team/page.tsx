@@ -76,16 +76,16 @@ export default async function TeamPage() {
             </p>
             <h2 className="mt-3 text-3xl font-black text-white">Team Members</h2>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-7 sm:gap-x-5 md:grid-cols-3 lg:grid-cols-4">
             {members.map((fileName) => {
               const name = displayName(fileName);
 
               return (
                 <article
-                  className="flex min-h-48 flex-col items-center justify-start rounded-lg border border-[#d8ad45]/45 bg-[#FFFFFF] p-4 text-center shadow-lg shadow-black/15 transition duration-300 hover:border-[#d8ad45] hover:shadow-[#d8ad45]/15"
+                  className="flex min-h-44 flex-col items-center justify-start rounded-lg bg-white px-3 py-5 text-center shadow-md shadow-black/10 transition duration-300 hover:shadow-[#d8ad45]/15"
                   key={fileName}
                 >
-                  <div className="mx-auto size-24 overflow-hidden rounded-full border-2 border-[#d8ad45]/65 bg-[#061426] shadow-lg shadow-slate-900/15 sm:size-28">
+                  <div className="mx-auto size-28 overflow-hidden rounded-full border-2 border-[#d8ad45] shadow-lg shadow-slate-900/15 sm:size-32">
                     <img
                       alt={name}
                       className="size-full object-cover object-center"
