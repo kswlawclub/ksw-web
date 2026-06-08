@@ -125,7 +125,7 @@ export default async function PartnersPage() {
             <p className="mt-8 text-xs font-black uppercase tracking-[0.24em] text-[#d8ad45]">
               KSW Partnership
             </p>
-            <h1 className="mt-3 max-w-4xl text-4xl font-black leading-[1.05] tracking-normal text-white sm:text-6xl">
+            <h1 className="mt-3 max-w-4xl text-4xl font-black tracking-tight text-white sm:text-6xl">
               Partner With KSW L.C.
             </h1>
             <p className="mt-4 text-xl font-black uppercase tracking-wide text-[#f4d58a]">
@@ -183,7 +183,7 @@ export default async function PartnersPage() {
 
       <section className="bg-[#f6f2ea]">
         <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
-          <h2 className="text-3xl font-black leading-[1.08] tracking-normal text-[#061426] sm:text-4xl">Partnership Opportunities</h2>
+          <h2 className="text-3xl font-black text-[#061426]">Partnership Opportunities</h2>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-700">
             Select a partnership level that fits your brand presence across club media,
             matchdays, and legal community activities. Prices are discussed privately.
@@ -212,7 +212,7 @@ export default async function PartnersPage() {
 
       <section className="bg-gradient-to-br from-[#071b31] via-[#0b2745] to-[#061426]">
         <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
-          <h2 className="text-3xl font-black leading-[1.08] tracking-normal text-white sm:text-4xl">Sponsor Wall</h2>
+          <h2 className="text-3xl font-black text-white">Sponsor Wall</h2>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">
             พื้นที่แสดงโลโก้ผู้สนับสนุนของชมรม แบ่งระดับการมองเห็นตามรูปแบบความร่วมมือ
           </p>
@@ -256,7 +256,7 @@ export default async function PartnersPage() {
       <section className="bg-[#f6f2ea]">
         <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
           <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-900/10 sm:p-8">
-            <h2 className="text-3xl font-black leading-[1.08] tracking-normal text-[#061426] sm:text-4xl">
+            <h2 className="text-3xl font-black text-[#061426]">
               ร่วมเป็นส่วนหนึ่งของ KSW L.C.
             </h2>
             <p className="mt-4 max-w-3xl text-base leading-8 text-slate-700">

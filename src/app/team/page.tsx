@@ -119,7 +119,7 @@ export default async function TeamPage() {
           <p className="mt-8 text-xs font-black uppercase tracking-[0.24em] text-[#d8ad45]">
             KSW L.C.
           </p>
-          <h1 className="mt-3 text-4xl font-black leading-[1.05] tracking-normal text-white sm:text-6xl">
+          <h1 className="mt-3 text-4xl font-black tracking-tight text-white sm:text-6xl">
             KSW Team Members
           </h1>
           <p className="mt-4 text-xl font-black uppercase tracking-wide text-[#f4d58a]">
@@ -138,7 +138,7 @@ export default async function TeamPage() {
             <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">
               KSW Community
             </p>
-            <h2 className="mt-3 text-3xl font-black leading-[1.08] tracking-normal text-[#061426] sm:text-4xl">Team Members</h2>
+            <h2 className="mt-3 text-3xl font-black text-[#061426]">Team Members</h2>
           </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-7 sm:gap-x-5 md:grid-cols-3 lg:grid-cols-4">
             {members.map((member) => {
@@ -189,7 +189,7 @@ export default async function TeamPage() {
           <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">
             CLUB OPERATIONS
           </p>
-          <h2 className="mt-3 text-3xl font-black leading-[1.08] tracking-normal text-[#061426] sm:text-4xl">Coaching Staff</h2>
+          <h2 className="mt-3 text-3xl font-black text-[#061426]">Coaching Staff</h2>
 
           <article className="mt-7 overflow-hidden rounded-lg border border-[#d8ad45]/35 bg-white shadow-2xl shadow-slate-900/10 md:grid md:grid-cols-[0.9fr_1.1fr]">
             <div className="relative min-h-[280px] overflow-hidden md:min-h-full">

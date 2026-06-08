@@ -353,7 +353,7 @@ export default async function Home() {
             <p className="mb-4 text-xs font-bold uppercase tracking-[0.22em] text-[#d8ad45] sm:text-sm sm:tracking-[0.28em]">
               KHLONG SAM WA LAWYERS CLUB
             </p>
-            <h1 className="max-w-4xl text-4xl font-black leading-[1.03] tracking-normal text-white sm:text-5xl md:text-7xl">
+            <h1 className="max-w-4xl text-4xl font-black leading-[1.03] tracking-tight text-white sm:text-5xl md:text-7xl">
               KSW L.C.
             </h1>
             <p className="mt-4 max-w-2xl text-lg font-black uppercase leading-7 tracking-wide text-[#f4d58a] sm:text-2xl">
@@ -412,7 +412,7 @@ export default async function Home() {
             <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">
               ABOUT KSW
             </p>
-            <h2 className="mt-3 max-w-5xl text-3xl font-black leading-[1.08] tracking-normal text-[#061426] sm:text-4xl lg:whitespace-nowrap">
+            <h2 className="mt-3 max-w-5xl text-2xl font-black leading-snug text-[#061426] sm:text-3xl lg:text-4xl lg:whitespace-nowrap">
               สโมสรฟุตบอลนักกฎหมายคลองสามวา
             </h2>
             <p className="mt-5 max-w-3xl text-base leading-8 text-slate-700">
@@ -448,7 +448,7 @@ export default async function Home() {
             <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]">
               KSW HIGHLIGHTS
             </p>
-            <h2 className="mt-3 text-3xl font-black leading-[1.08] tracking-normal text-white sm:text-4xl">
+            <h2 className="mt-3 text-3xl font-black text-white sm:text-4xl">
               Life at KSW
             </h2>
             <p className="mt-3 text-base leading-7 text-slate-300">
@@ -523,7 +523,7 @@ export default async function Home() {
         <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
         <div className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
           <div className="border-b border-slate-200 px-4 py-4 sm:px-5">
-            <h2 className="text-2xl font-black leading-[1.08] tracking-normal text-[#061426]">Latest Results</h2>
+            <h2 className="text-xl font-black text-[#061426]">Latest Results</h2>
           </div>
           <div className="divide-y divide-slate-200">
             {latestResults.length ? (
@@ -575,7 +575,7 @@ export default async function Home() {
         </div>
         <div className="mt-6 min-w-0 rounded-lg border border-dashed border-[#d8ad45]/55 bg-[#fffdf7] shadow-xl shadow-slate-900/10">
           <div className="border-b border-dashed border-[#d8ad45]/40 px-4 py-4 sm:px-5">
-            <h2 className="text-2xl font-black leading-[1.08] tracking-normal text-[#061426]">Next Fixtures</h2>
+            <h2 className="text-xl font-black text-[#061426]">Next Fixtures</h2>
             <p className="mt-1 text-sm text-slate-600">
               Upcoming KSW match schedule.
             </p>
@@ -652,7 +652,7 @@ export default async function Home() {
         <div className="min-w-0 overflow-hidden rounded-lg border border-white/10 bg-white/[0.05]">
           <div className="flex items-center justify-between gap-4 border-b border-white/10 px-4 py-3 sm:px-5">
             <div>
-              <h2 className="text-2xl font-black leading-[1.08] tracking-normal text-white">League Table</h2>
+              <h2 className="text-xl font-black text-white">League Table</h2>
               <p className="mt-1 text-xs font-semibold text-slate-400">
                 Thai Lawyers League Season 6
               </p>
@@ -739,7 +739,7 @@ export default async function Home() {
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="text-2xl font-black leading-[1.08] tracking-normal text-[#061426]">League Teams</h2>
+              <h2 className="text-xl font-black text-[#061426]">League Teams</h2>
               <p className="mt-1 text-sm text-slate-600">13 clubs across the legal football community.</p>
             </div>
           </div>
@@ -775,7 +775,7 @@ export default async function Home() {
           <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]">
             KSW Partnership
           </p>
-          <h2 className="mt-3 text-3xl font-black leading-[1.08] tracking-normal text-white sm:text-4xl">Partners & Supporters</h2>
+          <h2 className="mt-3 text-3xl font-black text-white">Partners & Supporters</h2>
           <p className="mt-4 max-w-xl text-sm leading-7 text-slate-200">
             สนับสนุน KSW L.C. คือการเป็นส่วนหนึ่งของชุมชนฟุตบอลนักกฎหมายที่เชื่อมโยงมิตรภาพ
             เครือข่ายวิชาชีพ และกิจกรรมการแข่งขันตลอดฤดูกาล
