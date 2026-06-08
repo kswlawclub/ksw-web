@@ -6,7 +6,23 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const teamMembersDir = path.join(process.cwd(), "public/images/team-members");
-const staffRoles = ["Coaching Staff", "Assistant Coach", "Team Staff"];
+const coachBio = [
+  "อดีตเยาวชนทีมชาติไทย",
+  "อดีตนักฟุตบอลทีมทนายไทย",
+  "อดีตนักฟุตบอลโรงเรียนเทพศิรินทร์",
+];
+const coachExperience = [
+  "ผู้ช่วยผู้ฝึกสอน ลพบุรี UTD",
+  "ผู้ช่วยผู้ฝึกสอน BFB พัทยาซิตี้ T3",
+];
+const coachLicenses = ["AFC C License", "AFC G License"];
+const coachAchievements = [
+  "แชมป์ Asia Lawyer 2019–2023",
+  "Assistant Coach – Lawyer All Star 2019–2024",
+  "แชมป์ Lawyers Cup",
+  "แชมป์ Thai Lawyers League 2022–2025",
+];
+const staffRoles = ["Team Staff", "Matchday Support", "Operations Support"];
 
 function displayName(fileName: string) {
   const name = fileName
@@ -120,18 +136,102 @@ export default async function TeamPage() {
       </section>
 
       <section className="bg-[#f6f2ea]">
-        <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
+        <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
           <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">
-            Club Operations
+            CLUB OPERATIONS
           </p>
-          <h2 className="mt-3 text-3xl font-black text-[#061426]">Team Staff</h2>
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
+          <h2 className="mt-3 text-3xl font-black text-[#061426]">Coaching Staff</h2>
+
+          <article className="mt-7 overflow-hidden rounded-lg border border-[#d8ad45]/35 bg-white shadow-2xl shadow-slate-900/10 md:grid md:grid-cols-[0.9fr_1.1fr]">
+            <div className="relative min-h-[280px] overflow-hidden md:min-h-full">
+              <img
+                alt="Coach Nat coaching demo"
+                className="absolute inset-0 size-full object-cover"
+                src="/images/ksw-highlights/highlight-matchday.jpg"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#061426]/75 via-transparent to-transparent md:bg-gradient-to-r" />
+            </div>
+            <div className="p-5 sm:p-7">
+              <div className="h-0.5 w-14 rounded-full bg-[#d8ad45]" />
+              <div className="mt-5 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-black text-[#9b1c1f]">
+                    กวีวัฒน์ รัตนหนูพงศ์
+                  </p>
+                  <h3 className="mt-1 text-2xl font-black text-[#061426]">
+                    COACH NAT (แนท)
+                  </h3>
+                </div>
+                <span className="rounded-full border border-[#d8ad45]/45 bg-[#fff8e3] px-3 py-1 text-xs font-black uppercase tracking-wide text-[#061426]">
+                  AFC C License
+                </span>
+              </div>
+
+              <div className="mt-6 grid gap-5 sm:grid-cols-2">
+                {[
+                  ["Bio", coachBio],
+                  ["Club Coaching Experience", coachExperience],
+                  ["Coaching License", coachLicenses],
+                  ["Achievements", coachAchievements],
+                ].map(([title, items]) => (
+                  <div key={title as string}>
+                    <h4 className="text-xs font-black uppercase tracking-[0.18em] text-[#d8ad45]">
+                      {title as string}
+                    </h4>
+                    <ul className="mt-3 space-y-2">
+                      {(items as string[]).map((item) => (
+                        <li className="flex gap-2 text-sm font-semibold leading-6 text-slate-700" key={item}>
+                          <span className="mt-2 size-1.5 shrink-0 rounded-full bg-[#9b1c1f]" />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-6 rounded-lg border border-[#d8ad45]/25 bg-[#fffdf7] p-4">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#9b1c1f]">
+                  Current
+                </p>
+                <p className="mt-2 text-sm font-bold text-[#061426]">
+                  Coach ผู้ฝึกสอน – ชมรมทนายความคลองสามวา
+                </p>
+              </div>
+            </div>
+          </article>
+
+          <article className="mt-5 overflow-hidden rounded-lg border border-[#d8ad45]/30 bg-white shadow-xl shadow-slate-900/10 sm:grid sm:grid-cols-[220px_1fr]">
+            <div className="relative min-h-[180px] overflow-hidden">
+              <img
+                alt="Assistant coach demo"
+                className="absolute inset-0 size-full object-cover"
+                src="/images/ksw-highlights/highlight-team-huddle.jpg"
+              />
+              <div className="absolute inset-0 bg-[#061426]/25" />
+            </div>
+            <div className="p-5">
+              <div className="flex flex-wrap items-center gap-3">
+                <h3 className="text-xl font-black text-[#061426]">Assistant Coach</h3>
+                <span className="rounded-full border border-[#d8ad45]/45 bg-[#fff8e3] px-3 py-1 text-xs font-black uppercase tracking-wide text-[#061426]">
+                  AFC C License
+                </span>
+              </div>
+              <p className="mt-2 text-sm font-black uppercase tracking-wide text-[#9b1c1f]">
+                DEMO ASSISTANT COACH
+              </p>
+              <p className="mt-4 max-w-3xl text-sm font-semibold leading-7 text-slate-700">
+                ผู้ช่วยผู้ฝึกสอนที่สนับสนุนการวางแผน การซ้อม และการจัดการทีมในวันแข่งขัน
+              </p>
+            </div>
+          </article>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
             {staffRoles.map((role) => (
               <article
-                className="rounded-lg border border-[#d8ad45]/35 bg-white p-5 text-center shadow-xl shadow-slate-900/10"
+                className="rounded-lg border border-[#d8ad45]/30 bg-white p-5 text-center shadow-xl shadow-slate-900/10"
                 key={role}
               >
-                <div className="mx-auto flex size-24 items-center justify-center rounded-full border border-[#d8ad45]/40 bg-[#061426] p-3 shadow-lg shadow-[#061426]/20">
+                <div className="mx-auto flex size-20 items-center justify-center rounded-full border border-[#d8ad45]/40 bg-[#061426] p-3 shadow-lg shadow-[#061426]/20">
                   <img
                     alt="KSW L.C. logo"
                     className="max-h-full max-w-full object-contain"
