@@ -88,7 +88,7 @@ export default async function TeamPage() {
                   <div className="mx-auto size-28 overflow-hidden rounded-full border-2 border-[#d8ad45] shadow-lg shadow-slate-900/15 sm:size-32">
                     <img
                       alt={name}
-                      className="size-full scale-[1.55] object-cover object-center"
+                      className="size-full scale-[1.75] object-cover object-[center_58%]"
                       src={imagePath(fileName)}
                     />
                   </div>
