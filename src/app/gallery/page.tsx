@@ -1,70 +1,57 @@
 import Link from "next/link";
 import { GalleryGrid, type GalleryImage } from "@/components/gallery-grid";
+import { getSupabase } from "@/lib/supabase";
 
-const galleryImages: GalleryImage[] = [
-  {
-    src: "/images/gallery/team-photo-01.jpg",
-    title: "KSW Team Photo",
-    category: "Team Photo",
-  },
-  {
-    src: "/images/gallery/matchday-01.jpg",
-    title: "Matchday Focus",
-    category: "Matchday",
-  },
-  {
-    src: "/images/gallery/matchday-02.jpg",
-    title: "Game Tempo",
-    category: "Matchday",
-  },
-  {
-    src: "/images/gallery/matchday-03.jpg",
-    title: "On The Ball",
-    category: "Matchday",
-  },
-  {
-    src: "/images/gallery/matchday-04.jpg",
-    title: "Final Whistle",
-    category: "Matchday",
-  },
-  {
-    src: "/images/gallery/team-spirit-01.jpg",
-    title: "Team Talk",
-    category: "Team Spirit",
-  },
-  {
-    src: "/images/gallery/team-spirit-02.jpg",
-    title: "Together Before Kickoff",
-    category: "Team Spirit",
-  },
-  {
-    src: "/images/gallery/team-spirit-03.jpg",
-    title: "Shared Standard",
-    category: "Team Spirit",
-  },
-  {
-    src: "/images/gallery/sideline-01.jpg",
-    title: "Sideline Energy",
-    category: "Sideline",
-  },
-  {
-    src: "/images/gallery/community-01.jpg",
-    title: "Legal Football Community",
-    category: "Community",
-  },
-  {
-    src: "/images/gallery/community-02.jpg",
-    title: "Beyond The Pitch",
-    category: "Community",
-  },
-  {
-    src: "/images/gallery/community-03.jpg",
-    title: "Club Connections",
-    category: "Community",
-  },
-];
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-export default function GalleryPage() {
+const categoryLabels: Record<string, string> = {
+  "team-photo": "Team Photo",
+  matchday: "Matchday",
+  "team-spirit": "Team Spirit",
+  sideline: "Sideline",
+  community: "Community",
+  training: "Training",
+  other: "Other",
+};
+
+type GalleryItemRow = {
+  image_url: string | null;
+  title: string | null;
+  category: string | null;
+};
+
+async function getGalleryImages(): Promise<GalleryImage[]> {
+  const supabase = getSupabase();
+
+  if (!supabase) {
+    return [];
+  }
+
+  const result = await supabase
+    .from("gallery_items")
+    .select("image_url, title, category")
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: false });
+
+  if (result.error) {
+    console.error("public gallery query failed", result.error);
+    return [];
+  }
+
+  return ((result.data ?? []) as GalleryItemRow[])
+    .filter((item) => item.image_url && item.title)
+    .map((item) => ({
+      src: item.image_url ?? "",
+      title: item.title ?? "KSW Gallery",
+      category: categoryLabels[item.category ?? ""] ?? "Other",
+    }));
+}
+
+export default async function GalleryPage() {
+  const galleryImages = await getGalleryImages();
+
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#061426] text-slate-100">
       <section className="relative overflow-hidden border-b border-[#d8ad45]/25">

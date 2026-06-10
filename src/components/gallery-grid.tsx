@@ -12,7 +12,16 @@ type GalleryGridProps = {
   images: GalleryImage[];
 };
 
-const filters = ["All", "Team Photo", "Matchday", "Team Spirit", "Sideline", "Community"];
+const filters = [
+  "All",
+  "Team Photo",
+  "Matchday",
+  "Team Spirit",
+  "Sideline",
+  "Community",
+  "Training",
+  "Other",
+];
 
 export function GalleryGrid({ images }: GalleryGridProps) {
   const [activeFilter, setActiveFilter] = useState("All");
@@ -43,29 +52,35 @@ export function GalleryGrid({ images }: GalleryGridProps) {
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
-        {filteredImages.map((image) => (
-          <button
-            className="group relative aspect-video overflow-hidden rounded-lg border border-white/10 bg-white/[0.05] text-left shadow-xl shadow-black/20 transition-shadow hover:shadow-[#d8ad45]/15"
-            key={image.src}
-            onClick={() => setActiveImage(image)}
-            type="button"
-          >
-            <img
-              alt={image.title}
-              className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105"
-              src={image.src}
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#061426]/88 via-[#061426]/20 to-transparent" />
-            <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4">
-              <span className="rounded-full bg-[#d8ad45] px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-[#061426]">
-                {image.category}
-              </span>
-              <h3 className="mt-2 text-sm font-black text-white sm:text-base">
-                {image.title}
-              </h3>
-            </div>
-          </button>
-        ))}
+        {filteredImages.length > 0 ? (
+          filteredImages.map((image) => (
+            <button
+              className="group relative aspect-video overflow-hidden rounded-lg border border-white/10 bg-white/[0.05] text-left shadow-xl shadow-black/20 transition-shadow hover:shadow-[#d8ad45]/15"
+              key={image.src}
+              onClick={() => setActiveImage(image)}
+              type="button"
+            >
+              <img
+                alt={image.title}
+                className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105"
+                src={image.src}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#061426]/88 via-[#061426]/20 to-transparent" />
+              <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4">
+                <span className="rounded-full bg-[#d8ad45] px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-[#061426]">
+                  {image.category}
+                </span>
+                <h3 className="mt-2 text-sm font-black text-white sm:text-base">
+                  {image.title}
+                </h3>
+              </div>
+            </button>
+          ))
+        ) : (
+          <div className="col-span-full rounded-lg border border-white/10 bg-white/[0.05] p-8 text-center text-slate-300">
+            Gallery moments will be added soon.
+          </div>
+        )}
       </div>
 
       {activeImage ? (
