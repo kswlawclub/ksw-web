@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { getSupabase } from "@/lib/supabase";
+import { getSupabase, getSupabaseConfig } from "@/lib/supabase";
 import { createMatch, deleteMatchById, updateMatch } from "./actions";
 
 const storageKey = "ksw-admin-authenticated";
@@ -39,6 +39,12 @@ type MatchForm = {
   homeScore: string;
   awayScore: string;
   status: "scheduled" | "completed" | "finished";
+};
+
+type ReadDiagnostics = {
+  projectRef: string;
+  matchCount: number;
+  matchesQueryError: boolean;
 };
 
 const emptyForm: MatchForm = {
@@ -94,6 +100,20 @@ function normalizeStatusForDb(status: MatchForm["status"]): "scheduled" | "compl
   return status === "finished" || status === "completed" ? "completed" : "scheduled";
 }
 
+function supabaseProjectRef() {
+  const { supabaseUrl } = getSupabaseConfig();
+
+  if (!supabaseUrl) {
+    return "not configured";
+  }
+
+  try {
+    return new URL(supabaseUrl).hostname.split(".")[0] || "unknown";
+  } catch {
+    return "invalid url";
+  }
+}
+
 export default function AdminMatchesPage() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
@@ -105,6 +125,11 @@ export default function AdminMatchesPage() {
   const [form, setForm] = useState<MatchForm>(emptyForm);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [readDiagnostics, setReadDiagnostics] = useState<ReadDiagnostics>({
+    projectRef: supabaseProjectRef(),
+    matchCount: 0,
+    matchesQueryError: false,
+  });
 
   const teamsById = useMemo(
     () => new Map(teams.map((team) => [team.id, team])),
@@ -152,8 +177,19 @@ export default function AdminMatchesPage() {
     if (matchesResult.error) {
       console.error("admin matches query failed", matchesResult.error.message);
       setError("Could not load matches. Confirm the matches table exists and is readable.");
+      setReadDiagnostics({
+        projectRef: supabaseProjectRef(),
+        matchCount: 0,
+        matchesQueryError: true,
+      });
     } else {
-      setMatches((matchesResult.data ?? []) as Match[]);
+      const loadedMatches = (matchesResult.data ?? []) as Match[];
+      setMatches(loadedMatches);
+      setReadDiagnostics({
+        projectRef: supabaseProjectRef(),
+        matchCount: loadedMatches.length,
+        matchesQueryError: false,
+      });
     }
 
     if (teamsResult.error) {
@@ -286,6 +322,13 @@ export default function AdminMatchesPage() {
       </section>
 
       <section className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-10 sm:px-6 lg:grid-cols-[380px_1fr] lg:px-10">
+        <div className="rounded-lg border border-[#d8ad45]/25 bg-white p-4 text-sm font-bold text-slate-700 shadow-lg shadow-slate-900/5 lg:col-span-2">
+          <span className="text-[#061426]">Supabase diagnostics:</span>{" "}
+          project ref {readDiagnostics.projectRef} · matches loaded{" "}
+          {readDiagnostics.matchCount} · matches query error{" "}
+          {readDiagnostics.matchesQueryError ? "yes" : "no"}
+        </div>
+
         <form
           className="rounded-lg border border-[#d8ad45]/30 bg-white p-5 shadow-xl shadow-slate-900/10"
           onSubmit={saveMatch}
