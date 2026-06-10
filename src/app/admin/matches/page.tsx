@@ -20,6 +20,8 @@ type Team = {
 type League = {
   id: string;
   name: string;
+  season: string | null;
+  competition_type: string | null;
 };
 
 type Match = {
@@ -35,6 +37,7 @@ type Match = {
 
 type MatchForm = {
   id: string;
+  leagueId: string;
   matchDate: string;
   homeTeamId: string;
   awayTeamId: string;
@@ -45,6 +48,7 @@ type MatchForm = {
 
 const emptyForm: MatchForm = {
   id: "",
+  leagueId: "",
   matchDate: "",
   homeTeamId: "",
   awayTeamId: "",
@@ -108,6 +112,10 @@ export default function AdminMatchesPage() {
     () => new Map(teams.map((team) => [team.id, team])),
     [teams],
   );
+  const leaguesById = useMemo(
+    () => new Map(leagues.map((league) => [league.id, league])),
+    [leagues],
+  );
 
   useEffect(() => {
     if (window.localStorage.getItem(storageKey) !== "true") {
@@ -144,7 +152,11 @@ export default function AdminMatchesPage() {
         .select("id, league_id, match_date, home_team_id, away_team_id, home_score, away_score, status")
         .order("match_date", { ascending: false }),
       supabase.from("teams").select("id, name, short_name, league_id").order("name"),
-      supabase.from("leagues").select("id, name").order("created_at", { ascending: false }),
+      supabase
+        .from("leagues")
+        .select("id, name, season, competition_type")
+        .eq("is_active", true)
+        .order("created_at", { ascending: false }),
     ]);
 
     if (matchesResult.error) {
@@ -169,7 +181,13 @@ export default function AdminMatchesPage() {
     if (leaguesResult.error) {
       console.error("admin leagues query failed", leaguesResult.error.message);
     } else {
-      setLeagues((leaguesResult.data ?? []) as League[]);
+      const activeLeagues = (leaguesResult.data ?? []) as League[];
+      setLeagues(activeLeagues);
+      setForm((current) =>
+        current.leagueId || !activeLeagues[0]
+          ? current
+          : { ...current, leagueId: activeLeagues[0].id },
+      );
     }
 
     setLoading(false);
@@ -184,6 +202,7 @@ export default function AdminMatchesPage() {
   function editMatch(match: Match) {
     setForm({
       id: match.id,
+      leagueId: match.league_id,
       matchDate: toLocalDateInput(match.match_date),
       homeTeamId: match.home_team_id,
       awayTeamId: match.away_team_id,
@@ -198,8 +217,6 @@ export default function AdminMatchesPage() {
   async function saveMatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const homeTeam = teamsById.get(form.homeTeamId);
-    const leagueId = homeTeam?.league_id ?? leagues[0]?.id;
     const homeScore = scoreValue(form.homeScore);
     const awayScore = scoreValue(form.awayScore);
 
@@ -207,8 +224,14 @@ export default function AdminMatchesPage() {
     setMessage("");
     setError("");
 
-    if (!leagueId) {
-      setError("No league is available for this match.");
+    if (!form.leagueId) {
+      setError("Competition is required.");
+      setSaving(false);
+      return;
+    }
+
+    if (!form.homeTeamId || !form.awayTeamId) {
+      setError("Home team and away team are required.");
       setSaving(false);
       return;
     }
@@ -226,7 +249,7 @@ export default function AdminMatchesPage() {
     }
 
     const payload = {
-      league_id: leagueId,
+      league_id: form.leagueId,
       match_date: new Date(form.matchDate).toISOString(),
       home_team_id: form.homeTeamId,
       away_team_id: form.awayTeamId,
@@ -314,6 +337,25 @@ export default function AdminMatchesPage() {
           </div>
 
           <div className="grid gap-4">
+            <label className="grid gap-2 text-sm font-black">
+              Competition
+              <select
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                onChange={(event) => setForm((current) => ({ ...current, leagueId: event.target.value }))}
+                required
+                value={form.leagueId}
+              >
+                <option value="">Select competition</option>
+                {leagues.map((league) => (
+                  <option key={league.id} value={league.id}>
+                    {[league.name, league.season, league.competition_type]
+                      .filter(Boolean)
+                      .join(" - ")}
+                  </option>
+                ))}
+              </select>
+            </label>
+
             <label className="grid gap-2 text-sm font-black">
               Match Date & Time
               <input
@@ -435,9 +477,10 @@ export default function AdminMatchesPage() {
             <p className="p-5 text-sm font-bold text-slate-600">Loading matches...</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+              <table className="w-full min-w-[880px] border-collapse text-left text-sm">
                 <thead className="bg-[#061426] text-xs uppercase tracking-[0.14em] text-[#f4d58a]">
                   <tr>
+                    <th className="px-4 py-3">Competition</th>
                     <th className="px-4 py-3">Match Date</th>
                     <th className="px-4 py-3">Home Team</th>
                     <th className="px-4 py-3">Away Team</th>
@@ -451,9 +494,16 @@ export default function AdminMatchesPage() {
                   {matches.map((match) => {
                     const homeTeam = teamsById.get(match.home_team_id);
                     const awayTeam = teamsById.get(match.away_team_id);
+                    const league = leaguesById.get(match.league_id);
 
                     return (
                       <tr className="border-b border-slate-100 last:border-b-0 hover:bg-[#f8f3e7]" key={match.id}>
+                        <td className="px-4 py-3">
+                          <div className="font-black">{league?.name ?? "Unknown competition"}</div>
+                          <div className="mt-1 text-xs font-bold text-slate-500">
+                            {[league?.season, league?.competition_type].filter(Boolean).join(" - ")}
+                          </div>
+                        </td>
                         <td className="px-4 py-3 font-bold">{formatDateTime(match.match_date)}</td>
                         <td className="px-4 py-3">{homeTeam?.name ?? "Unknown team"}</td>
                         <td className="px-4 py-3">{awayTeam?.name ?? "Unknown team"}</td>
