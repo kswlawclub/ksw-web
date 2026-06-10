@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 const storageKey = "ksw-admin-authenticated";
 const modules = [
   { title: "Manage Matches", href: "/admin/matches", status: "Open module" },
-  { title: "Manage League Table", href: "", status: "Coming Soon" },
+  { title: "Manage Competitions", href: "/admin/competitions", status: "Open module" },
   { title: "Manage Gallery", href: "", status: "Coming Soon" },
   { title: "Manage Sponsors", href: "", status: "Coming Soon" },
 ];
