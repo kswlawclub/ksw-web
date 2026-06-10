@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { getSupabase, getSupabaseConfig } from "@/lib/supabase";
+import { getSupabase } from "@/lib/supabase";
 import { createMatch, deleteMatchById, updateMatch } from "./actions";
 
 const storageKey = "ksw-admin-authenticated";
+
+type MatchStatus = "scheduled" | "completed";
 
 type Team = {
   id: string;
@@ -28,7 +30,7 @@ type Match = {
   away_team_id: string;
   home_score: number | null;
   away_score: number | null;
-  status: string;
+  status: MatchStatus;
 };
 
 type MatchForm = {
@@ -38,13 +40,7 @@ type MatchForm = {
   awayTeamId: string;
   homeScore: string;
   awayScore: string;
-  status: "scheduled" | "completed" | "finished";
-};
-
-type ReadDiagnostics = {
-  projectRef: string;
-  matchCount: number;
-  matchesQueryError: boolean;
+  status: MatchStatus;
 };
 
 const emptyForm: MatchForm = {
@@ -88,30 +84,12 @@ function scoreValue(value: string) {
   return value.trim() === "" ? null : Number(value);
 }
 
-function toFormStatus(status: string): MatchForm["status"] {
-  return status === "completed" || status === "finished" ? "completed" : "scheduled";
+function isMatchStatus(value: string): value is MatchStatus {
+  return value === "scheduled" || value === "completed";
 }
 
-function toDisplayStatus(status: string) {
-  return status === "completed" || status === "finished" ? "finished" : "scheduled";
-}
-
-function normalizeStatusForDb(status: MatchForm["status"]): "scheduled" | "completed" {
-  return status === "finished" || status === "completed" ? "completed" : "scheduled";
-}
-
-function supabaseProjectRef() {
-  const { supabaseUrl } = getSupabaseConfig();
-
-  if (!supabaseUrl) {
-    return "not configured";
-  }
-
-  try {
-    return new URL(supabaseUrl).hostname.split(".")[0] || "unknown";
-  } catch {
-    return "invalid url";
-  }
+function toMatchStatus(value: string): MatchStatus {
+  return isMatchStatus(value) ? value : "scheduled";
 }
 
 export default function AdminMatchesPage() {
@@ -125,11 +103,6 @@ export default function AdminMatchesPage() {
   const [form, setForm] = useState<MatchForm>(emptyForm);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [readDiagnostics, setReadDiagnostics] = useState<ReadDiagnostics>({
-    projectRef: supabaseProjectRef(),
-    matchCount: 0,
-    matchesQueryError: false,
-  });
 
   const teamsById = useMemo(
     () => new Map(teams.map((team) => [team.id, team])),
@@ -177,19 +150,13 @@ export default function AdminMatchesPage() {
     if (matchesResult.error) {
       console.error("admin matches query failed", matchesResult.error.message);
       setError("Could not load matches. Confirm the matches table exists and is readable.");
-      setReadDiagnostics({
-        projectRef: supabaseProjectRef(),
-        matchCount: 0,
-        matchesQueryError: true,
-      });
     } else {
-      const loadedMatches = (matchesResult.data ?? []) as Match[];
-      setMatches(loadedMatches);
-      setReadDiagnostics({
-        projectRef: supabaseProjectRef(),
-        matchCount: loadedMatches.length,
-        matchesQueryError: false,
-      });
+      setMatches(
+        ((matchesResult.data ?? []) as Match[]).map((match) => ({
+          ...match,
+          status: toMatchStatus(match.status),
+        })),
+      );
     }
 
     if (teamsResult.error) {
@@ -222,7 +189,7 @@ export default function AdminMatchesPage() {
       awayTeamId: match.away_team_id,
       homeScore: match.home_score === null ? "" : String(match.home_score),
       awayScore: match.away_score === null ? "" : String(match.away_score),
-      status: toFormStatus(match.status),
+      status: match.status,
     });
     setMessage("");
     setError("");
@@ -233,6 +200,8 @@ export default function AdminMatchesPage() {
 
     const homeTeam = teamsById.get(form.homeTeamId);
     const leagueId = homeTeam?.league_id ?? leagues[0]?.id;
+    const homeScore = scoreValue(form.homeScore);
+    const awayScore = scoreValue(form.awayScore);
 
     setSaving(true);
     setMessage("");
@@ -250,14 +219,20 @@ export default function AdminMatchesPage() {
       return;
     }
 
+    if (form.status === "completed" && (homeScore === null || awayScore === null)) {
+      setError("Completed matches require both scores.");
+      setSaving(false);
+      return;
+    }
+
     const payload = {
       league_id: leagueId,
       match_date: new Date(form.matchDate).toISOString(),
       home_team_id: form.homeTeamId,
       away_team_id: form.awayTeamId,
-      home_score: scoreValue(form.homeScore),
-      away_score: scoreValue(form.awayScore),
-      status: normalizeStatusForDb(form.status),
+      home_score: homeScore,
+      away_score: awayScore,
+      status: form.status,
     };
 
     const result = form.id
@@ -322,13 +297,6 @@ export default function AdminMatchesPage() {
       </section>
 
       <section className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-10 sm:px-6 lg:grid-cols-[380px_1fr] lg:px-10">
-        <div className="rounded-lg border border-[#d8ad45]/25 bg-white p-4 text-sm font-bold text-slate-700 shadow-lg shadow-slate-900/5 lg:col-span-2">
-          <span className="text-[#061426]">Supabase diagnostics:</span>{" "}
-          project ref {readDiagnostics.projectRef} · matches loaded{" "}
-          {readDiagnostics.matchCount} · matches query error{" "}
-          {readDiagnostics.matchesQueryError ? "yes" : "no"}
-        </div>
-
         <form
           className="rounded-lg border border-[#d8ad45]/30 bg-white p-5 shadow-xl shadow-slate-900/10"
           onSubmit={saveMatch}
@@ -398,6 +366,7 @@ export default function AdminMatchesPage() {
                   className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                   min="0"
                   onChange={(event) => setForm((current) => ({ ...current, homeScore: event.target.value }))}
+                  required={form.status === "completed"}
                   type="number"
                   value={form.homeScore}
                 />
@@ -408,6 +377,7 @@ export default function AdminMatchesPage() {
                   className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                   min="0"
                   onChange={(event) => setForm((current) => ({ ...current, awayScore: event.target.value }))}
+                  required={form.status === "completed"}
                   type="number"
                   value={form.awayScore}
                 />
@@ -421,13 +391,13 @@ export default function AdminMatchesPage() {
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
-                    status: event.target.value as MatchForm["status"],
+                    status: toMatchStatus(event.target.value),
                   }))
                 }
                 value={form.status}
               >
                 <option value="scheduled">scheduled</option>
-                <option value="completed">finished</option>
+                <option value="completed">completed</option>
               </select>
             </label>
 
@@ -491,7 +461,7 @@ export default function AdminMatchesPage() {
                         <td className="px-4 py-3 text-center font-black">{match.away_score ?? "-"}</td>
                         <td className="px-4 py-3">
                           <span className="rounded-full border border-[#d8ad45]/40 bg-[#d8ad45]/10 px-3 py-1 text-xs font-black text-[#061426]">
-                            {toDisplayStatus(match.status)}
+                            {match.status}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right">
@@ -518,10 +488,7 @@ export default function AdminMatchesPage() {
                 </tbody>
               </table>
               {matches.length === 0 ? (
-                <p className="p-5 text-sm font-bold text-slate-600">
-                  No matches found. If the matches table is missing, create it with match_date,
-                  home_team_id, away_team_id, scores, status, and league_id columns.
-                </p>
+                <p className="p-5 text-sm font-bold text-slate-600">No matches found.</p>
               ) : null}
             </div>
           )}

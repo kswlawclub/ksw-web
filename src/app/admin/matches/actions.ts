@@ -2,6 +2,8 @@
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
+type MatchStatus = "scheduled" | "completed";
+
 type MatchPayload = {
   league_id: string;
   match_date: string;
@@ -9,24 +11,13 @@ type MatchPayload = {
   away_team_id: string;
   home_score: number | null;
   away_score: number | null;
-  status: "scheduled" | "completed" | "finished";
+  status: MatchStatus;
 };
 
 type ActionResult = {
   ok: boolean;
   error?: string;
 };
-
-function normalizeStatusForDb(status: MatchPayload["status"]): "scheduled" | "completed" {
-  return status === "finished" || status === "completed" ? "completed" : "scheduled";
-}
-
-function normalizeMatchPayload(payload: MatchPayload) {
-  return {
-    ...payload,
-    status: normalizeStatusForDb(payload.status),
-  };
-}
 
 function getAdminClient() {
   const supabase = getSupabaseAdmin();
@@ -41,17 +32,38 @@ function getAdminClient() {
   return { supabase, error: "" };
 }
 
+function validatePayload(payload: MatchPayload): string {
+  if (payload.home_team_id === payload.away_team_id) {
+    return "Home team and away team must be different.";
+  }
+
+  if (
+    payload.status === "completed" &&
+    (payload.home_score === null || payload.away_score === null)
+  ) {
+    return "Completed matches require both scores.";
+  }
+
+  return "";
+}
+
 export async function createMatch(payload: MatchPayload): Promise<ActionResult> {
+  const validationError = validatePayload(payload);
+
+  if (validationError) {
+    return { ok: false, error: validationError };
+  }
+
   const { supabase, error } = getAdminClient();
 
   if (!supabase) {
     return { ok: false, error };
   }
 
-  const result = await supabase.from("matches").insert(normalizeMatchPayload(payload));
+  const result = await supabase.from("matches").insert(payload);
 
   if (result.error) {
-    console.error("admin match insert failed", result.error.message);
+    console.error("admin match insert failed", result.error);
     return { ok: false, error: result.error.message };
   }
 
@@ -59,19 +71,22 @@ export async function createMatch(payload: MatchPayload): Promise<ActionResult> 
 }
 
 export async function updateMatch(id: string, payload: MatchPayload): Promise<ActionResult> {
+  const validationError = validatePayload(payload);
+
+  if (validationError) {
+    return { ok: false, error: validationError };
+  }
+
   const { supabase, error } = getAdminClient();
 
   if (!supabase) {
     return { ok: false, error };
   }
 
-  const result = await supabase
-    .from("matches")
-    .update(normalizeMatchPayload(payload))
-    .eq("id", id);
+  const result = await supabase.from("matches").update(payload).eq("id", id);
 
   if (result.error) {
-    console.error("admin match update failed", result.error.message);
+    console.error("admin match update failed", result.error);
     return { ok: false, error: result.error.message };
   }
 
@@ -88,7 +103,7 @@ export async function deleteMatchById(id: string): Promise<ActionResult> {
   const result = await supabase.from("matches").delete().eq("id", id);
 
   if (result.error) {
-    console.error("admin match delete failed", result.error.message);
+    console.error("admin match delete failed", result.error);
     return { ok: false, error: result.error.message };
   }
 
