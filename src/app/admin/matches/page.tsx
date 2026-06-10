@@ -82,6 +82,14 @@ function scoreValue(value: string) {
   return value.trim() === "" ? null : Number(value);
 }
 
+function toUiStatus(status: string): MatchForm["status"] {
+  return status === "completed" || status === "finished" ? "finished" : "scheduled";
+}
+
+function toDbStatus(status: MatchForm["status"]) {
+  return status === "finished" ? "completed" : "scheduled";
+}
+
 export default function AdminMatchesPage() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
@@ -174,7 +182,7 @@ export default function AdminMatchesPage() {
       awayTeamId: match.away_team_id,
       homeScore: match.home_score === null ? "" : String(match.home_score),
       awayScore: match.away_score === null ? "" : String(match.away_score),
-      status: match.status === "finished" ? "finished" : "scheduled",
+      status: toUiStatus(match.status),
     });
     setMessage("");
     setError("");
@@ -209,7 +217,7 @@ export default function AdminMatchesPage() {
       away_team_id: form.awayTeamId,
       home_score: scoreValue(form.homeScore),
       away_score: scoreValue(form.awayScore),
-      status: form.status,
+      status: toDbStatus(form.status),
     };
 
     const result = form.id
@@ -436,7 +444,7 @@ export default function AdminMatchesPage() {
                         <td className="px-4 py-3 text-center font-black">{match.away_score ?? "-"}</td>
                         <td className="px-4 py-3">
                           <span className="rounded-full border border-[#d8ad45]/40 bg-[#d8ad45]/10 px-3 py-1 text-xs font-black text-[#061426]">
-                            {match.status === "finished" ? "finished" : "scheduled"}
+                            {toUiStatus(match.status)}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right">
