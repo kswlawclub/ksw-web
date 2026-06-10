@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
-import { getSupabase } from "@/lib/supabase";
 import {
   createGalleryItem,
   deleteGalleryItemById,
+  listGalleryItems,
   updateGalleryItem,
   uploadGalleryImage,
 } from "./actions";
@@ -139,29 +139,17 @@ export default function AdminGalleryPage() {
   }, [imageFile]);
 
   async function loadData() {
-    const supabase = getSupabase();
-
     setLoading(true);
     setError("");
 
-    if (!supabase) {
-      setError("Supabase is not configured.");
-      setLoading(false);
-      return;
-    }
+    const result = await listGalleryItems();
 
-    const result = await supabase
-      .from("gallery_items")
-      .select("id, title, category, image_url, thumbnail_url, sort_order, is_featured, is_active, created_at")
-      .order("sort_order", { ascending: true, nullsFirst: false })
-      .order("created_at", { ascending: false });
-
-    if (result.error) {
-      console.error("admin gallery query failed", result.error.message);
-      setError("Could not load gallery items.");
+    if (!result.ok) {
+      setItems([]);
+      setError(result.error ? `Could not load gallery items: ${result.error}` : "Could not load gallery items.");
     } else {
       setItems(
-        ((result.data ?? []) as GalleryItem[]).map((item) => ({
+        (result.items ?? []).map((item) => ({
           ...item,
           category: toGalleryCategory(item.category),
         })),

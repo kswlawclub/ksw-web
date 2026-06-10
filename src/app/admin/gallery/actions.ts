@@ -31,6 +31,22 @@ type UploadResult = ActionResult & {
   path?: string;
 };
 
+type GalleryItem = {
+  id: string;
+  title: string;
+  category: GalleryCategory;
+  image_url: string;
+  thumbnail_url: string | null;
+  sort_order: number | null;
+  is_featured: boolean;
+  is_active: boolean;
+  created_at: string;
+};
+
+type GalleryListResult = ActionResult & {
+  items?: GalleryItem[];
+};
+
 const bucketName = "gallery-images";
 const maxImageSize = 2 * 1024 * 1024;
 const allowedImageTypes = new Map([
@@ -122,6 +138,30 @@ export async function uploadGalleryImage(formData: FormData): Promise<UploadResu
     ok: true,
     path: objectPath,
     publicUrl: data.publicUrl,
+  };
+}
+
+export async function listGalleryItems(): Promise<GalleryListResult> {
+  const { supabase, error } = getAdminClient();
+
+  if (!supabase) {
+    return { ok: false, error };
+  }
+
+  const result = await supabase
+    .from("gallery_items")
+    .select("id, title, category, image_url, thumbnail_url, sort_order, is_featured, is_active, created_at")
+    .order("sort_order", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: false });
+
+  if (result.error) {
+    console.error("admin gallery list failed", result.error);
+    return { ok: false, error: result.error.message };
+  }
+
+  return {
+    ok: true,
+    items: (result.data ?? []) as GalleryItem[],
   };
 }
 
