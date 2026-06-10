@@ -2,9 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
+import { verifyAdminPassword } from "../actions";
 
 const storageKey = "ksw-admin-authenticated";
-const adminPassword = process.env.NEXT_PUBLIC_KSW_ADMIN_PASSWORD ?? "";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -17,15 +17,17 @@ export default function AdminLoginPage() {
     }
   }, [router]);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!adminPassword) {
+    const result = await verifyAdminPassword(password);
+
+    if (!result.configured) {
       setError("Admin password is not configured.");
       return;
     }
 
-    if (password === adminPassword) {
+    if (result.valid) {
       window.localStorage.setItem(storageKey, "true");
       router.replace("/admin");
       return;
