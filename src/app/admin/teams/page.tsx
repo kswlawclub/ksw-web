@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
-import { createTeam, deleteTeamById, updateTeam } from "./actions";
+import { createTeam, deleteTeamById, updateTeam, uploadTeamLogo } from "./actions";
 
 const storageKey = "ksw-admin-authenticated";
 
@@ -46,6 +46,9 @@ const emptyForm: TeamForm = {
   isActive: true,
 };
 
+const maxLogoSize = 2 * 1024 * 1024;
+const allowedLogoTypes = ["image/png", "image/jpeg", "image/webp"];
+
 function formatDate(value: string) {
   const date = new Date(value);
 
@@ -78,6 +81,8 @@ export default function AdminTeamsPage() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [form, setForm] = useState<TeamForm>(emptyForm);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -102,6 +107,20 @@ export default function AdminTeamsPage() {
 
     void loadData();
   }, [ready]);
+
+  useEffect(() => {
+    if (!logoFile) {
+      setLogoPreview("");
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(logoFile);
+    setLogoPreview(previewUrl);
+
+    return () => {
+      URL.revokeObjectURL(previewUrl);
+    };
+  }, [logoFile]);
 
   async function loadData() {
     const supabase = getSupabase();
@@ -152,6 +171,7 @@ export default function AdminTeamsPage() {
 
   function resetForm() {
     setForm(emptyForm);
+    setLogoFile(null);
     setMessage("");
     setError("");
   }
@@ -166,18 +186,51 @@ export default function AdminTeamsPage() {
       isKsw: team.is_ksw,
       isActive: team.is_active,
     });
+    setLogoFile(null);
     setMessage("");
     setError("");
   }
 
   async function saveTeam(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    let logoUrl = form.logoUrl.trim() || null;
+
+    if (logoFile) {
+      if (!allowedLogoTypes.includes(logoFile.type)) {
+        setError("Logo must be a png, jpg, jpeg, or webp image.");
+        return;
+      }
+
+      if (logoFile.size > maxLogoSize) {
+        setError("Logo file must be 2MB or smaller.");
+        return;
+      }
+
+      const uploadData = new FormData();
+      uploadData.append("file", logoFile);
+      uploadData.append("shortName", form.shortName.trim() || form.name.trim());
+      uploadData.append("teamId", form.id);
+
+      setSaving(true);
+      setMessage("");
+      setError("");
+
+      const uploadResult = await uploadTeamLogo(uploadData);
+
+      if (!uploadResult.ok || !uploadResult.publicUrl) {
+        setSaving(false);
+        setError(uploadResult.error ?? "Logo upload failed.");
+        return;
+      }
+
+      logoUrl = uploadResult.publicUrl;
+    }
 
     const payload = {
       league_id: form.leagueId,
       name: form.name.trim(),
       short_name: form.shortName.trim(),
-      logo_url: form.logoUrl.trim() || null,
+      logo_url: logoUrl,
       is_ksw: form.isKsw,
       is_active: form.isActive,
     };
@@ -197,6 +250,7 @@ export default function AdminTeamsPage() {
 
     setMessage(form.id ? "Team updated." : "Team added.");
     setForm(emptyForm);
+    setLogoFile(null);
     await loadData();
   }
 
@@ -292,6 +346,53 @@ export default function AdminTeamsPage() {
                 value={form.logoUrl}
               />
             </label>
+
+            <label className="grid gap-2 text-sm font-black">
+              Upload Logo
+              <input
+                accept="image/png,image/jpeg,image/webp"
+                className="rounded-md border border-dashed border-[#d8ad45]/50 bg-[#f8f3e7] px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-[#061426] file:px-3 file:py-2 file:text-xs file:font-black file:text-[#f4d58a]"
+                onChange={(event) => {
+                  const file = event.target.files?.[0] ?? null;
+
+                  if (!file) {
+                    setLogoFile(null);
+                    return;
+                  }
+
+                  if (!allowedLogoTypes.includes(file.type)) {
+                    setError("Logo must be a png, jpg, jpeg, or webp image.");
+                    setLogoFile(null);
+                    return;
+                  }
+
+                  if (file.size > maxLogoSize) {
+                    setError("Logo file must be 2MB or smaller.");
+                    setLogoFile(null);
+                    return;
+                  }
+
+                  setError("");
+                  setLogoFile(file);
+                }}
+                type="file"
+              />
+            </label>
+
+            {logoPreview || form.logoUrl ? (
+              <div className="rounded-md border border-slate-200 bg-[#f8f3e7] p-3">
+                <p className="mb-2 text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                  Logo Preview
+                </p>
+                <div className="flex size-24 items-center justify-center overflow-hidden rounded-full border border-[#d8ad45]/60 bg-[#061426]">
+                  <img
+                    alt="Team logo preview"
+                    className="h-full w-full object-contain p-2"
+                    src={logoPreview || form.logoUrl}
+                  />
+                </div>
+              </div>
+            ) : null}
 
             <label className="grid gap-2 text-sm font-black">
               Competition

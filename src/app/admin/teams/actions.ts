@@ -16,6 +16,18 @@ type ActionResult = {
   error?: string;
 };
 
+type UploadResult = ActionResult & {
+  publicUrl?: string;
+  path?: string;
+};
+
+const maxLogoSize = 2 * 1024 * 1024;
+const allowedLogoTypes = new Map([
+  ["image/png", "png"],
+  ["image/jpeg", "jpg"],
+  ["image/webp", "webp"],
+]);
+
 function getAdminClient() {
   const supabase = getSupabaseAdmin();
 
@@ -129,4 +141,57 @@ export async function deleteTeamById(id: string): Promise<ActionResult> {
   }
 
   return { ok: true };
+}
+
+export async function uploadTeamLogo(formData: FormData): Promise<UploadResult> {
+  const file = formData.get("file");
+  const shortName = String(formData.get("shortName") ?? "team");
+  const teamId = String(formData.get("teamId") ?? "");
+
+  if (!(file instanceof File)) {
+    return { ok: false, error: "Please choose an image file." };
+  }
+
+  if (!allowedLogoTypes.has(file.type)) {
+    return { ok: false, error: "Logo must be a png, jpg, jpeg, or webp image." };
+  }
+
+  if (file.size > maxLogoSize) {
+    return { ok: false, error: "Logo file must be 2MB or smaller." };
+  }
+
+  const { supabase, error } = getAdminClient();
+
+  if (!supabase) {
+    return { ok: false, error };
+  }
+
+  const extension = allowedLogoTypes.get(file.type) ?? "png";
+  const baseName =
+    (shortName || teamId || "team")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "team";
+  const objectPath = `team-logos/${baseName}-${Date.now()}.${extension}`;
+  const bytes = Buffer.from(await file.arrayBuffer());
+
+  const upload = await supabase.storage
+    .from("team-logos")
+    .upload(objectPath, bytes, {
+      contentType: file.type,
+      upsert: false,
+    });
+
+  if (upload.error) {
+    console.error("admin team logo upload failed", upload.error);
+    return { ok: false, error: upload.error.message };
+  }
+
+  const { data } = supabase.storage.from("team-logos").getPublicUrl(objectPath);
+
+  return {
+    ok: true,
+    path: objectPath,
+    publicUrl: data.publicUrl,
+  };
 }
