@@ -84,6 +84,19 @@ type GalleryItemRow = {
   category: string | null;
 };
 
+function mergeGalleryImages(primaryImages: GalleryImage[], secondaryImages: GalleryImage[]) {
+  const seenSources = new Set<string>();
+
+  return [...primaryImages, ...secondaryImages].filter((image) => {
+    if (seenSources.has(image.src)) {
+      return false;
+    }
+
+    seenSources.add(image.src);
+    return true;
+  });
+}
+
 async function getGalleryImages(): Promise<GalleryImage[]> {
   const supabase = getSupabase();
 
@@ -111,7 +124,7 @@ async function getGalleryImages(): Promise<GalleryImage[]> {
       category: categoryLabels[item.category ?? ""] ?? "Other",
     }));
 
-  return supabaseImages.length > 0 ? supabaseImages : fallbackGalleryImages;
+  return mergeGalleryImages(supabaseImages, fallbackGalleryImages);
 }
 
 export default async function GalleryPage() {
