@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
+import { createMatch, deleteMatchById, updateMatch } from "./actions";
 
 const storageKey = "ksw-admin-authenticated";
 
@@ -182,19 +183,12 @@ export default function AdminMatchesPage() {
   async function saveMatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const supabase = getSupabase();
     const homeTeam = teamsById.get(form.homeTeamId);
     const leagueId = homeTeam?.league_id ?? leagues[0]?.id;
 
     setSaving(true);
     setMessage("");
     setError("");
-
-    if (!supabase) {
-      setError("Supabase is not configured.");
-      setSaving(false);
-      return;
-    }
 
     if (!leagueId) {
       setError("No league is available for this match.");
@@ -219,14 +213,13 @@ export default function AdminMatchesPage() {
     };
 
     const result = form.id
-      ? await supabase.from("matches").update(payload).eq("id", form.id)
-      : await supabase.from("matches").insert(payload);
+      ? await updateMatch(form.id, payload)
+      : await createMatch(payload);
 
     setSaving(false);
 
-    if (result.error) {
-      console.error("admin match save failed", result.error.message);
-      setError("Could not save match. Check Supabase write permissions and required columns.");
+    if (!result.ok) {
+      setError(result.error ?? "Could not save match.");
       return;
     }
 
@@ -242,18 +235,10 @@ export default function AdminMatchesPage() {
       return;
     }
 
-    const supabase = getSupabase();
+    const result = await deleteMatchById(match.id);
 
-    if (!supabase) {
-      setError("Supabase is not configured.");
-      return;
-    }
-
-    const result = await supabase.from("matches").delete().eq("id", match.id);
-
-    if (result.error) {
-      console.error("admin match delete failed", result.error.message);
-      setError("Could not delete match. Check Supabase write permissions.");
+    if (!result.ok) {
+      setError(result.error ?? "Could not delete match.");
       return;
     }
 
