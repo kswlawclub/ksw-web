@@ -531,7 +531,7 @@ export default async function Home() {
       <div id="league-center">
       <section className="bg-slate-100">
         <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
-        <div className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
+        <div id="latest-results" className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
           <div className="border-b border-slate-200 px-4 py-4 sm:px-5">
             <h2 className="text-xl font-black text-[#061426]">Latest Results</h2>
           </div>
@@ -583,7 +583,7 @@ export default async function Home() {
             )}
           </div>
         </div>
-        <div className="mt-6 min-w-0 rounded-lg border border-dashed border-[#d8ad45]/60 bg-gradient-to-br from-[#fff4dc] via-[#fff9eb] to-white shadow-xl shadow-[#d8ad45]/10">
+        <div id="next-fixtures" className="mt-6 min-w-0 rounded-lg border border-dashed border-[#d8ad45]/60 bg-gradient-to-br from-[#fff4dc] via-[#fff9eb] to-white shadow-xl shadow-[#d8ad45]/10">
           <div className="border-b border-dashed border-[#d8ad45]/40 px-4 py-4 sm:px-5">
             <h2 className="text-xl font-black text-[#061426]">Next Fixtures</h2>
             <p className="mt-1 text-sm text-slate-600">
