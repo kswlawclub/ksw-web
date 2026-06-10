@@ -635,7 +635,7 @@ export default async function Home() {
                       </div>
                       <div className="grid gap-1 text-center">
                         {text(fixture, ["venue"], "") ? (
-                          <span className="text-sm font-black text-[#b98718] sm:text-base">
+                          <span className="text-sm font-black text-black sm:text-base">
                             สนาม {text(fixture, ["venue"], "")}
                           </span>
                         ) : null}
