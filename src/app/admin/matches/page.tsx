@@ -57,15 +57,30 @@ const emptyForm: MatchForm = {
   status: "scheduled",
 };
 
-function toLocalDateInput(value: string) {
+function toBangkokDateInput(value: string) {
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
     return "";
   }
 
-  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return offsetDate.toISOString().slice(0, 16);
+  const parts = new Intl.DateTimeFormat("en", {
+    day: "2-digit",
+    hour: "2-digit",
+    hour12: false,
+    hourCycle: "h23",
+    minute: "2-digit",
+    month: "2-digit",
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+  }).formatToParts(date);
+  const valueByType = new Map(parts.map((part) => [part.type, part.value]));
+
+  return `${valueByType.get("year")}-${valueByType.get("month")}-${valueByType.get("day")}T${valueByType.get("hour")}:${valueByType.get("minute")}`;
+}
+
+function bangkokDateInputToIso(value: string) {
+  return new Date(`${value}:00+07:00`).toISOString();
 }
 
 function formatDateTime(value: string) {
@@ -80,7 +95,9 @@ function formatDateTime(value: string) {
     month: "short",
     year: "numeric",
     hour: "2-digit",
+    hourCycle: "h23",
     minute: "2-digit",
+    timeZone: "Asia/Bangkok",
   }).format(date);
 }
 
@@ -203,7 +220,7 @@ export default function AdminMatchesPage() {
     setForm({
       id: match.id,
       leagueId: match.league_id,
-      matchDate: toLocalDateInput(match.match_date),
+      matchDate: toBangkokDateInput(match.match_date),
       homeTeamId: match.home_team_id,
       awayTeamId: match.away_team_id,
       homeScore: match.home_score === null ? "" : String(match.home_score),
@@ -250,7 +267,7 @@ export default function AdminMatchesPage() {
 
     const payload = {
       league_id: form.leagueId,
-      match_date: new Date(form.matchDate).toISOString(),
+      match_date: bangkokDateInputToIso(form.matchDate),
       home_team_id: form.homeTeamId,
       away_team_id: form.awayTeamId,
       home_score: homeScore,

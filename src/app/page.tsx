@@ -61,6 +61,7 @@ function formatMatchDate(value: unknown) {
     day: "2-digit",
     month: "short",
     year: "numeric",
+    timeZone: "Asia/Bangkok",
   }).format(date);
 }
 
@@ -78,6 +79,8 @@ function formatMatchTime(value: unknown) {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+    hourCycle: "h23",
+    timeZone: "Asia/Bangkok",
   }).format(date);
 }
 
@@ -573,7 +576,7 @@ export default async function Home() {
             )}
           </div>
         </div>
-        <div className="mt-6 min-w-0 rounded-lg border border-dashed border-[#d8ad45]/55 bg-[#fffdf7] shadow-xl shadow-slate-900/10">
+        <div className="mt-6 min-w-0 rounded-lg border border-dashed border-[#d8ad45]/60 bg-gradient-to-br from-[#fff4dc] via-[#fff9eb] to-white shadow-xl shadow-[#d8ad45]/10">
           <div className="border-b border-dashed border-[#d8ad45]/40 px-4 py-4 sm:px-5">
             <h2 className="text-xl font-black text-[#061426]">Next Fixtures</h2>
             <p className="mt-1 text-sm text-slate-600">
@@ -623,7 +626,7 @@ export default async function Home() {
                           {homeName}
                         </span>
                       </div>
-                      <div className="rounded-md border border-[#d8ad45]/45 bg-white px-2 py-2 text-center text-sm font-black text-[#061426] shadow-sm sm:text-base">
+                      <div className="rounded-md border border-[#d8ad45]/45 bg-white px-2 py-2 text-center text-sm font-black text-[#9b1c1f] shadow-sm sm:text-base">
                         VS
                       </div>
                       <div className="flex min-w-0 items-center justify-end gap-2.5 text-right">
