@@ -15,6 +15,69 @@ const categoryLabels: Record<string, string> = {
   other: "Other",
 };
 
+const fallbackGalleryImages: GalleryImage[] = [
+  {
+    src: "/images/gallery/team-photo-01.jpg",
+    title: "KSW Team Photo",
+    category: "Team Photo",
+  },
+  {
+    src: "/images/gallery/matchday-01.jpg",
+    title: "Matchday Focus",
+    category: "Matchday",
+  },
+  {
+    src: "/images/gallery/matchday-02.jpg",
+    title: "Game Tempo",
+    category: "Matchday",
+  },
+  {
+    src: "/images/gallery/matchday-03.jpg",
+    title: "On The Ball",
+    category: "Matchday",
+  },
+  {
+    src: "/images/gallery/matchday-04.jpg",
+    title: "Final Whistle",
+    category: "Matchday",
+  },
+  {
+    src: "/images/gallery/team-spirit-01.jpg",
+    title: "Team Talk",
+    category: "Team Spirit",
+  },
+  {
+    src: "/images/gallery/team-spirit-02.jpg",
+    title: "Together Before Kickoff",
+    category: "Team Spirit",
+  },
+  {
+    src: "/images/gallery/team-spirit-03.jpg",
+    title: "Shared Standard",
+    category: "Team Spirit",
+  },
+  {
+    src: "/images/gallery/sideline-01.jpg",
+    title: "Sideline Energy",
+    category: "Sideline",
+  },
+  {
+    src: "/images/gallery/community-01.jpg",
+    title: "Legal Football Community",
+    category: "Community",
+  },
+  {
+    src: "/images/gallery/community-02.jpg",
+    title: "Beyond The Pitch",
+    category: "Community",
+  },
+  {
+    src: "/images/gallery/community-03.jpg",
+    title: "Club Connections",
+    category: "Community",
+  },
+];
+
 type GalleryItemRow = {
   image_url: string | null;
   title: string | null;
@@ -25,7 +88,7 @@ async function getGalleryImages(): Promise<GalleryImage[]> {
   const supabase = getSupabase();
 
   if (!supabase) {
-    return [];
+    return fallbackGalleryImages;
   }
 
   const result = await supabase
@@ -37,16 +100,18 @@ async function getGalleryImages(): Promise<GalleryImage[]> {
 
   if (result.error) {
     console.error("public gallery query failed", result.error);
-    return [];
+    return fallbackGalleryImages;
   }
 
-  return ((result.data ?? []) as GalleryItemRow[])
+  const supabaseImages = ((result.data ?? []) as GalleryItemRow[])
     .filter((item) => item.image_url && item.title)
     .map((item) => ({
       src: item.image_url ?? "",
       title: item.title ?? "KSW Gallery",
       category: categoryLabels[item.category ?? ""] ?? "Other",
     }));
+
+  return supabaseImages.length > 0 ? supabaseImages : fallbackGalleryImages;
 }
 
 export default async function GalleryPage() {
