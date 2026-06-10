@@ -25,7 +25,7 @@ export function SiteHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[#d8ad45]/20 bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.2),transparent_34%),linear-gradient(135deg,rgba(6,20,38,0.96),rgba(9,31,57,0.88))] text-white shadow-lg shadow-black/20">
+    <header className="sticky top-0 z-50 border-b border-[#d8ad45]/20 bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.16),transparent_34%),linear-gradient(135deg,#061426,#091f39)] text-white shadow-lg shadow-black/20">
       <div className="mx-auto flex min-h-16 w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-10">
         <Link className="flex items-center gap-3" href="/" onClick={() => setOpen(false)}>
           <span className="flex size-12 items-center justify-center drop-shadow-[0_10px_24px_rgba(216,173,69,0.18)]">
