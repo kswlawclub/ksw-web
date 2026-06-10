@@ -633,13 +633,15 @@ export default async function Home() {
                           {homeName}
                         </span>
                       </div>
-                      <div className="rounded-md border border-[#d8ad45]/45 bg-white px-2 py-2 text-center text-sm font-black text-[#9b1c1f] shadow-sm sm:text-base">
+                      <div className="grid gap-1 text-center">
                         {text(fixture, ["venue"], "") ? (
-                          <span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-[#061426]">
-                            {text(fixture, ["venue"], "")}
+                          <span className="text-sm font-black text-[#b98718] sm:text-base">
+                            สนาม {text(fixture, ["venue"], "")}
                           </span>
                         ) : null}
-                        <span>VS</span>
+                        <div className="rounded-md border border-[#d8ad45]/45 bg-white px-2 py-2 text-center text-sm font-black text-[#9b1c1f] shadow-sm sm:text-base">
+                          VS
+                        </div>
                       </div>
                       <div className="flex min-w-0 items-center justify-end gap-2.5 text-right">
                         <span className="hidden min-w-0 text-wrap text-base font-bold leading-5 text-[#061426] sm:inline">
