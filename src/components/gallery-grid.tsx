@@ -4,6 +4,7 @@ import { useState } from "react";
 
 export type GalleryImage = {
   src: string;
+  fullSrc?: string;
   title: string;
   category: string;
 };
@@ -56,7 +57,7 @@ export function GalleryGrid({ images }: GalleryGridProps) {
           filteredImages.map((image) => (
             <button
               className="group relative aspect-video overflow-hidden rounded-lg border border-white/10 bg-white/[0.05] text-left shadow-xl shadow-black/20 transition-shadow hover:shadow-[#d8ad45]/15"
-              key={image.src}
+              key={image.fullSrc ?? image.src}
               onClick={() => setActiveImage(image)}
               type="button"
             >
@@ -106,7 +107,7 @@ export function GalleryGrid({ images }: GalleryGridProps) {
             <img
               alt={activeImage.title}
               className="max-h-[78vh] w-full object-contain"
-              src={activeImage.src}
+              src={activeImage.fullSrc ?? activeImage.src}
             />
             <div className="border-t border-white/10 p-4">
               <p className="text-xs font-black uppercase tracking-[0.18em] text-[#d8ad45]">

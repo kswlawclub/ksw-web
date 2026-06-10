@@ -66,7 +66,7 @@ const emptyForm: GalleryForm = {
   isActive: true,
 };
 
-const maxImageSize = 2 * 1024 * 1024;
+const maxImageSize = 5 * 1024 * 1024;
 const allowedImageTypes = ["image/png", "image/jpeg", "image/webp"];
 
 function formatDate(value: string) {
@@ -195,7 +195,7 @@ export default function AdminGalleryPage() {
     }
 
     if (file.size > maxImageSize) {
-      setError("Image file must be 2MB or smaller.");
+      setError("Image file must be 5MB or smaller.");
       setImageFile(null);
       return;
     }
@@ -207,6 +207,7 @@ export default function AdminGalleryPage() {
   async function saveItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     let imageUrl = form.imageUrl;
+    let thumbnailUrl = form.thumbnailUrl || form.imageUrl;
 
     setSaving(true);
     setMessage("");
@@ -225,20 +226,21 @@ export default function AdminGalleryPage() {
 
       const uploadResult = await uploadGalleryImage(uploadData);
 
-      if (!uploadResult.ok || !uploadResult.publicUrl) {
+      if (!uploadResult.ok || !uploadResult.publicUrl || !uploadResult.thumbnailUrl) {
         setSaving(false);
         setError(uploadResult.error ?? "Image upload failed.");
         return;
       }
 
       imageUrl = uploadResult.publicUrl;
+      thumbnailUrl = uploadResult.thumbnailUrl;
     }
 
     const payload = {
       title: form.title.trim(),
       category: form.category,
       image_url: imageUrl,
-      thumbnail_url: imageUrl,
+      thumbnail_url: thumbnailUrl,
       sort_order: sortOrderValue(form.sortOrder),
       is_featured: form.isFeatured,
       is_active: form.isActive,
@@ -268,7 +270,7 @@ export default function AdminGalleryPage() {
       return;
     }
 
-    const result = await deleteGalleryItemById(item.id, item.image_url);
+    const result = await deleteGalleryItemById(item.id, item.image_url, item.thumbnail_url);
 
     if (!result.ok) {
       setError(result.error ?? "Could not delete gallery item.");

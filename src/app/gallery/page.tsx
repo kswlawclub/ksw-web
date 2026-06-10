@@ -80,6 +80,7 @@ const fallbackGalleryImages: GalleryImage[] = [
 
 type GalleryItemRow = {
   image_url: string | null;
+  thumbnail_url: string | null;
   title: string | null;
   category: string | null;
 };
@@ -88,11 +89,13 @@ function mergeGalleryImages(primaryImages: GalleryImage[], secondaryImages: Gall
   const seenSources = new Set<string>();
 
   return [...primaryImages, ...secondaryImages].filter((image) => {
-    if (seenSources.has(image.src)) {
+    const source = image.fullSrc ?? image.src;
+
+    if (seenSources.has(source)) {
       return false;
     }
 
-    seenSources.add(image.src);
+    seenSources.add(source);
     return true;
   });
 }
@@ -106,7 +109,7 @@ async function getGalleryImages(): Promise<GalleryImage[]> {
 
   const result = await supabase
     .from("gallery_items")
-    .select("image_url, title, category")
+    .select("image_url, thumbnail_url, title, category")
     .eq("is_active", true)
     .order("sort_order", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: false });
@@ -119,7 +122,8 @@ async function getGalleryImages(): Promise<GalleryImage[]> {
   const supabaseImages = ((result.data ?? []) as GalleryItemRow[])
     .filter((item) => item.image_url && item.title)
     .map((item) => ({
-      src: item.image_url ?? "",
+      src: item.thumbnail_url || item.image_url || "",
+      fullSrc: item.image_url ?? "",
       title: item.title ?? "KSW Gallery",
       category: categoryLabels[item.category ?? ""] ?? "Other",
     }));

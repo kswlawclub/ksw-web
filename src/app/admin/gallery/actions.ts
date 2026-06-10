@@ -1,5 +1,6 @@
 "use server";
 
+import sharp from "sharp";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 type GalleryCategory =
@@ -28,7 +29,9 @@ type ActionResult = {
 
 type UploadResult = ActionResult & {
   publicUrl?: string;
+  thumbnailUrl?: string;
   path?: string;
+  thumbnailPath?: string;
 };
 
 type GalleryItem = {
@@ -48,7 +51,7 @@ type GalleryListResult = ActionResult & {
 };
 
 const bucketName = "gallery-images";
-const maxImageSize = 2 * 1024 * 1024;
+const maxImageSize = 5 * 1024 * 1024;
 const allowedImageTypes = new Map([
   ["image/png", "png"],
   ["image/jpeg", "jpg"],
@@ -95,6 +98,16 @@ function pathFromPublicUrl(publicUrl: string) {
   return decodeURIComponent(publicUrl.slice(index + marker.length));
 }
 
+function slugify(value: string) {
+  const slug = value
+    .toLowerCase()
+    .replace(/\.[^.]+$/, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return slug || "gallery";
+}
+
 export async function uploadGalleryImage(formData: FormData): Promise<UploadResult> {
   const file = formData.get("file");
   const category = String(formData.get("category") ?? "other");
@@ -108,7 +121,7 @@ export async function uploadGalleryImage(formData: FormData): Promise<UploadResu
   }
 
   if (file.size > maxImageSize) {
-    return { ok: false, error: "Image file must be 2MB or smaller." };
+    return { ok: false, error: "Image file must be 5MB or smaller." };
   }
 
   const { supabase, error } = getAdminClient();
@@ -117,27 +130,67 @@ export async function uploadGalleryImage(formData: FormData): Promise<UploadResu
     return { ok: false, error };
   }
 
-  const extension = allowedImageTypes.get(file.type) ?? "jpg";
   const safeCategory = category.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "gallery";
-  const objectPath = `${safeCategory}-${Date.now()}.${extension}`;
-  const bytes = Buffer.from(await file.arrayBuffer());
+  const timestamp = Date.now();
+  const slug = slugify(file.name || safeCategory);
+  const fullPath = `full/${timestamp}-${slug}.webp`;
+  const thumbnailPath = `thumb/${timestamp}-${slug}.webp`;
+  const inputBuffer = Buffer.from(await file.arrayBuffer());
 
-  const upload = await supabase.storage.from(bucketName).upload(objectPath, bytes, {
-    contentType: file.type,
+  let fullBytes: Buffer;
+  let thumbnailBytes: Buffer;
+
+  try {
+    fullBytes = await sharp(inputBuffer)
+      .rotate()
+      .resize({ width: 1600, withoutEnlargement: true })
+      .webp({ quality: 82 })
+      .toBuffer();
+
+    thumbnailBytes = await sharp(inputBuffer)
+      .rotate()
+      .resize({ width: 500, withoutEnlargement: true })
+      .webp({ quality: 82 })
+      .toBuffer();
+  } catch (processingError) {
+    console.error("admin gallery image processing failed", processingError);
+    return { ok: false, error: "Image could not be processed." };
+  }
+
+  const fullUpload = await supabase.storage.from(bucketName).upload(fullPath, fullBytes, {
+    contentType: "image/webp",
     upsert: false,
   });
 
-  if (upload.error) {
-    console.error("admin gallery image upload failed", upload.error);
-    return { ok: false, error: upload.error.message };
+  if (fullUpload.error) {
+    console.error("admin gallery full image upload failed", fullUpload.error);
+    return { ok: false, error: fullUpload.error.message };
   }
 
-  const { data } = supabase.storage.from(bucketName).getPublicUrl(objectPath);
+  const thumbnailUpload = await supabase.storage.from(bucketName).upload(
+    thumbnailPath,
+    thumbnailBytes,
+    {
+      contentType: "image/webp",
+      upsert: false,
+    },
+  );
+
+  if (thumbnailUpload.error) {
+    console.error("admin gallery thumbnail upload failed", thumbnailUpload.error);
+    await supabase.storage.from(bucketName).remove([fullPath]);
+    return { ok: false, error: thumbnailUpload.error.message };
+  }
+
+  const { data: fullData } = supabase.storage.from(bucketName).getPublicUrl(fullPath);
+  const { data: thumbnailData } = supabase.storage.from(bucketName).getPublicUrl(thumbnailPath);
 
   return {
     ok: true,
-    path: objectPath,
-    publicUrl: data.publicUrl,
+    path: fullPath,
+    thumbnailPath,
+    publicUrl: fullData.publicUrl,
+    thumbnailUrl: thumbnailData.publicUrl,
   };
 }
 
@@ -217,6 +270,7 @@ export async function updateGalleryItem(
 export async function deleteGalleryItemById(
   id: string,
   imageUrl: string,
+  thumbnailUrl?: string | null,
 ): Promise<ActionResult> {
   const { supabase, error } = getAdminClient();
 
@@ -231,10 +285,12 @@ export async function deleteGalleryItemById(
     return { ok: false, error: result.error.message };
   }
 
-  const objectPath = pathFromPublicUrl(imageUrl);
+  const objectPaths = Array.from(
+    new Set([pathFromPublicUrl(imageUrl), thumbnailUrl ? pathFromPublicUrl(thumbnailUrl) : ""]),
+  ).filter(Boolean);
 
-  if (objectPath) {
-    const storageResult = await supabase.storage.from(bucketName).remove([objectPath]);
+  if (objectPaths.length > 0) {
+    const storageResult = await supabase.storage.from(bucketName).remove(objectPaths);
 
     if (storageResult.error) {
       console.error("admin gallery storage delete failed", storageResult.error);
