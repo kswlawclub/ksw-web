@@ -264,14 +264,22 @@ async function loadHomeData() {
     };
   }
 
-  const [teams, allTeams, standings, matches, scheduledMatches, sponsors] = await Promise.all([
+  const [teams, allTeams, standings, finishedMatches, scheduledMatches, sponsors] = await Promise.all([
     runSupabaseQuery("teams", supabase.from("teams").select(teamColumns).eq("is_ksw", true)),
     runSupabaseQuery("teams_all", supabase.from("teams").select(teamColumns)),
     runSupabaseQuery(
       "league_standings_view",
       supabase.from("league_standings_view").select(standingsColumns),
     ),
-    runSupabaseQuery("matches", supabase.from("matches").select(matchColumns)),
+    runSupabaseQuery(
+      "finished_matches",
+      supabase
+        .from("matches")
+        .select(matchColumns)
+        .eq("status", "finished")
+        .order("match_date", { ascending: false })
+        .limit(16),
+    ),
     runSupabaseQuery(
       "scheduled_matches",
       supabase
@@ -296,7 +304,7 @@ async function loadHomeData() {
     configured: true,
     teams,
     standings,
-    matches: sortMatches(withMatchTeams(matches, teamRows)),
+    matches: withMatchTeams(finishedMatches, teamRows),
     scheduledMatches: withMatchTeams(scheduledMatches, teamRows),
     sponsors,
   };
@@ -330,10 +338,9 @@ export default async function Home() {
   });
   const latestResults = matches
     .filter(
-      (match) =>
-        typeof match.home_score === "number" && typeof match.away_score === "number",
+      (match) => typeof match.home_score === "number" && typeof match.away_score === "number",
     )
-    .slice(0, 6);
+    .slice(0, 16);
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#061426] text-slate-100">
@@ -627,7 +634,12 @@ export default async function Home() {
                         </span>
                       </div>
                       <div className="rounded-md border border-[#d8ad45]/45 bg-white px-2 py-2 text-center text-sm font-black text-[#9b1c1f] shadow-sm sm:text-base">
-                        VS
+                        {text(fixture, ["venue"], "") ? (
+                          <span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-[#061426]">
+                            {text(fixture, ["venue"], "")}
+                          </span>
+                        ) : null}
+                        <span>VS</span>
                       </div>
                       <div className="flex min-w-0 items-center justify-end gap-2.5 text-right">
                         <span className="hidden min-w-0 text-wrap text-base font-bold leading-5 text-[#061426] sm:inline">

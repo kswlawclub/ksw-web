@@ -11,6 +11,7 @@ type MatchPayload = {
   away_team_id: string;
   home_score: number | null;
   away_score: number | null;
+  venue: string | null;
   status: MatchStatus;
 };
 

@@ -32,6 +32,7 @@ type Match = {
   away_team_id: string;
   home_score: number | null;
   away_score: number | null;
+  venue: string | null;
   status: MatchStatus;
 };
 
@@ -43,6 +44,8 @@ type MatchForm = {
   awayTeamId: string;
   homeScore: string;
   awayScore: string;
+  venueOption: string;
+  customVenue: string;
   status: MatchStatus;
 };
 
@@ -54,8 +57,12 @@ const emptyForm: MatchForm = {
   awayTeamId: "",
   homeScore: "",
   awayScore: "",
+  venueOption: "",
+  customVenue: "",
   status: "scheduled",
 };
+
+const standardVenues = ["V1", "V2", "V3"];
 
 function toBangkokDateInput(value: string) {
   const date = new Date(value);
@@ -113,6 +120,35 @@ function toMatchStatus(value: string): MatchStatus {
   return isMatchStatus(value) ? value : "scheduled";
 }
 
+function venueFields(value: string | null) {
+  if (!value) {
+    return {
+      venueOption: "",
+      customVenue: "",
+    };
+  }
+
+  if (standardVenues.includes(value)) {
+    return {
+      venueOption: value,
+      customVenue: "",
+    };
+  }
+
+  return {
+    venueOption: "Other",
+    customVenue: value,
+  };
+}
+
+function venueValue(form: MatchForm) {
+  if (form.venueOption === "Other") {
+    return form.customVenue.trim() || null;
+  }
+
+  return form.venueOption || null;
+}
+
 export default function AdminMatchesPage() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
@@ -166,7 +202,7 @@ export default function AdminMatchesPage() {
     const [matchesResult, teamsResult, leaguesResult] = await Promise.all([
       supabase
         .from("matches")
-        .select("id, league_id, match_date, home_team_id, away_team_id, home_score, away_score, status")
+        .select("id, league_id, match_date, home_team_id, away_team_id, home_score, away_score, venue, status")
         .order("match_date", { ascending: false }),
       supabase.from("teams").select("id, name, short_name, league_id").order("name"),
       supabase
@@ -217,6 +253,8 @@ export default function AdminMatchesPage() {
   }
 
   function editMatch(match: Match) {
+    const venue = venueFields(match.venue);
+
     setForm({
       id: match.id,
       leagueId: match.league_id,
@@ -225,6 +263,8 @@ export default function AdminMatchesPage() {
       awayTeamId: match.away_team_id,
       homeScore: match.home_score === null ? "" : String(match.home_score),
       awayScore: match.away_score === null ? "" : String(match.away_score),
+      venueOption: venue.venueOption,
+      customVenue: venue.customVenue,
       status: match.status,
     });
     setMessage("");
@@ -272,6 +312,7 @@ export default function AdminMatchesPage() {
       away_team_id: form.awayTeamId,
       home_score: homeScore,
       away_score: awayScore,
+      venue: venueValue(form),
       status: form.status,
     };
 
@@ -444,6 +485,43 @@ export default function AdminMatchesPage() {
             </div>
 
             <label className="grid gap-2 text-sm font-black">
+              Venue
+              <select
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    venueOption: event.target.value,
+                    customVenue: event.target.value === "Other" ? current.customVenue : "",
+                  }))
+                }
+                value={form.venueOption}
+              >
+                <option value="">Select venue</option>
+                {standardVenues.map((venue) => (
+                  <option key={venue} value={venue}>
+                    {venue}
+                  </option>
+                ))}
+                <option value="Other">Other</option>
+              </select>
+            </label>
+
+            {form.venueOption === "Other" ? (
+              <label className="grid gap-2 text-sm font-black">
+                Custom Venue
+                <input
+                  className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, customVenue: event.target.value }))
+                  }
+                  placeholder="Enter venue"
+                  value={form.customVenue}
+                />
+              </label>
+            ) : null}
+
+            <label className="grid gap-2 text-sm font-black">
               Status
               <select
                 className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
@@ -521,7 +599,14 @@ export default function AdminMatchesPage() {
                             {[league?.season, league?.competition_type].filter(Boolean).join(" - ")}
                           </div>
                         </td>
-                        <td className="px-4 py-3 font-bold">{formatDateTime(match.match_date)}</td>
+                        <td className="px-4 py-3">
+                          <div className="font-bold">{formatDateTime(match.match_date)}</div>
+                          {match.venue ? (
+                            <div className="mt-1 text-xs font-bold text-slate-500">
+                              Venue: {match.venue}
+                            </div>
+                          ) : null}
+                        </td>
                         <td className="px-4 py-3">{homeTeam?.name ?? "Unknown team"}</td>
                         <td className="px-4 py-3">{awayTeam?.name ?? "Unknown team"}</td>
                         <td className="px-4 py-3 text-center font-black">{match.home_score ?? "-"}</td>
