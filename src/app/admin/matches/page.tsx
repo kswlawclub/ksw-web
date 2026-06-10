@@ -8,7 +8,7 @@ import { createMatch, deleteMatchById, updateMatch } from "./actions";
 
 const storageKey = "ksw-admin-authenticated";
 
-type MatchStatus = "scheduled" | "completed";
+type MatchStatus = "scheduled" | "finished";
 
 type Team = {
   id: string;
@@ -85,7 +85,7 @@ function scoreValue(value: string) {
 }
 
 function isMatchStatus(value: string): value is MatchStatus {
-  return value === "scheduled" || value === "completed";
+  return value === "scheduled" || value === "finished";
 }
 
 function toMatchStatus(value: string): MatchStatus {
@@ -219,8 +219,8 @@ export default function AdminMatchesPage() {
       return;
     }
 
-    if (form.status === "completed" && (homeScore === null || awayScore === null)) {
-      setError("Completed matches require both scores.");
+    if (form.status === "finished" && (homeScore === null || awayScore === null)) {
+      setError("Finished matches require both scores.");
       setSaving(false);
       return;
     }
@@ -366,7 +366,7 @@ export default function AdminMatchesPage() {
                   className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                   min="0"
                   onChange={(event) => setForm((current) => ({ ...current, homeScore: event.target.value }))}
-                  required={form.status === "completed"}
+                  required={form.status === "finished"}
                   type="number"
                   value={form.homeScore}
                 />
@@ -377,7 +377,7 @@ export default function AdminMatchesPage() {
                   className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                   min="0"
                   onChange={(event) => setForm((current) => ({ ...current, awayScore: event.target.value }))}
-                  required={form.status === "completed"}
+                  required={form.status === "finished"}
                   type="number"
                   value={form.awayScore}
                 />
@@ -397,7 +397,7 @@ export default function AdminMatchesPage() {
                 value={form.status}
               >
                 <option value="scheduled">scheduled</option>
-                <option value="completed">completed</option>
+                <option value="finished">finished</option>
               </select>
             </label>
 

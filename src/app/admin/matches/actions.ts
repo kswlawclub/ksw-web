@@ -2,7 +2,7 @@
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
-type MatchStatus = "scheduled" | "completed";
+type MatchStatus = "scheduled" | "finished";
 
 type MatchPayload = {
   league_id: string;
@@ -38,10 +38,10 @@ function validatePayload(payload: MatchPayload): string {
   }
 
   if (
-    payload.status === "completed" &&
+    payload.status === "finished" &&
     (payload.home_score === null || payload.away_score === null)
   ) {
-    return "Completed matches require both scores.";
+    return "Finished matches require both scores.";
   }
 
   return "";
