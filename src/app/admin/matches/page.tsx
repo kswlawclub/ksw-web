@@ -38,7 +38,7 @@ type MatchForm = {
   awayTeamId: string;
   homeScore: string;
   awayScore: string;
-  status: "scheduled" | "finished";
+  status: "scheduled" | "completed";
 };
 
 const emptyForm: MatchForm = {
@@ -82,12 +82,12 @@ function scoreValue(value: string) {
   return value.trim() === "" ? null : Number(value);
 }
 
-function toUiStatus(status: string): MatchForm["status"] {
-  return status === "completed" || status === "finished" ? "finished" : "scheduled";
+function toFormStatus(status: string): MatchForm["status"] {
+  return status === "completed" || status === "finished" ? "completed" : "scheduled";
 }
 
-function toDbStatus(status: MatchForm["status"]) {
-  return status === "finished" ? "completed" : "scheduled";
+function toDisplayStatus(status: string) {
+  return status === "completed" || status === "finished" ? "finished" : "scheduled";
 }
 
 export default function AdminMatchesPage() {
@@ -182,7 +182,7 @@ export default function AdminMatchesPage() {
       awayTeamId: match.away_team_id,
       homeScore: match.home_score === null ? "" : String(match.home_score),
       awayScore: match.away_score === null ? "" : String(match.away_score),
-      status: toUiStatus(match.status),
+      status: toFormStatus(match.status),
     });
     setMessage("");
     setError("");
@@ -217,7 +217,7 @@ export default function AdminMatchesPage() {
       away_team_id: form.awayTeamId,
       home_score: scoreValue(form.homeScore),
       away_score: scoreValue(form.awayScore),
-      status: toDbStatus(form.status),
+      status: form.status,
     };
 
     const result = form.id
@@ -380,7 +380,7 @@ export default function AdminMatchesPage() {
                 value={form.status}
               >
                 <option value="scheduled">scheduled</option>
-                <option value="finished">finished</option>
+                <option value="completed">finished</option>
               </select>
             </label>
 
@@ -444,7 +444,7 @@ export default function AdminMatchesPage() {
                         <td className="px-4 py-3 text-center font-black">{match.away_score ?? "-"}</td>
                         <td className="px-4 py-3">
                           <span className="rounded-full border border-[#d8ad45]/40 bg-[#d8ad45]/10 px-3 py-1 text-xs font-black text-[#061426]">
-                            {toUiStatus(match.status)}
+                            {toDisplayStatus(match.status)}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right">
