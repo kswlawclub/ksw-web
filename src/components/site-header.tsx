@@ -25,10 +25,10 @@ export function SiteHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[#d8ad45]/20 bg-[#061426]/88 text-white shadow-lg shadow-black/20 backdrop-blur-xl">
+    <header className="sticky top-0 z-50 border-b border-[#d8ad45]/20 bg-[linear-gradient(135deg,rgba(6,20,38,0.98),rgba(9,31,57,0.94))] text-white shadow-lg shadow-black/20 backdrop-blur-xl">
       <div className="mx-auto flex min-h-16 w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-10">
         <Link className="flex items-center gap-3" href="/" onClick={() => setOpen(false)}>
-          <span className="flex size-10 items-center justify-center rounded-full border border-[#d8ad45]/45 bg-white p-1.5 shadow-md shadow-[#d8ad45]/10">
+          <span className="flex size-12 items-center justify-center drop-shadow-[0_10px_24px_rgba(216,173,69,0.18)]">
             <img alt="KSW L.C. logo" className="max-h-full max-w-full object-contain" src="/team-logos/ksw-lc.png" />
           </span>
           <span className="text-sm font-black tracking-wide text-[#f4d58a]">KSW L.C.</span>
