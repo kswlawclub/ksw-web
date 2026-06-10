@@ -64,6 +64,23 @@ function formatMatchDate(value: unknown) {
   }).format(date);
 }
 
+function formatMatchTime(value: unknown) {
+  if (typeof value !== "string" || !value) {
+    return "";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
 function isString(value: unknown) {
   return typeof value === "string" && value.trim().length > 0;
 }
@@ -118,7 +135,7 @@ function teamById(teams: Row[]) {
   );
 }
 
-function withMatchTeams(matches: Row[], teams: Row[]) {
+function withMatchTeams(matches: Row[], teams: Row[]): Row[] {
   const teamsById = teamById(teams);
 
   return matches.map((match) => {
@@ -139,7 +156,7 @@ function withMatchTeams(matches: Row[], teams: Row[]) {
       away_team_short_name: awayTeam?.shortName ?? "",
       away_team_logo_url: awayTeam?.logoUrl ?? "",
       score: hasScore ? `${homeScore} - ${awayScore}` : "VS",
-    };
+    } satisfies Row;
   });
 }
 
@@ -239,11 +256,12 @@ async function loadHomeData() {
       teams: [] as Row[],
       standings: [] as Row[],
       matches: [] as Row[],
+      scheduledMatches: [] as Row[],
       sponsors: [] as Row[],
     };
   }
 
-  const [teams, allTeams, standings, matches, sponsors] = await Promise.all([
+  const [teams, allTeams, standings, matches, scheduledMatches, sponsors] = await Promise.all([
     runSupabaseQuery("teams", supabase.from("teams").select(teamColumns).eq("is_ksw", true)),
     runSupabaseQuery("teams_all", supabase.from("teams").select(teamColumns)),
     runSupabaseQuery(
@@ -251,6 +269,15 @@ async function loadHomeData() {
       supabase.from("league_standings_view").select(standingsColumns),
     ),
     runSupabaseQuery("matches", supabase.from("matches").select(matchColumns)),
+    runSupabaseQuery(
+      "scheduled_matches",
+      supabase
+        .from("matches")
+        .select(matchColumns)
+        .eq("status", "scheduled")
+        .order("match_date", { ascending: true })
+        .limit(6),
+    ),
     runSupabaseQuery(
       "sponsors",
       supabase
@@ -267,12 +294,13 @@ async function loadHomeData() {
     teams,
     standings,
     matches: sortMatches(withMatchTeams(matches, teamRows)),
+    scheduledMatches: withMatchTeams(scheduledMatches, teamRows),
     sponsors,
   };
 }
 
 export default async function Home() {
-  const { configured, teams, standings, matches, sponsors } = await loadHomeData();
+  const { configured, teams, standings, matches, scheduledMatches, sponsors } = await loadHomeData();
   const club = teams[0];
   const logoUrl = club?.logo_url;
 
@@ -303,35 +331,6 @@ export default async function Home() {
         typeof match.home_score === "number" && typeof match.away_score === "number",
     )
     .slice(0, 6);
-  const findLeagueTeam = (names: string[]) =>
-    leagueTeams.find((team) => {
-      const teamName = text(team, ["team_name", "name", "team"], "");
-      const shortName = text(team, ["short_name"], "");
-
-      return names.some(
-        (name) => teamName === name || teamName.includes(name) || shortName === name,
-      );
-    });
-  const mockFixtures = [
-    {
-      date: "13 Jun 2026",
-      time: "17:20",
-      status: "Scheduled",
-      homeName: "KSW L.C.",
-      awayName: "ทนายความกรุงเทพ BKK Lawyer",
-      homeTeam: findLeagueTeam(["KSW L.C.", "KSW"]),
-      awayTeam: findLeagueTeam(["ทนายความกรุงเทพ BKK Lawyer", "BKK"]),
-    },
-    {
-      date: "13 Jun 2026",
-      time: "19:40",
-      status: "Scheduled",
-      homeName: "KSW L.C.",
-      awayName: "Lawyer Club",
-      homeTeam: findLeagueTeam(["KSW L.C.", "KSW"]),
-      awayTeam: findLeagueTeam(["Lawyer Club"]),
-    },
-  ];
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#061426] text-slate-100">
@@ -582,68 +581,80 @@ export default async function Home() {
             </p>
           </div>
           <div className="divide-y divide-dashed divide-[#d8ad45]/30">
-            {mockFixtures.map((fixture) => (
-              <div
-                className="grid min-w-0 gap-3 px-4 py-4 transition-colors hover:bg-[#fff8e3]/50 sm:px-5"
-                key={`${fixture.homeName}-${fixture.awayName}`}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs font-black uppercase tracking-[0.16em] text-[#9b1c1f]">
-                    {fixture.date} · {fixture.time}
-                  </p>
-                  <span className="rounded-full border border-[#d8ad45]/45 bg-[#fff8e3] px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-[#061426]">
-                    {fixture.status}
-                  </span>
-                </div>
-                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_64px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_78px_minmax(0,1fr)] sm:gap-4">
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <TeamLogo
-                      initials={teamInitials(
-                        fixture.homeTeam ?? { team_name: fixture.homeName },
-                      )}
-                      logoUrl={text(fixture.homeTeam, ["logo_url"], "")}
-                      teamName={fixture.homeName}
-                    />
-                    <span className="min-w-0 truncate text-sm font-bold leading-5 text-[#061426] sm:hidden">
-                      {text(
-                        fixture.homeTeam,
-                        ["short_name"],
-                        teamInitials(fixture.homeTeam ?? { team_name: fixture.homeName }),
-                      )}
-                    </span>
-                    <span className="hidden min-w-0 text-wrap text-base font-bold leading-5 text-[#061426] sm:inline">
-                      {fixture.homeName}
-                    </span>
-                  </div>
-                  <div className="rounded-md border border-[#d8ad45]/45 bg-white px-2 py-2 text-center text-sm font-black text-[#061426] shadow-sm sm:text-base">
-                    VS
-                  </div>
-                  <div className="flex min-w-0 items-center justify-end gap-2.5 text-right">
-                    <span className="hidden min-w-0 text-wrap text-base font-bold leading-5 text-[#061426] sm:inline">
-                      {fixture.awayName}
-                    </span>
-                    <span className="min-w-0 truncate text-sm font-bold leading-5 text-[#061426] sm:hidden">
-                      {text(
-                        fixture.awayTeam,
-                        ["short_name"],
-                        teamInitials(fixture.awayTeam ?? { team_name: fixture.awayName }),
-                      )}
-                    </span>
-                    {fixture.awayTeam ? (
-                      <TeamLogo
-                        initials={teamInitials(fixture.awayTeam)}
-                        logoUrl={text(fixture.awayTeam, ["logo_url"], "")}
-                        teamName={fixture.awayName}
-                      />
-                    ) : (
-                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-slate-300 bg-slate-100 text-[10px] font-black text-slate-500 sm:size-7 md:size-8">
-                        TBD
+            {scheduledMatches.length ? (
+              scheduledMatches.map((fixture, index) => {
+                const matchDate = fixture.match_date ?? fixture.date ?? fixture.kickoff_at;
+                const matchTime = formatMatchTime(matchDate);
+                const homeName = text(fixture, ["home_team_name"], "Home team unavailable");
+                const awayName = text(fixture, ["away_team_name"], "Away team unavailable");
+
+                return (
+                  <div
+                    className="grid min-w-0 gap-3 px-4 py-4 transition-colors hover:bg-[#fff8e3]/50 sm:px-5"
+                    key={text(fixture, ["id", "match_id"], String(index))}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-black uppercase tracking-[0.16em] text-[#9b1c1f]">
+                        {formatMatchDate(matchDate)}
+                        {matchTime ? ` · ${matchTime}` : ""}
+                      </p>
+                      <span className="rounded-full border border-[#d8ad45]/45 bg-[#fff8e3] px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-[#061426]">
+                        {text(fixture, ["status"], "scheduled")}
                       </span>
-                    )}
+                    </div>
+                    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_64px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_78px_minmax(0,1fr)] sm:gap-4">
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <TeamLogo
+                          initials={teamInitials({
+                            short_name: text(fixture, ["home_team_short_name"], ""),
+                            team_name: homeName,
+                          })}
+                          logoUrl={text(fixture, ["home_team_logo_url"], "")}
+                          teamName={homeName}
+                        />
+                        <span className="min-w-0 truncate text-sm font-bold leading-5 text-[#061426] sm:hidden">
+                          {text(
+                            fixture,
+                            ["home_team_short_name"],
+                            teamInitials({ team_name: homeName }),
+                          )}
+                        </span>
+                        <span className="hidden min-w-0 text-wrap text-base font-bold leading-5 text-[#061426] sm:inline">
+                          {homeName}
+                        </span>
+                      </div>
+                      <div className="rounded-md border border-[#d8ad45]/45 bg-white px-2 py-2 text-center text-sm font-black text-[#061426] shadow-sm sm:text-base">
+                        VS
+                      </div>
+                      <div className="flex min-w-0 items-center justify-end gap-2.5 text-right">
+                        <span className="hidden min-w-0 text-wrap text-base font-bold leading-5 text-[#061426] sm:inline">
+                          {awayName}
+                        </span>
+                        <span className="min-w-0 truncate text-sm font-bold leading-5 text-[#061426] sm:hidden">
+                          {text(
+                            fixture,
+                            ["away_team_short_name"],
+                            teamInitials({ team_name: awayName }),
+                          )}
+                        </span>
+                        <TeamLogo
+                          initials={teamInitials({
+                            short_name: text(fixture, ["away_team_short_name"], ""),
+                            team_name: awayName,
+                          })}
+                          logoUrl={text(fixture, ["away_team_logo_url"], "")}
+                          teamName={awayName}
+                        />
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            ))}
+                );
+              })
+            ) : (
+              <p className="px-4 py-8 text-slate-600 sm:px-5">
+                No scheduled fixtures available.
+              </p>
+            )}
           </div>
         </div>
         </div>
