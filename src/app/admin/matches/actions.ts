@@ -17,6 +17,17 @@ type ActionResult = {
   error?: string;
 };
 
+function normalizeDbStatus(status: string) {
+  return status === "finished" ? "completed" : status;
+}
+
+function normalizeMatchPayload(payload: MatchPayload): MatchPayload {
+  return {
+    ...payload,
+    status: normalizeDbStatus(payload.status),
+  };
+}
+
 function getAdminClient() {
   const supabase = getSupabaseAdmin();
 
@@ -37,7 +48,7 @@ export async function createMatch(payload: MatchPayload): Promise<ActionResult> 
     return { ok: false, error };
   }
 
-  const result = await supabase.from("matches").insert(payload);
+  const result = await supabase.from("matches").insert(normalizeMatchPayload(payload));
 
   if (result.error) {
     console.error("admin match insert failed", result.error.message);
@@ -54,7 +65,10 @@ export async function updateMatch(id: string, payload: MatchPayload): Promise<Ac
     return { ok: false, error };
   }
 
-  const result = await supabase.from("matches").update(payload).eq("id", id);
+  const result = await supabase
+    .from("matches")
+    .update(normalizeMatchPayload(payload))
+    .eq("id", id);
 
   if (result.error) {
     console.error("admin match update failed", result.error.message);
