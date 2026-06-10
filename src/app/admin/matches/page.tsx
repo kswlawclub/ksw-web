@@ -38,7 +38,7 @@ type MatchForm = {
   awayTeamId: string;
   homeScore: string;
   awayScore: string;
-  status: "scheduled" | "completed";
+  status: "scheduled" | "completed" | "finished";
 };
 
 const emptyForm: MatchForm = {
@@ -88,6 +88,10 @@ function toFormStatus(status: string): MatchForm["status"] {
 
 function toDisplayStatus(status: string) {
   return status === "completed" || status === "finished" ? "finished" : "scheduled";
+}
+
+function normalizeStatusForDb(status: MatchForm["status"]): "scheduled" | "completed" {
+  return status === "finished" || status === "completed" ? "completed" : "scheduled";
 }
 
 export default function AdminMatchesPage() {
@@ -217,7 +221,7 @@ export default function AdminMatchesPage() {
       away_team_id: form.awayTeamId,
       home_score: scoreValue(form.homeScore),
       away_score: scoreValue(form.awayScore),
-      status: form.status,
+      status: normalizeStatusForDb(form.status),
     };
 
     const result = form.id
