@@ -269,6 +269,20 @@ export default async function PartnersPage() {
             >
               Email KSW
             </a>
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+              <Link
+                className="inline-flex items-center justify-center rounded-md border border-[#061426]/20 px-5 py-3 text-sm font-black text-[#061426] transition-colors hover:bg-slate-100"
+                href="/team"
+              >
+                Meet The Team
+              </Link>
+              <Link
+                className="inline-flex items-center justify-center rounded-md border border-[#061426]/20 px-5 py-3 text-sm font-black text-[#061426] transition-colors hover:bg-slate-100"
+                href="/gallery"
+              >
+                View Gallery
+              </Link>
+            </div>
             <p className="mt-3 text-sm font-bold text-slate-700">kswlawclub@gmail.com</p>
           </div>
         </div>

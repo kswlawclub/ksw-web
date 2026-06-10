@@ -89,6 +89,20 @@ export default function GalleryPage() {
             A collection of memorable moments from matches, team activities, and
             the KSW community.
           </p>
+          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+            <Link
+              className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/15 transition-transform hover:scale-[1.02]"
+              href="/team"
+            >
+              Meet The Team
+            </Link>
+            <Link
+              className="inline-flex items-center justify-center rounded-md border border-[#d8ad45]/50 bg-white/[0.03] px-5 py-3 text-sm font-black text-[#f4d58a] backdrop-blur transition-colors hover:bg-[#d8ad45]/10"
+              href="/partners"
+            >
+              Partner With KSW
+            </Link>
+          </div>
         </div>
       </section>
 

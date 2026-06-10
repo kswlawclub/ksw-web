@@ -365,13 +365,13 @@ export default async function Home() {
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <a
                 className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/15 transition-transform hover:scale-[1.02]"
-                href="#league-table"
+                href="/#league-center"
               >
                 View League Table
               </a>
               <a
                 className="inline-flex items-center justify-center rounded-md border border-[#d8ad45]/50 bg-white/[0.03] px-5 py-3 text-sm font-black text-[#f4d58a] backdrop-blur transition-colors hover:bg-[#d8ad45]/10"
-                href="mailto:kswlawclub@gmail.com"
+                href="/partners"
               >
                 Partner With KSW
               </a>
@@ -519,6 +519,7 @@ export default async function Home() {
         </div>
       </section>
 
+      <div id="league-center">
       <section className="bg-slate-100">
         <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
         <div className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
@@ -766,6 +767,7 @@ export default async function Home() {
         </div>
         </div>
       </section>
+      </div>
 
       <section id="sponsors" className="bg-gradient-to-br from-[#071b31] via-[#0b2745] to-[#061426]">
         <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
@@ -808,7 +810,7 @@ export default async function Home() {
           <div className="mt-7">
             <a
               className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/20 transition-transform hover:scale-[1.02]"
-              href="mailto:kswlawclub@gmail.com"
+              href="/partners"
             >
               Become a KSW Partner
             </a>
