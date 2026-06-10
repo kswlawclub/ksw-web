@@ -279,7 +279,7 @@ async function loadHomeData() {
         .select(matchColumns)
         .eq("status", "scheduled")
         .order("match_date", { ascending: true })
-        .limit(6),
+        .limit(16),
     ),
     runSupabaseQuery(
       "sponsors",
