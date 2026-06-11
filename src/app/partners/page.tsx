@@ -8,6 +8,7 @@ type Sponsor = {
   id?: string;
   name?: string;
   logo_url?: string;
+  website_url?: string;
   tier?: string;
 };
 
@@ -90,7 +91,7 @@ async function loadSponsors() {
   try {
     const { data, error } = await supabase
       .from("sponsors")
-      .select("id, name, logo_url, tier, sort_order, is_active")
+      .select("id, name, logo_url, website_url, tier, sort_order, is_active")
       .order("sort_order", { ascending: true, nullsFirst: false });
 
     if (error) {
@@ -221,6 +222,7 @@ export default async function PartnersPage() {
               const sponsor = sponsors[index];
               const name = sponsor?.name ?? "YOUR LOGO";
               const logoUrl = sponsor?.logo_url;
+              const websiteUrl = sponsor?.website_url;
               const tierLabel =
                 index === 0 ? "Main Partner" : index < 4 ? "Official Partner" : "Supporter";
               const size =
@@ -229,20 +231,35 @@ export default async function PartnersPage() {
                   : index < 4
                     ? "size-24 sm:size-28"
                     : "size-20 sm:size-24";
+              const sponsorCircle = (
+                <div
+                  className={`flex ${size} items-center justify-center rounded-full border border-[#d8ad45]/25 bg-white p-3 text-center shadow-xl shadow-black/25 ring-1 ring-white/10 transition duration-300 hover:border-[#d8ad45]/70 hover:shadow-[#d8ad45]/20`}
+                >
+                  {logoUrl ? (
+                    <img alt={`${name} logo`} className="max-h-full max-w-full object-contain" src={logoUrl} />
+                  ) : (
+                    <span className="text-[10px] font-black uppercase tracking-wide text-[#061426] sm:text-xs">
+                      {sponsor ? initials(name) || "YOUR LOGO" : "YOUR LOGO"}
+                    </span>
+                  )}
+                </div>
+              );
 
               return (
                 <div className="flex flex-col items-center gap-2" key={sponsor?.id ?? index}>
-                  <div
-                    className={`flex ${size} items-center justify-center rounded-full border border-[#d8ad45]/25 bg-white p-3 text-center shadow-xl shadow-black/25 ring-1 ring-white/10 transition duration-300 hover:border-[#d8ad45]/70 hover:shadow-[#d8ad45]/20`}
-                  >
-                    {logoUrl ? (
-                      <img alt={`${name} logo`} className="max-h-full max-w-full object-contain" src={logoUrl} />
-                    ) : (
-                      <span className="text-[10px] font-black uppercase tracking-wide text-[#061426] sm:text-xs">
-                        {sponsor ? initials(name) || "YOUR LOGO" : "YOUR LOGO"}
-                      </span>
-                    )}
-                  </div>
+                  {websiteUrl ? (
+                    <a
+                      aria-label={`Visit ${name} website`}
+                      className="cursor-pointer"
+                      href={websiteUrl}
+                      rel="noopener noreferrer"
+                      target="_blank"
+                    >
+                      {sponsorCircle}
+                    </a>
+                  ) : (
+                    sponsorCircle
+                  )}
                   <span className="text-center text-[10px] font-black uppercase tracking-wide text-[#f4d58a]/80">
                     {tierLabel}
                   </span>

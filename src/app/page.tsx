@@ -861,17 +861,16 @@ export default async function Home() {
               const sponsor = sponsors[index];
               const sponsorName = text(sponsor, ["name", "sponsor_name"], "YOUR LOGO");
               const sponsorLogo = text(sponsor, ["logo_url"], "");
+              const sponsorWebsite = text(sponsor, ["website_url"], "");
               const circleSize =
                 index === 0
                   ? "size-28 sm:size-32 lg:size-36"
                   : index < 4
                     ? "size-24 sm:size-28"
                     : "size-20 sm:size-24";
-
-              return (
+              const sponsorCircle = (
                 <div
                   className={`flex ${circleSize} items-center justify-center rounded-full border border-[#d8ad45]/25 bg-white p-3 text-center shadow-xl shadow-black/25 ring-1 ring-white/10 transition-all duration-300 hover:scale-105 hover:border-[#d8ad45]/70 hover:shadow-[#d8ad45]/25`}
-                  key={text(sponsor, ["id", "name"], String(index))}
                 >
                   {isString(sponsorLogo) ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -886,6 +885,23 @@ export default async function Home() {
                     </span>
                   )}
                 </div>
+              );
+
+              return (
+                isString(sponsorWebsite) ? (
+                  <a
+                    aria-label={`Visit ${sponsorName} website`}
+                    className="cursor-pointer"
+                    href={sponsorWebsite}
+                    key={text(sponsor, ["id", "name"], String(index))}
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    {sponsorCircle}
+                  </a>
+                ) : (
+                  <div key={text(sponsor, ["id", "name"], String(index))}>{sponsorCircle}</div>
+                )
               );
             })}
           </div>
