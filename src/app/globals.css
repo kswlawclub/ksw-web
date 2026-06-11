@@ -34,3 +34,11 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* Keeps sponsor marks visually consistent inside fixed circular sponsor slots. */
+.ksw-sponsor-logo-fit {
+  height: 88%;
+  width: 88%;
+  object-fit: contain;
+  object-position: center;
+}

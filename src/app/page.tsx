@@ -876,7 +876,7 @@ export default async function Home() {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       alt={`${sponsorName} logo`}
-                      className="h-[78%] w-[78%] object-contain object-center"
+                      className="ksw-sponsor-logo-fit"
                       src={sponsorLogo}
                     />
                   ) : (
