@@ -233,10 +233,10 @@ export default async function PartnersPage() {
                     : "size-20 sm:size-24";
               const sponsorCircle = (
                 <div
-                  className={`flex ${size} items-center justify-center rounded-full border border-[#d8ad45]/25 bg-white p-3 text-center shadow-xl shadow-black/25 ring-1 ring-white/10 transition duration-300 hover:border-[#d8ad45]/70 hover:shadow-[#d8ad45]/20`}
+                  className={`flex ${size} items-center justify-center overflow-hidden rounded-full border border-[#d8ad45]/25 bg-white p-3 text-center shadow-xl shadow-black/25 ring-1 ring-white/10 transition duration-300 hover:border-[#d8ad45]/70 hover:shadow-[#d8ad45]/20`}
                 >
                   {logoUrl ? (
-                    <img alt={`${name} logo`} className="max-h-full max-w-full object-contain" src={logoUrl} />
+                    <img alt={`${name} logo`} className="max-h-[72%] max-w-[72%] object-contain" src={logoUrl} />
                   ) : (
                     <span className="text-[10px] font-black uppercase tracking-wide text-[#061426] sm:text-xs">
                       {sponsor ? initials(name) || "YOUR LOGO" : "YOUR LOGO"}
