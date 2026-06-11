@@ -10,7 +10,7 @@ const modules = [
   { title: "Manage Competitions", href: "/admin/competitions", status: "Open module" },
   { title: "Manage Teams", href: "/admin/teams", status: "Open module" },
   { title: "Manage Gallery", href: "/admin/gallery", status: "Open module" },
-  { title: "Manage Sponsors", href: "", status: "Coming Soon" },
+  { title: "Manage Sponsors", href: "/admin/sponsors", status: "Open module" },
 ];
 
 export default function AdminDashboardPage() {
