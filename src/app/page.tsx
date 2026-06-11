@@ -350,8 +350,15 @@ export default async function Home() {
             0%, 100% { transform: translateY(0); }
             50% { transform: translateY(-10px); }
           }
+          @keyframes kswLivePulse {
+            0%, 100% { opacity: 0.72; transform: scale(0.92); box-shadow: 0 0 0 0 rgba(244, 213, 138, 0.28); }
+            50% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 6px rgba(244, 213, 138, 0); }
+          }
           .ksw-float-logo {
             animation: kswFloat 7s ease-in-out infinite;
+          }
+          .ksw-live-dot {
+            animation: kswLivePulse 2.4s ease-in-out infinite;
           }
         `}
       </style>
@@ -686,8 +693,9 @@ export default async function Home() {
                 Thai Lawyers League Season 6
               </p>
             </div>
-            <span className="text-xs font-bold uppercase tracking-[0.2em] text-[#d8ad45]">
-              Live
+            <span className="inline-flex items-center gap-2 rounded-full border border-[#f4d58a]/35 bg-[#d8ad45]/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.2em] text-[#f4d58a] shadow-lg shadow-[#d8ad45]/10">
+              <span className="ksw-live-dot size-2 rounded-full bg-[#f4d58a]" />
+              LIVE
             </span>
           </div>
           <div className="overflow-hidden">
@@ -712,12 +720,16 @@ export default async function Home() {
                 {sortedStandings.length ? (
                   sortedStandings.map((row, index) => (
                     <tr
-                      className="cursor-pointer transition-colors hover:bg-white/[0.08]"
+                      className={`cursor-pointer transition-colors hover:bg-white/[0.08] ${
+                        index < 4
+                          ? "bg-gradient-to-r from-[#d8ad45]/12 via-white/[0.045] to-transparent shadow-[inset_3px_0_0_rgba(216,173,69,0.65)]"
+                          : ""
+                      }`}
                       key={text(row, ["id", "team_id", "team_name", "name"], String(index))}
                     >
                       <td
                         className={`px-1 py-3 font-bold sm:px-4 ${
-                          index < 3 ? "text-[#f4d58a]" : "text-slate-300"
+                          index < 4 ? "text-[#f4d58a]" : "text-slate-300"
                         }`}
                       >
                         {index + 1}
