@@ -1,5 +1,6 @@
 "use server";
 
+import sharp from "sharp";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 type TeamPayload = {
@@ -22,6 +23,7 @@ type UploadResult = ActionResult & {
 };
 
 const maxLogoSize = 2 * 1024 * 1024;
+const rasterLogoTypes = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp"]);
 const allowedLogoTypes = new Map([
   ["image/png", "png"],
   ["image/jpeg", "jpg"],
@@ -158,7 +160,7 @@ export async function uploadTeamLogo(formData: FormData): Promise<UploadResult> 
     return { ok: false, error: "Logo must be a png, jpg, jpeg, webp, or svg image." };
   }
 
-  if (file.size > maxLogoSize) {
+  if (file.type === "image/svg+xml" && file.size > maxLogoSize) {
     return { ok: false, error: "Logo file must be 2MB or smaller." };
   }
 
@@ -168,19 +170,43 @@ export async function uploadTeamLogo(formData: FormData): Promise<UploadResult> 
     return { ok: false, error };
   }
 
-  const extension = allowedLogoTypes.get(file.type) ?? "png";
+  const isRasterLogo = rasterLogoTypes.has(file.type);
+  const extension = isRasterLogo ? "webp" : allowedLogoTypes.get(file.type) ?? "png";
   const baseName =
     (shortName || teamId || "team")
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "") || "team";
   const objectPath = `team-logos/${baseName}-${Date.now()}.${extension}`;
-  const bytes = Buffer.from(await file.arrayBuffer());
+  const inputBytes = Buffer.from(await file.arrayBuffer());
+  let bytes: Buffer<ArrayBufferLike> = inputBytes;
+  let contentType = file.type;
+
+  if (isRasterLogo) {
+    try {
+      bytes = await sharp(inputBytes)
+        .rotate()
+        .resize({ width: 800, height: 800, fit: "inside", withoutEnlargement: true })
+        .webp({ quality: 85 })
+        .toBuffer();
+      contentType = "image/webp";
+    } catch (processingError) {
+      console.error("admin team logo processing failed", processingError);
+      return { ok: false, error: "Logo could not be processed." };
+    }
+
+    if (bytes.length > maxLogoSize) {
+      return {
+        ok: false,
+        error: "Logo could not be compressed below 2MB. Please choose a smaller image.",
+      };
+    }
+  }
 
   const upload = await supabase.storage
     .from("team-logos")
     .upload(objectPath, bytes, {
-      contentType: file.type,
+      contentType,
       upsert: false,
     });
 
