@@ -193,65 +193,67 @@ export default function AdminTeamsPage() {
 
   async function saveTeam(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    let logoUrl = form.logoUrl.trim() || null;
-
-    if (logoFile) {
-      if (!allowedLogoTypes.includes(logoFile.type)) {
-        setError("Logo must be a png, jpg, jpeg, webp, or svg image.");
-        return;
-      }
-
-      if (logoFile.type === "image/svg+xml" && logoFile.size > maxLogoSize) {
-        setError("Logo file must be 2MB or smaller.");
-        return;
-      }
-
-      const uploadData = new FormData();
-      uploadData.append("file", logoFile);
-      uploadData.append("shortName", form.shortName.trim() || form.name.trim());
-      uploadData.append("teamId", form.id);
-
-      setSaving(true);
-      setMessage("");
-      setError("");
-
-      const uploadResult = await uploadTeamLogo(uploadData);
-
-      if (!uploadResult.ok || !uploadResult.publicUrl) {
-        setSaving(false);
-        setError(uploadResult.error ?? "Logo upload failed.");
-        return;
-      }
-
-      logoUrl = uploadResult.publicUrl;
-    }
-
-    const payload = {
-      league_id: form.leagueId,
-      name: form.name.trim(),
-      short_name: form.shortName.trim(),
-      logo_url: logoUrl,
-      is_ksw: form.isKsw,
-      is_active: form.isActive,
-    };
-
     setSaving(true);
     setMessage("");
     setError("");
 
-    const result = form.id ? await updateTeam(form.id, payload) : await createTeam(payload);
+    try {
+      let logoUrl = form.logoUrl.trim() || null;
 
-    setSaving(false);
+      if (logoFile) {
+        if (!allowedLogoTypes.includes(logoFile.type)) {
+          setError("Logo must be a png, jpg, jpeg, webp, or svg image.");
+          return;
+        }
 
-    if (!result.ok) {
-      setError(result.error ?? "Could not save team.");
-      return;
+        if (logoFile.type === "image/svg+xml" && logoFile.size > maxLogoSize) {
+          setError("Logo file must be 2MB or smaller.");
+          return;
+        }
+
+        const uploadData = new FormData();
+        uploadData.append("file", logoFile);
+        uploadData.append("shortName", form.shortName.trim() || form.name.trim());
+        uploadData.append("teamId", form.id);
+
+        const uploadResult = await uploadTeamLogo(uploadData);
+
+        if (!uploadResult.ok || !uploadResult.publicUrl) {
+          console.error("admin team logo upload returned error", uploadResult);
+          setError(uploadResult.error ?? "Logo upload failed.");
+          return;
+        }
+
+        logoUrl = uploadResult.publicUrl;
+      }
+
+      const payload = {
+        league_id: form.leagueId,
+        name: form.name.trim(),
+        short_name: form.shortName.trim(),
+        logo_url: logoUrl,
+        is_ksw: form.isKsw,
+        is_active: form.isActive,
+      };
+
+      const result = form.id ? await updateTeam(form.id, payload) : await createTeam(payload);
+
+      if (!result.ok) {
+        console.error("admin team save returned error", result);
+        setError(result.error ?? "Could not save team.");
+        return;
+      }
+
+      setMessage(form.id ? "Team updated." : "Team added.");
+      setForm(emptyForm);
+      setLogoFile(null);
+      await loadData();
+    } catch (saveError) {
+      console.error("admin team save failed", saveError);
+      setError("Could not save team. Please check the logo upload and try again.");
+    } finally {
+      setSaving(false);
     }
-
-    setMessage(form.id ? "Team updated." : "Team added.");
-    setForm(emptyForm);
-    setLogoFile(null);
-    await loadData();
   }
 
   async function deleteTeam(team: Team) {

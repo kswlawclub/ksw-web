@@ -23,6 +23,7 @@ type UploadResult = ActionResult & {
 };
 
 const maxLogoSize = 2 * 1024 * 1024;
+const bucketName = "team-logos";
 const rasterLogoTypes = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp"]);
 const allowedLogoTypes = new Map([
   ["image/png", "png"],
@@ -177,8 +178,16 @@ export async function uploadTeamLogo(formData: FormData): Promise<UploadResult> 
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "") || "team";
-  const objectPath = `team-logos/${baseName}-${Date.now()}.${extension}`;
-  const inputBytes = Buffer.from(await file.arrayBuffer());
+  const objectPath = `${baseName}-${Date.now()}.${extension}`;
+  let inputBytes: Buffer<ArrayBufferLike>;
+
+  try {
+    inputBytes = Buffer.from(await file.arrayBuffer());
+  } catch (readError) {
+    console.error("admin team logo file read failed", readError);
+    return { ok: false, error: "Logo file could not be read." };
+  }
+
   let bytes: Buffer<ArrayBufferLike> = inputBytes;
   let contentType = file.type;
 
@@ -203,19 +212,21 @@ export async function uploadTeamLogo(formData: FormData): Promise<UploadResult> 
     }
   }
 
-  const upload = await supabase.storage
-    .from("team-logos")
-    .upload(objectPath, bytes, {
-      contentType,
-      upsert: false,
-    });
+  const upload = await supabase.storage.from(bucketName).upload(objectPath, bytes, {
+    contentType,
+    upsert: false,
+  });
 
   if (upload.error) {
-    console.error("admin team logo upload failed", upload.error);
+    console.error("admin team logo upload failed", {
+      bucketName,
+      objectPath,
+      error: upload.error,
+    });
     return { ok: false, error: upload.error.message };
   }
 
-  const { data } = supabase.storage.from("team-logos").getPublicUrl(objectPath);
+  const { data } = supabase.storage.from(bucketName).getPublicUrl(objectPath);
 
   return {
     ok: true,
