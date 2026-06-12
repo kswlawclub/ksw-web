@@ -25,7 +25,9 @@ const maxLogoSize = 2 * 1024 * 1024;
 const allowedLogoTypes = new Map([
   ["image/png", "png"],
   ["image/jpeg", "jpg"],
+  ["image/jpg", "jpg"],
   ["image/webp", "webp"],
+  ["image/svg+xml", "svg"],
 ]);
 
 function getAdminClient() {
@@ -153,7 +155,7 @@ export async function uploadTeamLogo(formData: FormData): Promise<UploadResult> 
   }
 
   if (!allowedLogoTypes.has(file.type)) {
-    return { ok: false, error: "Logo must be a png, jpg, jpeg, or webp image." };
+    return { ok: false, error: "Logo must be a png, jpg, jpeg, webp, or svg image." };
   }
 
   if (file.size > maxLogoSize) {

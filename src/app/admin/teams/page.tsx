@@ -47,7 +47,7 @@ const emptyForm: TeamForm = {
 };
 
 const maxLogoSize = 2 * 1024 * 1024;
-const allowedLogoTypes = ["image/png", "image/jpeg", "image/webp"];
+const allowedLogoTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/svg+xml"];
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -197,7 +197,7 @@ export default function AdminTeamsPage() {
 
     if (logoFile) {
       if (!allowedLogoTypes.includes(logoFile.type)) {
-        setError("Logo must be a png, jpg, jpeg, or webp image.");
+        setError("Logo must be a png, jpg, jpeg, webp, or svg image.");
         return;
       }
 
@@ -350,7 +350,7 @@ export default function AdminTeamsPage() {
             <label className="grid gap-2 text-sm font-black">
               Upload Logo
               <input
-                accept="image/png,image/jpeg,image/webp"
+                accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
                 className="rounded-md border border-dashed border-[#d8ad45]/50 bg-[#f8f3e7] px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-[#061426] file:px-3 file:py-2 file:text-xs file:font-black file:text-[#f4d58a]"
                 onChange={(event) => {
                   const file = event.target.files?.[0] ?? null;
@@ -361,7 +361,7 @@ export default function AdminTeamsPage() {
                   }
 
                   if (!allowedLogoTypes.includes(file.type)) {
-                    setError("Logo must be a png, jpg, jpeg, or webp image.");
+                    setError("Logo must be a png, jpg, jpeg, webp, or svg image.");
                     setLogoFile(null);
                     return;
                   }
