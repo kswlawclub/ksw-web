@@ -48,6 +48,7 @@ const emptyForm: TeamForm = {
 
 const maxLogoSize = 2 * 1024 * 1024;
 const allowedLogoTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/svg+xml"];
+const rasterLogoTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -71,6 +72,52 @@ function competitionLabel(competition: Competition) {
 
 function teamInitials(team: Team) {
   return (team.short_name || team.name).slice(0, 3).toUpperCase();
+}
+
+function loadImageFromFile(file: File) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Logo image could not be loaded."));
+    };
+    image.src = objectUrl;
+  });
+}
+
+async function compressRasterLogo(file: File) {
+  const image = await loadImageFromFile(file);
+  const scale = Math.min(800 / image.naturalWidth, 800 / image.naturalHeight, 1);
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    throw new Error("Logo image could not be processed.");
+  }
+
+  canvas.width = width;
+  canvas.height = height;
+  context.drawImage(image, 0, 0, width, height);
+
+  const blob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, "image/webp", 0.85);
+  });
+
+  if (!blob) {
+    throw new Error("Logo image could not be compressed.");
+  }
+
+  const outputName = file.name.replace(/\.[^.]+$/, "") || "team-logo";
+
+  return new File([blob], `${outputName}.webp`, { type: "image/webp" });
 }
 
 export default function AdminTeamsPage() {
@@ -211,8 +258,25 @@ export default function AdminTeamsPage() {
           return;
         }
 
+        let fileToUpload = logoFile;
+
+        if (rasterLogoTypes.includes(logoFile.type)) {
+          try {
+            fileToUpload = await compressRasterLogo(logoFile);
+          } catch (compressionError) {
+            console.error("admin team logo client compression failed", compressionError);
+            setError("Logo could not be compressed. Please choose another image.");
+            return;
+          }
+
+          if (fileToUpload.size > maxLogoSize) {
+            setError("Logo is still larger than 2MB after compression. Please choose a smaller image.");
+            return;
+          }
+        }
+
         const uploadData = new FormData();
-        uploadData.append("file", logoFile);
+        uploadData.append("file", fileToUpload);
         uploadData.append("shortName", form.shortName.trim() || form.name.trim());
         uploadData.append("teamId", form.id);
 
