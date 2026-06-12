@@ -221,12 +221,25 @@ export async function uploadTeamLogo(formData: FormData): Promise<UploadResult> 
     console.error("admin team logo upload failed", {
       bucketName,
       objectPath,
+      contentType,
+      fileSize: bytes.length,
       error: upload.error,
     });
-    return { ok: false, error: upload.error.message };
+    return {
+      ok: false,
+      error: `Logo upload failed for bucket "${bucketName}": ${upload.error.message}`,
+    };
   }
 
   const { data } = supabase.storage.from(bucketName).getPublicUrl(objectPath);
+
+  if (!data.publicUrl) {
+    console.error("admin team logo public URL missing", {
+      bucketName,
+      objectPath,
+    });
+    return { ok: false, error: "Logo uploaded, but no public URL was returned." };
+  }
 
   return {
     ok: true,

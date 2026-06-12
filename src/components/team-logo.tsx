@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type TeamLogoProps = {
   logoUrl: string;
@@ -11,6 +11,10 @@ type TeamLogoProps = {
 
 export function TeamLogo({ logoUrl, initials, teamName, className = "" }: TeamLogoProps) {
   const [failed, setFailed] = useState(!logoUrl);
+
+  useEffect(() => {
+    setFailed(!logoUrl);
+  }, [logoUrl]);
 
   return (
     <span
