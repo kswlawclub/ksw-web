@@ -37,7 +37,7 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.16),transparent_34%),linear-gradient(135deg,#061426,#091f39)] px-4 py-12 text-white sm:px-6">
+    <main className="min-h-screen overflow-x-auto bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.16),transparent_34%),linear-gradient(135deg,#061426,#091f39)] px-4 py-12 text-white sm:px-6">
       <section className="mx-auto flex min-h-[70vh] w-full max-w-md flex-col justify-center">
         <div className="rounded-lg border border-[#d8ad45]/25 bg-white/[0.08] p-6 shadow-2xl shadow-black/30 sm:p-8">
           <div className="mx-auto flex size-24 items-center justify-center">

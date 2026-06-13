@@ -40,7 +40,7 @@ export default function AdminDashboardPage() {
   }
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[#f6f2ea] text-[#061426]">
+    <main className="min-h-screen overflow-x-auto bg-[#f6f2ea] text-[#061426]">
       <section className="bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.16),transparent_34%),linear-gradient(135deg,#061426,#091f39)] px-4 py-12 text-white sm:px-6 lg:px-10">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -64,7 +64,7 @@ export default function AdminDashboardPage() {
 
       <section className="mx-auto grid w-full max-w-7xl gap-4 px-4 py-10 sm:px-6 md:grid-cols-2 lg:px-10">
         {modules.map((module) => (
-          <article className="rounded-lg border border-slate-200 bg-white p-6 shadow-xl shadow-slate-900/10" key={module.title}>
+          <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-6 shadow-xl shadow-slate-900/10" key={module.title}>
             <div className="mb-4 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
             <h2 className="text-2xl font-black text-[#061426]">{module.title}</h2>
             {module.href ? (

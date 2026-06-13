@@ -359,7 +359,7 @@ export default function AdminMatchesPage() {
   }
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[#f6f2ea] text-[#061426]">
+    <main className="min-h-screen overflow-x-auto bg-[#f6f2ea] text-[#061426]">
       <section className="bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.16),transparent_34%),linear-gradient(135deg,#061426,#091f39)] px-4 py-12 text-white sm:px-6 lg:px-10">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
           <Link className="text-sm font-bold text-[#f4d58a] hover:text-white" href="/admin">
@@ -377,9 +377,9 @@ export default function AdminMatchesPage() {
         </div>
       </section>
 
-      <section className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-10 sm:px-6 lg:grid-cols-[380px_1fr] lg:px-10">
+      <section className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-10 sm:px-6 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] lg:px-10">
         <form
-          className="rounded-lg border border-[#d8ad45]/30 bg-white p-5 shadow-xl shadow-slate-900/10"
+          className="min-w-0 rounded-lg border border-[#d8ad45]/30 bg-white p-5 shadow-xl shadow-slate-900/10"
           onSubmit={saveMatch}
         >
           <div className="mb-5 flex items-start justify-between gap-4">
@@ -459,7 +459,7 @@ export default function AdminMatchesPage() {
               </select>
             </label>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="grid gap-2 text-sm font-black">
                 Home Score
                 <input
@@ -559,7 +559,7 @@ export default function AdminMatchesPage() {
           </div>
         </form>
 
-        <div className="rounded-lg border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
+        <div className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
           <div className="flex flex-col gap-2 border-b border-slate-200 p-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <div className="mb-3 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
@@ -571,7 +571,7 @@ export default function AdminMatchesPage() {
           {loading ? (
             <p className="p-5 text-sm font-bold text-slate-600">Loading matches...</p>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="w-full max-w-full overflow-x-auto">
               <table className="w-full min-w-[880px] border-collapse text-left text-sm">
                 <thead className="bg-[#061426] text-xs uppercase tracking-[0.14em] text-[#f4d58a]">
                   <tr>
