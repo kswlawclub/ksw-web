@@ -225,20 +225,20 @@ export default async function PartnersPage() {
               const websiteUrl = sponsor?.website_url;
               const tierLabel =
                 index === 0 ? "Main Partner" : index < 4 ? "Official Partner" : "Supporter";
-              const size =
+              const logoSlotSize =
                 index === 0
-                  ? "size-28 sm:size-32"
+                  ? "h-20 w-32 sm:h-24 sm:w-40"
                   : index < 4
-                    ? "size-24 sm:size-28"
-                    : "size-20 sm:size-24";
-              const sponsorCircle = (
+                    ? "h-16 w-28 sm:h-20 sm:w-36"
+                    : "h-14 w-24 sm:h-16 sm:w-32";
+              const sponsorMark = (
                 <div
-                  className={`flex ${size} items-center justify-center overflow-hidden rounded-full border border-[#d8ad45]/25 bg-white p-3 text-center shadow-xl shadow-black/25 ring-1 ring-white/10 transition duration-300 hover:border-[#d8ad45]/70 hover:shadow-[#d8ad45]/20`}
+                  className={`flex ${logoSlotSize} items-center justify-center text-center transition duration-300 hover:scale-105`}
                 >
                   {logoUrl ? (
                     <img alt={`${name} logo`} className="ksw-sponsor-logo-fit" src={logoUrl} />
                   ) : (
-                    <span className="text-[10px] font-black uppercase tracking-wide text-[#061426] sm:text-xs">
+                    <span className="text-[10px] font-black uppercase tracking-wide text-[#f4d58a]/75 sm:text-xs">
                       {sponsor ? initials(name) || "YOUR LOGO" : "YOUR LOGO"}
                     </span>
                   )}
@@ -255,10 +255,10 @@ export default async function PartnersPage() {
                       rel="noopener noreferrer"
                       target="_blank"
                     >
-                      {sponsorCircle}
+                      {sponsorMark}
                     </a>
                   ) : (
-                    sponsorCircle
+                    sponsorMark
                   )}
                   <span className="text-center text-[10px] font-black uppercase tracking-wide text-[#f4d58a]/80">
                     {tierLabel}

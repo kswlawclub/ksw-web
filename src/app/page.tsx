@@ -862,15 +862,15 @@ export default async function Home() {
               const sponsorName = text(sponsor, ["name", "sponsor_name"], "YOUR LOGO");
               const sponsorLogo = text(sponsor, ["logo_url"], "");
               const sponsorWebsite = text(sponsor, ["website_url"], "");
-              const circleSize =
+              const logoSlotSize =
                 index === 0
-                  ? "size-28 sm:size-32 lg:size-36"
+                  ? "h-20 w-32 sm:h-24 sm:w-40 lg:h-28 lg:w-48"
                   : index < 4
-                    ? "size-24 sm:size-28"
-                    : "size-20 sm:size-24";
-              const sponsorCircle = (
+                    ? "h-16 w-28 sm:h-20 sm:w-36"
+                    : "h-14 w-24 sm:h-16 sm:w-32";
+              const sponsorMark = (
                 <div
-                  className={`flex ${circleSize} items-center justify-center overflow-hidden rounded-full border border-[#d8ad45]/25 bg-white p-3 text-center shadow-xl shadow-black/25 ring-1 ring-white/10 transition-all duration-300 hover:scale-105 hover:border-[#d8ad45]/70 hover:shadow-[#d8ad45]/25`}
+                  className={`flex ${logoSlotSize} items-center justify-center text-center transition-all duration-300 hover:scale-105`}
                 >
                   {isString(sponsorLogo) ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -880,7 +880,7 @@ export default async function Home() {
                       src={sponsorLogo}
                     />
                   ) : (
-                    <span className="text-[10px] font-black uppercase tracking-wide text-[#061426] sm:text-xs">
+                    <span className="text-[10px] font-black uppercase tracking-wide text-[#f4d58a]/75 sm:text-xs">
                       {sponsor ? initialsFromName(sponsorName) || "YOUR LOGO" : "YOUR LOGO"}
                     </span>
                   )}
@@ -897,10 +897,10 @@ export default async function Home() {
                     rel="noopener noreferrer"
                     target="_blank"
                   >
-                    {sponsorCircle}
+                    {sponsorMark}
                   </a>
                 ) : (
-                  <div key={text(sponsor, ["id", "name"], String(index))}>{sponsorCircle}</div>
+                  <div key={text(sponsor, ["id", "name"], String(index))}>{sponsorMark}</div>
                 )
               );
             })}

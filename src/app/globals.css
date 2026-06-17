@@ -35,10 +35,10 @@ body {
   box-sizing: border-box;
 }
 
-/* Keeps sponsor marks visually consistent inside fixed circular sponsor slots. */
+/* Keeps sponsor marks centered and proportional in clean logo-only sponsor walls. */
 .ksw-sponsor-logo-fit {
-  height: 88%;
-  width: 88%;
+  height: 100%;
+  width: 100%;
   object-fit: contain;
   object-position: center;
 }
