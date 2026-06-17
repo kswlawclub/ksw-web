@@ -11,6 +11,7 @@ const navItems = [
   ["Partners", "/partners"],
   ["League Center", "/#league-center"],
 ];
+const facebookUrl = "https://web.facebook.com/KlongSamWaLawyers";
 const storageKey = "ksw-admin-authenticated";
 
 export function SiteHeader() {
@@ -96,6 +97,15 @@ export function SiteHeader() {
                 {label}
               </Link>
             ))}
+            <a
+              className="mt-2 rounded-md border border-[#d8ad45]/25 px-3 py-3 text-sm font-black text-[#f4d58a] transition-colors hover:bg-white/10 hover:text-white"
+              href={facebookUrl}
+              onClick={() => setOpen(false)}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              KSW Facebook
+            </a>
           </div>
         </nav>
       ) : null}
