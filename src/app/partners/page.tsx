@@ -223,8 +223,6 @@ export default async function PartnersPage() {
               const name = sponsor?.name ?? "YOUR LOGO";
               const logoUrl = sponsor?.logo_url;
               const websiteUrl = sponsor?.website_url;
-              const tierLabel =
-                index === 0 ? "Main Partner" : index < 4 ? "Official Partner" : "Supporter";
               const logoSlotSize =
                 index === 0
                   ? "h-20 w-32 sm:h-24 sm:w-40"
@@ -233,7 +231,7 @@ export default async function PartnersPage() {
                     : "h-14 w-24 sm:h-16 sm:w-32";
               const sponsorMark = (
                 <div
-                  className={`flex ${logoSlotSize} items-center justify-center text-center transition duration-300 hover:scale-105`}
+                  className={`ksw-sponsor-glass-card flex ${logoSlotSize} items-center justify-center p-4 text-center transition duration-300 hover:scale-[1.03] hover:border-white/20 hover:bg-white/[0.09]`}
                 >
                   {logoUrl ? (
                     <img alt={`${name} logo`} className="ksw-sponsor-logo-fit" src={logoUrl} />
@@ -260,9 +258,6 @@ export default async function PartnersPage() {
                   ) : (
                     sponsorMark
                   )}
-                  <span className="text-center text-[10px] font-black uppercase tracking-wide text-[#f4d58a]/80">
-                    {tierLabel}
-                  </span>
                 </div>
               );
             })}

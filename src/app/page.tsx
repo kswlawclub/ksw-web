@@ -870,7 +870,7 @@ export default async function Home() {
                     : "h-14 w-24 sm:h-16 sm:w-32";
               const sponsorMark = (
                 <div
-                  className={`flex ${logoSlotSize} items-center justify-center text-center transition-all duration-300 hover:scale-105`}
+                  className={`ksw-sponsor-glass-card flex ${logoSlotSize} items-center justify-center p-4 text-center transition-all duration-300 hover:scale-[1.03] hover:border-white/20 hover:bg-white/[0.09]`}
                 >
                   {isString(sponsorLogo) ? (
                     // eslint-disable-next-line @next/next/no-img-element
