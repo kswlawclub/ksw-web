@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { FacebookIcon } from "@/components/facebook-icon";
 
 const navItems = [
   ["Home", "/"],
@@ -98,12 +99,13 @@ export function SiteHeader() {
               </Link>
             ))}
             <a
-              className="mt-2 rounded-md border border-[#d8ad45]/25 px-3 py-3 text-sm font-black text-[#f4d58a] transition-colors hover:bg-white/10 hover:text-white"
+              className="mt-2 inline-flex items-center gap-2 rounded-md border border-[#d8ad45]/25 px-3 py-3 text-sm font-black text-[#f4d58a] transition-colors hover:bg-white/10 hover:text-white"
               href={facebookUrl}
               onClick={() => setOpen(false)}
               rel="noopener noreferrer"
               target="_blank"
             >
+              <FacebookIcon className="size-4" />
               KSW Facebook
             </a>
           </div>

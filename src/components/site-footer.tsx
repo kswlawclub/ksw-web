@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FacebookIcon } from "@/components/facebook-icon";
 
 const footerLinks = [
   ["Home", "/"],
@@ -23,11 +24,12 @@ export function SiteFooter() {
               kswlawclub@gmail.com
             </a>
             <a
-              className="inline-flex text-sm font-bold text-slate-300 hover:text-[#f4d58a]"
+              className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-300 hover:text-[#f4d58a]"
               href={facebookUrl}
               rel="noopener noreferrer"
               target="_blank"
             >
+              <FacebookIcon className="size-4" />
               KSW Facebook
             </a>
           </div>

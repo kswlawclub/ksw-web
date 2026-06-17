@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FacebookIcon } from "@/components/facebook-icon";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -90,6 +91,7 @@ const teamStaff = [
   ["หม่อมโจอี้", "/images/staff/staff-05.png"],
   ["เด่น", "/images/staff/staff-06.png"],
 ];
+const facebookUrl = "https://web.facebook.com/KlongSamWaLawyers";
 
 function shuffle<T>(items: T[]) {
   const shuffled = [...items];
@@ -142,6 +144,15 @@ export default async function TeamPage() {
             >
               Partner With KSW
             </Link>
+            <a
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-[#d8ad45]/50 bg-white/[0.03] px-5 py-3 text-sm font-black text-[#f4d58a] backdrop-blur transition-colors hover:bg-[#d8ad45]/10"
+              href={facebookUrl}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              <FacebookIcon className="size-4" />
+              Facebook
+            </a>
           </div>
         </div>
       </section>
