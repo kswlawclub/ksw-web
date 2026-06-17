@@ -231,12 +231,12 @@ export default async function PartnersPage() {
                     : "h-14 w-24 sm:h-16 sm:w-32";
               const sponsorMark = (
                 <div
-                  className={`ksw-sponsor-glass-card flex ${logoSlotSize} items-center justify-center p-4 text-center transition duration-300 hover:scale-[1.03] hover:border-white/20 hover:bg-white/[0.09]`}
+                  className={`ksw-sponsor-glass-card flex ${logoSlotSize} items-center justify-center p-2.5 text-center transition duration-300 hover:scale-[1.025] hover:border-white/10 hover:bg-white/[0.04] sm:p-3`}
                 >
                   {logoUrl ? (
                     <img alt={`${name} logo`} className="ksw-sponsor-logo-fit" src={logoUrl} />
                   ) : (
-                    <span className="text-[10px] font-black uppercase tracking-wide text-[#f4d58a]/75 sm:text-xs">
+                    <span className="text-[9px] font-black uppercase tracking-[0.18em] text-[#f4d58a]/45 sm:text-[10px]">
                       {sponsor ? initials(name) || "YOUR LOGO" : "YOUR LOGO"}
                     </span>
                   )}
