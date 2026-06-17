@@ -116,11 +116,53 @@ function sponsorTierGroup(sponsor: Row | undefined) {
   return "supporter";
 }
 
+function sponsorTierPriority(sponsor: Row) {
+  const group = sponsorTierGroup(sponsor);
+
+  if (group === "main") return 0;
+  if (group === "official") return 1;
+  return 2;
+}
+
+function sponsorSortOrder(sponsor: Row) {
+  const value = sponsor.sort_order;
+
+  if (typeof value === "number") {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim() && !Number.isNaN(Number(value))) {
+    return Number(value);
+  }
+
+  return Number.MAX_SAFE_INTEGER;
+}
+
+function isActiveSponsor(sponsor: Row) {
+  return sponsor.is_active !== false;
+}
+
+function sortSponsorsForWall(sponsors: Row[]) {
+  return sponsors
+    .filter(isActiveSponsor)
+    .sort((a, b) => {
+      const tierDiff = sponsorTierPriority(a) - sponsorTierPriority(b);
+      if (tierDiff) return tierDiff;
+
+      const orderDiff = sponsorSortOrder(a) - sponsorSortOrder(b);
+      if (orderDiff) return orderDiff;
+
+      return text(a, ["name"], "").localeCompare(text(b, ["name"], ""));
+    });
+}
+
 function groupSponsorsByTier(sponsors: Row[]) {
+  const sortedSponsors = sortSponsorsForWall(sponsors);
+
   return {
-    main: sponsors.filter((sponsor) => sponsorTierGroup(sponsor) === "main"),
-    official: sponsors.filter((sponsor) => sponsorTierGroup(sponsor) === "official"),
-    supporter: sponsors.filter((sponsor) => sponsorTierGroup(sponsor) === "supporter"),
+    main: sortedSponsors.filter((sponsor) => sponsorTierGroup(sponsor) === "main"),
+    official: sortedSponsors.filter((sponsor) => sponsorTierGroup(sponsor) === "official"),
+    supporter: sortedSponsors.filter((sponsor) => sponsorTierGroup(sponsor) === "supporter"),
   };
 }
 
@@ -333,19 +375,19 @@ export default async function Home() {
       label: "Main Partner",
       items: sponsorGroups.main.length ? sponsorGroups.main : [undefined],
       logoSlotSize: "h-24 w-48 sm:h-28 sm:w-64 lg:h-32 lg:w-72",
-      wrapperClass: "flex justify-center",
+      wrapperClass: "flex flex-wrap justify-center gap-8",
     },
     {
       key: "official",
       label: "Official Partner",
-      items: sponsorGroups.official.length ? sponsorGroups.official : [undefined, undefined],
+      items: sponsorGroups.official.length ? sponsorGroups.official : [undefined],
       logoSlotSize: "h-16 w-32 sm:h-20 sm:w-40 lg:h-24 lg:w-48",
       wrapperClass: "grid grid-cols-2 items-center justify-items-center gap-7 sm:grid-cols-3 lg:grid-cols-4",
     },
     {
       key: "supporter",
       label: "Supporter",
-      items: sponsorGroups.supporter.length ? sponsorGroups.supporter : [undefined, undefined, undefined],
+      items: sponsorGroups.supporter.length ? sponsorGroups.supporter : [undefined],
       logoSlotSize: "h-12 w-24 sm:h-16 sm:w-32",
       wrapperClass: "grid grid-cols-2 items-center justify-items-center gap-6 sm:grid-cols-4 lg:grid-cols-5",
     },

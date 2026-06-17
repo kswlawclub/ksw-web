@@ -13,7 +13,7 @@ import {
 
 const storageKey = "ksw-admin-authenticated";
 
-type SponsorTier = "main" | "official" | "matchday" | "community" | "partner" | "supporter";
+type SponsorTier = "main" | "official" | "supporter";
 
 type Sponsor = {
   id: string;
@@ -36,12 +36,16 @@ type SponsorForm = {
   isActive: boolean;
 };
 
-const tiers: SponsorTier[] = ["main", "official", "matchday", "community", "partner", "supporter"];
+const tiers: Array<{ label: string; value: SponsorTier }> = [
+  { label: "Main Partner", value: "main" },
+  { label: "Official Partner", value: "official" },
+  { label: "Supporter", value: "supporter" },
+];
 
 const emptyForm: SponsorForm = {
   id: "",
   name: "",
-  tier: "partner",
+  tier: "supporter",
   logoUrl: "",
   websiteUrl: "",
   sortOrder: "",
@@ -66,11 +70,45 @@ function formatDate(value: string) {
 }
 
 function isSponsorTier(value: string): value is SponsorTier {
-  return tiers.includes(value as SponsorTier);
+  return tiers.some((tier) => tier.value === value);
 }
 
 function toSponsorTier(value: string): SponsorTier {
-  return isSponsorTier(value) ? value : "partner";
+  if (value === "partner" || value === "matchday") {
+    return "official";
+  }
+
+  if (value === "community") {
+    return "supporter";
+  }
+
+  return isSponsorTier(value) ? value : "supporter";
+}
+
+function tierLabel(value: string) {
+  return tiers.find((tier) => tier.value === toSponsorTier(value))?.label ?? "Supporter";
+}
+
+function tierPriority(value: string) {
+  const tier = toSponsorTier(value);
+
+  if (tier === "main") return 0;
+  if (tier === "official") return 1;
+  return 2;
+}
+
+function sortSponsors(sponsors: Sponsor[]) {
+  return [...sponsors].sort((a, b) => {
+    const tierDiff = tierPriority(a.tier) - tierPriority(b.tier);
+    if (tierDiff) return tierDiff;
+
+    const orderA = a.sort_order ?? Number.MAX_SAFE_INTEGER;
+    const orderB = b.sort_order ?? Number.MAX_SAFE_INTEGER;
+    const orderDiff = orderA - orderB;
+    if (orderDiff) return orderDiff;
+
+    return a.name.localeCompare(b.name);
+  });
 }
 
 function sortOrderValue(value: string) {
@@ -145,10 +183,10 @@ export default function AdminSponsorsPage() {
       setError("Could not load sponsors.");
     } else {
       setSponsors(
-        ((result.data ?? []) as Sponsor[]).map((sponsor) => ({
+        sortSponsors(((result.data ?? []) as Sponsor[]).map((sponsor) => ({
           ...sponsor,
           tier: toSponsorTier(sponsor.tier),
-        })),
+        }))),
       );
     }
 
@@ -348,8 +386,8 @@ export default function AdminSponsorsPage() {
                 value={form.tier}
               >
                 {tiers.map((tier) => (
-                  <option key={tier} value={tier}>
-                    {tier}
+                  <option key={tier.value} value={tier.value}>
+                    {tier.label}
                   </option>
                 ))}
               </select>
@@ -486,7 +524,11 @@ export default function AdminSponsorsPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3 font-black">{sponsor.name}</td>
-                      <td className="px-4 py-3">{sponsor.tier}</td>
+                      <td className="px-4 py-3">
+                        <span className="rounded-full border border-[#d8ad45]/40 bg-[#d8ad45]/10 px-3 py-1 text-xs font-black text-[#061426]">
+                          {tierLabel(sponsor.tier)}
+                        </span>
+                      </td>
                       <td className="max-w-[220px] truncate px-4 py-3">
                         {sponsor.website_url ?? "-"}
                       </td>
