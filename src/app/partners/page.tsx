@@ -253,10 +253,11 @@ export default async function PartnersPage() {
           <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">
             พื้นที่แสดงโลโก้ผู้สนับสนุนของชมรม แบ่งระดับการมองเห็นตามรูปแบบความร่วมมือ
           </p>
-          <div className="mt-10 space-y-9">
+          <div className="mt-10 rounded-[24px] border border-white/60 bg-[#fafafa] p-6 shadow-xl shadow-black/15 sm:p-8 lg:p-10">
+          <div className="space-y-9">
             {sponsorSections.map((section) => (
               <div key={section.key}>
-                <p className="mb-4 text-center text-[10px] font-black uppercase tracking-[0.24em] text-[#f4d58a]/70">
+                <p className="mb-4 text-center text-[10px] font-black uppercase tracking-[0.24em] text-[#061426]/60">
                   {section.label}
                 </p>
                 <div className={section.wrapperClass}>
@@ -271,7 +272,7 @@ export default async function PartnersPage() {
                         {logoUrl ? (
                           <img alt={`${name} logo`} className="ksw-sponsor-logo-fit" src={logoUrl} />
                         ) : (
-                          <span className="text-[9px] font-black uppercase tracking-[0.2em] text-[#f4d58a]/35 sm:text-[10px]">
+                          <span className="text-[9px] font-black uppercase tracking-[0.2em] text-[#061426]/30 sm:text-[10px]">
                             YOUR LOGO
                           </span>
                         )}
@@ -298,6 +299,7 @@ export default async function PartnersPage() {
                 </div>
               </div>
             ))}
+          </div>
           </div>
         </div>
       </section>

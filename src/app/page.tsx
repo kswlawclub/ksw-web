@@ -892,10 +892,11 @@ export default async function Home() {
             </a>
           </div>
           </div>
+          <div className="rounded-[24px] border border-white/60 bg-[#fafafa] p-6 shadow-xl shadow-black/15 sm:p-8 lg:p-10">
           <div className="space-y-8">
             {sponsorSections.map((section) => (
               <div key={section.key}>
-                <p className="mb-4 text-center text-[10px] font-black uppercase tracking-[0.24em] text-[#f4d58a]/70">
+                <p className="mb-4 text-center text-[10px] font-black uppercase tracking-[0.24em] text-[#061426]/60">
                   {section.label}
                 </p>
                 <div className={section.wrapperClass}>
@@ -915,7 +916,7 @@ export default async function Home() {
                             src={sponsorLogo}
                           />
                         ) : (
-                          <span className="text-[9px] font-black uppercase tracking-[0.2em] text-[#f4d58a]/35 sm:text-[10px]">
+                          <span className="text-[9px] font-black uppercase tracking-[0.2em] text-[#061426]/30 sm:text-[10px]">
                             YOUR LOGO
                           </span>
                         )}
@@ -942,6 +943,7 @@ export default async function Home() {
                 </div>
               </div>
             ))}
+          </div>
           </div>
           </div>
         </div>
