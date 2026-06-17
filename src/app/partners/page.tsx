@@ -168,22 +168,22 @@ export default async function PartnersPage() {
       key: "main",
       label: "Main Partner",
       items: sponsorSlots(sponsorGroups.main, 1),
-      logoSlotSize: "h-24 w-48 sm:h-28 sm:w-64 lg:h-32 lg:w-72",
-      wrapperClass: "mx-auto flex max-w-[928px] flex-wrap items-center justify-center gap-x-8 gap-y-5",
+      logoSlotSize: "h-24 w-full max-w-48 sm:h-28 sm:max-w-64 lg:h-32 lg:max-w-72",
+      wrapperClass: "mx-auto grid w-full grid-cols-2 place-items-center gap-x-6 gap-y-4 lg:grid-cols-3",
     },
     {
       key: "official",
       label: "Official Partner",
       items: sponsorSlots(sponsorGroups.official, 4),
-      logoSlotSize: "h-16 w-32 sm:h-20 sm:w-40 lg:h-24 lg:w-44",
-      wrapperClass: "mx-auto flex max-w-[592px] flex-wrap items-center justify-center gap-x-8 gap-y-5",
+      logoSlotSize: "h-16 w-full max-w-32 sm:h-20 sm:max-w-40 lg:h-24 lg:max-w-44",
+      wrapperClass: "mx-auto grid w-full grid-cols-2 place-items-center gap-x-6 gap-y-4 lg:grid-cols-3",
     },
     {
       key: "supporter",
       label: "Supporter",
       items: sponsorSlots(sponsorGroups.supporter, 8),
-      logoSlotSize: "h-14 w-28 sm:h-16 sm:w-32 lg:h-[72px] lg:w-36",
-      wrapperClass: "mx-auto flex max-w-[488px] flex-wrap items-center justify-center gap-x-7 gap-y-4",
+      logoSlotSize: "h-14 w-full max-w-28 sm:h-16 sm:max-w-32 lg:h-[72px] lg:max-w-36",
+      wrapperClass: "mx-auto grid w-full grid-cols-2 place-items-center gap-x-5 gap-y-4 lg:grid-cols-3",
     },
   ];
 
