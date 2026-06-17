@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import {
   createGalleryItem,
   deleteGalleryItemById,
@@ -106,6 +106,8 @@ export default function AdminGalleryPage() {
   const [imagePreview, setImagePreview] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const formRef = useRef<HTMLFormElement>(null);
+  const firstFieldRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (window.localStorage.getItem(storageKey) !== "true") {
@@ -166,6 +168,13 @@ export default function AdminGalleryPage() {
     setError("");
   }
 
+  function scrollToEditForm() {
+    window.setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      firstFieldRef.current?.focus({ preventScroll: true });
+    }, 50);
+  }
+
   function editItem(item: GalleryItem) {
     setForm({
       id: item.id,
@@ -180,6 +189,7 @@ export default function AdminGalleryPage() {
     setImageFile(null);
     setMessage("");
     setError("");
+    scrollToEditForm();
   }
 
   function selectImage(file: File | null) {
@@ -312,6 +322,7 @@ export default function AdminGalleryPage() {
         <form
           className="min-w-0 rounded-lg border border-[#d8ad45]/30 bg-white p-5 shadow-xl shadow-slate-900/10"
           onSubmit={saveItem}
+          ref={formRef}
         >
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
@@ -333,6 +344,7 @@ export default function AdminGalleryPage() {
               <input
                 className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                 onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+                ref={firstFieldRef}
                 required
                 value={form.title}
               />

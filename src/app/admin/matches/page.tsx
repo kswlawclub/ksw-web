@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { createMatch, deleteMatchById, updateMatch } from "./actions";
 
@@ -160,6 +160,8 @@ export default function AdminMatchesPage() {
   const [form, setForm] = useState<MatchForm>(emptyForm);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const formRef = useRef<HTMLFormElement>(null);
+  const firstFieldRef = useRef<HTMLSelectElement>(null);
 
   const teamsById = useMemo(
     () => new Map(teams.map((team) => [team.id, team])),
@@ -252,6 +254,13 @@ export default function AdminMatchesPage() {
     setError("");
   }
 
+  function scrollToEditForm() {
+    window.setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      firstFieldRef.current?.focus({ preventScroll: true });
+    }, 50);
+  }
+
   function editMatch(match: Match) {
     const venue = venueFields(match.venue);
 
@@ -269,6 +278,7 @@ export default function AdminMatchesPage() {
     });
     setMessage("");
     setError("");
+    scrollToEditForm();
   }
 
   async function saveMatch(event: FormEvent<HTMLFormElement>) {
@@ -381,6 +391,7 @@ export default function AdminMatchesPage() {
         <form
           className="min-w-0 rounded-lg border border-[#d8ad45]/30 bg-white p-5 shadow-xl shadow-slate-900/10"
           onSubmit={saveMatch}
+          ref={formRef}
         >
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
@@ -400,6 +411,7 @@ export default function AdminMatchesPage() {
               <select
                 className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                 onChange={(event) => setForm((current) => ({ ...current, leagueId: event.target.value }))}
+                ref={firstFieldRef}
                 required
                 value={form.leagueId}
               >

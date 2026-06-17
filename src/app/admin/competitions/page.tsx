@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import {
   createCompetition,
@@ -70,6 +70,8 @@ export default function AdminCompetitionsPage() {
   const [form, setForm] = useState<CompetitionForm>(emptyForm);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const formRef = useRef<HTMLFormElement>(null);
+  const firstFieldRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (window.localStorage.getItem(storageKey) !== "true") {
@@ -126,6 +128,13 @@ export default function AdminCompetitionsPage() {
     setError("");
   }
 
+  function scrollToEditForm() {
+    window.setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      firstFieldRef.current?.focus({ preventScroll: true });
+    }, 50);
+  }
+
   function editCompetition(competition: Competition) {
     setForm({
       id: competition.id,
@@ -136,6 +145,7 @@ export default function AdminCompetitionsPage() {
     });
     setMessage("");
     setError("");
+    scrollToEditForm();
   }
 
   async function saveCompetition(event: FormEvent<HTMLFormElement>) {
@@ -219,6 +229,7 @@ export default function AdminCompetitionsPage() {
         <form
           className="min-w-0 rounded-lg border border-[#d8ad45]/30 bg-white p-5 shadow-xl shadow-slate-900/10"
           onSubmit={saveCompetition}
+          ref={formRef}
         >
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
@@ -240,6 +251,7 @@ export default function AdminCompetitionsPage() {
               <input
                 className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                 onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+                ref={firstFieldRef}
                 required
                 value={form.name}
               />

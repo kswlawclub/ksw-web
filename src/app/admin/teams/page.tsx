@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { createTeam, deleteTeamById, updateTeam, uploadTeamLogo } from "./actions";
 
@@ -132,6 +132,8 @@ export default function AdminTeamsPage() {
   const [logoPreview, setLogoPreview] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const formRef = useRef<HTMLFormElement>(null);
+  const firstFieldRef = useRef<HTMLInputElement>(null);
 
   const competitionsById = useMemo(
     () => new Map(competitions.map((competition) => [competition.id, competition])),
@@ -223,6 +225,13 @@ export default function AdminTeamsPage() {
     setError("");
   }
 
+  function scrollToEditForm() {
+    window.setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      firstFieldRef.current?.focus({ preventScroll: true });
+    }, 50);
+  }
+
   function editTeam(team: Team) {
     setForm({
       id: team.id,
@@ -236,6 +245,7 @@ export default function AdminTeamsPage() {
     setLogoFile(null);
     setMessage("");
     setError("");
+    scrollToEditForm();
   }
 
   async function saveTeam(event: FormEvent<HTMLFormElement>) {
@@ -369,6 +379,7 @@ export default function AdminTeamsPage() {
         <form
           className="min-w-0 rounded-lg border border-[#d8ad45]/30 bg-white p-5 shadow-xl shadow-slate-900/10"
           onSubmit={saveTeam}
+          ref={formRef}
         >
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
@@ -388,6 +399,7 @@ export default function AdminTeamsPage() {
               <input
                 className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                 onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+                ref={firstFieldRef}
                 required
                 value={form.name}
               />
