@@ -71,14 +71,26 @@ const tiers = [
   },
 ];
 
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 3)
-    .toUpperCase();
+function sponsorTierGroup(sponsor: Sponsor | undefined) {
+  const tier = sponsor?.tier?.toLowerCase() ?? "";
+
+  if (tier === "main") {
+    return "main";
+  }
+
+  if (["official", "partner", "matchday"].includes(tier)) {
+    return "official";
+  }
+
+  return "supporter";
+}
+
+function groupSponsorsByTier(sponsors: Sponsor[]) {
+  return {
+    main: sponsors.filter((sponsor) => sponsorTierGroup(sponsor) === "main"),
+    official: sponsors.filter((sponsor) => sponsorTierGroup(sponsor) === "official"),
+    supporter: sponsors.filter((sponsor) => sponsorTierGroup(sponsor) === "supporter"),
+  };
 }
 
 async function loadSponsors() {
@@ -113,6 +125,30 @@ async function loadSponsors() {
 
 export default async function PartnersPage() {
   const sponsors = await loadSponsors();
+  const sponsorGroups = groupSponsorsByTier(sponsors);
+  const sponsorSections = [
+    {
+      key: "main",
+      label: "Main Partner",
+      items: sponsorGroups.main.length ? sponsorGroups.main : [undefined],
+      logoSlotSize: "h-24 w-48 sm:h-28 sm:w-64 lg:h-32 lg:w-72",
+      wrapperClass: "flex justify-center",
+    },
+    {
+      key: "official",
+      label: "Official Partner",
+      items: sponsorGroups.official.length ? sponsorGroups.official : [undefined, undefined],
+      logoSlotSize: "h-16 w-32 sm:h-20 sm:w-40 lg:h-24 lg:w-48",
+      wrapperClass: "grid grid-cols-2 items-center justify-items-center gap-7 sm:grid-cols-3 lg:grid-cols-4",
+    },
+    {
+      key: "supporter",
+      label: "Supporter",
+      items: sponsorGroups.supporter.length ? sponsorGroups.supporter : [undefined, undefined, undefined],
+      logoSlotSize: "h-12 w-24 sm:h-16 sm:w-32",
+      wrapperClass: "grid grid-cols-2 items-center justify-items-center gap-6 sm:grid-cols-4 lg:grid-cols-5",
+    },
+  ];
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#061426] text-slate-100">
@@ -217,50 +253,51 @@ export default async function PartnersPage() {
           <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">
             พื้นที่แสดงโลโก้ผู้สนับสนุนของชมรม แบ่งระดับการมองเห็นตามรูปแบบความร่วมมือ
           </p>
-          <div className="mt-8 grid grid-cols-3 items-center justify-items-center gap-4 sm:grid-cols-4 sm:gap-5 lg:grid-cols-6">
-            {Array.from({ length: 12 }).map((_, index) => {
-              const sponsor = sponsors[index];
-              const name = sponsor?.name ?? "YOUR LOGO";
-              const logoUrl = sponsor?.logo_url;
-              const websiteUrl = sponsor?.website_url;
-              const logoSlotSize =
-                index === 0
-                  ? "h-20 w-32 sm:h-24 sm:w-40"
-                  : index < 4
-                    ? "h-16 w-28 sm:h-20 sm:w-36"
-                    : "h-14 w-24 sm:h-16 sm:w-32";
-              const sponsorMark = (
-                <div
-                  className={`ksw-sponsor-glass-card flex ${logoSlotSize} items-center justify-center p-2.5 text-center transition duration-300 hover:scale-[1.025] hover:border-white/30 hover:bg-white/[0.96] sm:p-3`}
-                >
-                  {logoUrl ? (
-                    <img alt={`${name} logo`} className="ksw-sponsor-logo-fit" src={logoUrl} />
-                  ) : (
-                    <span className="text-[9px] font-black uppercase tracking-[0.18em] text-[#061426]/45 sm:text-[10px]">
-                      {sponsor ? initials(name) || "YOUR LOGO" : "YOUR LOGO"}
-                    </span>
-                  )}
-                </div>
-              );
+          <div className="mt-10 space-y-9">
+            {sponsorSections.map((section) => (
+              <div key={section.key}>
+                <p className="mb-4 text-center text-[10px] font-black uppercase tracking-[0.24em] text-[#f4d58a]/70">
+                  {section.label}
+                </p>
+                <div className={section.wrapperClass}>
+                  {section.items.map((sponsor, index) => {
+                    const name = sponsor?.name ?? "YOUR LOGO";
+                    const logoUrl = sponsor?.logo_url;
+                    const websiteUrl = sponsor?.website_url;
+                    const sponsorMark = (
+                      <div
+                        className={`flex ${section.logoSlotSize} items-center justify-center text-center transition duration-300 hover:scale-[1.04]`}
+                      >
+                        {logoUrl ? (
+                          <img alt={`${name} logo`} className="ksw-sponsor-logo-fit" src={logoUrl} />
+                        ) : (
+                          <span className="text-[9px] font-black uppercase tracking-[0.2em] text-[#f4d58a]/35 sm:text-[10px]">
+                            YOUR LOGO
+                          </span>
+                        )}
+                      </div>
+                    );
 
-              return (
-                <div className="flex flex-col items-center gap-2" key={sponsor?.id ?? index}>
-                  {websiteUrl ? (
-                    <a
-                      aria-label={`Visit ${name} website`}
-                      className="cursor-pointer"
-                      href={websiteUrl}
-                      rel="noopener noreferrer"
-                      target="_blank"
-                    >
-                      {sponsorMark}
-                    </a>
-                  ) : (
-                    sponsorMark
-                  )}
+                    return websiteUrl ? (
+                      <a
+                        aria-label={`Visit ${name} website`}
+                        className="cursor-pointer"
+                        href={websiteUrl}
+                        key={sponsor?.id ?? `${section.key}-${index}`}
+                        rel="noopener noreferrer"
+                        target="_blank"
+                      >
+                        {sponsorMark}
+                      </a>
+                    ) : (
+                      <div key={sponsor?.id ?? `${section.key}-${index}`}>
+                        {sponsorMark}
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         </div>
       </section>
