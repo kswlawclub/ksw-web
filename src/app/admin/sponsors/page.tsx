@@ -483,13 +483,16 @@ export default function AdminSponsorsPage() {
             </label>
 
             <label className="grid gap-2 text-sm font-black">
-              Sort Order
+              Display Order
               <input
                 className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                 onChange={(event) => setForm((current) => ({ ...current, sortOrder: event.target.value }))}
                 type="number"
                 value={form.sortOrder}
               />
+              <span className="text-xs font-bold leading-5 text-slate-500">
+                เลขน้อยแสดงก่อนใน Tier เดียวกัน เช่น 1, 2, 3
+              </span>
             </label>
 
             <label className="flex items-center gap-3 rounded-md border border-slate-200 px-3 py-3 text-sm font-black">
@@ -545,7 +548,7 @@ export default function AdminSponsorsPage() {
                     <th className="px-4 py-3">Name</th>
                     <th className="px-4 py-3">Tier</th>
                     <th className="px-4 py-3">Website URL</th>
-                    <th className="px-4 py-3">Sort Order</th>
+                    <th className="px-4 py-3">Display Order</th>
                     <th className="px-4 py-3">Active</th>
                     <th className="px-4 py-3">Created At</th>
                     <th className="px-4 py-3 text-right">Actions</th>
