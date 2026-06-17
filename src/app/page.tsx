@@ -166,6 +166,13 @@ function groupSponsorsByTier(sponsors: Row[]) {
   };
 }
 
+function sponsorSlots(sponsors: Row[], minimumSlots: number) {
+  return [
+    ...sponsors,
+    ...Array.from({ length: Math.max(minimumSlots - sponsors.length, 0) }, () => undefined),
+  ];
+}
+
 function sortMatches(matches: Row[]) {
   return [...matches].sort((a, b) => {
     const dateA = new Date(text(a, ["match_date", "date", "kickoff_at"], "")).getTime();
@@ -373,23 +380,23 @@ export default async function Home() {
     {
       key: "main",
       label: "Main Partner",
-      items: sponsorGroups.main.length ? sponsorGroups.main : [undefined],
+      items: sponsorSlots(sponsorGroups.main, 1),
       logoSlotSize: "h-24 w-48 sm:h-28 sm:w-64 lg:h-32 lg:w-72",
       wrapperClass: "flex flex-wrap justify-center gap-8",
     },
     {
       key: "official",
       label: "Official Partner",
-      items: sponsorGroups.official.length ? sponsorGroups.official : [undefined],
-      logoSlotSize: "h-16 w-32 sm:h-20 sm:w-40 lg:h-24 lg:w-48",
-      wrapperClass: "grid grid-cols-2 items-center justify-items-center gap-7 sm:grid-cols-3 lg:grid-cols-4",
+      items: sponsorSlots(sponsorGroups.official, 4),
+      logoSlotSize: "h-16 w-32 sm:h-20 sm:w-40 lg:h-24 lg:w-44",
+      wrapperClass: "flex flex-wrap items-center justify-center gap-x-8 gap-y-6",
     },
     {
       key: "supporter",
       label: "Supporter",
-      items: sponsorGroups.supporter.length ? sponsorGroups.supporter : [undefined],
-      logoSlotSize: "h-12 w-24 sm:h-16 sm:w-32",
-      wrapperClass: "grid grid-cols-2 items-center justify-items-center gap-6 sm:grid-cols-4 lg:grid-cols-5",
+      items: sponsorSlots(sponsorGroups.supporter, 8),
+      logoSlotSize: "h-14 w-28 sm:h-16 sm:w-32 lg:h-[72px] lg:w-36",
+      wrapperClass: "flex flex-wrap items-center justify-center gap-x-7 gap-y-5",
     },
   ];
 
