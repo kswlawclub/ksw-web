@@ -128,6 +128,7 @@ export default function AdminSponsorsPage() {
   const [error, setError] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
   const firstFieldRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (window.localStorage.getItem(storageKey) !== "true") {
@@ -198,6 +199,9 @@ export default function AdminSponsorsPage() {
     setLogoFile(null);
     setMessage("");
     setError("");
+    if (logoInputRef.current) {
+      logoInputRef.current.value = "";
+    }
   }
 
   function scrollToEditForm() {
@@ -218,9 +222,22 @@ export default function AdminSponsorsPage() {
       isActive: sponsor.is_active,
     });
     setLogoFile(null);
+    if (logoInputRef.current) {
+      logoInputRef.current.value = "";
+    }
     setMessage("");
     setError("");
     scrollToEditForm();
+  }
+
+  function removeCurrentLogo() {
+    setForm((current) => ({ ...current, logoUrl: "" }));
+    setLogoFile(null);
+    setMessage("");
+    setError("");
+    if (logoInputRef.current) {
+      logoInputRef.current.value = "";
+    }
   }
 
   function selectLogo(file: File | null) {
@@ -232,12 +249,18 @@ export default function AdminSponsorsPage() {
     if (!allowedLogoTypes.includes(file.type)) {
       setError("Logo must be a png, jpg, jpeg, webp, or svg image.");
       setLogoFile(null);
+      if (logoInputRef.current) {
+        logoInputRef.current.value = "";
+      }
       return;
     }
 
     if (file.size > maxLogoSize) {
       setError("Logo file must be 2MB or smaller.");
       setLogoFile(null);
+      if (logoInputRef.current) {
+        logoInputRef.current.value = "";
+      }
       return;
     }
 
@@ -292,6 +315,9 @@ export default function AdminSponsorsPage() {
     setMessage(form.id ? "Sponsor updated." : "Sponsor added.");
     setForm(emptyForm);
     setLogoFile(null);
+    if (logoInputRef.current) {
+      logoInputRef.current.value = "";
+    }
     await loadData();
   }
 
@@ -398,9 +424,12 @@ export default function AdminSponsorsPage() {
               <input
                 className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                 onChange={(event) => setForm((current) => ({ ...current, logoUrl: event.target.value }))}
-                placeholder="https://..."
+                placeholder="https://... or leave blank for no logo"
                 value={form.logoUrl}
               />
+              <span className="text-xs font-bold leading-5 text-slate-500">
+                Manual URL is used unless a new logo file is selected.
+              </span>
             </label>
 
             <label className="grid gap-2 text-sm font-black">
@@ -409,15 +438,30 @@ export default function AdminSponsorsPage() {
                 accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
                 className="rounded-md border border-dashed border-[#d8ad45]/50 bg-[#f8f3e7] px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-[#061426] file:px-3 file:py-2 file:text-xs file:font-black file:text-[#f4d58a]"
                 onChange={(event) => selectLogo(event.target.files?.[0] ?? null)}
+                ref={logoInputRef}
                 type="file"
               />
+              <span className="text-xs font-bold leading-5 text-slate-500">
+                A selected upload replaces the current or manual Logo URL when saved.
+              </span>
             </label>
 
             {logoPreview || form.logoUrl ? (
               <div className="rounded-md border border-slate-200 bg-[#f8f3e7] p-3">
-                <p className="mb-2 text-xs font-black uppercase tracking-[0.14em] text-slate-500">
-                  Logo Preview
-                </p>
+                <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                    {logoPreview ? "Replacement Logo Preview" : form.id ? "Current Logo" : "Logo Preview"}
+                  </p>
+                  {form.id && form.logoUrl && !logoPreview ? (
+                    <button
+                      className="text-left text-xs font-black text-[#9b1c1f] hover:underline sm:text-right"
+                      onClick={removeCurrentLogo}
+                      type="button"
+                    >
+                      Remove current logo
+                    </button>
+                  ) : null}
+                </div>
                 <div className="flex h-28 items-center justify-center rounded-md bg-white p-4">
                   <img
                     alt="Sponsor logo preview"
