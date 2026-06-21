@@ -339,7 +339,7 @@ async function loadHomeData() {
         .select(matchColumns)
         .eq("status", "finished")
         .order("match_date", { ascending: false })
-        .limit(16),
+        .limit(12),
     ),
     runSupabaseQuery(
       "scheduled_matches",
