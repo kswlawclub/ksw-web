@@ -69,7 +69,7 @@ from (
     ('ชมรมทนายรัชดา', 'RAT', '/team-logos/ratchada-lawyers.png', false),
     ('ทนายความกรุงเทพ BKK Lawyer', 'BKK', '/team-logos/bkk-lawyer.png', false),
     ('ทนายเมืองชล', 'MCH', '/team-logos/muangchon-lawyer.png', false),
-    ('สโมสรทนายความมีนบุรี', 'MBC', '/team-logos/minburi-club.png', false),
+    ('สโมสรฟุตบอลทนายความมีนบุรี', 'MBC', '/team-logos/minburi-club.png', false),
     ('ชมรมทนายความอาสา', 'VOL', '/team-logos/lawyer-volunteer.png', false),
     ('Lawyer Club', 'LWC', '/team-logos/lawyer-club.png', false),
     ('ชมรมทนายความภาคอีสาน', 'NE', '/team-logos/northeast-lawyer.png', false),
