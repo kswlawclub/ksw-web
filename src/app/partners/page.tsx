@@ -124,10 +124,39 @@ function groupSponsorsByTier(sponsors: Sponsor[]) {
 }
 
 function sponsorSlots(sponsors: Sponsor[], minimumSlots: number) {
-  return [
-    ...sponsors,
-    ...Array.from({ length: Math.max(minimumSlots - sponsors.length, 0) }, () => undefined),
-  ];
+  const numericSlots = sponsors
+    .map(sponsorSortOrder)
+    .filter((slot) => Number.isInteger(slot) && slot > 0 && slot < Number.MAX_SAFE_INTEGER);
+  const totalSlots = Math.max(minimumSlots, ...numericSlots, sponsors.length);
+  const slots: Array<Sponsor | undefined> = Array.from({ length: totalSlots }, () => undefined);
+  const unslottedSponsors: Sponsor[] = [];
+
+  sponsors.forEach((sponsor) => {
+    const slotNumber = sponsorSortOrder(sponsor);
+
+    if (Number.isInteger(slotNumber) && slotNumber > 0 && slotNumber < Number.MAX_SAFE_INTEGER) {
+      const slotIndex = slotNumber - 1;
+
+      if (!slots[slotIndex]) {
+        slots[slotIndex] = sponsor;
+        return;
+      }
+    }
+
+    unslottedSponsors.push(sponsor);
+  });
+
+  unslottedSponsors.forEach((sponsor) => {
+    const emptySlotIndex = slots.findIndex((slot) => !slot);
+
+    if (emptySlotIndex >= 0) {
+      slots[emptySlotIndex] = sponsor;
+    } else {
+      slots.push(sponsor);
+    }
+  });
+
+  return slots;
 }
 
 async function loadSponsors() {
@@ -167,21 +196,21 @@ export default async function PartnersPage() {
     {
       key: "main",
       label: "Main Partner",
-      items: sponsorSlots(sponsorGroups.main, 1),
+      items: sponsorSlots(sponsorGroups.main, 3),
       logoSlotSize: "h-24 w-full max-w-48 sm:h-28 sm:max-w-64 lg:h-32 lg:max-w-72",
       wrapperClass: "mx-auto grid w-full grid-cols-2 place-items-center gap-x-6 gap-y-4 lg:grid-cols-3",
     },
     {
       key: "official",
       label: "Official Partner",
-      items: sponsorSlots(sponsorGroups.official, 4),
+      items: sponsorSlots(sponsorGroups.official, 6),
       logoSlotSize: "h-16 w-full max-w-32 sm:h-20 sm:max-w-40 lg:h-24 lg:max-w-44",
       wrapperClass: "mx-auto grid w-full grid-cols-2 place-items-center gap-x-6 gap-y-4 lg:grid-cols-3",
     },
     {
       key: "supporter",
       label: "Supporter",
-      items: sponsorSlots(sponsorGroups.supporter, 8),
+      items: sponsorSlots(sponsorGroups.supporter, 9),
       logoSlotSize: "h-14 w-full max-w-28 sm:h-16 sm:max-w-32 lg:h-[72px] lg:max-w-36",
       wrapperClass: "mx-auto grid w-full grid-cols-2 place-items-center gap-x-5 gap-y-4 lg:grid-cols-3",
     },
