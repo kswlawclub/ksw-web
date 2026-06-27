@@ -629,12 +629,15 @@ export default async function Home() {
             <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300 sm:mt-6 sm:text-lg sm:leading-8">
               ชุมชนฟุตบอลนักกฎหมายที่รวมการแข่งขัน มิตรภาพ และเครือข่ายวิชาชีพไว้ในสนามเดียวกัน
             </p>
+            <div className="mt-5 inline-flex max-w-full items-center rounded-full border border-[#d8ad45]/35 bg-[#d8ad45]/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-[#f4d58a] shadow-lg shadow-[#d8ad45]/10 sm:text-xs">
+              THAI LAWYERS LEAGUE • SEASON 6
+            </div>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <a
                 className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/15 transition-transform hover:scale-[1.02]"
-                href="/#league-center"
+                href="/#next-fixtures"
               >
-                View League Table
+                View Next Fixtures
               </a>
               <a
                 className="inline-flex items-center justify-center rounded-md border border-[#d8ad45]/50 bg-white/[0.03] px-5 py-3 text-sm font-black text-[#f4d58a] backdrop-blur transition-colors hover:bg-[#d8ad45]/10"
@@ -651,7 +654,9 @@ export default async function Home() {
             ) : null}
           </div>
 
-          <div className="ksw-float-logo mx-auto flex w-full max-w-[17rem] min-w-0 items-center justify-center sm:max-w-xs md:max-w-sm">
+          <div className="ksw-float-logo relative mx-auto flex w-full max-w-[17rem] min-w-0 items-center justify-center sm:max-w-xs md:max-w-sm">
+              <div className="absolute inset-0 -z-10 rounded-full bg-[#d8ad45]/20 blur-3xl" />
+              <div className="absolute inset-x-6 inset-y-10 -z-10 rounded-full bg-[#f4d58a]/10 blur-2xl" />
               {isString(logoUrl) ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -803,9 +808,6 @@ export default async function Home() {
                 </h2>
                 <p className="mt-1 text-sm font-semibold text-slate-300">
                   Upcoming KSW match schedule.
-                </p>
-                <p className="mt-2 text-xs font-semibold leading-5 text-slate-400">
-                  ข้อมูลการแข่งขันอ้างอิงจากฝ่ายจัดการแข่งขัน Thai Lawyers League Season 6
                 </p>
               </div>
             </div>
@@ -989,6 +991,11 @@ export default async function Home() {
               </p>
             )}
           </div>
+          <div className="border-t border-[#d8ad45]/15 px-4 py-3 text-right sm:px-6">
+            <p className="text-xs font-semibold leading-5 text-slate-400">
+              ข้อมูลการแข่งขันอ้างอิงจากฝ่ายจัดการแข่งขัน Thai Lawyers League Season 6
+            </p>
+          </div>
         </div>
         <div id="league-table" className="mt-8 min-w-0">
         <div className="min-w-0 overflow-hidden rounded-2xl border border-[#d8ad45]/25 bg-[linear-gradient(135deg,#061426,#0b2745_58%,#071b31)] shadow-2xl shadow-[#061426]/25">
@@ -1002,9 +1009,6 @@ export default async function Home() {
               </h2>
               <p className="mt-1 text-sm font-semibold text-slate-300">
                 Thai Lawyers League • Season 6
-              </p>
-              <p className="mt-2 text-xs font-semibold leading-5 text-slate-400">
-                ข้อมูลการแข่งขันอ้างอิงจากฝ่ายจัดการแข่งขัน Thai Lawyers League Season 6
               </p>
             </div>
             <span className="inline-flex items-center gap-2 rounded-full border border-[#f4d58a]/35 bg-[#d8ad45]/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.2em] text-[#f4d58a] shadow-lg shadow-[#d8ad45]/10">
@@ -1088,6 +1092,11 @@ export default async function Home() {
               </tbody>
             </table>
           </div>
+          <div className="border-t border-[#d8ad45]/15 px-4 py-3 text-right sm:px-6">
+            <p className="text-xs font-semibold leading-5 text-slate-400">
+              ข้อมูลการแข่งขันอ้างอิงจากฝ่ายจัดการแข่งขัน Thai Lawyers League Season 6
+            </p>
+          </div>
         </div>
         </div>
 
@@ -1105,9 +1114,6 @@ export default async function Home() {
                 </h2>
                 <p className="mt-1 text-sm font-semibold text-slate-600">
                   Completed KSW league match results.
-                </p>
-                <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">
-                  ข้อมูลการแข่งขันอ้างอิงจากฝ่ายจัดการแข่งขัน Thai Lawyers League Season 6
                 </p>
               </div>
             </div>
@@ -1258,6 +1264,11 @@ export default async function Home() {
                 No finished results available.
               </p>
             )}
+          </div>
+          <div className="border-t border-slate-200 px-4 py-3 text-right sm:px-6">
+            <p className="text-xs font-semibold leading-5 text-slate-500">
+              ข้อมูลการแข่งขันอ้างอิงจากฝ่ายจัดการแข่งขัน Thai Lawyers League Season 6
+            </p>
           </div>
         </div>
         </div>
