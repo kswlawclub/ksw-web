@@ -84,6 +84,104 @@ function formatMatchTime(value: unknown) {
   }).format(date);
 }
 
+function formatMatchDateLong(value: unknown) {
+  if (typeof value !== "string" || !value) {
+    return "Date unavailable";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    timeZone: "Asia/Bangkok",
+  }).format(date);
+}
+
+function formatMatchDateShort(value: unknown) {
+  if (typeof value !== "string" || !value) {
+    return "";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    day: "2-digit",
+    month: "short",
+    timeZone: "Asia/Bangkok",
+  }).format(date);
+}
+
+function bangkokDateKey(value: unknown) {
+  if (typeof value !== "string" || !value) {
+    return "date-unavailable";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: "Asia/Bangkok",
+  }).format(date);
+}
+
+function countdownText(value: unknown, now = new Date()) {
+  if (typeof value !== "string" || !value) {
+    return "TBC";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "TBC";
+  }
+
+  const diff = date.getTime() - now.getTime();
+  if (diff <= 0) {
+    return "Kickoff now";
+  }
+
+  const totalMinutes = Math.floor(diff / 60000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+
+  if (days > 0) {
+    return `${days}d ${hours}h ${minutes}m`;
+  }
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+
+  return `${minutes}m`;
+}
+
+function fixtureStatusLabel(match: Row, matchDate: unknown, now = new Date()) {
+  const status = text(match, ["status"], "").toLowerCase();
+  if (status === "live") {
+    return "LIVE";
+  }
+
+  if (bangkokDateKey(matchDate) === bangkokDateKey(now.toISOString())) {
+    return "TODAY";
+  }
+
+  return "UPCOMING";
+}
+
 function isString(value: unknown) {
   return typeof value === "string" && value.trim().length > 0;
 }
@@ -428,6 +526,29 @@ export default async function Home() {
       wrapperClass: "mx-auto grid w-full grid-cols-2 place-items-center gap-x-5 gap-y-4 lg:grid-cols-3",
     },
   ];
+  const now = new Date();
+  const nearestUpcomingMatch =
+    scheduledMatches.find((match) => {
+      const dateValue = text(match, ["match_date", "date", "kickoff_at"], "");
+      const matchTime = new Date(dateValue).getTime();
+      return !Number.isNaN(matchTime) && matchTime >= now.getTime();
+    }) ?? scheduledMatches[0];
+  const fixtureGroups = scheduledMatches.reduce<Array<{ key: string; date: unknown; matches: Row[] }>>(
+    (groups, match) => {
+      const matchDate = match.match_date ?? match.date ?? match.kickoff_at;
+      const key = bangkokDateKey(matchDate);
+      const existingGroup = groups.find((group) => group.key === key);
+
+      if (existingGroup) {
+        existingGroup.matches.push(match);
+      } else {
+        groups.push({ key, date: matchDate, matches: [match] });
+      }
+
+      return groups;
+    },
+    [],
+  );
 
   const sortedStandings = [...standings].sort((a, b) => {
     const pointsDiff = number(b, ["points", "pts"]) - number(a, ["points", "pts"]);
@@ -704,92 +825,199 @@ export default async function Home() {
             )}
           </div>
         </div>
-        <div id="next-fixtures" className="mt-6 min-w-0 rounded-lg border border-dashed border-[#d8ad45]/60 bg-gradient-to-br from-[#fff4dc] via-[#fff9eb] to-white shadow-xl shadow-[#d8ad45]/10">
-          <div className="border-b border-dashed border-[#d8ad45]/40 px-4 py-4 sm:px-5">
-            <h2 className="text-xl font-black text-[#061426]">Next Fixtures</h2>
-            <p className="mt-1 text-sm text-slate-600">
-              Upcoming KSW match schedule.
-            </p>
+        <div id="next-fixtures" className="mt-8 min-w-0 overflow-hidden rounded-2xl border border-[#d8ad45]/35 bg-[linear-gradient(135deg,#061426,#0b2745_58%,#071b31)] shadow-2xl shadow-[#061426]/25">
+          <div className="grid gap-5 border-b border-[#d8ad45]/20 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="mt-1 inline-flex size-11 shrink-0 items-center justify-center rounded-full border border-[#d8ad45]/35 bg-[#d8ad45]/10 text-[#f4d58a] shadow-lg shadow-[#d8ad45]/10">
+                <svg aria-hidden="true" className="size-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm3.9 4.2 1.8 1.3-.7 2.1-2.1.5-1.6-1.4.1-2.2 2.5-.3Zm-7.8 0 2.5.3.1 2.2-1.6 1.4-2.1-.5-.7-2.1 1.8-1.3ZM5.3 15.3l-.8-2.3 1.5-1.7 2.2.4 1 1.9-1.1 1.9-2.8-.2Zm8.7 3.4h-4l-1.2-2.1 1.2-2.1h4l1.2 2.1-1.2 2.1Zm-2-5.8-2-1.5.8-2.4h2.4l.8 2.4-2 1.5Zm6.7 2.4-2.8.2-1.1-1.9 1-1.9 2.2-.4 1.5 1.7-.8 2.3Z" />
+                </svg>
+              </span>
+              <div>
+                <h2 className="text-2xl font-black tracking-tight text-white sm:text-3xl">
+                  Next Fixtures
+                </h2>
+                <p className="mt-1 text-sm font-semibold text-slate-300">
+                  Upcoming KSW match schedule.
+                </p>
+              </div>
+            </div>
+            <div className="rounded-xl border border-[#d8ad45]/35 bg-white/[0.08] p-4 text-left shadow-xl shadow-black/15 backdrop-blur sm:min-w-64 lg:text-right">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f4d58a]">
+                Next Kickoff
+              </p>
+              <p className="mt-2 text-3xl font-black text-white">
+                {nearestUpcomingMatch
+                  ? countdownText(nearestUpcomingMatch.match_date ?? nearestUpcomingMatch.date ?? nearestUpcomingMatch.kickoff_at, now)
+                  : "TBC"}
+              </p>
+              <p className="mt-1 text-sm font-bold text-slate-300">
+                {nearestUpcomingMatch
+                  ? `${formatMatchDateLong(nearestUpcomingMatch.match_date ?? nearestUpcomingMatch.date ?? nearestUpcomingMatch.kickoff_at)} • ${
+                      formatMatchTime(nearestUpcomingMatch.match_date ?? nearestUpcomingMatch.date ?? nearestUpcomingMatch.kickoff_at) || "TBC"
+                    }`
+                  : "Schedule to be confirmed"}
+              </p>
+            </div>
           </div>
-          <div className="divide-y divide-dashed divide-[#d8ad45]/30">
-            {scheduledMatches.length ? (
-              scheduledMatches.map((fixture, index) => {
-                const matchDate = fixture.match_date ?? fixture.date ?? fixture.kickoff_at;
-                const matchTime = formatMatchTime(matchDate);
-                const homeName = text(fixture, ["home_team_name"], "Home team unavailable");
-                const awayName = text(fixture, ["away_team_name"], "Away team unavailable");
-
-                return (
-                  <div
-                    className="grid min-w-0 gap-3 px-4 py-4 transition-colors hover:bg-[#fff8e3]/50 sm:px-5"
-                    key={text(fixture, ["id", "match_id"], String(index))}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs font-black uppercase tracking-[0.16em] text-[#9b1c1f]">
-                        {formatMatchDate(matchDate)}
-                        {matchTime ? ` · ${matchTime}` : ""}
-                      </p>
-                      <span className="rounded-full border border-[#d8ad45]/45 bg-[#fff8e3] px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-[#061426]">
-                        {text(fixture, ["status"], "scheduled")}
-                      </span>
-                    </div>
-                    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_64px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_78px_minmax(0,1fr)] sm:gap-4">
-                      <div className="flex min-w-0 items-center gap-2.5">
-                        <TeamLogo
-                          initials={teamInitials({
-                            short_name: text(fixture, ["home_team_short_name"], ""),
-                            team_name: homeName,
-                          })}
-                          logoUrl={text(fixture, ["home_team_logo_url"], "")}
-                          teamName={homeName}
-                        />
-                        <span className="min-w-0 truncate text-sm font-bold leading-5 text-[#061426] sm:hidden">
-                          {text(
-                            fixture,
-                            ["home_team_short_name"],
-                            teamInitials({ team_name: homeName }),
-                          )}
-                        </span>
-                        <span className="hidden min-w-0 text-wrap text-base font-bold leading-5 text-[#061426] sm:inline">
-                          {homeName}
-                        </span>
-                      </div>
-                      <div className="grid gap-1 text-center">
-                        {text(fixture, ["venue"], "") ? (
-                          <span className="text-sm font-black text-black sm:text-base">
-                            สนาม {text(fixture, ["venue"], "")}
-                          </span>
-                        ) : null}
-                        <div className="rounded-md border border-[#d8ad45]/45 bg-white px-2 py-2 text-center text-sm font-black text-[#9b1c1f] shadow-sm sm:text-base">
-                          VS
-                        </div>
-                      </div>
-                      <div className="flex min-w-0 items-center justify-end gap-2.5 text-right">
-                        <span className="hidden min-w-0 text-wrap text-base font-bold leading-5 text-[#061426] sm:inline">
-                          {awayName}
-                        </span>
-                        <span className="min-w-0 truncate text-sm font-bold leading-5 text-[#061426] sm:hidden">
-                          {text(
-                            fixture,
-                            ["away_team_short_name"],
-                            teamInitials({ team_name: awayName }),
-                          )}
-                        </span>
-                        <TeamLogo
-                          initials={teamInitials({
-                            short_name: text(fixture, ["away_team_short_name"], ""),
-                            team_name: awayName,
-                          })}
-                          logoUrl={text(fixture, ["away_team_logo_url"], "")}
-                          teamName={awayName}
-                        />
-                      </div>
-                    </div>
+          <div className="grid gap-6 px-4 py-5 sm:px-6">
+            {fixtureGroups.length ? (
+              fixtureGroups.map((group, groupIndex) => (
+                <div className="grid gap-3" key={group.key}>
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                    <p className="text-xs font-black uppercase tracking-[0.22em] text-[#f4d58a]">
+                      Matchday {groupIndex + 1}
+                    </p>
+                    <p className="text-sm font-bold text-slate-300">
+                      {formatMatchDateLong(group.date)}
+                    </p>
                   </div>
-                );
-              })
+                  <div className="grid gap-3">
+                    {group.matches.map((fixture, index) => {
+                      const matchDate = fixture.match_date ?? fixture.date ?? fixture.kickoff_at;
+                      const matchTime = formatMatchTime(matchDate);
+                      const homeName = text(fixture, ["home_team_name"], "Home team unavailable");
+                      const awayName = text(fixture, ["away_team_name"], "Away team unavailable");
+                      const homeShortName = text(
+                        fixture,
+                        ["home_team_short_name"],
+                        teamInitials({ team_name: homeName }),
+                      );
+                      const awayShortName = text(
+                        fixture,
+                        ["away_team_short_name"],
+                        teamInitials({ team_name: awayName }),
+                      );
+                      const venue = text(fixture, ["venue"], "");
+                      const isKswMatch =
+                        homeName.toLowerCase().includes("ksw") ||
+                        awayName.toLowerCase().includes("ksw") ||
+                        homeShortName.toLowerCase().includes("ksw") ||
+                        awayShortName.toLowerCase().includes("ksw");
+                      const statusLabel = fixtureStatusLabel(fixture, matchDate, now);
+                      const startsIn = countdownText(matchDate, now);
+
+                      return (
+                        <article
+                          className={`group overflow-hidden rounded-xl border bg-white p-4 shadow-lg transition duration-300 lg:grid lg:grid-cols-[150px_minmax(0,1fr)_150px] lg:items-center lg:gap-5 lg:p-5 lg:hover:-translate-y-0.5 ${
+                            isKswMatch
+                              ? "border-[#d8ad45] shadow-[#d8ad45]/25"
+                              : "border-white/80 shadow-black/10 hover:shadow-black/20"
+                          }`}
+                          key={text(fixture, ["id", "match_id"], `${group.key}-${index}`)}
+                        >
+                          <div className="mb-4 flex flex-wrap items-center justify-center gap-2 lg:mb-0 lg:block lg:text-left">
+                            <div className="inline-flex items-center gap-1.5 rounded-full bg-[#061426] px-3 py-1.5 text-xs font-black text-white">
+                              <span aria-hidden="true">🕒</span>
+                              {matchTime || "TBC"}
+                            </div>
+                            {venue ? (
+                              <div className="inline-flex items-center gap-1.5 rounded-full bg-[#fff4dc] px-3 py-1.5 text-xs font-black text-[#061426]">
+                                <span aria-hidden="true">📍</span>
+                                สนาม {venue}
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <div className="lg:hidden">
+                            {isKswMatch ? (
+                              <div className="mb-3 text-center">
+                                <span className="rounded-full border border-[#d8ad45]/45 bg-[#fff4dc] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#061426]">
+                                  Featured Match
+                                </span>
+                              </div>
+                            ) : null}
+                            <div className="grid grid-cols-[minmax(0,1fr)_54px_minmax(0,1fr)] items-start gap-2 text-center">
+                              <div className="grid min-w-0 justify-items-center gap-2">
+                                <TeamLogo
+                                  className="!size-12 transition-transform duration-300 group-hover:scale-105"
+                                  initials={homeShortName}
+                                  logoUrl={text(fixture, ["home_team_logo_url"], "")}
+                                  teamName={homeName}
+                                />
+                                <p className="min-w-0 text-wrap text-sm font-black leading-5 text-[#061426]">
+                                  {homeShortName}
+                                </p>
+                              </div>
+                              <div className="mt-2 rounded-lg border border-[#d8ad45]/45 bg-[#061426] px-2 py-2 text-center text-sm font-black text-[#f4d58a]">
+                                VS
+                              </div>
+                              <div className="grid min-w-0 justify-items-center gap-2">
+                                <TeamLogo
+                                  className="!size-12 transition-transform duration-300 group-hover:scale-105"
+                                  initials={awayShortName}
+                                  logoUrl={text(fixture, ["away_team_logo_url"], "")}
+                                  teamName={awayName}
+                                />
+                                <p className="min-w-0 text-wrap text-sm font-black leading-5 text-[#061426]">
+                                  {awayShortName}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-xs font-black text-[#061426]">
+                              <span className="rounded-full bg-slate-100 px-3 py-1.5">
+                                📅 {formatMatchDateShort(matchDate)}
+                              </span>
+                              <span className="rounded-full bg-slate-100 px-3 py-1.5">
+                                🕒 {matchTime || "TBC"}
+                              </span>
+                              {venue ? (
+                                <span className="rounded-full bg-[#fff4dc] px-3 py-1.5">
+                                  📍 สนาม {venue}
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          <div className="hidden min-w-0 grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)] items-center gap-5 lg:grid">
+                            <div className="flex min-w-0 items-center gap-4">
+                              <TeamLogo
+                                className="!size-[68px] transition-transform duration-300 group-hover:scale-105"
+                                initials={homeShortName}
+                                logoUrl={text(fixture, ["home_team_logo_url"], "")}
+                                teamName={homeName}
+                              />
+                              <p className="min-w-0 text-wrap text-lg font-black leading-6 text-[#061426]">
+                                {homeName}
+                              </p>
+                            </div>
+                            <div className="rounded-xl border border-[#d8ad45]/45 bg-[#061426] px-3 py-3 text-center text-base font-black text-[#f4d58a] shadow-lg shadow-[#061426]/15">
+                              VS
+                            </div>
+                            <div className="flex min-w-0 items-center justify-end gap-4 text-right">
+                              <p className="min-w-0 text-wrap text-lg font-black leading-6 text-[#061426]">
+                                {awayName}
+                              </p>
+                              <TeamLogo
+                                className="!size-[68px] transition-transform duration-300 group-hover:scale-105"
+                                initials={awayShortName}
+                                logoUrl={text(fixture, ["away_team_logo_url"], "")}
+                                teamName={awayName}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="mt-4 grid justify-items-center gap-2 lg:mt-0 lg:justify-items-end lg:text-right">
+                            {isKswMatch ? (
+                              <span className="hidden rounded-full border border-[#d8ad45]/45 bg-[#fff4dc] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#061426] lg:inline-flex">
+                                Featured Match
+                              </span>
+                            ) : null}
+                            <span className="rounded-full border border-[#d8ad45]/45 bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-[#061426]">
+                              {statusLabel}
+                            </span>
+                            <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                              Starts in {startsIn}
+                            </p>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))
             ) : (
-              <p className="px-4 py-8 text-slate-600 sm:px-5">
+              <p className="rounded-xl border border-white/10 bg-white/[0.08] px-4 py-8 text-slate-200 sm:px-5">
                 No scheduled fixtures available.
               </p>
             )}
