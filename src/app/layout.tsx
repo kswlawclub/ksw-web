@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { BackToTop } from "@/components/back-to-top";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import "./globals.css";
@@ -19,6 +20,7 @@ export default function RootLayout({
         <SiteHeader />
         {children}
         <SiteFooter />
+        <BackToTop />
       </body>
     </html>
   );
