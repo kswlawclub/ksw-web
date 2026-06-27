@@ -575,7 +575,23 @@ export default async function Home() {
     .filter(
       (match) => typeof match.home_score === "number" && typeof match.away_score === "number",
     )
-    .slice(0, 16);
+    .slice(0, 12);
+  const resultGroups = latestResults.reduce<Array<{ key: string; date: unknown; matches: Row[] }>>(
+    (groups, match) => {
+      const matchDate = match.match_date ?? match.date ?? match.kickoff_at;
+      const key = bangkokDateKey(matchDate);
+      const existingGroup = groups.find((group) => group.key === key);
+
+      if (existingGroup) {
+        existingGroup.matches.push(match);
+      } else {
+        groups.push({ key, date: matchDate, matches: [match] });
+      }
+
+      return groups;
+    },
+    [],
+  );
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#061426] text-slate-100">
@@ -773,55 +789,169 @@ export default async function Home() {
       <div id="league-center">
       <section className="bg-slate-100">
         <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
-        <div id="latest-results" className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
-          <div className="border-b border-slate-200 px-4 py-4 sm:px-5">
-            <h2 className="text-xl font-black text-[#061426]">Latest Results</h2>
+        <div id="latest-results" className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/10">
+          <div className="border-b border-slate-200 bg-gradient-to-r from-white via-slate-50 to-[#fff8e3] px-4 py-5 sm:px-6">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="mt-1 inline-flex size-11 shrink-0 items-center justify-center rounded-full border border-[#d8ad45]/35 bg-[#fff4dc] text-[#9b1c1f] shadow-lg shadow-[#d8ad45]/10">
+                <svg aria-hidden="true" className="size-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M7 3h10v2h3v5a5 5 0 0 1-4.03 4.9A6.01 6.01 0 0 1 13 17.92V20h3v2H8v-2h3v-2.08A6.01 6.01 0 0 1 8.03 14.9 5 5 0 0 1 4 10V5h3V3Zm10 4v5.83A3 3 0 0 0 18 7h-1ZM6 7v3a3 3 0 0 0 1 2.24V7H6Zm3-2v7a3 3 0 1 0 6 0V5H9Z" />
+                </svg>
+              </span>
+              <div>
+                <h2 className="text-2xl font-black tracking-tight text-[#061426] sm:text-3xl">
+                  Latest Results
+                </h2>
+                <p className="mt-1 text-sm font-semibold text-slate-600">
+                  Completed KSW league match results.
+                </p>
+              </div>
+            </div>
           </div>
-          <div className="divide-y divide-slate-200">
-            {latestResults.length ? (
-              latestResults.map((match, index) => (
-                <div
-                  className="grid min-w-0 gap-3 px-4 py-4 transition-colors hover:bg-slate-50 sm:px-5"
-                  key={text(match, ["id", "match_id"], String(index))}
-                >
-                  <p className="text-xs font-black uppercase tracking-[0.16em] text-[#9b1c1f]">
-                    {formatMatchDate(match.match_date ?? match.date ?? match.kickoff_at)}
-                  </p>
-                  <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_64px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_78px_minmax(0,1fr)] sm:gap-4">
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      <TeamLogo
-                        initials={teamInitials({
-                          short_name: text(match, ["home_team_short_name"], ""),
-                          team_name: text(match, ["home_team_name"]),
-                        })}
-                        logoUrl={text(match, ["home_team_logo_url"], "")}
-                        teamName={text(match, ["home_team_name"])}
-                      />
-                      <span className="min-w-0 text-wrap text-sm font-bold leading-5 text-[#061426] sm:text-base">
-                        {text(match, ["home_team_name"])}
-                      </span>
-                    </div>
-                    <div className="rounded-md border border-[#d8ad45]/45 bg-[#fff8e3] px-2 py-2 text-center text-sm font-black text-[#061426] shadow-sm sm:text-base">
-                      {text(match, ["score"], "VS")}
-                    </div>
-                    <div className="flex min-w-0 items-center justify-end gap-2.5 text-right">
-                      <span className="min-w-0 text-wrap text-sm font-bold leading-5 text-[#061426] sm:text-base">
-                        {text(match, ["away_team_name"])}
-                      </span>
-                      <TeamLogo
-                        initials={teamInitials({
-                          short_name: text(match, ["away_team_short_name"], ""),
-                          team_name: text(match, ["away_team_name"]),
-                        })}
-                        logoUrl={text(match, ["away_team_logo_url"], "")}
-                        teamName={text(match, ["away_team_name"])}
-                      />
-                    </div>
+          <div className="grid gap-6 bg-slate-100 px-4 py-5 sm:px-6">
+            {resultGroups.length ? (
+              resultGroups.map((group, groupIndex) => (
+                <div className="grid gap-3" key={group.key}>
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                    <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">
+                      Results {groupIndex + 1}
+                    </p>
+                    <p className="text-sm font-bold text-slate-600">
+                      {formatMatchDateLong(group.date)}
+                    </p>
+                  </div>
+                  <div className="grid gap-3">
+                    {group.matches.map((match, index) => {
+                      const matchDate = match.match_date ?? match.date ?? match.kickoff_at;
+                      const matchTime = formatMatchTime(matchDate);
+                      const homeName = text(match, ["home_team_name"], "Home team unavailable");
+                      const awayName = text(match, ["away_team_name"], "Away team unavailable");
+                      const homeShortName = text(
+                        match,
+                        ["home_team_short_name"],
+                        teamInitials({ team_name: homeName }),
+                      );
+                      const awayShortName = text(
+                        match,
+                        ["away_team_short_name"],
+                        teamInitials({ team_name: awayName }),
+                      );
+                      const homeScore = number(match, ["home_score"]);
+                      const awayScore = number(match, ["away_score"]);
+                      const venue = text(match, ["venue"], "");
+                      const homeIsKsw =
+                        homeName.toLowerCase().includes("ksw") ||
+                        homeShortName.toLowerCase().includes("ksw");
+                      const awayIsKsw =
+                        awayName.toLowerCase().includes("ksw") ||
+                        awayShortName.toLowerCase().includes("ksw");
+                      const isKswResult = homeIsKsw || awayIsKsw;
+                      const kswScore = homeIsKsw ? homeScore : awayScore;
+                      const opponentScore = homeIsKsw ? awayScore : homeScore;
+                      const outcome =
+                        !isKswResult
+                          ? ""
+                          : kswScore > opponentScore
+                            ? "WIN"
+                            : kswScore < opponentScore
+                              ? "LOSS"
+                              : "DRAW";
+
+                      return (
+                        <article
+                          className={`group overflow-hidden rounded-xl border bg-white p-4 shadow-lg transition duration-300 lg:grid lg:grid-cols-[minmax(0,1fr)_150px_minmax(0,1fr)] lg:items-center lg:gap-5 lg:p-5 lg:hover:-translate-y-0.5 ${
+                            isKswResult
+                              ? "border-[#d8ad45] shadow-[#d8ad45]/20"
+                              : "border-white shadow-black/10 hover:shadow-black/20"
+                          }`}
+                          key={text(match, ["id", "match_id"], `${group.key}-${index}`)}
+                        >
+                          <div className="mb-4 flex flex-wrap items-center justify-center gap-2 lg:hidden">
+                            {isKswResult ? (
+                              <span className="rounded-full border border-[#d8ad45]/45 bg-[#fff4dc] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#061426]">
+                                KSW Result
+                              </span>
+                            ) : null}
+                            <span className="rounded-full border border-emerald-700/20 bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-800">
+                              Full Time
+                            </span>
+                            {outcome ? (
+                              <span className="rounded-full bg-[#061426] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#f4d58a]">
+                                {outcome}
+                              </span>
+                            ) : null}
+                          </div>
+
+                          <div className="grid min-w-0 justify-items-center gap-2 text-center lg:flex lg:justify-start lg:text-left">
+                            <TeamLogo
+                              className="!size-12 transition-transform duration-300 group-hover:scale-105 lg:!size-16"
+                              initials={homeShortName}
+                              logoUrl={text(match, ["home_team_logo_url"], "")}
+                              teamName={homeName}
+                            />
+                            <p className="min-w-0 text-wrap text-base font-black leading-5 text-[#061426] lg:text-lg lg:leading-6">
+                              <span className="lg:hidden">{homeShortName}</span>
+                              <span className="hidden lg:inline">{homeName}</span>
+                            </p>
+                          </div>
+
+                          <div className="my-4 grid justify-items-center gap-2 lg:my-0">
+                            <div className="rounded-2xl border border-[#d8ad45]/45 bg-[#061426] px-5 py-3 text-3xl font-black tracking-tight text-white shadow-xl shadow-[#061426]/20 sm:text-4xl">
+                              <span>{homeScore}</span>
+                              <span className="px-2 text-[#f4d58a]">-</span>
+                              <span>{awayScore}</span>
+                            </div>
+                            <div className="flex flex-wrap justify-center gap-2 text-xs font-black text-[#061426]">
+                              {matchTime ? (
+                                <span className="rounded-full bg-slate-100 px-3 py-1.5">
+                                  🕒 {matchTime}
+                                </span>
+                              ) : null}
+                              {venue ? (
+                                <span className="rounded-full bg-[#fff4dc] px-3 py-1.5">
+                                  📍 สนาม {venue}
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          <div className="grid min-w-0 justify-items-center gap-2 text-center lg:flex lg:justify-end lg:text-right">
+                            <p className="min-w-0 text-wrap text-base font-black leading-5 text-[#061426] lg:order-first lg:text-lg lg:leading-6">
+                              <span className="lg:hidden">{awayShortName}</span>
+                              <span className="hidden lg:inline">{awayName}</span>
+                            </p>
+                            <TeamLogo
+                              className="!size-12 transition-transform duration-300 group-hover:scale-105 lg:!size-16"
+                              initials={awayShortName}
+                              logoUrl={text(match, ["away_team_logo_url"], "")}
+                              teamName={awayName}
+                            />
+                          </div>
+
+                          <div className="mt-4 hidden flex-wrap items-center justify-center gap-2 lg:col-span-3 lg:flex">
+                            {isKswResult ? (
+                              <span className="rounded-full border border-[#d8ad45]/45 bg-[#fff4dc] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#061426]">
+                                KSW Result
+                              </span>
+                            ) : null}
+                            <span className="rounded-full border border-emerald-700/20 bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-800">
+                              Full Time
+                            </span>
+                            {outcome ? (
+                              <span className="rounded-full bg-[#061426] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#f4d58a]">
+                                {outcome}
+                              </span>
+                            ) : null}
+                          </div>
+                        </article>
+                      );
+                    })}
                   </div>
                 </div>
               ))
             ) : (
-              <p className="px-4 py-8 text-slate-600 sm:px-5">No finished results available.</p>
+              <p className="rounded-xl bg-white px-4 py-8 text-slate-600 sm:px-5">
+                No finished results available.
+              </p>
             )}
           </div>
         </div>
