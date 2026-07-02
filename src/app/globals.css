@@ -42,3 +42,40 @@ body {
   object-fit: contain;
   object-position: center;
 }
+
+@keyframes kswCountdownNew {
+  from {
+    opacity: 0;
+    transform: translateY(65%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes kswCountdownOld {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-65%);
+  }
+}
+
+.ksw-countdown-new {
+  animation: kswCountdownNew 320ms ease-out;
+}
+
+.ksw-countdown-old {
+  animation: kswCountdownOld 320ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ksw-countdown-new,
+  .ksw-countdown-old {
+    animation: none;
+  }
+}
