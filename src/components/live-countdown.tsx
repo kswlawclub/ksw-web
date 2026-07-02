@@ -91,8 +91,8 @@ function CountdownUnit({ value, label }: CountdownUnitProps) {
   }, [value]);
 
   return (
-    <span className="grid min-w-[3rem] justify-items-center gap-1 sm:min-w-[3.35rem]">
-      <span className="ksw-flip-tile relative h-12 w-full overflow-hidden rounded-lg border border-[#d8ad45]/25 bg-[#070e1d] text-2xl font-black leading-none text-slate-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),inset_0_-10px_20px_rgba(0,0,0,0.42),0_12px_28px_rgba(0,0,0,0.32)] sm:h-14 sm:text-3xl">
+    <span className="grid w-[clamp(3rem,19vw,3.9rem)] justify-items-center gap-1 sm:w-[3.35rem]">
+      <span className="ksw-flip-tile relative h-[clamp(2.75rem,13vw,3.1rem)] w-full overflow-hidden rounded-lg border border-[#d8ad45]/25 bg-[#070e1d] text-[clamp(1.45rem,7vw,1.9rem)] font-black leading-none text-slate-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),inset_0_-10px_20px_rgba(0,0,0,0.42),0_12px_28px_rgba(0,0,0,0.32)] sm:h-14 sm:text-3xl">
         <span className="ksw-flip-half ksw-flip-half-top">
           <span className="ksw-flip-number ksw-flip-number-top">{isFlipping ? previousValue : displayValue}</span>
         </span>
@@ -113,7 +113,7 @@ function CountdownUnit({ value, label }: CountdownUnitProps) {
         <span className="pointer-events-none absolute left-2 top-2 size-1 rounded-full bg-white/25" />
         <span className="pointer-events-none absolute right-2 top-2 size-1 rounded-full bg-white/20" />
       </span>
-      <span className="text-[9px] font-black uppercase tracking-[0.18em] text-[#f4d58a] sm:text-[10px]">
+      <span className="text-[8px] font-black uppercase tracking-[0.1em] text-[#f4d58a] min-[380px]:text-[9px] min-[380px]:tracking-[0.14em] sm:text-[10px] sm:tracking-[0.18em]">
         {label}
       </span>
     </span>
@@ -169,7 +169,7 @@ export function LiveCountdown({ targetDate, className = "" }: LiveCountdownProps
   }
 
   return (
-    <div className={`${className} grid grid-cols-2 gap-2 min-[420px]:flex min-[420px]:flex-wrap`}>
+    <div className={`${className} grid w-full max-w-full grid-cols-4 justify-items-center gap-1 min-[380px]:gap-1.5 sm:flex sm:w-auto sm:flex-wrap sm:justify-start sm:gap-2`}>
       <CountdownUnit label="DAYS" value={padUnit(countdown.days)} />
       <CountdownUnit label="HOURS" value={padUnit(countdown.hours)} />
       <CountdownUnit label="MINUTES" value={padUnit(countdown.minutes)} />
