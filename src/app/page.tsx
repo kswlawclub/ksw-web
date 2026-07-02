@@ -182,6 +182,65 @@ function fixtureStatusLabel(match: Row, matchDate: unknown, now = new Date()) {
   return "UPCOMING";
 }
 
+function fixtureDateValue(match: Row) {
+  return match.match_date ?? match.date ?? match.kickoff_at;
+}
+
+function isKswName(value: string) {
+  return value.toLowerCase().includes("ksw");
+}
+
+function isKswFixture(match: Row) {
+  return (
+    isKswName(text(match, ["home_team_name"], "")) ||
+    isKswName(text(match, ["away_team_name"], "")) ||
+    isKswName(text(match, ["home_team_short_name"], "")) ||
+    isKswName(text(match, ["away_team_short_name"], ""))
+  );
+}
+
+function opponentForKsw(match: Row) {
+  const homeName = text(match, ["home_team_name"], "Home team unavailable");
+  const awayName = text(match, ["away_team_name"], "Away team unavailable");
+  const homeShortName = text(match, ["home_team_short_name"], "");
+
+  return isKswName(homeName) || isKswName(homeShortName) ? awayName : homeName;
+}
+
+function venueNumber(match: Row) {
+  const venue = text(match, ["venue"], "");
+  const matchValue = venue.match(/v\s*(\d+)/i);
+
+  return matchValue ? Number(matchValue[1]) : Number.MAX_SAFE_INTEGER;
+}
+
+function formatVenue(value: string) {
+  if (!value) {
+    return "";
+  }
+
+  return value.trim().startsWith("สนาม") ? value.trim() : `สนาม ${value.trim()}`;
+}
+
+function fixtureTimeValue(match: Row) {
+  const dateValue = fixtureDateValue(match);
+  const date = typeof dateValue === "string" ? new Date(dateValue) : null;
+
+  return date && !Number.isNaN(date.getTime()) ? date.getTime() : Number.MAX_SAFE_INTEGER;
+}
+
+function sortUpcomingFixtures(fixtures: Row[]) {
+  return [...fixtures].sort((a, b) => {
+    const timeDiff = fixtureTimeValue(a) - fixtureTimeValue(b);
+    if (timeDiff) return timeDiff;
+
+    const venueDiff = venueNumber(a) - venueNumber(b);
+    if (venueDiff) return venueDiff;
+
+    return text(a, ["home_team_name"], "").localeCompare(text(b, ["home_team_name"], ""));
+  });
+}
+
 function isString(value: unknown) {
   return typeof value === "string" && value.trim().length > 0;
 }
@@ -527,15 +586,20 @@ export default async function Home() {
     },
   ];
   const now = new Date();
-  const nearestUpcomingMatch =
-    scheduledMatches.find((match) => {
-      const dateValue = text(match, ["match_date", "date", "kickoff_at"], "");
-      const matchTime = new Date(dateValue).getTime();
-      return !Number.isNaN(matchTime) && matchTime >= now.getTime();
-    }) ?? scheduledMatches[0];
-  const fixtureGroups = scheduledMatches.reduce<Array<{ key: string; date: unknown; matches: Row[] }>>(
+  const sortedScheduledMatches = sortUpcomingFixtures(scheduledMatches);
+  const upcomingKswMatches = sortedScheduledMatches.filter((match) => {
+    const matchTime = fixtureTimeValue(match);
+    return isKswFixture(match) && matchTime >= now.getTime();
+  });
+  const nextKswDateKey = upcomingKswMatches[0]
+    ? bangkokDateKey(fixtureDateValue(upcomingKswMatches[0]))
+    : "";
+  const nextKswKickoffMatches = upcomingKswMatches.filter(
+    (match) => bangkokDateKey(fixtureDateValue(match)) === nextKswDateKey,
+  );
+  const fixtureGroups = sortedScheduledMatches.reduce<Array<{ key: string; date: unknown; matches: Row[] }>>(
     (groups, match) => {
-      const matchDate = match.match_date ?? match.date ?? match.kickoff_at;
+      const matchDate = fixtureDateValue(match);
       const key = bangkokDateKey(matchDate);
       const existingGroup = groups.find((group) => group.key === key);
 
@@ -811,22 +875,48 @@ export default async function Home() {
                 </p>
               </div>
             </div>
-            <div className="rounded-xl border border-[#d8ad45]/35 bg-white/[0.08] p-4 text-left shadow-xl shadow-black/15 backdrop-blur sm:min-w-64 lg:text-right">
-              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f4d58a]">
-                Next Kickoff
-              </p>
-              <p className="mt-2 text-3xl font-black text-white">
-                {nearestUpcomingMatch
-                  ? countdownText(nearestUpcomingMatch.match_date ?? nearestUpcomingMatch.date ?? nearestUpcomingMatch.kickoff_at, now)
-                  : "TBC"}
-              </p>
-              <p className="mt-1 text-sm font-bold text-slate-300">
-                {nearestUpcomingMatch
-                  ? `${formatMatchDateLong(nearestUpcomingMatch.match_date ?? nearestUpcomingMatch.date ?? nearestUpcomingMatch.kickoff_at)} • ${
-                      formatMatchTime(nearestUpcomingMatch.match_date ?? nearestUpcomingMatch.date ?? nearestUpcomingMatch.kickoff_at) || "TBC"
-                    }`
-                  : "Schedule to be confirmed"}
-              </p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[32rem]">
+              {nextKswKickoffMatches.length ? (
+                nextKswKickoffMatches.map((match, index) => {
+                  const matchDate = fixtureDateValue(match);
+                  const venue = text(match, ["venue"], "");
+
+                  return (
+                    <div
+                      className="rounded-xl border border-[#d8ad45]/35 bg-white/[0.08] p-4 text-left shadow-xl shadow-black/15 backdrop-blur"
+                      key={text(match, ["id", "match_id"], `ksw-kickoff-${index}`)}
+                    >
+                      <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f4d58a]">
+                        Next Kickoff
+                      </p>
+                      <p className="mt-2 text-3xl font-black text-white">
+                        {countdownText(matchDate, now)}
+                      </p>
+                      <p className="mt-1 text-sm font-bold text-slate-300">
+                        {formatMatchDateLong(matchDate)} • {formatMatchTime(matchDate) || "TBC"}
+                      </p>
+                      <p className="mt-2 text-sm font-black text-white">
+                        vs {opponentForKsw(match)}
+                      </p>
+                      {venue ? (
+                        <p className="mt-2 inline-flex rounded-full border border-[#d8ad45]/35 bg-[#d8ad45]/15 px-3 py-1 text-xs font-black text-[#f4d58a]">
+                          📍 {formatVenue(venue)}
+                        </p>
+                      ) : null}
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="rounded-xl border border-[#d8ad45]/35 bg-white/[0.08] p-4 text-left shadow-xl shadow-black/15 backdrop-blur sm:col-span-2 lg:ml-auto lg:min-w-64">
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f4d58a]">
+                    Next Kickoff
+                  </p>
+                  <p className="mt-2 text-3xl font-black text-white">TBC</p>
+                  <p className="mt-1 text-sm font-bold text-slate-300">
+                    KSW match schedule to be confirmed
+                  </p>
+                </div>
+              )}
             </div>
           </div>
           <div className="grid gap-6 px-4 py-5 sm:px-6">
@@ -843,7 +933,7 @@ export default async function Home() {
                   </div>
                   <div className="grid gap-3">
                     {group.matches.map((fixture, index) => {
-                      const matchDate = fixture.match_date ?? fixture.date ?? fixture.kickoff_at;
+                      const matchDate = fixtureDateValue(fixture);
                       const matchTime = formatMatchTime(matchDate);
                       const homeName = text(fixture, ["home_team_name"], "Home team unavailable");
                       const awayName = text(fixture, ["away_team_name"], "Away team unavailable");
@@ -858,11 +948,7 @@ export default async function Home() {
                         teamInitials({ team_name: awayName }),
                       );
                       const venue = text(fixture, ["venue"], "");
-                      const isKswMatch =
-                        homeName.toLowerCase().includes("ksw") ||
-                        awayName.toLowerCase().includes("ksw") ||
-                        homeShortName.toLowerCase().includes("ksw") ||
-                        awayShortName.toLowerCase().includes("ksw");
+                      const isKswMatch = isKswFixture(fixture);
                       const statusLabel = fixtureStatusLabel(fixture, matchDate, now);
                       const startsIn = countdownText(matchDate, now);
 
@@ -881,9 +967,9 @@ export default async function Home() {
                               {matchTime || "TBC"}
                             </div>
                             {venue ? (
-                              <div className="inline-flex items-center gap-1.5 rounded-full bg-[#fff4dc] px-3 py-1.5 text-xs font-black text-[#061426]">
+                              <div className="inline-flex items-center gap-1.5 rounded-full border border-[#d8ad45]/45 bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-3 py-1.5 text-xs font-black text-[#061426] shadow-lg shadow-[#d8ad45]/15">
                                 <span aria-hidden="true">📍</span>
-                                สนาม {venue}
+                                {formatVenue(venue)}
                               </div>
                             ) : null}
                           </div>
@@ -931,8 +1017,8 @@ export default async function Home() {
                                 🕒 {matchTime || "TBC"}
                               </span>
                               {venue ? (
-                                <span className="rounded-full bg-[#fff4dc] px-3 py-1.5">
-                                  📍 สนาม {venue}
+                                <span className="rounded-full border border-[#d8ad45]/45 bg-[#061426] px-3 py-1.5 text-[#f4d58a]">
+                                  📍 {formatVenue(venue)}
                                 </span>
                               ) : null}
                             </div>
