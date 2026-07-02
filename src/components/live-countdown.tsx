@@ -21,14 +21,7 @@ type CountdownState =
 
 type CountdownUnitProps = {
   value: string;
-  tone: "day" | "hour" | "minute" | "second";
-};
-
-const unitToneClasses = {
-  day: "from-[#f4d58a] via-[#d8ad45] to-[#b98724] text-[#061426] shadow-[#d8ad45]/20",
-  hour: "from-[#fff4c2] via-[#f4d58a] to-[#d8ad45] text-[#061426] shadow-[#f4d58a]/15",
-  minute: "from-[#e8f1ff] via-white to-[#9fc4ff] text-[#061426] shadow-[#9fc4ff]/10",
-  second: "from-white via-[#f4d58a] to-[#d8ad45] text-[#061426] shadow-[#f4d58a]/20",
+  label: string;
 };
 
 function getCountdownState(targetDate: string): CountdownState {
@@ -53,7 +46,7 @@ function getCountdownState(targetDate: string): CountdownState {
   return { status: "countdown", days, hours, minutes, seconds };
 }
 
-function CountdownUnit({ value, tone }: CountdownUnitProps) {
+function CountdownUnit({ value, label }: CountdownUnitProps) {
   const previousValue = useRef(value);
   const [exitingValue, setExitingValue] = useState("");
 
@@ -75,16 +68,37 @@ function CountdownUnit({ value, tone }: CountdownUnitProps) {
   }, [value]);
 
   return (
-    <span
-      className={`relative inline-flex min-w-[3.9rem] justify-center overflow-hidden rounded-xl bg-gradient-to-br px-2.5 py-2 text-center text-2xl font-black leading-none shadow-lg sm:min-w-[4.35rem] sm:px-3 sm:text-3xl ${unitToneClasses[tone]}`}
-    >
-      {exitingValue ? (
-        <span className="ksw-countdown-old absolute inset-0 flex items-center justify-center">
-          {exitingValue}
-        </span>
-      ) : null}
-      <span className="ksw-countdown-new block">{value}</span>
+    <span className="grid min-w-[3.25rem] justify-items-center gap-1 sm:min-w-[3.4rem]">
+      <span className="relative flex h-12 w-full items-center justify-center overflow-hidden rounded-lg border border-[#d8ad45]/20 bg-[linear-gradient(180deg,#22324a_0%,#111b2c_48%,#07101f_52%,#020815_100%)] text-2xl font-black leading-none text-slate-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),inset_0_-8px_18px_rgba(0,0,0,0.38),0_10px_24px_rgba(0,0,0,0.28)] sm:h-14 sm:text-3xl">
+        <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-white/[0.07]" />
+        <span className="pointer-events-none absolute inset-x-0 top-1/2 z-10 h-px bg-black/70 shadow-[0_-1px_0_rgba(255,255,255,0.08)]" />
+        <span className="pointer-events-none absolute left-2 top-2 size-1 rounded-full bg-white/25" />
+        <span className="pointer-events-none absolute right-2 top-2 size-1 rounded-full bg-white/20" />
+        {exitingValue ? (
+          <span className="ksw-countdown-old absolute inset-0 flex items-center justify-center">
+            {exitingValue}
+          </span>
+        ) : null}
+        <span className="ksw-countdown-new block tabular-nums">{value}</span>
+      </span>
+      <span className="text-[9px] font-black uppercase tracking-[0.18em] text-[#f4d58a] sm:text-[10px]">
+        {label}
+      </span>
     </span>
+  );
+}
+
+function padUnit(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function StatusCountdown({ label, className }: { label: string; className: string }) {
+  return (
+    <div className={`${className} inline-flex`}>
+      <span className="rounded-lg border border-[#d8ad45]/25 bg-[linear-gradient(180deg,#22324a,#020815)] px-4 py-3 text-2xl font-black text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_10px_24px_rgba(0,0,0,0.28)]">
+        {label}
+      </span>
+    </div>
   );
 }
 
@@ -111,11 +125,11 @@ export function LiveCountdown({ targetDate, className = "" }: LiveCountdownProps
   }, [targetDate]);
 
   if (countdown.status === "kickoff") {
-    return <p className={className}>KICKOFF</p>;
+    return <StatusCountdown className={className} label="KICKOFF" />;
   }
 
   if (countdown.status === "tbc") {
-    return <p className={className}>TBC</p>;
+    return <StatusCountdown className={className} label="TBC" />;
   }
 
   if (countdown.status !== "countdown") {
@@ -123,11 +137,11 @@ export function LiveCountdown({ targetDate, className = "" }: LiveCountdownProps
   }
 
   return (
-    <div className={`${className} flex flex-wrap gap-1.5 sm:gap-2`}>
-      <CountdownUnit tone="day" value={`${countdown.days}d`} />
-      <CountdownUnit tone="hour" value={`${countdown.hours}h`} />
-      <CountdownUnit tone="minute" value={`${String(countdown.minutes).padStart(2, "0")}m`} />
-      <CountdownUnit tone="second" value={`${String(countdown.seconds).padStart(2, "0")}s`} />
+    <div className={`${className} grid grid-cols-2 gap-2 min-[420px]:flex min-[420px]:flex-wrap`}>
+      <CountdownUnit label="Days" value={padUnit(countdown.days)} />
+      <CountdownUnit label="Hours" value={padUnit(countdown.hours)} />
+      <CountdownUnit label="Minutes" value={padUnit(countdown.minutes)} />
+      <CountdownUnit label="Seconds" value={padUnit(countdown.seconds)} />
     </div>
   );
 }
