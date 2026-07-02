@@ -1,3 +1,4 @@
+import { LiveCountdown } from "@/components/live-countdown";
 import { TeamLogo } from "@/components/team-logo";
 import { getSupabase, getSupabaseConfig } from "@/lib/supabase";
 
@@ -895,9 +896,10 @@ export default async function Home() {
                       <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f4d58a]">
                         Next Kickoff
                       </p>
-                      <p className="mt-2 text-3xl font-black text-white">
-                        {countdownText(matchDate, now)}
-                      </p>
+                      <LiveCountdown
+                        className="mt-2 text-3xl font-black text-white"
+                        targetDate={typeof matchDate === "string" ? matchDate : ""}
+                      />
                       <p className="mt-1 text-sm font-bold text-slate-300">
                         {formatMatchDateLong(matchDate)} • {formatMatchTime(matchDate) || "TBC"}
                       </p>
