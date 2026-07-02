@@ -47,39 +47,71 @@ function getCountdownState(targetDate: string): CountdownState {
 }
 
 function CountdownUnit({ value, label }: CountdownUnitProps) {
-  const previousValue = useRef(value);
-  const [exitingValue, setExitingValue] = useState("");
+  const timeoutRef = useRef<number | null>(null);
+  const hasMounted = useRef(false);
+  const displayValueRef = useRef(value);
+  const [displayValue, setDisplayValue] = useState(value);
+  const [previousValue, setPreviousValue] = useState(value);
+  const [isFlipping, setIsFlipping] = useState(false);
 
   useEffect(() => {
-    if (previousValue.current === value) {
+    if (!hasMounted.current) {
+      hasMounted.current = true;
+      displayValueRef.current = value;
+      setDisplayValue(value);
+      setPreviousValue(value);
       return;
     }
 
-    setExitingValue(previousValue.current);
-    previousValue.current = value;
+    if (displayValueRef.current === value) {
+      return;
+    }
 
-    const timeoutId = window.setTimeout(() => {
-      setExitingValue("");
+    if (timeoutRef.current) {
+      window.clearTimeout(timeoutRef.current);
+    }
+
+    setPreviousValue(displayValueRef.current);
+    displayValueRef.current = value;
+    setDisplayValue(value);
+    setIsFlipping(true);
+
+    timeoutRef.current = window.setTimeout(() => {
+      setPreviousValue(value);
+      setIsFlipping(false);
+      timeoutRef.current = null;
     }, 340);
 
     return () => {
-      window.clearTimeout(timeoutId);
+      if (timeoutRef.current) {
+        window.clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
     };
   }, [value]);
 
   return (
-    <span className="grid min-w-[3.25rem] justify-items-center gap-1 sm:min-w-[3.4rem]">
-      <span className="relative flex h-12 w-full items-center justify-center overflow-hidden rounded-lg border border-[#d8ad45]/20 bg-[linear-gradient(180deg,#22324a_0%,#111b2c_48%,#07101f_52%,#020815_100%)] text-2xl font-black leading-none text-slate-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),inset_0_-8px_18px_rgba(0,0,0,0.38),0_10px_24px_rgba(0,0,0,0.28)] sm:h-14 sm:text-3xl">
-        <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-white/[0.07]" />
-        <span className="pointer-events-none absolute inset-x-0 top-1/2 z-10 h-px bg-black/70 shadow-[0_-1px_0_rgba(255,255,255,0.08)]" />
+    <span className="grid min-w-[3rem] justify-items-center gap-1 sm:min-w-[3.35rem]">
+      <span className="ksw-flip-tile relative h-12 w-full overflow-hidden rounded-lg border border-[#d8ad45]/25 bg-[#070e1d] text-2xl font-black leading-none text-slate-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),inset_0_-10px_20px_rgba(0,0,0,0.42),0_12px_28px_rgba(0,0,0,0.32)] sm:h-14 sm:text-3xl">
+        <span className="ksw-flip-half ksw-flip-half-top">
+          <span className="ksw-flip-number ksw-flip-number-top">{isFlipping ? previousValue : displayValue}</span>
+        </span>
+        <span className="ksw-flip-half ksw-flip-half-bottom">
+          <span className="ksw-flip-number ksw-flip-number-bottom">{displayValue}</span>
+        </span>
+        {isFlipping ? (
+          <>
+            <span className="ksw-flip-panel ksw-flip-panel-top">
+              <span className="ksw-flip-number ksw-flip-number-top">{previousValue}</span>
+            </span>
+            <span className="ksw-flip-panel ksw-flip-panel-bottom">
+              <span className="ksw-flip-number ksw-flip-number-bottom">{displayValue}</span>
+            </span>
+          </>
+        ) : null}
+        <span className="pointer-events-none absolute inset-x-0 top-1/2 z-30 h-px bg-black/80 shadow-[0_-1px_0_rgba(255,255,255,0.08)]" />
         <span className="pointer-events-none absolute left-2 top-2 size-1 rounded-full bg-white/25" />
         <span className="pointer-events-none absolute right-2 top-2 size-1 rounded-full bg-white/20" />
-        {exitingValue ? (
-          <span className="ksw-countdown-old absolute inset-0 flex items-center justify-center">
-            {exitingValue}
-          </span>
-        ) : null}
-        <span className="ksw-countdown-new block tabular-nums">{value}</span>
       </span>
       <span className="text-[9px] font-black uppercase tracking-[0.18em] text-[#f4d58a] sm:text-[10px]">
         {label}
@@ -138,10 +170,10 @@ export function LiveCountdown({ targetDate, className = "" }: LiveCountdownProps
 
   return (
     <div className={`${className} grid grid-cols-2 gap-2 min-[420px]:flex min-[420px]:flex-wrap`}>
-      <CountdownUnit label="Days" value={padUnit(countdown.days)} />
-      <CountdownUnit label="Hours" value={padUnit(countdown.hours)} />
-      <CountdownUnit label="Minutes" value={padUnit(countdown.minutes)} />
-      <CountdownUnit label="Seconds" value={padUnit(countdown.seconds)} />
+      <CountdownUnit label="DAYS" value={padUnit(countdown.days)} />
+      <CountdownUnit label="HOURS" value={padUnit(countdown.hours)} />
+      <CountdownUnit label="MINUTES" value={padUnit(countdown.minutes)} />
+      <CountdownUnit label="SECONDS" value={padUnit(countdown.seconds)} />
     </div>
   );
 }
