@@ -749,7 +749,7 @@ export default async function Home() {
               ABOUT KSW
             </p>
             <h2 className="mt-3 max-w-5xl text-2xl font-black leading-snug text-[#061426] sm:text-3xl lg:text-4xl lg:whitespace-nowrap">
-              สโมสรฟุตบอลนักกฎหมายคลองสามวา
+              ชมรมทนายความคลองสามวา
             </h2>
             <p className="mt-5 max-w-3xl text-base leading-8 text-slate-700">
               KSW L.C. คือพื้นที่ของนักกฎหมายที่รักฟุตบอล ใช้กีฬาเป็นสะพานเชื่อมมิตรภาพ
@@ -760,7 +760,7 @@ export default async function Home() {
             {[
               ["2019", "ก่อตั้งชมรม"],
               ["50+", "สมาชิกในเครือข่าย"],
-              ["13", "ทีมในลีกการแข่งขัน"],
+              ["Football & Network", "กิจกรรมฟุตบอลและเครือข่ายวิชาชีพ"],
             ].map(([value, label]) => (
               <div
                 key={label}
@@ -769,7 +769,13 @@ export default async function Home() {
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-[#d8ad45]">
                   KSW
                 </p>
-                <p className="mt-2 text-2xl font-black text-[#061426]">{value}</p>
+                <p
+                  className={`mt-2 font-black text-[#061426] ${
+                    value === "Football & Network" ? "text-xl sm:text-2xl" : "text-2xl"
+                  }`}
+                >
+                  {value}
+                </p>
                 <p className="mt-1 text-sm font-semibold text-slate-600">{label}</p>
               </div>
             ))}
