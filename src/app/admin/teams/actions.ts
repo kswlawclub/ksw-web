@@ -2,6 +2,7 @@
 
 import sharp from "sharp";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { requireAdminSession } from "@/lib/admin-server-auth";
 
 type TeamPayload = {
   league_id: string;
@@ -63,6 +64,8 @@ function validatePayload(payload: TeamPayload) {
 }
 
 export async function createTeam(payload: TeamPayload): Promise<ActionResult> {
+  await requireAdminSession();
+
   const validationError = validatePayload(payload);
 
   if (validationError) {
@@ -86,6 +89,8 @@ export async function createTeam(payload: TeamPayload): Promise<ActionResult> {
 }
 
 export async function updateTeam(id: string, payload: TeamPayload): Promise<ActionResult> {
+  await requireAdminSession();
+
   const validationError = validatePayload(payload);
 
   if (validationError) {
@@ -109,6 +114,8 @@ export async function updateTeam(id: string, payload: TeamPayload): Promise<Acti
 }
 
 export async function deleteTeamById(id: string): Promise<ActionResult> {
+  await requireAdminSession();
+
   const { supabase, error } = getAdminClient();
 
   if (!supabase) {
@@ -149,6 +156,8 @@ export async function deleteTeamById(id: string): Promise<ActionResult> {
 }
 
 export async function uploadTeamLogo(formData: FormData): Promise<UploadResult> {
+  await requireAdminSession();
+
   const file = formData.get("file");
   const shortName = String(formData.get("shortName") ?? "team");
   const teamId = String(formData.get("teamId") ?? "");

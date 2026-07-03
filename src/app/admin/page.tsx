@@ -1,10 +1,6 @@
-"use client";
-
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { logoutAdmin } from "./actions";
 
-const storageKey = "ksw-admin-authenticated";
 const modules = [
   { title: "Manage Matches", href: "/admin/matches", status: "Open module" },
   { title: "Manage Competitions", href: "/admin/competitions", status: "Open module" },
@@ -14,31 +10,6 @@ const modules = [
 ];
 
 export default function AdminDashboardPage() {
-  const router = useRouter();
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    if (window.localStorage.getItem(storageKey) !== "true") {
-      router.replace("/admin/login");
-      return;
-    }
-
-    setReady(true);
-  }, [router]);
-
-  function logout() {
-    window.localStorage.removeItem(storageKey);
-    router.replace("/admin/login");
-  }
-
-  if (!ready) {
-    return (
-      <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.16),transparent_34%),linear-gradient(135deg,#061426,#091f39)] px-4 py-12 text-white">
-        <div className="mx-auto w-full max-w-7xl">Loading admin...</div>
-      </main>
-    );
-  }
-
   return (
     <main className="min-h-screen overflow-x-auto bg-[#f6f2ea] text-[#061426]">
       <section className="bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.16),transparent_34%),linear-gradient(135deg,#061426,#091f39)] px-4 py-12 text-white sm:px-6 lg:px-10">
@@ -52,13 +23,14 @@ export default function AdminDashboardPage() {
               Website and league management dashboard
             </p>
           </div>
-          <button
-            className="inline-flex items-center justify-center rounded-md border border-[#d8ad45]/50 bg-white/[0.03] px-5 py-3 text-sm font-black text-[#f4d58a] transition-colors hover:bg-[#d8ad45]/10"
-            onClick={logout}
-            type="button"
-          >
-            Logout
-          </button>
+          <form action={logoutAdmin}>
+            <button
+              className="inline-flex items-center justify-center rounded-md border border-[#d8ad45]/50 bg-white/[0.03] px-5 py-3 text-sm font-black text-[#f4d58a] transition-colors hover:bg-[#d8ad45]/10"
+              type="submit"
+            >
+              Logout
+            </button>
+          </form>
         </div>
       </section>
 

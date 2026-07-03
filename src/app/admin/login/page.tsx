@@ -1,39 +1,25 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
-import { verifyAdminPassword } from "../actions";
-
-const storageKey = "ksw-admin-authenticated";
+import { FormEvent, useState } from "react";
+import { loginAdmin } from "../actions";
 
 export default function AdminLoginPage() {
   const router = useRouter();
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (window.localStorage.getItem(storageKey) === "true") {
-      router.replace("/admin");
-    }
-  }, [router]);
-
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const result = await verifyAdminPassword(password);
+    const result = await loginAdmin(password);
 
-    if (!result.configured) {
-      setError("Admin password is not configured.");
-      return;
-    }
-
-    if (result.valid) {
-      window.localStorage.setItem(storageKey, "true");
+    if (result.ok) {
       router.replace("/admin");
       return;
     }
 
-    setError("Wrong password. Please try again.");
+    setError(result.error ?? "Could not log in.");
   }
 
   return (

@@ -1,6 +1,7 @@
 "use server";
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { requireAdminSession } from "@/lib/admin-server-auth";
 
 type CompetitionType = "league" | "cup" | "friendly" | "tournament";
 
@@ -38,6 +39,8 @@ function validatePayload(payload: CompetitionPayload) {
 }
 
 export async function createCompetition(payload: CompetitionPayload): Promise<ActionResult> {
+  await requireAdminSession();
+
   const validationError = validatePayload(payload);
 
   if (validationError) {
@@ -64,6 +67,8 @@ export async function updateCompetition(
   id: string,
   payload: CompetitionPayload,
 ): Promise<ActionResult> {
+  await requireAdminSession();
+
   const validationError = validatePayload(payload);
 
   if (validationError) {
@@ -87,6 +92,8 @@ export async function updateCompetition(
 }
 
 export async function deleteCompetitionById(id: string): Promise<ActionResult> {
+  await requireAdminSession();
+
   const { supabase, error } = getAdminClient();
 
   if (!supabase) {

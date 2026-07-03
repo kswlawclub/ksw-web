@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import {
@@ -9,8 +8,6 @@ import {
   deleteCompetitionById,
   updateCompetition,
 } from "./actions";
-
-const storageKey = "ksw-admin-authenticated";
 
 type CompetitionType = "league" | "cup" | "friendly" | "tournament";
 
@@ -62,8 +59,6 @@ function formatDate(value: string) {
 }
 
 export default function AdminCompetitionsPage() {
-  const router = useRouter();
-  const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [competitions, setCompetitions] = useState<Competition[]>([]);
@@ -74,21 +69,8 @@ export default function AdminCompetitionsPage() {
   const firstFieldRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (window.localStorage.getItem(storageKey) !== "true") {
-      router.replace("/admin/login");
-      return;
-    }
-
-    setReady(true);
-  }, [router]);
-
-  useEffect(() => {
-    if (!ready) {
-      return;
-    }
-
     void loadData();
-  }, [ready]);
+  }, []);
 
   async function loadData() {
     const supabase = getSupabase();
@@ -194,14 +176,6 @@ export default function AdminCompetitionsPage() {
 
     setMessage("Competition deleted.");
     await loadData();
-  }
-
-  if (!ready) {
-    return (
-      <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.16),transparent_34%),linear-gradient(135deg,#061426,#091f39)] px-4 py-12 text-white">
-        <div className="mx-auto w-full max-w-7xl">Loading admin...</div>
-      </main>
-    );
   }
 
   return (

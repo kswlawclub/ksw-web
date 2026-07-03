@@ -1,6 +1,7 @@
 "use server";
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { requireAdminSession } from "@/lib/admin-server-auth";
 
 type SponsorTier = "main" | "official" | "matchday" | "community" | "partner" | "supporter";
 
@@ -68,6 +69,8 @@ function safeSlug(value: string) {
 }
 
 export async function createSponsor(payload: SponsorPayload): Promise<ActionResult> {
+  await requireAdminSession();
+
   const validationError = validatePayload(payload);
 
   if (validationError) {
@@ -94,6 +97,8 @@ export async function updateSponsor(
   id: string,
   payload: SponsorPayload,
 ): Promise<ActionResult> {
+  await requireAdminSession();
+
   const validationError = validatePayload(payload);
 
   if (validationError) {
@@ -117,6 +122,8 @@ export async function updateSponsor(
 }
 
 export async function deleteSponsorById(id: string): Promise<ActionResult> {
+  await requireAdminSession();
+
   const { supabase, error } = getAdminClient();
 
   if (!supabase) {
@@ -134,6 +141,8 @@ export async function deleteSponsorById(id: string): Promise<ActionResult> {
 }
 
 export async function uploadSponsorLogo(formData: FormData): Promise<UploadResult> {
+  await requireAdminSession();
+
   const file = formData.get("file");
   const sponsorName = String(formData.get("sponsorName") ?? "sponsor");
 

@@ -1,12 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { createTeam, deleteTeamById, updateTeam, uploadTeamLogo } from "./actions";
-
-const storageKey = "ksw-admin-authenticated";
 
 type Competition = {
   id: string;
@@ -121,8 +118,6 @@ async function compressRasterLogo(file: File) {
 }
 
 export default function AdminTeamsPage() {
-  const router = useRouter();
-  const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -141,21 +136,8 @@ export default function AdminTeamsPage() {
   );
 
   useEffect(() => {
-    if (window.localStorage.getItem(storageKey) !== "true") {
-      router.replace("/admin/login");
-      return;
-    }
-
-    setReady(true);
-  }, [router]);
-
-  useEffect(() => {
-    if (!ready) {
-      return;
-    }
-
     void loadData();
-  }, [ready]);
+  }, []);
 
   useEffect(() => {
     if (!logoFile) {
@@ -346,14 +328,6 @@ export default function AdminTeamsPage() {
 
     setMessage("Team deleted.");
     await loadData();
-  }
-
-  if (!ready) {
-    return (
-      <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.16),transparent_34%),linear-gradient(135deg,#061426,#091f39)] px-4 py-12 text-white">
-        <div className="mx-auto w-full max-w-7xl">Loading admin...</div>
-      </main>
-    );
   }
 
   return (

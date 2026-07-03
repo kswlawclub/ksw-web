@@ -2,6 +2,7 @@
 
 import sharp from "sharp";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { requireAdminSession } from "@/lib/admin-server-auth";
 
 type GalleryCategory =
   | "team-photo"
@@ -109,6 +110,8 @@ function slugify(value: string) {
 }
 
 export async function uploadGalleryImage(formData: FormData): Promise<UploadResult> {
+  await requireAdminSession();
+
   const file = formData.get("file");
   const category = String(formData.get("category") ?? "other");
 
@@ -195,6 +198,8 @@ export async function uploadGalleryImage(formData: FormData): Promise<UploadResu
 }
 
 export async function listGalleryItems(): Promise<GalleryListResult> {
+  await requireAdminSession();
+
   const { supabase, error } = getAdminClient();
 
   if (!supabase) {
@@ -219,6 +224,8 @@ export async function listGalleryItems(): Promise<GalleryListResult> {
 }
 
 export async function createGalleryItem(payload: GalleryPayload): Promise<ActionResult> {
+  await requireAdminSession();
+
   const validationError = validatePayload(payload);
 
   if (validationError) {
@@ -245,6 +252,8 @@ export async function updateGalleryItem(
   id: string,
   payload: GalleryPayload,
 ): Promise<ActionResult> {
+  await requireAdminSession();
+
   const validationError = validatePayload(payload);
 
   if (validationError) {
@@ -272,6 +281,8 @@ export async function deleteGalleryItemById(
   imageUrl: string,
   thumbnailUrl?: string | null,
 ): Promise<ActionResult> {
+  await requireAdminSession();
+
   const { supabase, error } = getAdminClient();
 
   if (!supabase) {

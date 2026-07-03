@@ -1,12 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { createMatch, deleteMatchById, updateMatch } from "./actions";
-
-const storageKey = "ksw-admin-authenticated";
 
 type MatchStatus = "scheduled" | "finished";
 
@@ -150,8 +147,6 @@ function venueValue(form: MatchForm) {
 }
 
 export default function AdminMatchesPage() {
-  const router = useRouter();
-  const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [matches, setMatches] = useState<Match[]>([]);
@@ -173,21 +168,8 @@ export default function AdminMatchesPage() {
   );
 
   useEffect(() => {
-    if (window.localStorage.getItem(storageKey) !== "true") {
-      router.replace("/admin/login");
-      return;
-    }
-
-    setReady(true);
-  }, [router]);
-
-  useEffect(() => {
-    if (!ready) {
-      return;
-    }
-
     void loadData();
-  }, [ready]);
+  }, []);
 
   async function loadData() {
     const supabase = getSupabase();
@@ -358,14 +340,6 @@ export default function AdminMatchesPage() {
 
     setMessage("Match deleted.");
     await loadData();
-  }
-
-  if (!ready) {
-    return (
-      <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.16),transparent_34%),linear-gradient(135deg,#061426,#091f39)] px-4 py-12 text-white">
-        <div className="mx-auto w-full max-w-7xl">Loading admin...</div>
-      </main>
-    );
   }
 
   return (

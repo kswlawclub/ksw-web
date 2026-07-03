@@ -1,6 +1,7 @@
 "use server";
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { requireAdminSession } from "@/lib/admin-server-auth";
 
 type MatchStatus = "scheduled" | "finished";
 
@@ -49,6 +50,8 @@ function validatePayload(payload: MatchPayload): string {
 }
 
 export async function createMatch(payload: MatchPayload): Promise<ActionResult> {
+  await requireAdminSession();
+
   const validationError = validatePayload(payload);
 
   if (validationError) {
@@ -72,6 +75,8 @@ export async function createMatch(payload: MatchPayload): Promise<ActionResult> 
 }
 
 export async function updateMatch(id: string, payload: MatchPayload): Promise<ActionResult> {
+  await requireAdminSession();
+
   const validationError = validatePayload(payload);
 
   if (validationError) {
@@ -95,6 +100,8 @@ export async function updateMatch(id: string, payload: MatchPayload): Promise<Ac
 }
 
 export async function deleteMatchById(id: string): Promise<ActionResult> {
+  await requireAdminSession();
+
   const { supabase, error } = getAdminClient();
 
   if (!supabase) {
