@@ -223,6 +223,41 @@ function formatVenue(value: string) {
   return value.trim().startsWith("สนาม") ? value.trim() : `สนาม ${value.trim()}`;
 }
 
+function FixtureMetaBadge({
+  icon,
+  label,
+  tone,
+}: {
+  icon: string;
+  label: string;
+  tone: "navy" | "gold";
+}) {
+  const toneClass =
+    tone === "gold"
+      ? "border border-[#d8ad45]/45 bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] text-[#061426] shadow-lg shadow-[#d8ad45]/15"
+      : "bg-[#061426] text-white";
+
+  return (
+    <span
+      className={`inline-flex min-h-16 w-[min(100%,13.75rem)] items-center justify-center gap-3 rounded-full px-5 py-3 text-[2rem] font-extrabold leading-none lg:min-h-0 lg:w-auto lg:justify-start lg:gap-1.5 lg:px-3 lg:py-1.5 lg:text-sm ${toneClass}`}
+    >
+      <span aria-hidden="true" className="text-[1.8rem] leading-none lg:text-sm">
+        {icon}
+      </span>
+      {label}
+    </span>
+  );
+}
+
+function FixtureMetaBadgePair({ matchTime, venue }: { matchTime: string; venue: string }) {
+  return (
+    <div className="grid justify-items-center gap-6 lg:justify-items-start lg:gap-2 lg:text-left">
+      <FixtureMetaBadge icon="🕒" label={matchTime || "TBC"} tone="navy" />
+      {venue ? <FixtureMetaBadge icon="📍" label={formatVenue(venue)} tone="gold" /> : null}
+    </div>
+  );
+}
+
 function fixtureTimeValue(match: Row) {
   const dateValue = fixtureDateValue(match);
   const date = typeof dateValue === "string" ? new Date(dateValue) : null;
@@ -969,17 +1004,8 @@ export default async function Home() {
                           }`}
                           key={text(fixture, ["id", "match_id"], `${group.key}-${index}`)}
                         >
-                          <div className="mb-4 flex flex-wrap items-center justify-center gap-x-2 gap-y-6 lg:mb-0 lg:block lg:text-left">
-                            <div className="inline-flex min-h-16 w-[min(100%,13rem)] items-center justify-center gap-2 rounded-full bg-[#061426] px-5 py-3 text-3xl font-black leading-none text-white lg:min-h-0 lg:w-auto lg:justify-start lg:gap-1.5 lg:px-3 lg:py-1.5 lg:text-sm">
-                              <span aria-hidden="true" className="text-2xl leading-none lg:text-sm">🕒</span>
-                              {matchTime || "TBC"}
-                            </div>
-                            {venue ? (
-                              <div className="inline-flex min-h-16 w-[min(100%,13rem)] items-center justify-center gap-2 rounded-full border border-[#d8ad45]/45 bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-3xl font-black leading-none text-[#061426] shadow-lg shadow-[#d8ad45]/15 lg:min-h-0 lg:w-auto lg:justify-start lg:gap-1.5 lg:px-3 lg:py-1.5 lg:text-xs">
-                                <span aria-hidden="true" className="text-2xl leading-none lg:text-xs">📍</span>
-                                {formatVenue(venue)}
-                              </div>
-                            ) : null}
+                          <div className="mb-4 lg:mb-0">
+                            <FixtureMetaBadgePair matchTime={matchTime} venue={venue} />
                           </div>
 
                           <div className="lg:hidden">
@@ -1017,20 +1043,11 @@ export default async function Home() {
                                 </p>
                               </div>
                             </div>
-                            <div className="mt-4 flex flex-wrap items-center justify-center gap-x-2 gap-y-6 text-xs font-black text-[#061426]">
+                            <div className="mt-4 grid justify-items-center gap-4 text-xs font-black text-[#061426]">
                               <span className="rounded-full bg-slate-100 px-3 py-1.5">
                                 📅 {formatMatchDateShort(matchDate)}
                               </span>
-                              <span className="inline-flex min-h-16 w-[min(100%,13rem)] items-center justify-center gap-2 rounded-full bg-slate-100 px-5 py-3 text-3xl font-black leading-none">
-                                <span aria-hidden="true" className="text-2xl leading-none">🕒</span>
-                                {matchTime || "TBC"}
-                              </span>
-                              {venue ? (
-                                <span className="inline-flex min-h-16 w-[min(100%,13rem)] items-center justify-center gap-2 rounded-full border border-[#d8ad45]/45 bg-[#061426] px-5 py-3 text-3xl font-black leading-none text-[#f4d58a]">
-                                  <span aria-hidden="true" className="text-2xl leading-none">📍</span>
-                                  {formatVenue(venue)}
-                                </span>
-                              ) : null}
+                              <FixtureMetaBadgePair matchTime={matchTime} venue={venue} />
                             </div>
                           </div>
 
