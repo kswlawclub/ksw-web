@@ -995,63 +995,94 @@ export default async function Home() {
                       const statusLabel = fixtureStatusLabel(fixture, matchDate, now);
                       const startsIn = countdownText(matchDate, now);
 
-                      return (
-                        <article
-                          className={`group overflow-hidden rounded-xl border bg-white p-4 shadow-lg transition duration-300 lg:grid lg:grid-cols-[150px_minmax(0,1fr)_150px] lg:items-center lg:gap-5 lg:p-5 lg:hover:-translate-y-0.5 ${
-                            isKswMatch
-                              ? "border-[#d8ad45] shadow-[#d8ad45]/25"
-                              : "border-white/80 shadow-black/10 hover:shadow-black/20"
-                          }`}
-                          key={text(fixture, ["id", "match_id"], `${group.key}-${index}`)}
-                        >
-                          <div className="mb-4 lg:mb-0">
-                            <FixtureMetaBadgePair matchTime={matchTime} venue={venue} />
-                          </div>
+                      const fixtureKey = text(fixture, ["id", "match_id"], `${group.key}-${index}`);
 
-                          <div className="lg:hidden">
+                      return (
+                        <div className="grid gap-3" key={fixtureKey}>
+                          <article
+                            className={`group overflow-hidden rounded-xl border bg-white p-4 shadow-lg lg:hidden ${
+                              isKswMatch
+                                ? "border-[#d8ad45] shadow-[#d8ad45]/20"
+                                : "border-white/80 shadow-black/10"
+                            }`}
+                          >
+                            <div className="flex min-w-0 items-center justify-between gap-2">
+                              <span className="inline-flex min-w-0 shrink-0 items-center gap-1.5 rounded-full bg-[#061426] px-3 py-2 text-sm font-black leading-none text-white">
+                                <span aria-hidden="true">🕒</span>
+                                {matchTime || "TBC"}
+                              </span>
+                              {venue ? (
+                                <span className="inline-flex min-w-0 max-w-[58%] items-center gap-1.5 rounded-full border border-[#d8ad45]/45 bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-3 py-2 text-sm font-black leading-none text-[#061426]">
+                                  <span aria-hidden="true" className="shrink-0">
+                                    📍
+                                  </span>
+                                  <span className="truncate">{formatVenue(venue)}</span>
+                                </span>
+                              ) : null}
+                            </div>
+
                             {isKswMatch ? (
-                              <div className="mb-3 text-center">
+                              <div className="mt-3">
                                 <span className="rounded-full border border-[#d8ad45]/45 bg-[#fff4dc] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#061426]">
                                   Featured Match
                                 </span>
                               </div>
                             ) : null}
-                            <div className="grid grid-cols-[minmax(0,1fr)_54px_minmax(0,1fr)] items-start gap-2 text-center">
-                              <div className="grid min-w-0 justify-items-center gap-2">
+
+                            <div className="mt-5 grid gap-3">
+                              <div className="flex min-w-0 items-center gap-3">
                                 <TeamLogo
-                                  className="!size-12 transition-transform duration-300 group-hover:scale-105"
+                                  className="!size-12 shrink-0"
                                   initials={homeShortName}
                                   logoUrl={text(fixture, ["home_team_logo_url"], "")}
                                   teamName={homeName}
                                 />
-                                <p className="min-w-0 text-wrap text-sm font-black leading-5 text-[#061426]">
-                                  {homeShortName}
+                                <p className="min-w-0 text-base font-black leading-5 text-[#061426]">
+                                  {homeName}
                                 </p>
                               </div>
-                              <div className="mt-2 rounded-lg border border-[#d8ad45]/45 bg-[#061426] px-2 py-2 text-center text-sm font-black text-[#f4d58a]">
-                                VS
+
+                              <div className="grid justify-items-center">
+                                <span className="rounded-lg border border-[#d8ad45]/45 bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] shadow-lg shadow-[#061426]/10">
+                                  VS
+                                </span>
                               </div>
-                              <div className="grid min-w-0 justify-items-center gap-2">
+
+                              <div className="flex min-w-0 items-center gap-3">
                                 <TeamLogo
-                                  className="!size-12 transition-transform duration-300 group-hover:scale-105"
+                                  className="!size-12 shrink-0"
                                   initials={awayShortName}
                                   logoUrl={text(fixture, ["away_team_logo_url"], "")}
                                   teamName={awayName}
                                 />
-                                <p className="min-w-0 text-wrap text-sm font-black leading-5 text-[#061426]">
-                                  {awayShortName}
+                                <p className="min-w-0 text-base font-black leading-5 text-[#061426]">
+                                  {awayName}
                                 </p>
                               </div>
                             </div>
-                            <div className="mt-4 grid justify-items-center gap-4 text-xs font-black text-[#061426]">
-                              <span className="rounded-full bg-slate-100 px-3 py-1.5">
-                                📅 {formatMatchDateShort(matchDate)}
+
+                            <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-4">
+                              <span className="rounded-full border border-[#d8ad45]/45 bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-[#061426]">
+                                {statusLabel}
                               </span>
+                              <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                                Starts in {startsIn}
+                              </p>
+                            </div>
+                          </article>
+
+                          <article
+                            className={`group hidden overflow-hidden rounded-xl border bg-white p-4 shadow-lg transition duration-300 lg:grid lg:grid-cols-[150px_minmax(0,1fr)_150px] lg:items-center lg:gap-5 lg:p-5 lg:hover:-translate-y-0.5 ${
+                              isKswMatch
+                                ? "border-[#d8ad45] shadow-[#d8ad45]/25"
+                                : "border-white/80 shadow-black/10 hover:shadow-black/20"
+                            }`}
+                          >
+                            <div className="mb-4 lg:mb-0">
                               <FixtureMetaBadgePair matchTime={matchTime} venue={venue} />
                             </div>
-                          </div>
 
-                          <div className="hidden min-w-0 grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)] items-center gap-5 lg:grid">
+                            <div className="hidden min-w-0 grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)] items-center gap-5 lg:grid">
                             <div className="flex min-w-0 items-center gap-4">
                               <TeamLogo
                                 className="!size-[68px] transition-transform duration-300 group-hover:scale-105"
@@ -1092,7 +1123,8 @@ export default async function Home() {
                               Starts in {startsIn}
                             </p>
                           </div>
-                        </article>
+                          </article>
+                        </div>
                       );
                     })}
                   </div>
