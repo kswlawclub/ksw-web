@@ -970,8 +970,8 @@ export default async function Home() {
                           key={text(fixture, ["id", "match_id"], `${group.key}-${index}`)}
                         >
                           <div className="mb-4 flex flex-wrap items-center justify-center gap-2 lg:mb-0 lg:block lg:text-left">
-                            <div className="inline-flex items-center gap-1.5 rounded-full bg-[#061426] px-3 py-1.5 text-xs font-black text-white">
-                              <span aria-hidden="true">🕒</span>
+                            <div className="inline-flex items-center gap-1.5 rounded-full bg-[#061426] px-3 py-1.5 text-sm font-black leading-none text-white">
+                              <span aria-hidden="true" className="leading-none">🕒</span>
                               {matchTime || "TBC"}
                             </div>
                             {venue ? (
@@ -1021,7 +1021,7 @@ export default async function Home() {
                               <span className="rounded-full bg-slate-100 px-3 py-1.5">
                                 📅 {formatMatchDateShort(matchDate)}
                               </span>
-                              <span className="rounded-full bg-slate-100 px-3 py-1.5">
+                              <span className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-black leading-none">
                                 🕒 {matchTime || "TBC"}
                               </span>
                               {venue ? (
