@@ -43,6 +43,41 @@ body {
   object-position: center;
 }
 
+.fixtureMetaBadge {
+  display: inline-flex;
+  width: clamp(140px, 48vw, 170px);
+  max-width: 100%;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  border-radius: 9999px;
+  padding: 0.625rem 1rem;
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.fixtureMetaBadge__icon {
+  font-size: 1.125rem;
+  line-height: 1;
+}
+
+@media (min-width: 1024px) {
+  .fixtureMetaBadge {
+    width: auto;
+    min-height: 0;
+    justify-content: flex-start;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+  }
+
+  .fixtureMetaBadge__icon {
+    font-size: 0.875rem;
+  }
+}
+
 .ksw-flip-tile {
   perspective: 520px;
   transform-style: preserve-3d;

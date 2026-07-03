@@ -239,9 +239,9 @@ function FixtureMetaBadge({
 
   return (
     <span
-      className={`inline-flex min-h-16 w-[min(100%,13.75rem)] items-center justify-center gap-3 rounded-full px-5 py-3 text-[2rem] font-extrabold leading-none lg:min-h-0 lg:w-auto lg:justify-start lg:gap-1.5 lg:px-3 lg:py-1.5 lg:text-sm ${toneClass}`}
+      className={`fixtureMetaBadge ${toneClass}`}
     >
-      <span aria-hidden="true" className="text-[1.8rem] leading-none lg:text-sm">
+      <span aria-hidden="true" className="fixtureMetaBadge__icon">
         {icon}
       </span>
       {label}
