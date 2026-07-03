@@ -969,13 +969,13 @@ export default async function Home() {
                           }`}
                           key={text(fixture, ["id", "match_id"], `${group.key}-${index}`)}
                         >
-                          <div className="mb-4 flex flex-wrap items-center justify-center gap-x-2 gap-y-3 lg:mb-0 lg:block lg:text-left">
-                            <div className="inline-flex items-center gap-1.5 rounded-full bg-[#061426] px-4 py-2 text-base font-black leading-none text-white lg:px-3 lg:py-1.5 lg:text-sm">
+                          <div className="mb-4 flex flex-wrap items-center justify-center gap-x-2 gap-y-4 lg:mb-0 lg:block lg:text-left">
+                            <div className="inline-flex min-h-[42px] items-center gap-1.5 rounded-full bg-[#061426] px-4 py-2 text-base font-black leading-none text-white lg:min-h-0 lg:px-3 lg:py-1.5 lg:text-sm">
                               <span aria-hidden="true" className="text-base leading-none lg:text-sm">🕒</span>
                               {matchTime || "TBC"}
                             </div>
                             {venue ? (
-                              <div className="inline-flex items-center gap-1.5 rounded-full border border-[#d8ad45]/45 bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-4 py-2 text-base font-black leading-none text-[#061426] shadow-lg shadow-[#d8ad45]/15 lg:px-3 lg:py-1.5 lg:text-xs">
+                              <div className="inline-flex min-h-[42px] items-center gap-1.5 rounded-full border border-[#d8ad45]/45 bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-4 py-2 text-base font-black leading-none text-[#061426] shadow-lg shadow-[#d8ad45]/15 lg:min-h-0 lg:px-3 lg:py-1.5 lg:text-xs">
                                 <span aria-hidden="true" className="text-base leading-none lg:text-xs">📍</span>
                                 {formatVenue(venue)}
                               </div>
@@ -1017,16 +1017,16 @@ export default async function Home() {
                                 </p>
                               </div>
                             </div>
-                            <div className="mt-4 flex flex-wrap items-center justify-center gap-x-2 gap-y-3 text-xs font-black text-[#061426]">
+                            <div className="mt-4 flex flex-wrap items-center justify-center gap-x-2 gap-y-4 text-xs font-black text-[#061426]">
                               <span className="rounded-full bg-slate-100 px-3 py-1.5">
                                 📅 {formatMatchDateShort(matchDate)}
                               </span>
-                              <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-4 py-2 text-base font-black leading-none">
+                              <span className="inline-flex min-h-[42px] items-center gap-1.5 rounded-full bg-slate-100 px-4 py-2 text-base font-black leading-none">
                                 <span aria-hidden="true" className="text-base leading-none">🕒</span>
                                 {matchTime || "TBC"}
                               </span>
                               {venue ? (
-                                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#d8ad45]/45 bg-[#061426] px-4 py-2 text-base font-black leading-none text-[#f4d58a]">
+                                <span className="inline-flex min-h-[42px] items-center gap-1.5 rounded-full border border-[#d8ad45]/45 bg-[#061426] px-4 py-2 text-base font-black leading-none text-[#f4d58a]">
                                   <span aria-hidden="true" className="text-base leading-none">📍</span>
                                   {formatVenue(venue)}
                                 </span>
