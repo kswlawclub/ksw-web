@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FacebookIcon } from "@/components/facebook-icon";
 
 const navItems = [
@@ -17,6 +17,43 @@ const facebookUrl = "https://web.facebook.com/KlongSamWaLawyers";
 export function SiteHeader() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [adminAuthenticated, setAdminAuthenticated] = useState(false);
+  const visibleNavItems = useMemo(
+    () => (adminAuthenticated ? [...navItems, ["Admin", "/admin"]] : navItems),
+    [adminAuthenticated],
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    async function checkAdminSession() {
+      try {
+        const response = await fetch("/api/admin/session", {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error("Admin session check failed.");
+        }
+
+        const data = (await response.json()) as { authenticated?: boolean };
+
+        if (active) {
+          setAdminAuthenticated(data.authenticated === true);
+        }
+      } catch {
+        if (active) {
+          setAdminAuthenticated(false);
+        }
+      }
+    }
+
+    void checkAdminSession();
+
+    return () => {
+      active = false;
+    };
+  }, [pathname]);
 
   const isActive = (href: string) => {
     if (href === "/#league-center") {
@@ -37,7 +74,7 @@ export function SiteHeader() {
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">
-          {navItems.map(([label, href]) => (
+          {visibleNavItems.map(([label, href]) => (
             <Link
               className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${
                 isActive(href)
@@ -70,7 +107,7 @@ export function SiteHeader() {
       {open ? (
         <nav className="border-t border-[#d8ad45]/15 px-4 pb-4 md:hidden">
           <div className="mx-auto grid w-full max-w-7xl gap-2 pt-3">
-            {navItems.map(([label, href]) => (
+            {visibleNavItems.map(([label, href]) => (
               <Link
                 className={`rounded-md px-3 py-3 text-sm font-bold transition-colors ${
                   isActive(href)

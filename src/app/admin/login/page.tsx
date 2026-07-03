@@ -16,6 +16,7 @@ export default function AdminLoginPage() {
 
     if (result.ok) {
       router.replace("/admin");
+      router.refresh();
       return;
     }
 
