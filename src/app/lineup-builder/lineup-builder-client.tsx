@@ -369,14 +369,22 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
     return "left-1/2 -translate-x-1/2";
   }
 
-  function renderPlayerPicker(positionIndex: number, variant: "desktop" | "mobile") {
+  function pickerPositionStyle(position: PositionSlot): CSSProperties {
+    if (position.y > 62) {
+      return { bottom: "8px" };
+    }
+
+    return { top: `${Math.max(8, position.y + 6)}%` };
+  }
+
+  function renderPlayerPicker(positionIndex: number) {
     const position = positions[positionIndex];
     const selectedId = selectedPlayers[positionIndex] ?? "";
     const hasSelection = Boolean(selectedId);
 
     return (
-      <div className={variant === "mobile" ? "flex max-h-[72vh] flex-col" : ""}>
-        <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-3">
+      <div className="flex max-h-full min-h-0 flex-col">
+        <div className="shrink-0 flex items-start justify-between gap-4 border-b border-white/10 pb-3">
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#d8ad45]">
               Select Player
@@ -395,7 +403,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
           </button>
         </div>
 
-        <div className="mt-3 grid gap-2 overflow-y-auto pr-1">
+        <div className="lineup-picker-scroll mt-3 grid min-h-0 flex-1 gap-2 overflow-y-auto pb-3 pr-1">
           {!sortedMembers.length ? (
             <p className="rounded-lg border border-white/10 bg-white/[0.04] p-3 text-sm font-bold text-slate-300">
               No active members available.
@@ -430,7 +438,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
           )}
         </div>
 
-        <div className="mt-3 grid gap-2 border-t border-white/10 pt-3 sm:grid-cols-2">
+        <div className="shrink-0 mt-3 grid gap-2 border-t border-white/10 pt-3 sm:grid-cols-2">
           <button
             className="min-h-11 rounded-lg border border-[#9b1c1f]/45 px-4 py-2 text-sm font-black text-[#ffb4b7] transition-colors hover:bg-[#9b1c1f]/15 disabled:cursor-not-allowed disabled:opacity-40"
             disabled={!hasSelection}
@@ -775,22 +783,22 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
 
               {activePosition ? (
                 <div
-                  className={`absolute z-40 hidden w-[min(360px,calc(100%-16px))] rounded-2xl border border-[#d8ad45]/35 bg-[#061426]/95 p-4 shadow-2xl shadow-black/50 backdrop-blur sm:block ${pickerAlignmentClass(
+                  className={`absolute z-40 hidden max-h-[min(520px,calc(100%-16px))] w-[min(360px,calc(100%-16px))] rounded-2xl border border-[#d8ad45]/35 bg-[#061426]/95 p-4 shadow-2xl shadow-black/50 backdrop-blur sm:block ${pickerAlignmentClass(
                     activePosition,
                   )}`}
                   ref={pickerRef}
                   role="dialog"
-                  style={{ top: `${Math.min(78, Math.max(8, activePosition.y + 6))}%` }}
+                  style={pickerPositionStyle(activePosition)}
                 >
-                  {renderPlayerPicker(activePickerPosition ?? 0, "desktop")}
+                  {renderPlayerPicker(activePickerPosition ?? 0)}
                 </div>
               ) : null}
             </div>
 
             {activePosition ? (
-              <div className="fixed inset-x-0 bottom-0 z-50 border-t border-[#d8ad45]/35 bg-[#061426]/98 p-4 shadow-2xl shadow-black/60 backdrop-blur sm:hidden">
-                <div className="mx-auto w-full max-w-md" ref={pickerRef} role="dialog">
-                  {renderPlayerPicker(activePickerPosition ?? 0, "mobile")}
+              <div className="fixed inset-x-0 bottom-0 z-50 max-h-[80vh] border-t border-[#d8ad45]/35 bg-[#061426]/98 p-4 shadow-2xl shadow-black/60 backdrop-blur sm:hidden">
+                <div className="mx-auto flex max-h-[calc(80vh-32px)] w-full max-w-md flex-col" ref={pickerRef} role="dialog">
+                  {renderPlayerPicker(activePickerPosition ?? 0)}
                 </div>
               </div>
             ) : null}
@@ -829,6 +837,25 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
 
         .lineup-marker-bounce {
           animation: lineup-marker-bounce 460ms cubic-bezier(0.2, 0.78, 0.25, 1);
+        }
+
+        .lineup-picker-scroll {
+          scrollbar-color: rgba(216, 173, 69, 0.72) rgba(255, 255, 255, 0.08);
+          scrollbar-width: thin;
+        }
+
+        .lineup-picker-scroll::-webkit-scrollbar {
+          width: 8px;
+        }
+
+        .lineup-picker-scroll::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.08);
+          border-radius: 999px;
+        }
+
+        .lineup-picker-scroll::-webkit-scrollbar-thumb {
+          background: rgba(216, 173, 69, 0.72);
+          border-radius: 999px;
         }
 
         @keyframes lineup-marker-bounce {
