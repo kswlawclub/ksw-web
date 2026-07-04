@@ -173,16 +173,16 @@ const ageGroupStyles = [
   },
   {
     label: "40-44",
-    sampleClass: "bg-[#d58b2a]",
-    borderClass: "border-[#d58b2a]",
-    glow: "rgba(213,139,42,0.32)",
+    sampleClass: "bg-white ring-1 ring-slate-300",
+    borderClass: "border-white",
+    glow: "rgba(255,255,255,0.34)",
     match: (age: number | null) => age !== null && age >= 40 && age <= 44,
   },
   {
     label: "45-49",
-    sampleClass: "bg-[#dce2ea]",
-    borderClass: "border-[#dce2ea]",
-    glow: "rgba(220,226,234,0.32)",
+    sampleClass: "bg-[#3b82c4]",
+    borderClass: "border-[#3b82c4]",
+    glow: "rgba(59,130,196,0.34)",
     match: (age: number | null) => age !== null && age >= 45 && age <= 49,
   },
   {
@@ -487,10 +487,10 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                       tabIndex={0}
                     >
                       <div
-                        className={`lineup-marker-circle relative z-10 flex size-12 items-center justify-center overflow-hidden rounded-full border-2 shadow-lg transition duration-300 sm:size-16 ${
+                        className={`lineup-marker-circle relative z-10 flex size-12 items-center justify-center overflow-hidden rounded-full shadow-lg transition duration-300 sm:size-16 ${
                           member
-                            ? `${markerAgeGroup.borderClass} bg-[#061426] shadow-[#d8ad45]/30`
-                            : "border-white/55 bg-white/15"
+                            ? `border-4 ${markerAgeGroup.borderClass} bg-[#061426] shadow-[#d8ad45]/30`
+                            : "border-2 border-white/55 bg-white/15"
                         }`}
                         style={
                           member
