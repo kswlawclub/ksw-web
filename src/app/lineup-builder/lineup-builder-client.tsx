@@ -363,20 +363,6 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
     setOpenDropdown(null);
   }
 
-  function pickerAlignmentClass(position: PositionSlot) {
-    if (position.x < 28) return "left-2 translate-x-0";
-    if (position.x > 72) return "right-2 translate-x-0";
-    return "left-1/2 -translate-x-1/2";
-  }
-
-  function pickerPositionStyle(position: PositionSlot): CSSProperties {
-    if (position.y > 62) {
-      return { bottom: "8px" };
-    }
-
-    return { top: `${Math.max(8, position.y + 6)}%` };
-  }
-
   function renderPlayerPicker(positionIndex: number) {
     const position = positions[positionIndex];
     const selectedId = selectedPlayers[positionIndex] ?? "";
@@ -780,31 +766,23 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                   </div>
                 );
               })}
-
-              {activePosition ? (
-                <div
-                  className={`absolute z-40 hidden max-h-[min(520px,calc(100%-16px))] w-[min(360px,calc(100%-16px))] rounded-2xl border border-[#d8ad45]/35 bg-[#061426]/95 p-4 shadow-2xl shadow-black/50 backdrop-blur sm:block ${pickerAlignmentClass(
-                    activePosition,
-                  )}`}
-                  ref={pickerRef}
-                  role="dialog"
-                  style={pickerPositionStyle(activePosition)}
-                >
-                  {renderPlayerPicker(activePickerPosition ?? 0)}
-                </div>
-              ) : null}
             </div>
-
-            {activePosition ? (
-              <div className="fixed inset-x-0 bottom-0 z-50 max-h-[80vh] border-t border-[#d8ad45]/35 bg-[#061426]/98 p-4 shadow-2xl shadow-black/60 backdrop-blur sm:hidden">
-                <div className="mx-auto flex max-h-[calc(80vh-32px)] w-full max-w-md flex-col" ref={pickerRef} role="dialog">
-                  {renderPlayerPicker(activePickerPosition ?? 0)}
-                </div>
-              </div>
-            ) : null}
           </div>
         </div>
       </section>
+
+      {activePosition ? (
+        <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/55 px-4 pb-[max(16px,env(safe-area-inset-bottom))] pt-6 backdrop-blur-sm sm:items-center sm:p-6">
+          <div
+            className="flex max-h-[82vh] w-full max-w-2xl flex-col rounded-t-2xl border-t border-[#d8ad45]/35 bg-[#061426]/98 p-4 shadow-2xl shadow-black/60 sm:max-h-[80vh] sm:rounded-2xl sm:border sm:p-5"
+            ref={pickerRef}
+            role="dialog"
+          >
+            {renderPlayerPicker(activePickerPosition ?? 0)}
+          </div>
+        </div>
+      ) : null}
+
       <style jsx>{`
         .lineup-marker {
           transform-origin: center bottom;
