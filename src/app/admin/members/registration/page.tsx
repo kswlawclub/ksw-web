@@ -19,6 +19,40 @@ type ClubMember = {
 };
 
 type SortMode = "oldest" | "youngest";
+type ExportColumnKey =
+  | "number"
+  | "fullName"
+  | "firstName"
+  | "lastName"
+  | "lawyerLicenseNo"
+  | "birthDate"
+  | "birthDay"
+  | "birthMonth"
+  | "birthYearBe"
+  | "exactAge"
+  | "displayAge"
+  | "shirtNo"
+  | "nickname"
+  | "publicDisplay"
+  | "phone"
+  | "status";
+
+type ExportColumn = {
+  key: ExportColumnKey;
+  label: string;
+  value: (member: ClubMember, index: number) => string | number;
+};
+
+const defaultExportColumns: ExportColumnKey[] = [
+  "number",
+  "fullName",
+  "lawyerLicenseNo",
+  "birthDate",
+  "displayAge",
+  "shirtNo",
+  "nickname",
+  "phone",
+];
 
 function currentBuddhistYear() {
   return new Date().getFullYear() + 543;
@@ -64,6 +98,16 @@ function shirtNumberDisplay(value: number | null) {
   return value ? `#${value}` : "-";
 }
 
+function publicMemberName(nickname: string) {
+  const value = nickname.trim();
+
+  if (!value) {
+    return "ทนาย";
+  }
+
+  return value.startsWith("ทนาย") ? value : `ทนาย${value}`;
+}
+
 function fullName(member: Pick<ClubMember, "first_name" | "last_name">) {
   return [member.first_name, member.last_name].filter(Boolean).join(" ") || "-";
 }
@@ -96,12 +140,29 @@ function compareBirthDate(a: ClubMember, b: ClubMember, mode: SortMode) {
   return b.birth_year_be! - a.birth_year_be! || bMonth - aMonth || bDay - aDay;
 }
 
+function csvCell(value: string | number) {
+  const text = String(value);
+
+  if (/[",\n\r]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+
+  return text;
+}
+
+function exportFileName() {
+  return `ksw-members-registration-${new Date().toISOString().slice(0, 10)}.csv`;
+}
+
 export default function MemberRegistrationPage() {
   const [members, setMembers] = useState<ClubMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [exportError, setExportError] = useState("");
   const [activeOnly, setActiveOnly] = useState(true);
   const [sortMode, setSortMode] = useState<SortMode>("oldest");
+  const [selectedExportColumns, setSelectedExportColumns] =
+    useState<ExportColumnKey[]>(defaultExportColumns);
 
   useEffect(() => {
     async function loadData() {
@@ -134,6 +195,78 @@ export default function MemberRegistrationPage() {
         return fullName(a).localeCompare(fullName(b));
       });
   }, [activeOnly, members, sortMode]);
+
+  const exportColumns: ExportColumn[] = useMemo(
+    () => [
+      { key: "number", label: "No.", value: (_member, index) => index + 1 },
+      { key: "fullName", label: "Full Name", value: (member) => fullName(member) },
+      { key: "firstName", label: "First Name", value: (member) => member.first_name ?? "-" },
+      { key: "lastName", label: "Last Name", value: (member) => member.last_name ?? "-" },
+      {
+        key: "lawyerLicenseNo",
+        label: "Lawyer License No.",
+        value: (member) => member.lawyer_license_no ?? "-",
+      },
+      { key: "birthDate", label: "Birth Date (B.E.)", value: (member) => birthDateDisplay(member) },
+      { key: "birthDay", label: "Birth Day", value: (member) => member.birth_day ?? "-" },
+      { key: "birthMonth", label: "Birth Month", value: (member) => member.birth_month ?? "-" },
+      {
+        key: "birthYearBe",
+        label: "Birth Year (B.E.)",
+        value: (member) => member.birth_year_be ?? "-",
+      },
+      { key: "exactAge", label: "Exact Age", value: (member) => calculatedAge(member) },
+      { key: "displayAge", label: "Display Age", value: (member) => displayAge(member) },
+      { key: "shirtNo", label: "Shirt No.", value: (member) => member.shirt_number ?? "-" },
+      { key: "nickname", label: "Nickname", value: (member) => member.nickname },
+      { key: "publicDisplay", label: "Public Display", value: (member) => publicMemberName(member.nickname) },
+      { key: "phone", label: "Phone", value: (member) => member.phone ?? "-" },
+      { key: "status", label: "Status", value: (member) => (member.is_active ? "Active" : "Inactive") },
+    ],
+    [],
+  );
+
+  function toggleExportColumn(key: ExportColumnKey) {
+    setExportError("");
+    setSelectedExportColumns((current) =>
+      current.includes(key) ? current.filter((columnKey) => columnKey !== key) : [...current, key],
+    );
+  }
+
+  function setDefaultExportColumns() {
+    setExportError("");
+    setSelectedExportColumns(defaultExportColumns);
+  }
+
+  function exportCsv() {
+    const columns = exportColumns.filter((column) => selectedExportColumns.includes(column.key));
+
+    if (!columns.length) {
+      setExportError("Please select at least one column to export.");
+      return;
+    }
+
+    setExportError("");
+
+    const rows = [
+      columns.map((column) => csvCell(column.label)).join(","),
+      ...visibleMembers.map((member, index) =>
+        columns.map((column) => csvCell(column.value(member, index))).join(","),
+      ),
+    ];
+    const blob = new Blob([`\uFEFF${rows.join("\r\n")}`], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = exportFileName();
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <main className="min-h-screen overflow-x-auto bg-[#f6f2ea] text-[#061426]">
@@ -202,6 +335,78 @@ export default function MemberRegistrationPage() {
               Youngest First
             </button>
           </div>
+        </div>
+
+        <div className="mb-5 rounded-lg border border-slate-200 bg-white p-4 shadow-xl shadow-slate-900/10">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="mb-3 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
+              <h2 className="text-xl font-black">Excel Export</h2>
+              <p className="mt-1 text-sm font-bold text-slate-500">
+                Export the currently filtered and sorted registration table as UTF-8 CSV.
+              </p>
+            </div>
+            <button
+              className="rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/20 transition-transform hover:scale-[1.01]"
+              onClick={exportCsv}
+              type="button"
+            >
+              Export Excel
+            </button>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              className="rounded-md border border-[#061426]/15 px-3 py-2 text-xs font-black text-[#061426] hover:bg-slate-50"
+              onClick={() => {
+                setExportError("");
+                setSelectedExportColumns(exportColumns.map((column) => column.key));
+              }}
+              type="button"
+            >
+              Select All
+            </button>
+            <button
+              className="rounded-md border border-[#061426]/15 px-3 py-2 text-xs font-black text-[#061426] hover:bg-slate-50"
+              onClick={() => {
+                setExportError("");
+                setSelectedExportColumns([]);
+              }}
+              type="button"
+            >
+              Clear All
+            </button>
+            <button
+              className="rounded-md border border-[#d8ad45]/50 bg-[#fff8e3] px-3 py-2 text-xs font-black text-[#061426] hover:bg-[#f4d58a]/30"
+              onClick={setDefaultExportColumns}
+              type="button"
+            >
+              Default Registration Fields
+            </button>
+          </div>
+
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {exportColumns.map((column) => (
+              <label
+                className="flex items-center gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm font-bold text-[#061426]"
+                key={column.key}
+              >
+                <input
+                  checked={selectedExportColumns.includes(column.key)}
+                  className="size-4 accent-[#d8ad45]"
+                  onChange={() => toggleExportColumn(column.key)}
+                  type="checkbox"
+                />
+                {column.label}
+              </label>
+            ))}
+          </div>
+
+          {exportError ? (
+            <p className="mt-4 rounded-md border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-3 py-2 text-sm font-bold text-[#9b1c1f]">
+              {exportError}
+            </p>
+          ) : null}
         </div>
 
         <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
