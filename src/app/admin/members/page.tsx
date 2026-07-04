@@ -6,6 +6,7 @@ import {
   createMember,
   deleteMemberById,
   listMembers,
+  removeMemberPhoto,
   updateMember,
   uploadMemberPhoto,
 } from "./actions";
@@ -289,6 +290,7 @@ async function compressMemberPhoto(file: File) {
 export default function AdminMembersPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [removingPhoto, setRemovingPhoto] = useState(false);
   const [members, setMembers] = useState<ClubMember[]>([]);
   const [form, setForm] = useState<MemberForm>(emptyForm);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -472,6 +474,42 @@ export default function AdminMembersPage() {
 
     setMessage("Member deleted.");
     await loadData();
+  }
+
+  async function removeCurrentPhoto() {
+    if (!form.id || !form.photoUrl) {
+      return;
+    }
+
+    const confirmed = window.confirm("Remove this member photo?");
+
+    if (!confirmed) {
+      return;
+    }
+
+    setRemovingPhoto(true);
+    setMessage("");
+    setError("");
+
+    try {
+      const result = await removeMemberPhoto(form.id);
+
+      if (!result.ok) {
+        console.error("admin member photo remove returned error", result);
+        setError(result.error ?? "Could not remove photo.");
+        return;
+      }
+
+      setForm((current) => ({ ...current, photoUrl: "" }));
+      setPhotoFile(null);
+      setMessage("Photo removed.");
+      await loadData();
+    } catch (removeError) {
+      console.error("admin member photo remove failed", removeError);
+      setError("Could not remove photo. Please try again.");
+    } finally {
+      setRemovingPhoto(false);
+    }
   }
 
   const sortedMembers = useMemo(
@@ -700,14 +738,26 @@ export default function AdminMembersPage() {
             {photoPreview || form.photoUrl ? (
               <div className="rounded-md border border-slate-200 bg-[#f8f3e7] p-3">
                 <p className="mb-2 text-xs font-black uppercase tracking-[0.14em] text-slate-500">
-                  Photo Preview
+                  {photoPreview ? "Replacement Photo Preview" : "Current Photo"}
                 </p>
-                <div className="flex size-28 items-center justify-center overflow-hidden rounded-full border-2 border-[#d8ad45] bg-white">
-                  <img
-                    alt="Member photo preview"
-                    className="h-full w-full object-cover object-center"
-                    src={photoPreview || form.photoUrl}
-                  />
+                <div className="flex flex-wrap items-end gap-4">
+                  <div className="flex size-28 items-center justify-center overflow-hidden rounded-full border-2 border-[#d8ad45] bg-white">
+                    <img
+                      alt="Member photo preview"
+                      className="h-full w-full object-cover object-center"
+                      src={photoPreview || form.photoUrl}
+                    />
+                  </div>
+                  {form.id && form.photoUrl ? (
+                    <button
+                      className="rounded-md border border-[#9b1c1f]/35 px-3 py-2 text-xs font-black text-[#9b1c1f] hover:bg-[#9b1c1f]/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={removingPhoto}
+                      onClick={() => void removeCurrentPhoto()}
+                      type="button"
+                    >
+                      {removingPhoto ? "Removing..." : "Remove Photo"}
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ) : null}

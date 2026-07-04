@@ -89,6 +89,27 @@ function safeSlug(value: string) {
   );
 }
 
+function memberPhotoObjectPath(photoUrl: string | null) {
+  if (!photoUrl) {
+    return "";
+  }
+
+  const marker = `/${bucketName}/`;
+  const markerIndex = photoUrl.indexOf(marker);
+
+  if (markerIndex === -1) {
+    return "";
+  }
+
+  const objectPath = photoUrl.slice(markerIndex + marker.length).split("?")[0];
+
+  try {
+    return decodeURIComponent(objectPath);
+  } catch {
+    return objectPath;
+  }
+}
+
 export async function listMembers(): Promise<ListResult> {
   await requireAdminSession();
 
@@ -177,6 +198,50 @@ export async function deleteMemberById(id: string): Promise<ActionResult> {
   if (result.error) {
     console.error("admin club member delete failed", result.error);
     return { ok: false, error: result.error.message };
+  }
+
+  return { ok: true };
+}
+
+export async function removeMemberPhoto(memberId: string): Promise<ActionResult> {
+  await requireAdminSession();
+
+  const { supabase, error } = getAdminClient();
+
+  if (!supabase) {
+    return { ok: false, error };
+  }
+
+  const current = await supabase
+    .from("club_members")
+    .select("photo_url")
+    .eq("id", memberId)
+    .maybeSingle();
+
+  if (current.error) {
+    console.error("admin club member photo lookup failed", current.error);
+    return { ok: false, error: current.error.message };
+  }
+
+  const update = await supabase.from("club_members").update({ photo_url: null }).eq("id", memberId);
+
+  if (update.error) {
+    console.error("admin club member photo clear failed", update.error);
+    return { ok: false, error: update.error.message };
+  }
+
+  const objectPath = memberPhotoObjectPath(current.data?.photo_url ?? null);
+
+  if (objectPath) {
+    const storageResult = await supabase.storage.from(bucketName).remove([objectPath]);
+
+    if (storageResult.error) {
+      console.error("admin club member photo storage remove failed", {
+        bucketName,
+        objectPath,
+        error: storageResult.error,
+      });
+    }
   }
 
   return { ok: true };
