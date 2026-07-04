@@ -199,12 +199,22 @@ const missingAgeGroup = {
   borderClass: "border-slate-400",
   glow: "rgba(148,163,184,0.26)",
 };
+const goalkeeperAgeGroup = {
+  label: "GK",
+  sampleClass: "bg-[#d8ad45]",
+  borderClass: "border-[#d8ad45]",
+  glow: "rgba(216,173,69,0.38)",
+};
 const ageLegend = [...ageGroupStyles, missingAgeGroup];
 
 function ageGroup(age: number | null) {
   return (
     ageGroupStyles.find((group) => group.match(age)) ?? missingAgeGroup
   );
+}
+
+function markerGroupForPosition(positionLabel: string, age: number | null) {
+  return positionLabel === "GK" ? goalkeeperAgeGroup : ageGroup(age);
 }
 
 function ageDisplayText(age: number | null) {
@@ -467,7 +477,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                 const member = members.find((item) => item.id === selectedPlayers[index]);
                 const hasSelectedPlayer = Boolean(member);
                 const age = member ? displayAge(member) : null;
-                const markerAgeGroup = ageGroup(age);
+                const markerAgeGroup = markerGroupForPosition(position.label, age);
 
                 return (
                   <div
