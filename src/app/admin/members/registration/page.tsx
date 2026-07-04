@@ -60,6 +60,10 @@ function displayAge(member: Pick<ClubMember, "birth_year_be">) {
   return String(currentBuddhistYear() - member.birth_year_be!);
 }
 
+function shirtNumberDisplay(value: number | null) {
+  return value ? `#${value}` : "-";
+}
+
 function fullName(member: Pick<ClubMember, "first_name" | "last_name">) {
   return [member.first_name, member.last_name].filter(Boolean).join(" ") || "-";
 }
@@ -214,9 +218,15 @@ export default function MemberRegistrationPage() {
                     <th className="min-w-[220px] px-4 py-3">Full Name</th>
                     <th className="px-4 py-3">Lawyer License No.</th>
                     <th className="px-4 py-3">Birth Date (B.E.)</th>
-                    <th className="px-4 py-3">Exact Age</th>
-                    <th className="px-4 py-3">Display Age</th>
-                    <th className="px-4 py-3">Shirt No.</th>
+                    <th className="min-w-[110px] border-l border-[#d8ad45]/20 px-4 py-3 text-center">
+                      Exact Age
+                    </th>
+                    <th className="min-w-[120px] border-l border-[#d8ad45]/20 px-4 py-3 text-center">
+                      Display Age
+                    </th>
+                    <th className="min-w-[100px] border-l border-[#d8ad45]/20 px-4 py-3 text-center">
+                      Shirt No.
+                    </th>
                     <th className="px-4 py-3">Nickname</th>
                     <th className="px-4 py-3">Phone</th>
                     <th className="px-4 py-3">Status</th>
@@ -231,9 +241,15 @@ export default function MemberRegistrationPage() {
                       </td>
                       <td className="px-4 py-3">{member.lawyer_license_no ?? "-"}</td>
                       <td className="px-4 py-3">{birthDateDisplay(member)}</td>
-                      <td className="px-4 py-3">{calculatedAge(member)}</td>
-                      <td className="px-4 py-3">{displayAge(member)}</td>
-                      <td className="px-4 py-3">{member.shirt_number ?? "-"}</td>
+                      <td className="min-w-[110px] border-l border-slate-200 px-4 py-3 text-center">
+                        {calculatedAge(member)}
+                      </td>
+                      <td className="min-w-[120px] border-l border-slate-200 px-4 py-3 text-center">
+                        {displayAge(member)}
+                      </td>
+                      <td className="min-w-[100px] border-l border-slate-200 px-4 py-3 text-center font-bold">
+                        {shirtNumberDisplay(member.shirt_number)}
+                      </td>
                       <td className="px-4 py-3">{member.nickname}</td>
                       <td className="px-4 py-3">{member.phone ?? "-"}</td>
                       <td className="px-4 py-3">

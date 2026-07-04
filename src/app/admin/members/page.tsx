@@ -140,6 +140,10 @@ function displayAge(yearValue: string | number | null) {
   return String(year - birthYear);
 }
 
+function shirtNumberDisplay(value: number | null) {
+  return value ? `#${value}` : "-";
+}
+
 function numberOrNull(value: string) {
   return value.trim() === "" ? null : Number(value);
 }
@@ -697,9 +701,15 @@ export default function AdminMembersPage() {
                     <th className="px-4 py-3">Nickname</th>
                     <th className="px-4 py-3">Public Display</th>
                     <th className="px-4 py-3">Birth Date (B.E.)</th>
-                    <th className="px-4 py-3">Exact Age</th>
-                    <th className="px-4 py-3">Display Age</th>
-                    <th className="px-4 py-3">Shirt No.</th>
+                    <th className="min-w-[110px] border-l border-[#d8ad45]/20 px-4 py-3 text-center">
+                      Exact Age
+                    </th>
+                    <th className="min-w-[120px] border-l border-[#d8ad45]/20 px-4 py-3 text-center">
+                      Display Age
+                    </th>
+                    <th className="min-w-[100px] border-l border-[#d8ad45]/20 px-4 py-3 text-center">
+                      Shirt No.
+                    </th>
                     <th className="px-4 py-3">License No.</th>
                     <th className="px-4 py-3">Phone</th>
                     <th className="px-4 py-3">Status</th>
@@ -732,11 +742,15 @@ export default function AdminMembersPage() {
                       <td className="px-4 py-3 text-slate-600">
                         {birthDateDisplay(member.birth_year_be, member.birth_month, member.birth_day)}
                       </td>
-                      <td className="px-4 py-3 text-slate-600">
+                      <td className="min-w-[110px] border-l border-slate-200 px-4 py-3 text-center text-slate-600">
                         {calculatedAge(member.birth_year_be, member.birth_month, member.birth_day)}
                       </td>
-                      <td className="px-4 py-3 text-slate-600">{displayAge(member.birth_year_be)}</td>
-                      <td className="px-4 py-3 text-slate-600">{member.shirt_number ?? "-"}</td>
+                      <td className="min-w-[120px] border-l border-slate-200 px-4 py-3 text-center text-slate-600">
+                        {displayAge(member.birth_year_be)}
+                      </td>
+                      <td className="min-w-[100px] border-l border-slate-200 px-4 py-3 text-center font-bold text-slate-600">
+                        {shirtNumberDisplay(member.shirt_number)}
+                      </td>
                       <td className="px-4 py-3 text-slate-600">{member.lawyer_license_no ?? "-"}</td>
                       <td className="px-4 py-3 text-slate-600">{member.phone ?? "-"}</td>
                       <td className="px-4 py-3">
