@@ -14,7 +14,7 @@ async function getLineupData() {
   const [membersResult, teamsResult] = await Promise.all([
     supabase
       .from("club_members")
-      .select("id, nickname, photo_url, shirt_number, is_active")
+      .select("id, nickname, photo_url, shirt_number, birth_year_be, is_active")
       .eq("is_active", true)
       .order("nickname", { ascending: true }),
     supabase

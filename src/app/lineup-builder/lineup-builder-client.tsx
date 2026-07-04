@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { type CSSProperties, useMemo, useState } from "react";
 
 export type LineupMember = {
   id: string;
   nickname: string;
   photo_url: string | null;
   shirt_number: number | null;
+  birth_year_be: number | null;
   is_active: boolean;
 };
 
@@ -17,7 +18,6 @@ export type OpponentTeam = {
   logo_url: string | null;
 };
 
-type Formation = "4-3-3" | "4-4-2" | "4-2-3-1" | "3-5-2" | "5-3-2";
 type PositionSlot = {
   label: string;
   x: number;
@@ -29,75 +29,107 @@ type LineupBuilderProps = {
   opponents: OpponentTeam[];
 };
 
-const formations: Record<Formation, PositionSlot[]> = {
-  "4-3-3": [
-    { label: "GK", x: 50, y: 90 },
-    { label: "LB", x: 18, y: 72 },
-    { label: "CB", x: 39, y: 73 },
-    { label: "CB", x: 61, y: 73 },
-    { label: "RB", x: 82, y: 72 },
-    { label: "CM", x: 30, y: 52 },
-    { label: "CM", x: 50, y: 48 },
-    { label: "CM", x: 70, y: 52 },
-    { label: "LW", x: 24, y: 27 },
-    { label: "ST", x: 50, y: 21 },
-    { label: "RW", x: 76, y: 27 },
-  ],
-  "4-4-2": [
-    { label: "GK", x: 50, y: 90 },
-    { label: "LB", x: 18, y: 72 },
-    { label: "CB", x: 39, y: 73 },
-    { label: "CB", x: 61, y: 73 },
-    { label: "RB", x: 82, y: 72 },
-    { label: "LM", x: 20, y: 49 },
-    { label: "CM", x: 40, y: 49 },
-    { label: "CM", x: 60, y: 49 },
-    { label: "RM", x: 80, y: 49 },
-    { label: "ST", x: 40, y: 22 },
-    { label: "ST", x: 60, y: 22 },
-  ],
-  "4-2-3-1": [
-    { label: "GK", x: 50, y: 90 },
-    { label: "LB", x: 18, y: 72 },
-    { label: "CB", x: 39, y: 73 },
-    { label: "CB", x: 61, y: 73 },
-    { label: "RB", x: 82, y: 72 },
-    { label: "DM", x: 39, y: 57 },
-    { label: "DM", x: 61, y: 57 },
-    { label: "LAM", x: 26, y: 39 },
-    { label: "CAM", x: 50, y: 36 },
-    { label: "RAM", x: 74, y: 39 },
-    { label: "ST", x: 50, y: 19 },
-  ],
-  "3-5-2": [
-    { label: "GK", x: 50, y: 90 },
-    { label: "CB", x: 30, y: 73 },
-    { label: "CB", x: 50, y: 75 },
-    { label: "CB", x: 70, y: 73 },
-    { label: "LWB", x: 16, y: 52 },
-    { label: "CM", x: 36, y: 49 },
-    { label: "CM", x: 50, y: 46 },
-    { label: "CM", x: 64, y: 49 },
-    { label: "RWB", x: 84, y: 52 },
-    { label: "ST", x: 40, y: 21 },
-    { label: "ST", x: 60, y: 21 },
-  ],
-  "5-3-2": [
-    { label: "GK", x: 50, y: 90 },
-    { label: "LB", x: 14, y: 71 },
-    { label: "CB", x: 32, y: 73 },
-    { label: "CB", x: 50, y: 75 },
-    { label: "CB", x: 68, y: 73 },
-    { label: "RB", x: 86, y: 71 },
-    { label: "CM", x: 34, y: 49 },
-    { label: "CM", x: 50, y: 46 },
-    { label: "CM", x: 66, y: 49 },
-    { label: "ST", x: 40, y: 22 },
-    { label: "ST", x: 60, y: 22 },
-  ],
+type Formation =
+  | "4-4-2"
+  | "4-4-1-1"
+  | "4-3-3"
+  | "4-2-3-1"
+  | "4-1-4-1"
+  | "4-5-1"
+  | "4-3-1-2"
+  | "4-3-2-1"
+  | "4-2-2-2"
+  | "4-1-2-1-2"
+  | "4-2-4"
+  | "3-5-2"
+  | "3-4-3"
+  | "3-4-2-1"
+  | "3-4-1-2"
+  | "3-3-3-1"
+  | "3-2-4-1"
+  | "5-3-2"
+  | "5-4-1"
+  | "5-2-3"
+  | "5-2-1-2"
+  | "5-1-3-1"
+  | "4-1-3-2"
+  | "4-2-1-3"
+  | "4-3-3 False 9"
+  | "4-3-3 Holding"
+  | "4-3-3 Attack"
+  | "4-4-2 Diamond"
+  | "4-4-2 Flat"
+  | "4-2-3-1 Wide"
+  | "4-2-3-1 Narrow"
+  | "3-5-1-1"
+  | "3-6-1";
+
+const formations: Record<Formation, string[][]> = {
+  "4-4-2": [["GK"], ["LB", "CB", "CB", "RB"], ["LM", "CM", "CM", "RM"], ["ST", "ST"]],
+  "4-4-1-1": [["GK"], ["LB", "CB", "CB", "RB"], ["LM", "CM", "CM", "RM"], ["SS"], ["ST"]],
+  "4-3-3": [["GK"], ["LB", "CB", "CB", "RB"], ["CM", "CM", "CM"], ["LW", "ST", "RW"]],
+  "4-2-3-1": [["GK"], ["LB", "CB", "CB", "RB"], ["DM", "DM"], ["LW", "AM", "RW"], ["ST"]],
+  "4-1-4-1": [["GK"], ["LB", "CB", "CB", "RB"], ["DM"], ["LM", "CM", "CM", "RM"], ["ST"]],
+  "4-5-1": [["GK"], ["LB", "CB", "CB", "RB"], ["LM", "CM", "CM", "CM", "RM"], ["ST"]],
+  "4-3-1-2": [["GK"], ["LB", "CB", "CB", "RB"], ["CM", "CM", "CM"], ["AM"], ["ST", "ST"]],
+  "4-3-2-1": [["GK"], ["LB", "CB", "CB", "RB"], ["CM", "CM", "CM"], ["AM", "AM"], ["ST"]],
+  "4-2-2-2": [["GK"], ["LB", "CB", "CB", "RB"], ["DM", "DM"], ["AM", "AM"], ["ST", "ST"]],
+  "4-1-2-1-2": [["GK"], ["LB", "CB", "CB", "RB"], ["DM"], ["CM", "CM"], ["AM"], ["ST", "ST"]],
+  "4-2-4": [["GK"], ["LB", "CB", "CB", "RB"], ["CM", "CM"], ["LW", "ST", "ST", "RW"]],
+  "3-5-2": [["GK"], ["CB", "CB", "CB"], ["LWB", "CM", "CM", "CM", "RWB"], ["ST", "ST"]],
+  "3-4-3": [["GK"], ["CB", "CB", "CB"], ["LM", "CM", "CM", "RM"], ["LW", "ST", "RW"]],
+  "3-4-2-1": [["GK"], ["CB", "CB", "CB"], ["LWB", "CM", "CM", "RWB"], ["AM", "AM"], ["ST"]],
+  "3-4-1-2": [["GK"], ["CB", "CB", "CB"], ["LWB", "CM", "CM", "RWB"], ["AM"], ["ST", "ST"]],
+  "3-3-3-1": [["GK"], ["CB", "CB", "CB"], ["DM", "CM", "DM"], ["LW", "AM", "RW"], ["ST"]],
+  "3-2-4-1": [["GK"], ["CB", "CB", "CB"], ["DM", "DM"], ["LW", "AM", "AM", "RW"], ["ST"]],
+  "5-3-2": [["GK"], ["LB", "CB", "CB", "CB", "RB"], ["CM", "CM", "CM"], ["ST", "ST"]],
+  "5-4-1": [["GK"], ["LB", "CB", "CB", "CB", "RB"], ["LM", "CM", "CM", "RM"], ["ST"]],
+  "5-2-3": [["GK"], ["LB", "CB", "CB", "CB", "RB"], ["CM", "CM"], ["LW", "ST", "RW"]],
+  "5-2-1-2": [["GK"], ["LB", "CB", "CB", "CB", "RB"], ["CM", "CM"], ["AM"], ["ST", "ST"]],
+  "5-1-3-1": [["GK"], ["LB", "CB", "CB", "CB", "RB"], ["DM"], ["LW", "AM", "RW"], ["ST"]],
+  "4-1-3-2": [["GK"], ["LB", "CB", "CB", "RB"], ["DM"], ["LM", "CM", "RM"], ["ST", "ST"]],
+  "4-2-1-3": [["GK"], ["LB", "CB", "CB", "RB"], ["DM", "DM"], ["AM"], ["LW", "ST", "RW"]],
+  "4-3-3 False 9": [["GK"], ["LB", "CB", "CB", "RB"], ["CM", "CM", "CM"], ["LW", "CF", "RW"]],
+  "4-3-3 Holding": [["GK"], ["LB", "CB", "CB", "RB"], ["DM", "CM", "CM"], ["LW", "ST", "RW"]],
+  "4-3-3 Attack": [["GK"], ["LB", "CB", "CB", "RB"], ["CM", "CM", "AM"], ["LW", "ST", "RW"]],
+  "4-4-2 Diamond": [["GK"], ["LB", "CB", "CB", "RB"], ["DM"], ["CM", "CM"], ["AM"], ["ST", "ST"]],
+  "4-4-2 Flat": [["GK"], ["LB", "CB", "CB", "RB"], ["LM", "CM", "CM", "RM"], ["ST", "ST"]],
+  "4-2-3-1 Wide": [["GK"], ["LB", "CB", "CB", "RB"], ["DM", "DM"], ["LW", "AM", "RW"], ["ST"]],
+  "4-2-3-1 Narrow": [["GK"], ["LB", "CB", "CB", "RB"], ["DM", "DM"], ["AM", "AM", "AM"], ["ST"]],
+  "3-5-1-1": [["GK"], ["CB", "CB", "CB"], ["LWB", "CM", "CM", "CM", "RWB"], ["SS"], ["ST"]],
+  "3-6-1": [["GK"], ["CB", "CB", "CB"], ["LWB", "DM", "CM", "AM", "CM", "RWB"], ["ST"]],
 };
 
 const formationOptions = Object.keys(formations) as Formation[];
+const rowYByCount: Record<number, number[]> = {
+  4: [90, 71, 48, 22],
+  5: [90, 73, 56, 39, 20],
+  6: [90, 74, 61, 48, 35, 19],
+};
+
+function rowXs(count: number) {
+  if (count === 1) return [50];
+  if (count === 2) return [39, 61];
+  if (count === 3) return [28, 50, 72];
+  if (count === 4) return [18, 39, 61, 82];
+  if (count === 5) return [13, 31, 50, 69, 87];
+  return [10, 26, 42, 58, 74, 90];
+}
+
+function formationPositions(formationName: Formation) {
+  const rows = formations[formationName];
+  const yValues = rowYByCount[rows.length] ?? rowYByCount[5];
+
+  return rows.flatMap((row, rowIndex) => {
+    const xValues = rowXs(row.length);
+
+    return row.map((label, index) => ({
+      label,
+      x: xValues[index],
+      y: yValues[rowIndex],
+    }));
+  });
+}
 
 function publicMemberName(nickname: string) {
   const value = nickname.trim();
@@ -109,10 +141,81 @@ function publicMemberName(nickname: string) {
   return value.startsWith("ทนาย") ? value : `ทนาย${value}`;
 }
 
+function currentBuddhistYear() {
+  return new Date().getFullYear() + 543;
+}
+
+function displayAge(member: Pick<LineupMember, "birth_year_be">) {
+  const birthYear = member.birth_year_be;
+  const currentYear = currentBuddhistYear();
+
+  if (!birthYear || Number.isNaN(birthYear) || birthYear < 2400 || birthYear > currentYear) {
+    return null;
+  }
+
+  return currentYear - birthYear;
+}
+
+const ageGroupStyles = [
+  {
+    label: "U35",
+    sampleClass: "bg-[#c93a3a]",
+    borderClass: "border-[#c93a3a]",
+    glow: "rgba(201,58,58,0.3)",
+    match: (age: number | null) => age !== null && age < 35,
+  },
+  {
+    label: "35-39",
+    sampleClass: "bg-[#e7c947]",
+    borderClass: "border-[#e7c947]",
+    glow: "rgba(231,201,71,0.32)",
+    match: (age: number | null) => age !== null && age >= 35 && age <= 39,
+  },
+  {
+    label: "40-44",
+    sampleClass: "bg-[#d58b2a]",
+    borderClass: "border-[#d58b2a]",
+    glow: "rgba(213,139,42,0.32)",
+    match: (age: number | null) => age !== null && age >= 40 && age <= 44,
+  },
+  {
+    label: "45-49",
+    sampleClass: "bg-[#dce2ea]",
+    borderClass: "border-[#dce2ea]",
+    glow: "rgba(220,226,234,0.32)",
+    match: (age: number | null) => age !== null && age >= 45 && age <= 49,
+  },
+  {
+    label: "50+",
+    sampleClass: "bg-[#d8ad45]",
+    borderClass: "border-[#d8ad45]",
+    glow: "rgba(216,173,69,0.36)",
+    match: (age: number | null) => age !== null && age >= 50,
+  },
+];
+const missingAgeGroup = {
+  label: "Age -",
+  sampleClass: "bg-slate-400",
+  borderClass: "border-slate-400",
+  glow: "rgba(148,163,184,0.26)",
+};
+const ageLegend = [...ageGroupStyles, missingAgeGroup];
+
+function ageGroup(age: number | null) {
+  return (
+    ageGroupStyles.find((group) => group.match(age)) ?? missingAgeGroup
+  );
+}
+
+function ageDisplayText(age: number | null) {
+  return age === null ? "Age -" : String(age);
+}
+
 function memberOptionLabel(member: LineupMember) {
   const number = member.shirt_number ? `#${member.shirt_number} ` : "";
+  const age = displayAge(member);
 
-  return `${number}${publicMemberName(member.nickname)}`;
+  return `${number}${publicMemberName(member.nickname)} · ${ageDisplayText(age)}`;
 }
 
 function initials(value: string) {
@@ -131,7 +234,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
   const [selectedPlayers, setSelectedPlayers] = useState<Record<number, string>>({});
   const [recentlyChangedPosition, setRecentlyChangedPosition] = useState<number | null>(null);
 
-  const positions = formations[formation];
+  const positions = useMemo(() => formationPositions(formation), [formation]);
   const opponent = opponents.find((team) => team.id === opponentId) ?? null;
   const selectedIds = useMemo(
     () => new Set(Object.values(selectedPlayers).filter(Boolean)),
@@ -250,6 +353,22 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
               </button>
             </div>
           </div>
+          <div className="mt-5 rounded-xl border border-white/10 bg-[#071b31]/70 p-3">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#d8ad45]">
+              Age Groups
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {ageLegend.slice(0, 5).map((group) => (
+                <span
+                  className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-black text-white"
+                  key={group.label}
+                >
+                  <span className={`size-2.5 rounded-full ${group.sampleClass}`} />
+                  {group.label}
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[390px_minmax(0,1fr)]">
@@ -347,6 +466,8 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
               {positions.map((position, index) => {
                 const member = members.find((item) => item.id === selectedPlayers[index]);
                 const hasSelectedPlayer = Boolean(member);
+                const age = member ? displayAge(member) : null;
+                const markerAgeGroup = ageGroup(age);
 
                 return (
                   <div
@@ -368,9 +489,14 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                       <div
                         className={`lineup-marker-circle relative z-10 flex size-12 items-center justify-center overflow-hidden rounded-full border-2 shadow-lg transition duration-300 sm:size-16 ${
                           member
-                            ? "border-[#d8ad45] bg-[#061426] shadow-[#d8ad45]/30"
+                            ? `${markerAgeGroup.borderClass} bg-[#061426] shadow-[#d8ad45]/30`
                             : "border-white/55 bg-white/15"
                         }`}
+                        style={
+                          member
+                            ? ({ "--lineup-age-glow": markerAgeGroup.glow } as CSSProperties)
+                            : undefined
+                        }
                       >
                         {member?.photo_url ? (
                           <img
@@ -401,6 +527,9 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                             <span className="block text-[#f4d58a]">#{member.shirt_number}</span>
                           ) : null}
                           <span className="line-clamp-2">{publicMemberName(member.nickname)}</span>
+                          <span className="mt-1 inline-flex rounded-full border border-[#d8ad45]/25 bg-white/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-white sm:text-[10px]">
+                            Age {age ?? "-"}
+                          </span>
                           <span className="mt-0.5 block text-[9px] uppercase tracking-[0.12em] text-slate-300 sm:text-[10px]">
                             {position.label}
                           </span>
@@ -426,7 +555,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
           box-shadow:
             0 0 0 3px rgba(216, 173, 69, 0.14),
             0 14px 24px rgba(0, 0, 0, 0.34),
-            0 0 20px rgba(216, 173, 69, 0.22);
+            0 0 20px var(--lineup-age-glow, rgba(216, 173, 69, 0.22));
         }
 
         .lineup-marker-selected:hover,
@@ -439,7 +568,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
           box-shadow:
             0 0 0 3px rgba(244, 213, 138, 0.18),
             0 18px 30px rgba(0, 0, 0, 0.38),
-            0 0 26px rgba(216, 173, 69, 0.32);
+            0 0 26px var(--lineup-age-glow, rgba(216, 173, 69, 0.32));
         }
 
         .lineup-marker-empty {
