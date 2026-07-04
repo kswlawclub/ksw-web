@@ -9,6 +9,8 @@ type ClubMember = {
   first_name: string | null;
   last_name: string | null;
   nickname: string;
+  birth_day: number | null;
+  birth_month: number | null;
   birth_year_be: number | null;
   shirt_number: number | null;
   lawyer_license_no: string | null;
@@ -22,26 +24,64 @@ function currentBuddhistYear() {
   return new Date().getFullYear() + 543;
 }
 
-function calculatedAge(value: number | null) {
-  const year = currentBuddhistYear();
+function validBirthYear(value: number | null) {
+  return Boolean(value && !Number.isNaN(value) && value >= 2400 && value <= currentBuddhistYear());
+}
 
-  if (!value || Number.isNaN(value) || value < 2400 || value > year) {
+function calculatedAge(member: Pick<ClubMember, "birth_day" | "birth_month" | "birth_year_be">) {
+  const birthYear = member.birth_year_be;
+  const birthMonth = member.birth_month;
+  const birthDay = member.birth_day;
+  const now = new Date();
+  const year = currentBuddhistYear();
+  const month = now.getMonth() + 1;
+  const day = now.getDate();
+
+  if (!validBirthYear(birthYear)) {
     return "-";
   }
 
-  return String(year - value);
+  let age = year - birthYear!;
+
+  if (birthMonth && birthDay) {
+    if (month < birthMonth || (month === birthMonth && day < birthDay)) {
+      age -= 1;
+    }
+  }
+
+  return age >= 0 ? String(age) : "-";
 }
 
 function fullName(member: Pick<ClubMember, "first_name" | "last_name">) {
   return [member.first_name, member.last_name].filter(Boolean).join(" ") || "-";
 }
 
-function birthYearSortValue(member: ClubMember, mode: SortMode) {
-  if (!member.birth_year_be) {
-    return mode === "oldest" ? Number.MAX_SAFE_INTEGER : Number.MIN_SAFE_INTEGER;
+function birthDateDisplay(member: Pick<ClubMember, "birth_day" | "birth_month" | "birth_year_be">) {
+  if (member.birth_year_be && member.birth_month && member.birth_day) {
+    return `${String(member.birth_day).padStart(2, "0")}/${String(member.birth_month).padStart(2, "0")}/${member.birth_year_be}`;
   }
 
-  return member.birth_year_be;
+  return member.birth_year_be ? String(member.birth_year_be) : "-";
+}
+
+function compareBirthDate(a: ClubMember, b: ClubMember, mode: SortMode) {
+  const aHasYear = validBirthYear(a.birth_year_be);
+  const bHasYear = validBirthYear(b.birth_year_be);
+
+  if (!aHasYear && !bHasYear) return 0;
+  if (!aHasYear) return 1;
+  if (!bHasYear) return -1;
+
+  const aMonth = a.birth_month ?? (mode === "oldest" ? 99 : -1);
+  const bMonth = b.birth_month ?? (mode === "oldest" ? 99 : -1);
+  const aDay = a.birth_day ?? (mode === "oldest" ? 99 : -1);
+  const bDay = b.birth_day ?? (mode === "oldest" ? 99 : -1);
+
+  if (mode === "oldest") {
+    return a.birth_year_be! - b.birth_year_be! || aMonth - bMonth || aDay - bDay;
+  }
+
+  return b.birth_year_be! - a.birth_year_be! || bMonth - aMonth || bDay - aDay;
 }
 
 export default function MemberRegistrationPage() {
@@ -75,9 +115,7 @@ export default function MemberRegistrationPage() {
     return members
       .filter((member) => (activeOnly ? member.is_active : true))
       .sort((a, b) => {
-        const left = birthYearSortValue(a, sortMode);
-        const right = birthYearSortValue(b, sortMode);
-        const diff = sortMode === "oldest" ? left - right : right - left;
+        const diff = compareBirthDate(a, b, sortMode);
 
         if (diff) return diff;
 
@@ -161,13 +199,13 @@ export default function MemberRegistrationPage() {
             <p className="p-5 text-sm font-bold text-[#9b1c1f]">{error}</p>
           ) : visibleMembers.length ? (
             <div className="w-full overflow-x-auto">
-              <table className="w-full min-w-[980px] border-collapse text-left text-sm">
+              <table className="w-full min-w-[1120px] border-collapse text-left text-sm">
                 <thead className="bg-[#061426] text-xs uppercase tracking-[0.14em] text-[#f4d58a]">
                   <tr>
                     <th className="px-4 py-3">No.</th>
-                    <th className="px-4 py-3">Full Name</th>
+                    <th className="min-w-[220px] px-4 py-3">Full Name</th>
                     <th className="px-4 py-3">Lawyer License No.</th>
-                    <th className="px-4 py-3">Birth Year (B.E.)</th>
+                    <th className="px-4 py-3">Birth Date (B.E.)</th>
                     <th className="px-4 py-3">Age</th>
                     <th className="px-4 py-3">Shirt No.</th>
                     <th className="px-4 py-3">Nickname</th>
@@ -179,10 +217,12 @@ export default function MemberRegistrationPage() {
                   {visibleMembers.map((member, index) => (
                     <tr className="border-b border-slate-100 last:border-b-0" key={member.id}>
                       <td className="px-4 py-3 font-black">{index + 1}</td>
-                      <td className="px-4 py-3 font-black">{fullName(member)}</td>
+                      <td className="min-w-[220px] whitespace-nowrap px-4 py-3 font-black">
+                        {fullName(member)}
+                      </td>
                       <td className="px-4 py-3">{member.lawyer_license_no ?? "-"}</td>
-                      <td className="px-4 py-3">{member.birth_year_be ?? "-"}</td>
-                      <td className="px-4 py-3">{calculatedAge(member.birth_year_be)}</td>
+                      <td className="px-4 py-3">{birthDateDisplay(member)}</td>
+                      <td className="px-4 py-3">{calculatedAge(member)}</td>
                       <td className="px-4 py-3">{member.shirt_number ?? "-"}</td>
                       <td className="px-4 py-3">{member.nickname}</td>
                       <td className="px-4 py-3">{member.phone ?? "-"}</td>

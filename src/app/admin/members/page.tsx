@@ -15,6 +15,8 @@ type ClubMember = {
   first_name: string | null;
   last_name: string | null;
   nickname: string;
+  birth_day: number | null;
+  birth_month: number | null;
   birth_year_be: number | null;
   shirt_number: number | null;
   lawyer_license_no: string | null;
@@ -30,6 +32,8 @@ type MemberForm = {
   firstName: string;
   lastName: string;
   nickname: string;
+  birthDay: string;
+  birthMonth: string;
   birthYearBe: string;
   shirtNumber: string;
   lawyerLicenseNo: string;
@@ -43,6 +47,8 @@ const emptyForm: MemberForm = {
   firstName: "",
   lastName: "",
   nickname: "",
+  birthDay: "",
+  birthMonth: "",
   birthYearBe: "",
   shirtNumber: "",
   lawyerLicenseNo: "",
@@ -54,6 +60,22 @@ const emptyForm: MemberForm = {
 const maxPhotoSize = 2 * 1024 * 1024;
 const maxOriginalSize = 5 * 1024 * 1024;
 const allowedPhotoTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+const birthDays = Array.from({ length: 31 }, (_, index) => index + 1);
+const birthMonths = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+].map((label, index) => ({ label, value: index + 1 }));
+const birthYearsBe = Array.from({ length: 2545 - 2510 + 1 }, (_, index) => 2545 - index);
 
 function publicMemberName(nickname: string) {
   const value = nickname.trim();
@@ -69,15 +91,42 @@ function currentBuddhistYear() {
   return new Date().getFullYear() + 543;
 }
 
-function calculatedAge(value: string | number | null) {
-  const birthYear = typeof value === "number" ? value : Number(value);
-  const year = currentBuddhistYear();
+function validNumber(value: string | number | null) {
+  if (value === null || value === "") {
+    return null;
+  }
 
-  if (!birthYear || Number.isNaN(birthYear) || birthYear < 2400 || birthYear > year) {
+  const number = typeof value === "number" ? value : Number(value);
+
+  return Number.isNaN(number) ? null : number;
+}
+
+function calculatedAge(
+  yearValue: string | number | null,
+  monthValue?: string | number | null,
+  dayValue?: string | number | null,
+) {
+  const birthYear = validNumber(yearValue);
+  const birthMonth = validNumber(monthValue ?? null);
+  const birthDay = validNumber(dayValue ?? null);
+  const now = new Date();
+  const year = currentBuddhistYear();
+  const month = now.getMonth() + 1;
+  const day = now.getDate();
+
+  if (!birthYear || birthYear < 2400 || birthYear > year) {
     return "-";
   }
 
-  return String(year - birthYear);
+  let age = year - birthYear;
+
+  if (birthMonth && birthDay) {
+    if (month < birthMonth || (month === birthMonth && day < birthDay)) {
+      age -= 1;
+    }
+  }
+
+  return age >= 0 ? String(age) : "-";
 }
 
 function numberOrNull(value: string) {
@@ -86,6 +135,22 @@ function numberOrNull(value: string) {
 
 function fullName(member: Pick<ClubMember, "first_name" | "last_name">) {
   return [member.first_name, member.last_name].filter(Boolean).join(" ") || "-";
+}
+
+function birthDateDisplay(
+  yearValue: string | number | null,
+  monthValue?: string | number | null,
+  dayValue?: string | number | null,
+) {
+  const year = validNumber(yearValue);
+  const month = validNumber(monthValue ?? null);
+  const day = validNumber(dayValue ?? null);
+
+  if (year && month && day) {
+    return `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}/${year}`;
+  }
+
+  return year ? String(year) : "-";
 }
 
 function formatDate(value: string) {
@@ -219,6 +284,8 @@ export default function AdminMembersPage() {
       firstName: member.first_name ?? "",
       lastName: member.last_name ?? "",
       nickname: member.nickname,
+      birthDay: member.birth_day ? String(member.birth_day) : "",
+      birthMonth: member.birth_month ? String(member.birth_month) : "",
       birthYearBe: member.birth_year_be ? String(member.birth_year_be) : "",
       shirtNumber: member.shirt_number ? String(member.shirt_number) : "",
       lawyerLicenseNo: member.lawyer_license_no ?? "",
@@ -287,6 +354,8 @@ export default function AdminMembersPage() {
         first_name: form.firstName.trim() || null,
         last_name: form.lastName.trim() || null,
         nickname: form.nickname.trim(),
+        birth_day: numberOrNull(form.birthDay),
+        birth_month: numberOrNull(form.birthMonth),
         birth_year_be: numberOrNull(form.birthYearBe),
         shirt_number: numberOrNull(form.shirtNumber),
         lawyer_license_no: form.lawyerLicenseNo.trim() || null,
@@ -417,24 +486,62 @@ export default function AdminMembersPage() {
               </p>
             </div>
 
-            <label className="grid gap-2 text-sm font-black">
-              Birth Year (B.E.)
-              <input
-                className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
-                inputMode="numeric"
-                onChange={(event) => setForm((current) => ({ ...current, birthYearBe: event.target.value }))}
-                placeholder="2540"
-                type="number"
-                value={form.birthYearBe}
-              />
-            </label>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="grid gap-2 text-sm font-black">
+                Birth Day
+                <select
+                  className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                  onChange={(event) => setForm((current) => ({ ...current, birthDay: event.target.value }))}
+                  value={form.birthDay}
+                >
+                  <option value="">-</option>
+                  {birthDays.map((day) => (
+                    <option key={day} value={day}>
+                      {day}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="grid gap-2 text-sm font-black">
+                Birth Month
+                <select
+                  className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                  onChange={(event) => setForm((current) => ({ ...current, birthMonth: event.target.value }))}
+                  value={form.birthMonth}
+                >
+                  <option value="">-</option>
+                  {birthMonths.map((month) => (
+                    <option key={month.value} value={month.value}>
+                      {month.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="grid gap-2 text-sm font-black">
+                Birth Year (B.E.)
+                <select
+                  className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                  onChange={(event) => setForm((current) => ({ ...current, birthYearBe: event.target.value }))}
+                  value={form.birthYearBe}
+                >
+                  <option value="">-</option>
+                  {birthYearsBe.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
 
             <div className="rounded-md border border-slate-200 bg-[#f8f3e7] px-3 py-2">
               <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
                 Age
               </p>
               <p className="mt-1 text-base font-black text-[#061426]">
-                {calculatedAge(form.birthYearBe)}
+                {calculatedAge(form.birthYearBe, form.birthMonth, form.birthDay)}
               </p>
             </div>
 
@@ -561,14 +668,14 @@ export default function AdminMembersPage() {
             <p className="p-5 text-sm font-bold text-slate-600">Loading members...</p>
           ) : members.length ? (
             <div className="w-full overflow-x-auto">
-              <table className="w-full min-w-[1200px] border-collapse text-left text-sm">
+              <table className="w-full min-w-[1380px] border-collapse text-left text-sm">
                 <thead className="bg-[#061426] text-xs uppercase tracking-[0.14em] text-[#f4d58a]">
                   <tr>
                     <th className="px-4 py-3">Photo</th>
-                    <th className="px-4 py-3">Full Name</th>
+                    <th className="min-w-[220px] px-4 py-3">Full Name</th>
                     <th className="px-4 py-3">Nickname</th>
                     <th className="px-4 py-3">Public Display</th>
-                    <th className="px-4 py-3">Birth Year (B.E.)</th>
+                    <th className="px-4 py-3">Birth Date (B.E.)</th>
                     <th className="px-4 py-3">Age</th>
                     <th className="px-4 py-3">Shirt No.</th>
                     <th className="px-4 py-3">License No.</th>
@@ -593,13 +700,19 @@ export default function AdminMembersPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3 font-black">{fullName(member)}</td>
+                      <td className="min-w-[220px] whitespace-nowrap px-4 py-3 font-black">
+                        {fullName(member)}
+                      </td>
                       <td className="px-4 py-3 font-black">{member.nickname}</td>
                       <td className="px-4 py-3 font-black text-[#061426]">
                         {publicMemberName(member.nickname)}
                       </td>
-                      <td className="px-4 py-3 text-slate-600">{member.birth_year_be ?? "-"}</td>
-                      <td className="px-4 py-3 text-slate-600">{calculatedAge(member.birth_year_be)}</td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {birthDateDisplay(member.birth_year_be, member.birth_month, member.birth_day)}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {calculatedAge(member.birth_year_be, member.birth_month, member.birth_day)}
+                      </td>
                       <td className="px-4 py-3 text-slate-600">{member.shirt_number ?? "-"}</td>
                       <td className="px-4 py-3 text-slate-600">{member.lawyer_license_no ?? "-"}</td>
                       <td className="px-4 py-3 text-slate-600">{member.phone ?? "-"}</td>

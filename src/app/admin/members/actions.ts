@@ -8,6 +8,8 @@ type MemberPayload = {
   first_name: string | null;
   last_name: string | null;
   nickname: string;
+  birth_day: number | null;
+  birth_month: number | null;
   birth_year_be: number | null;
   shirt_number: number | null;
   lawyer_license_no: string | null;
@@ -21,6 +23,8 @@ type ClubMember = {
   first_name: string | null;
   last_name: string | null;
   nickname: string;
+  birth_day: number | null;
+  birth_month: number | null;
   birth_year_be: number | null;
   shirt_number: number | null;
   lawyer_license_no: string | null;
@@ -97,7 +101,7 @@ export async function listMembers(): Promise<ListResult> {
   const result = await supabase
     .from("club_members")
     .select(
-      "id, first_name, last_name, nickname, birth_year_be, shirt_number, lawyer_license_no, phone, photo_url, is_active, created_at, updated_at",
+      "id, first_name, last_name, nickname, birth_day, birth_month, birth_year_be, shirt_number, lawyer_license_no, phone, photo_url, is_active, created_at, updated_at",
     )
     .order("created_at", { ascending: false });
 
