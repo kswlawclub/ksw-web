@@ -261,7 +261,7 @@ function initials(value: string) {
 
 export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) {
   const [formation, setFormation] = useState<Formation>("4-3-3");
-  const [opponentId, setOpponentId] = useState(opponents[0]?.id ?? "");
+  const [opponentId, setOpponentId] = useState("");
   const [selectedPlayers, setSelectedPlayers] = useState<Record<number, string>>({});
   const [recentlyChangedPosition, setRecentlyChangedPosition] = useState<number | null>(null);
   const [openDropdown, setOpenDropdown] = useState<number | null>(null);
@@ -372,20 +372,21 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
               Opponent
               <select
                 className="min-h-12 rounded-md border border-white/15 bg-[#071b31] px-3 py-3 text-sm font-bold text-white outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/25"
-                disabled={!opponents.length}
                 onChange={(event) => setOpponentId(event.target.value)}
                 value={opponentId}
               >
-                {opponents.length ? (
-                  opponents.map((team) => (
-                    <option key={team.id} value={team.id}>
-                      {team.name}
-                    </option>
-                  ))
-                ) : (
-                  <option value="">No opponent teams available.</option>
-                )}
+                <option value="">No Opponent</option>
+                {opponents.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name}
+                  </option>
+                ))}
               </select>
+              {!opponents.length ? (
+                <span className="text-xs font-bold text-slate-400">
+                  No opponent teams available.
+                </span>
+              ) : null}
             </label>
 
             <label className="grid gap-2 text-sm font-black text-[#f4d58a]">
@@ -542,20 +543,26 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-[#d8ad45]">
                   Formation Preview
                 </p>
-                <h2 className="mt-1 text-2xl font-black">KSW L.C. vs {opponent?.name ?? "Opponent"}</h2>
+                <h2 className="mt-1 text-2xl font-black">
+                  {opponent ? `KSW L.C. vs ${opponent.name}` : "KSW L.C. Formation Preview"}
+                </h2>
               </div>
               <div className="flex items-center gap-3">
                 <div className="flex size-12 items-center justify-center rounded-full border border-[#d8ad45]/40 bg-[#061426] text-xs font-black text-[#f4d58a]">
                   KSW
                 </div>
-                <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-300">vs</span>
-                <div className="flex size-12 items-center justify-center overflow-hidden rounded-full border border-white/15 bg-white text-xs font-black text-[#061426]">
-                  {opponent?.logo_url ? (
-                    <img alt={opponent.name} className="h-full w-full object-contain p-1.5" src={opponent.logo_url} />
-                  ) : (
-                    <span>{initials(opponent?.short_name || opponent?.name || "OPP")}</span>
-                  )}
-                </div>
+                {opponent ? (
+                  <>
+                    <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-300">vs</span>
+                    <div className="flex size-12 items-center justify-center overflow-hidden rounded-full border border-white/15 bg-white text-xs font-black text-[#061426]">
+                      {opponent.logo_url ? (
+                        <img alt={opponent.name} className="h-full w-full object-contain p-1.5" src={opponent.logo_url} />
+                      ) : (
+                        <span>{initials(opponent.short_name || opponent.name)}</span>
+                      )}
+                    </div>
+                  </>
+                ) : null}
               </div>
             </div>
 
