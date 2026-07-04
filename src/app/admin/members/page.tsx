@@ -12,7 +12,13 @@ import {
 
 type ClubMember = {
   id: string;
+  first_name: string | null;
+  last_name: string | null;
   nickname: string;
+  birth_year_be: number | null;
+  shirt_number: number | null;
+  lawyer_license_no: string | null;
+  phone: string | null;
   photo_url: string | null;
   is_active: boolean;
   created_at: string;
@@ -21,14 +27,26 @@ type ClubMember = {
 
 type MemberForm = {
   id: string;
+  firstName: string;
+  lastName: string;
   nickname: string;
+  birthYearBe: string;
+  shirtNumber: string;
+  lawyerLicenseNo: string;
+  phone: string;
   photoUrl: string;
   isActive: boolean;
 };
 
 const emptyForm: MemberForm = {
   id: "",
+  firstName: "",
+  lastName: "",
   nickname: "",
+  birthYearBe: "",
+  shirtNumber: "",
+  lawyerLicenseNo: "",
+  phone: "",
   photoUrl: "",
   isActive: true,
 };
@@ -45,6 +63,29 @@ function publicMemberName(nickname: string) {
   }
 
   return value.startsWith("ทนาย") ? value : `ทนาย${value}`;
+}
+
+function currentBuddhistYear() {
+  return new Date().getFullYear() + 543;
+}
+
+function calculatedAge(value: string | number | null) {
+  const birthYear = typeof value === "number" ? value : Number(value);
+  const year = currentBuddhistYear();
+
+  if (!birthYear || Number.isNaN(birthYear) || birthYear < 2400 || birthYear > year) {
+    return "-";
+  }
+
+  return String(year - birthYear);
+}
+
+function numberOrNull(value: string) {
+  return value.trim() === "" ? null : Number(value);
+}
+
+function fullName(member: Pick<ClubMember, "first_name" | "last_name">) {
+  return [member.first_name, member.last_name].filter(Boolean).join(" ") || "-";
 }
 
 function formatDate(value: string) {
@@ -175,7 +216,13 @@ export default function AdminMembersPage() {
   function editMember(member: ClubMember) {
     setForm({
       id: member.id,
+      firstName: member.first_name ?? "",
+      lastName: member.last_name ?? "",
       nickname: member.nickname,
+      birthYearBe: member.birth_year_be ? String(member.birth_year_be) : "",
+      shirtNumber: member.shirt_number ? String(member.shirt_number) : "",
+      lawyerLicenseNo: member.lawyer_license_no ?? "",
+      phone: member.phone ?? "",
       photoUrl: member.photo_url ?? "",
       isActive: member.is_active,
     });
@@ -237,7 +284,13 @@ export default function AdminMembersPage() {
       }
 
       const payload = {
+        first_name: form.firstName.trim() || null,
+        last_name: form.lastName.trim() || null,
         nickname: form.nickname.trim(),
+        birth_year_be: numberOrNull(form.birthYearBe),
+        shirt_number: numberOrNull(form.shirtNumber),
+        lawyer_license_no: form.lawyerLicenseNo.trim() || null,
+        phone: form.phone.trim() || null,
         photo_url: photoUrl,
         is_active: form.isActive,
       };
@@ -294,6 +347,12 @@ export default function AdminMembersPage() {
             <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300">
               Manage KSW club members shown on the public Team page.
             </p>
+            <Link
+              className="mt-5 inline-flex rounded-md border border-[#d8ad45]/50 bg-white/[0.03] px-4 py-2 text-sm font-black text-[#f4d58a] transition-colors hover:bg-[#d8ad45]/10"
+              href="/admin/members/registration"
+            >
+              Member Registration
+            </Link>
           </div>
         </div>
       </section>
@@ -318,6 +377,25 @@ export default function AdminMembersPage() {
 
           <div className="grid gap-4">
             <label className="grid gap-2 text-sm font-black">
+              First Name
+              <input
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))}
+                ref={firstFieldRef}
+                value={form.firstName}
+              />
+            </label>
+
+            <label className="grid gap-2 text-sm font-black">
+              Last Name
+              <input
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))}
+                value={form.lastName}
+              />
+            </label>
+
+            <label className="grid gap-2 text-sm font-black">
               Nickname
               <span className="text-xs font-semibold text-slate-500">
                 กรอกเฉพาะชื่อเล่น ไม่ต้องใส่คำว่า ทนาย
@@ -325,7 +403,6 @@ export default function AdminMembersPage() {
               <input
                 className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                 onChange={(event) => setForm((current) => ({ ...current, nickname: event.target.value }))}
-                ref={firstFieldRef}
                 required
                 value={form.nickname}
               />
@@ -339,6 +416,56 @@ export default function AdminMembersPage() {
                 {publicMemberName(form.nickname)}
               </p>
             </div>
+
+            <label className="grid gap-2 text-sm font-black">
+              Birth Year (B.E.)
+              <input
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                inputMode="numeric"
+                onChange={(event) => setForm((current) => ({ ...current, birthYearBe: event.target.value }))}
+                placeholder="2540"
+                type="number"
+                value={form.birthYearBe}
+              />
+            </label>
+
+            <div className="rounded-md border border-slate-200 bg-[#f8f3e7] px-3 py-2">
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                Age
+              </p>
+              <p className="mt-1 text-base font-black text-[#061426]">
+                {calculatedAge(form.birthYearBe)}
+              </p>
+            </div>
+
+            <label className="grid gap-2 text-sm font-black">
+              Shirt Number
+              <input
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                inputMode="numeric"
+                onChange={(event) => setForm((current) => ({ ...current, shirtNumber: event.target.value }))}
+                type="number"
+                value={form.shirtNumber}
+              />
+            </label>
+
+            <label className="grid gap-2 text-sm font-black">
+              Lawyer License No.
+              <input
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                onChange={(event) => setForm((current) => ({ ...current, lawyerLicenseNo: event.target.value }))}
+                value={form.lawyerLicenseNo}
+              />
+            </label>
+
+            <label className="grid gap-2 text-sm font-black">
+              Phone
+              <input
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
+                value={form.phone}
+              />
+            </label>
 
             <label className="grid gap-2 text-sm font-black">
               Upload Photo
@@ -434,14 +561,19 @@ export default function AdminMembersPage() {
             <p className="p-5 text-sm font-bold text-slate-600">Loading members...</p>
           ) : members.length ? (
             <div className="w-full overflow-x-auto">
-              <table className="w-full min-w-[780px] border-collapse text-left text-sm">
+              <table className="w-full min-w-[1200px] border-collapse text-left text-sm">
                 <thead className="bg-[#061426] text-xs uppercase tracking-[0.14em] text-[#f4d58a]">
                   <tr>
                     <th className="px-4 py-3">Photo</th>
+                    <th className="px-4 py-3">Full Name</th>
                     <th className="px-4 py-3">Nickname</th>
                     <th className="px-4 py-3">Public Display</th>
+                    <th className="px-4 py-3">Birth Year (B.E.)</th>
+                    <th className="px-4 py-3">Age</th>
+                    <th className="px-4 py-3">Shirt No.</th>
+                    <th className="px-4 py-3">License No.</th>
+                    <th className="px-4 py-3">Phone</th>
                     <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Created</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -461,10 +593,16 @@ export default function AdminMembersPage() {
                           )}
                         </div>
                       </td>
+                      <td className="px-4 py-3 font-black">{fullName(member)}</td>
                       <td className="px-4 py-3 font-black">{member.nickname}</td>
                       <td className="px-4 py-3 font-black text-[#061426]">
                         {publicMemberName(member.nickname)}
                       </td>
+                      <td className="px-4 py-3 text-slate-600">{member.birth_year_be ?? "-"}</td>
+                      <td className="px-4 py-3 text-slate-600">{calculatedAge(member.birth_year_be)}</td>
+                      <td className="px-4 py-3 text-slate-600">{member.shirt_number ?? "-"}</td>
+                      <td className="px-4 py-3 text-slate-600">{member.lawyer_license_no ?? "-"}</td>
+                      <td className="px-4 py-3 text-slate-600">{member.phone ?? "-"}</td>
                       <td className="px-4 py-3">
                         <span
                           className={`rounded-full px-3 py-1 text-xs font-black ${
@@ -476,7 +614,6 @@ export default function AdminMembersPage() {
                           {member.is_active ? "Active" : "Inactive"}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-slate-600">{formatDate(member.created_at)}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-2">
                           <button
