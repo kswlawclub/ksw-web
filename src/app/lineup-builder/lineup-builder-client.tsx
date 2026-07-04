@@ -265,6 +265,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
   const [selectedPlayers, setSelectedPlayers] = useState<Record<number, string>>({});
   const [recentlyChangedPosition, setRecentlyChangedPosition] = useState<number | null>(null);
   const [openDropdown, setOpenDropdown] = useState<number | null>(null);
+  const [mobileDetailPosition, setMobileDetailPosition] = useState<number | null>(null);
 
   const positions = useMemo(() => formationPositions(formation), [formation]);
   const opponent = opponents.find((team) => team.id === opponentId) ?? null;
@@ -276,12 +277,34 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
     () => [...members].sort(compareMembersByDisplayAge),
     [members],
   );
+  const mobileDetail = useMemo(() => {
+    if (mobileDetailPosition === null) {
+      return null;
+    }
+
+    const position = positions[mobileDetailPosition];
+    const member = members.find((item) => item.id === selectedPlayers[mobileDetailPosition]);
+
+    if (!position || !member) {
+      return null;
+    }
+
+    const age = displayAge(member);
+
+    return {
+      age,
+      group: ageGroup(age),
+      member,
+      position,
+    };
+  }, [members, mobileDetailPosition, positions, selectedPlayers]);
 
   function selectFormation(value: Formation) {
     setFormation(value);
     setSelectedPlayers({});
     setRecentlyChangedPosition(null);
     setOpenDropdown(null);
+    setMobileDetailPosition(null);
   }
 
   function selectPlayer(positionIndex: number, playerId: string) {
@@ -307,12 +330,14 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
       return next;
     });
     setOpenDropdown((current) => (current === positionIndex ? null : current));
+    setMobileDetailPosition((current) => (current === positionIndex ? null : current));
   }
 
   function clearAll() {
     setSelectedPlayers({});
     setRecentlyChangedPosition(null);
     setOpenDropdown(null);
+    setMobileDetailPosition(null);
   }
 
   function resetFormation() {
@@ -320,6 +345,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
     setSelectedPlayers({});
     setRecentlyChangedPosition(null);
     setOpenDropdown(null);
+    setMobileDetailPosition(null);
   }
 
   return (
@@ -548,7 +574,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
 
                 return (
                   <div
-                    className="absolute flex w-[72px] -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center sm:w-[96px]"
+                    className="absolute flex w-[58px] -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center sm:w-[96px]"
                     key={`${formation}-preview-${index}-${position.label}`}
                     style={{ left: `${position.x}%`, top: `${position.y}%` }}
                   >
@@ -556,6 +582,11 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                       className={`lineup-marker group relative flex flex-col items-center outline-none ${
                         hasSelectedPlayer ? "lineup-marker-selected" : "lineup-marker-empty"
                       } ${recentlyChangedPosition === index ? "lineup-marker-bounce" : ""}`}
+                      onClick={() => {
+                        if (member) {
+                          setMobileDetailPosition(index);
+                        }
+                      }}
                       onAnimationEnd={() => {
                         if (recentlyChangedPosition === index) {
                           setRecentlyChangedPosition(null);
@@ -597,7 +628,23 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                         }`}
                       />
                     </div>
-                    <div className="mt-1 max-w-[88px] rounded-md border border-black/10 bg-[#061426]/90 px-1.5 py-1 text-[10px] font-black leading-tight text-white shadow-lg shadow-black/20 sm:max-w-[112px] sm:text-xs">
+                    <div className="mt-0.5 flex max-w-[58px] flex-col items-center gap-0.5 text-[9px] font-black leading-none sm:hidden">
+                      {member ? (
+                        <>
+                          <span className="rounded-full border border-[#d8ad45]/35 bg-[#061426]/90 px-1.5 py-0.5 text-[#f4d58a] shadow-md shadow-black/20">
+                            {member.shirt_number ? `#${member.shirt_number}` : "-"}
+                          </span>
+                          <span className="rounded-full border border-white/20 bg-[#061426]/85 px-1.5 py-0.5 text-white shadow-md shadow-black/20">
+                            {position.label}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="rounded-full border border-white/20 bg-[#061426]/80 px-1.5 py-0.5 text-[#f4d58a]">
+                          {position.label}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1 hidden max-w-[88px] rounded-md border border-black/10 bg-[#061426]/90 px-1.5 py-1 text-[10px] font-black leading-tight text-white shadow-lg shadow-black/20 sm:block sm:max-w-[112px] sm:text-xs">
                       {member ? (
                         <>
                           {member.shirt_number ? (
@@ -619,6 +666,61 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                 );
               })}
             </div>
+
+            {mobileDetail ? (
+              <div className="mt-4 rounded-xl border border-[#d8ad45]/25 bg-[#061426]/90 p-3 shadow-xl shadow-black/25 sm:hidden">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 ${markerGroupForPosition(
+                      mobileDetail.position.label,
+                      mobileDetail.age,
+                    ).borderClass} bg-[#061426]`}
+                    style={
+                      {
+                        "--lineup-age-glow": markerGroupForPosition(
+                          mobileDetail.position.label,
+                          mobileDetail.age,
+                        ).glow,
+                      } as CSSProperties
+                    }
+                  >
+                    {mobileDetail.member.photo_url ? (
+                      <img
+                        alt={formatPublicLawyerName(mobileDetail.member.nickname)}
+                        className="h-full w-full object-cover object-center"
+                        src={mobileDetail.member.photo_url}
+                      />
+                    ) : (
+                      <span className="text-xs font-black text-[#f4d58a]">
+                        {initials(formatPublicLawyerName(mobileDetail.member.nickname))}
+                      </span>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-black text-white">
+                      {formatPublicLawyerName(mobileDetail.member.nickname)}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-black uppercase tracking-[0.08em]">
+                      <span className="rounded-full bg-[#d8ad45] px-2 py-1 text-[#061426]">
+                        {mobileDetail.member.shirt_number ? `#${mobileDetail.member.shirt_number}` : "No #"}
+                      </span>
+                      <span className="rounded-full border border-white/15 px-2 py-1 text-white">
+                        {mobileDetail.position.label}
+                      </span>
+                      <span className="rounded-full border border-white/15 px-2 py-1 text-white">
+                        Age {mobileDetail.age ?? "-"}
+                      </span>
+                      <span
+                        className="rounded-full border border-white/15 px-2 py-1"
+                        style={{ color: mobileDetail.group.textColor }}
+                      >
+                        {mobileDetail.group.label}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       </section>
