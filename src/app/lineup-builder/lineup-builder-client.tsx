@@ -131,7 +131,7 @@ function formationPositions(formationName: Formation) {
   });
 }
 
-function publicMemberName(nickname: string) {
+function formatPublicLawyerName(nickname: string) {
   const value = nickname.trim();
 
   if (!value) {
@@ -139,6 +139,10 @@ function publicMemberName(nickname: string) {
   }
 
   return value.startsWith("ทนาย") ? value : `ทนาย${value}`;
+}
+
+function formatDropdownNickname(nickname: string) {
+  return nickname.trim().replace(/^ทนาย\s*/, "") || "Player";
 }
 
 function currentBuddhistYear() {
@@ -228,7 +232,7 @@ function memberOptionLabel(member: LineupMember) {
   const number = member.shirt_number ? `#${member.shirt_number} ` : "";
   const age = displayAge(member);
 
-  return `${number}${publicMemberName(member.nickname)} · ${age === null ? "Age -" : `Age ${age}`}`;
+  return `${number}${formatDropdownNickname(member.nickname)} · ${age === null ? "Age -" : `Age ${age}`}`;
 }
 
 function compareMembersByDisplayAge(a: LineupMember, b: LineupMember) {
@@ -236,13 +240,13 @@ function compareMembersByDisplayAge(a: LineupMember, b: LineupMember) {
   const rightAge = displayAge(b);
 
   if (leftAge === null && rightAge === null) {
-    return publicMemberName(a.nickname).localeCompare(publicMemberName(b.nickname));
+    return formatDropdownNickname(a.nickname).localeCompare(formatDropdownNickname(b.nickname));
   }
 
   if (leftAge === null) return 1;
   if (rightAge === null) return -1;
 
-  return leftAge - rightAge || publicMemberName(a.nickname).localeCompare(publicMemberName(b.nickname));
+  return leftAge - rightAge || formatDropdownNickname(a.nickname).localeCompare(formatDropdownNickname(b.nickname));
 }
 
 function initials(value: string) {
@@ -260,6 +264,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
   const [opponentId, setOpponentId] = useState(opponents[0]?.id ?? "");
   const [selectedPlayers, setSelectedPlayers] = useState<Record<number, string>>({});
   const [recentlyChangedPosition, setRecentlyChangedPosition] = useState<number | null>(null);
+  const [openDropdown, setOpenDropdown] = useState<number | null>(null);
 
   const positions = useMemo(() => formationPositions(formation), [formation]);
   const opponent = opponents.find((team) => team.id === opponentId) ?? null;
@@ -276,6 +281,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
     setFormation(value);
     setSelectedPlayers({});
     setRecentlyChangedPosition(null);
+    setOpenDropdown(null);
   }
 
   function selectPlayer(positionIndex: number, playerId: string) {
@@ -285,6 +291,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
       if (playerId) {
         next[positionIndex] = playerId;
         setRecentlyChangedPosition(positionIndex);
+        setOpenDropdown(null);
       } else {
         delete next[positionIndex];
       }
@@ -299,17 +306,20 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
       delete next[positionIndex];
       return next;
     });
+    setOpenDropdown((current) => (current === positionIndex ? null : current));
   }
 
   function clearAll() {
     setSelectedPlayers({});
     setRecentlyChangedPosition(null);
+    setOpenDropdown(null);
   }
 
   function resetFormation() {
     setFormation("4-3-3");
     setSelectedPlayers({});
     setRecentlyChangedPosition(null);
+    setOpenDropdown(null);
   }
 
   return (
@@ -424,6 +434,8 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
               <div className="grid gap-3">
                 {positions.map((position, index) => {
                   const selectedId = selectedPlayers[index] ?? "";
+                  const selectedMember = members.find((member) => member.id === selectedId);
+                  const selectedAgeGroup = selectedMember ? ageGroup(displayAge(selectedMember)) : null;
 
                   return (
                     <div
@@ -433,31 +445,56 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                       <span className="rounded-md bg-[#d8ad45] px-3 py-2 text-center text-sm font-black text-[#061426]">
                         {position.label}
                       </span>
-                      <select
-                        className="min-h-11 min-w-0 rounded-md border border-white/15 bg-[#061426] px-3 py-2 text-sm font-bold text-white outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/25"
-                        onChange={(event) => selectPlayer(index, event.target.value)}
-                        value={selectedId}
-                      >
-                        <option value="">Choose player</option>
-                        {sortedMembers.map((member) => {
-                          const disabled = selectedIds.has(member.id) && selectedId !== member.id;
-                          const optionAgeGroup = ageGroup(displayAge(member));
-
-                          return (
-                            <option
-                              disabled={disabled}
-                              key={member.id}
-                              style={{
-                                backgroundColor: "#061426",
-                                color: optionAgeGroup.textColor,
-                              }}
-                              value={member.id}
+                      <div className="relative min-w-0">
+                        <button
+                          aria-expanded={openDropdown === index}
+                          className="flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-md border border-white/15 bg-[#061426] px-3 py-2 text-left text-sm font-bold outline-none transition-colors hover:border-[#d8ad45]/70 focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/25"
+                          onClick={() => setOpenDropdown((current) => (current === index ? null : index))}
+                          style={{ color: selectedAgeGroup?.textColor ?? "#cbd5e1" }}
+                          type="button"
+                        >
+                          <span className="min-w-0 truncate">
+                            {selectedMember ? memberOptionLabel(selectedMember) : "Choose player"}
+                          </span>
+                          <span className="shrink-0 text-[#f4d58a]">⌄</span>
+                        </button>
+                        {openDropdown === index ? (
+                          <div
+                            className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-72 overflow-y-auto rounded-lg border border-[#d8ad45]/35 bg-[#061426] p-1 shadow-2xl shadow-black/45"
+                            role="listbox"
+                          >
+                            <button
+                              className="flex w-full rounded-md px-3 py-2 text-left text-sm font-bold text-slate-300 hover:bg-white/10"
+                              onClick={() => selectPlayer(index, "")}
+                              type="button"
                             >
-                              {memberOptionLabel(member)}
-                            </option>
-                          );
-                        })}
-                      </select>
+                              Choose player
+                            </button>
+                            {sortedMembers.map((member) => {
+                              const disabled = selectedIds.has(member.id) && selectedId !== member.id;
+                              const optionAgeGroup = ageGroup(displayAge(member));
+
+                              return (
+                                <button
+                                  className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm font-black transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
+                                  disabled={disabled}
+                                  key={member.id}
+                                  onClick={() => selectPlayer(index, member.id)}
+                                  style={{ color: optionAgeGroup.textColor }}
+                                  type="button"
+                                >
+                                  <span className="min-w-0 truncate">{memberOptionLabel(member)}</span>
+                                  {disabled ? (
+                                    <span className="shrink-0 text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
+                                      Picked
+                                    </span>
+                                  ) : null}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </div>
                       <button
                         className="min-h-10 rounded-md border border-[#9b1c1f]/45 px-3 py-2 text-xs font-black text-[#ffb4b7] transition-colors hover:bg-[#9b1c1f]/15 disabled:cursor-not-allowed disabled:opacity-40"
                         disabled={!selectedId}
@@ -540,13 +577,13 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                       >
                         {member?.photo_url ? (
                           <img
-                            alt={publicMemberName(member.nickname)}
+                            alt={formatPublicLawyerName(member.nickname)}
                             className="h-full w-full object-cover object-center"
                             src={member.photo_url}
                           />
                         ) : member ? (
                           <span className="text-xs font-black text-[#f4d58a] sm:text-sm">
-                            {initials(publicMemberName(member.nickname))}
+                            {initials(formatPublicLawyerName(member.nickname))}
                           </span>
                         ) : (
                           <span className="text-xs font-black text-white/85">{position.label}</span>
@@ -566,7 +603,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                           {member.shirt_number ? (
                             <span className="block text-[#f4d58a]">#{member.shirt_number}</span>
                           ) : null}
-                          <span className="line-clamp-2">{publicMemberName(member.nickname)}</span>
+                          <span className="line-clamp-2">{formatPublicLawyerName(member.nickname)}</span>
                           <span className="mt-1 inline-flex rounded-full border border-[#d8ad45]/25 bg-white/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-white sm:text-[10px]">
                             Age {age ?? "-"}
                           </span>
