@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   createMember,
   deleteMemberById,
@@ -42,6 +42,8 @@ type MemberForm = {
   isActive: boolean;
 };
 
+type SortOption = "youngest" | "oldest" | "birthDate" | "nickname" | "shirtNo" | "recent";
+
 const emptyForm: MemberForm = {
   id: "",
   firstName: "",
@@ -76,6 +78,14 @@ const birthMonths = [
   "December",
 ].map((label, index) => ({ label, value: index + 1 }));
 const birthYearsBe = Array.from({ length: 2545 - 2510 + 1 }, (_, index) => 2545 - index);
+const sortOptions: { label: string; value: SortOption }[] = [
+  { label: "Youngest First", value: "youngest" },
+  { label: "Oldest First", value: "oldest" },
+  { label: "Birth Date", value: "birthDate" },
+  { label: "Nickname A-Z", value: "nickname" },
+  { label: "Shirt No.", value: "shirtNo" },
+  { label: "Recently Added", value: "recent" },
+];
 
 function publicMemberName(nickname: string) {
   const value = nickname.trim();
@@ -168,6 +178,53 @@ function birthDateDisplay(
   return year ? String(year) : "-";
 }
 
+function validBirthYear(value: number | null) {
+  return Boolean(value && !Number.isNaN(value) && value >= 2400 && value <= currentBuddhistYear());
+}
+
+function compareBirthDate(a: ClubMember, b: ClubMember, direction: "asc" | "desc") {
+  const aHasYear = validBirthYear(a.birth_year_be);
+  const bHasYear = validBirthYear(b.birth_year_be);
+
+  if (!aHasYear && !bHasYear) return 0;
+  if (!aHasYear) return 1;
+  if (!bHasYear) return -1;
+
+  const aMonth = a.birth_month ?? (direction === "asc" ? 99 : -1);
+  const bMonth = b.birth_month ?? (direction === "asc" ? 99 : -1);
+  const aDay = a.birth_day ?? (direction === "asc" ? 99 : -1);
+  const bDay = b.birth_day ?? (direction === "asc" ? 99 : -1);
+
+  if (direction === "asc") {
+    return a.birth_year_be! - b.birth_year_be! || aMonth - bMonth || aDay - bDay;
+  }
+
+  return b.birth_year_be! - a.birth_year_be! || bMonth - aMonth || bDay - aDay;
+}
+
+function compareMembers(a: ClubMember, b: ClubMember, sortBy: SortOption) {
+  if (sortBy === "youngest") {
+    return compareBirthDate(a, b, "desc") || fullName(a).localeCompare(fullName(b));
+  }
+
+  if (sortBy === "oldest" || sortBy === "birthDate") {
+    return compareBirthDate(a, b, "asc") || fullName(a).localeCompare(fullName(b));
+  }
+
+  if (sortBy === "nickname") {
+    return a.nickname.localeCompare(b.nickname);
+  }
+
+  if (sortBy === "shirtNo") {
+    const left = a.shirt_number ?? Number.MAX_SAFE_INTEGER;
+    const right = b.shirt_number ?? Number.MAX_SAFE_INTEGER;
+
+    return left - right || fullName(a).localeCompare(fullName(b));
+  }
+
+  return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+}
+
 function formatDate(value: string) {
   const date = new Date(value);
 
@@ -238,6 +295,7 @@ export default function AdminMembersPage() {
   const [photoPreview, setPhotoPreview] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [sortBy, setSortBy] = useState<SortOption>("youngest");
   const formRef = useRef<HTMLFormElement>(null);
   const firstFieldRef = useRef<HTMLInputElement>(null);
 
@@ -415,6 +473,11 @@ export default function AdminMembersPage() {
     setMessage("Member deleted.");
     await loadData();
   }
+
+  const sortedMembers = useMemo(
+    () => [...members].sort((a, b) => compareMembers(a, b, sortBy)),
+    [members, sortBy],
+  );
 
   return (
     <main className="min-h-screen overflow-x-auto bg-[#f6f2ea] text-[#061426]">
@@ -681,12 +744,26 @@ export default function AdminMembersPage() {
         </form>
 
         <div className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
-          <div className="flex flex-col gap-2 border-b border-slate-200 p-5 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-4 border-b border-slate-200 p-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <div className="mb-3 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
               <h2 className="text-2xl font-black">Member List</h2>
+              <p className="mt-1 text-sm font-bold text-slate-500">{members.length} members</p>
             </div>
-            <p className="text-sm font-bold text-slate-500">{members.length} members</p>
+            <label className="grid gap-2 text-sm font-black text-[#061426] sm:min-w-[220px]">
+              Sort By
+              <select
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                onChange={(event) => setSortBy(event.target.value as SortOption)}
+                value={sortBy}
+              >
+                {sortOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
 
           {loading ? (
@@ -717,7 +794,7 @@ export default function AdminMembersPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {members.map((member) => (
+                  {sortedMembers.map((member) => (
                     <tr className="border-b border-slate-100 last:border-b-0" key={member.id}>
                       <td className="px-4 py-3">
                         <div className="flex size-14 items-center justify-center overflow-hidden rounded-full border border-[#d8ad45]/60 bg-[#f8f3e7]">

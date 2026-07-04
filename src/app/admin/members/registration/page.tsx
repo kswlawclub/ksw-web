@@ -16,9 +16,10 @@ type ClubMember = {
   lawyer_license_no: string | null;
   phone: string | null;
   is_active: boolean;
+  created_at: string;
 };
 
-type SortMode = "oldest" | "youngest";
+type SortOption = "youngest" | "oldest" | "birthDate" | "nickname" | "shirtNo" | "recent";
 type ExportColumnKey =
   | "number"
   | "fullName"
@@ -52,6 +53,14 @@ const defaultExportColumns: ExportColumnKey[] = [
   "shirtNo",
   "nickname",
   "phone",
+];
+const sortOptions: { label: string; value: SortOption }[] = [
+  { label: "Youngest First", value: "youngest" },
+  { label: "Oldest First", value: "oldest" },
+  { label: "Birth Date", value: "birthDate" },
+  { label: "Nickname A-Z", value: "nickname" },
+  { label: "Shirt No.", value: "shirtNo" },
+  { label: "Recently Added", value: "recent" },
 ];
 
 function currentBuddhistYear() {
@@ -120,7 +129,7 @@ function birthDateDisplay(member: Pick<ClubMember, "birth_day" | "birth_month" |
   return member.birth_year_be ? String(member.birth_year_be) : "-";
 }
 
-function compareBirthDate(a: ClubMember, b: ClubMember, mode: SortMode) {
+function compareBirthDate(a: ClubMember, b: ClubMember, direction: "asc" | "desc") {
   const aHasYear = validBirthYear(a.birth_year_be);
   const bHasYear = validBirthYear(b.birth_year_be);
 
@@ -128,16 +137,39 @@ function compareBirthDate(a: ClubMember, b: ClubMember, mode: SortMode) {
   if (!aHasYear) return 1;
   if (!bHasYear) return -1;
 
-  const aMonth = a.birth_month ?? (mode === "oldest" ? 99 : -1);
-  const bMonth = b.birth_month ?? (mode === "oldest" ? 99 : -1);
-  const aDay = a.birth_day ?? (mode === "oldest" ? 99 : -1);
-  const bDay = b.birth_day ?? (mode === "oldest" ? 99 : -1);
+  const aMonth = a.birth_month ?? (direction === "asc" ? 99 : -1);
+  const bMonth = b.birth_month ?? (direction === "asc" ? 99 : -1);
+  const aDay = a.birth_day ?? (direction === "asc" ? 99 : -1);
+  const bDay = b.birth_day ?? (direction === "asc" ? 99 : -1);
 
-  if (mode === "oldest") {
+  if (direction === "asc") {
     return a.birth_year_be! - b.birth_year_be! || aMonth - bMonth || aDay - bDay;
   }
 
   return b.birth_year_be! - a.birth_year_be! || bMonth - aMonth || bDay - aDay;
+}
+
+function compareMembers(a: ClubMember, b: ClubMember, sortBy: SortOption) {
+  if (sortBy === "youngest") {
+    return compareBirthDate(a, b, "desc") || fullName(a).localeCompare(fullName(b));
+  }
+
+  if (sortBy === "oldest" || sortBy === "birthDate") {
+    return compareBirthDate(a, b, "asc") || fullName(a).localeCompare(fullName(b));
+  }
+
+  if (sortBy === "nickname") {
+    return a.nickname.localeCompare(b.nickname);
+  }
+
+  if (sortBy === "shirtNo") {
+    const left = a.shirt_number ?? Number.MAX_SAFE_INTEGER;
+    const right = b.shirt_number ?? Number.MAX_SAFE_INTEGER;
+
+    return left - right || fullName(a).localeCompare(fullName(b));
+  }
+
+  return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
 }
 
 function csvCell(value: string | number) {
@@ -160,7 +192,7 @@ export default function MemberRegistrationPage() {
   const [error, setError] = useState("");
   const [exportError, setExportError] = useState("");
   const [activeOnly, setActiveOnly] = useState(true);
-  const [sortMode, setSortMode] = useState<SortMode>("oldest");
+  const [sortBy, setSortBy] = useState<SortOption>("youngest");
   const [selectedExportColumns, setSelectedExportColumns] =
     useState<ExportColumnKey[]>(defaultExportColumns);
 
@@ -188,13 +220,13 @@ export default function MemberRegistrationPage() {
     return members
       .filter((member) => (activeOnly ? member.is_active : true))
       .sort((a, b) => {
-        const diff = compareBirthDate(a, b, sortMode);
+        const diff = compareMembers(a, b, sortBy);
 
         if (diff) return diff;
 
         return fullName(a).localeCompare(fullName(b));
       });
-  }, [activeOnly, members, sortMode]);
+  }, [activeOnly, members, sortBy]);
 
   const exportColumns: ExportColumn[] = useMemo(
     () => [
@@ -315,26 +347,20 @@ export default function MemberRegistrationPage() {
             </button>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <button
-              className={`rounded-md px-4 py-2 text-sm font-black ${
-                sortMode === "oldest" ? "bg-[#d8ad45] text-[#061426]" : "bg-slate-100 text-[#061426]"
-              }`}
-              onClick={() => setSortMode("oldest")}
-              type="button"
+          <label className="grid gap-2 text-sm font-black text-[#061426] sm:min-w-[220px]">
+            Sort By
+            <select
+              className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+              onChange={(event) => setSortBy(event.target.value as SortOption)}
+              value={sortBy}
             >
-              Oldest First
-            </button>
-            <button
-              className={`rounded-md px-4 py-2 text-sm font-black ${
-                sortMode === "youngest" ? "bg-[#d8ad45] text-[#061426]" : "bg-slate-100 text-[#061426]"
-              }`}
-              onClick={() => setSortMode("youngest")}
-              type="button"
-            >
-              Youngest First
-            </button>
-          </div>
+              {sortOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
         <div className="mb-5 rounded-lg border border-slate-200 bg-white p-4 shadow-xl shadow-slate-900/10">
