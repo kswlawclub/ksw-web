@@ -129,6 +129,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
   const [formation, setFormation] = useState<Formation>("4-3-3");
   const [opponentId, setOpponentId] = useState(opponents[0]?.id ?? "");
   const [selectedPlayers, setSelectedPlayers] = useState<Record<number, string>>({});
+  const [recentlyChangedPosition, setRecentlyChangedPosition] = useState<number | null>(null);
 
   const positions = formations[formation];
   const opponent = opponents.find((team) => team.id === opponentId) ?? null;
@@ -140,6 +141,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
   function selectFormation(value: Formation) {
     setFormation(value);
     setSelectedPlayers({});
+    setRecentlyChangedPosition(null);
   }
 
   function selectPlayer(positionIndex: number, playerId: string) {
@@ -148,6 +150,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
 
       if (playerId) {
         next[positionIndex] = playerId;
+        setRecentlyChangedPosition(positionIndex);
       } else {
         delete next[positionIndex];
       }
@@ -166,11 +169,13 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
 
   function clearAll() {
     setSelectedPlayers({});
+    setRecentlyChangedPosition(null);
   }
 
   function resetFormation() {
     setFormation("4-3-3");
     setSelectedPlayers({});
+    setRecentlyChangedPosition(null);
   }
 
   return (
@@ -341,6 +346,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
 
               {positions.map((position, index) => {
                 const member = members.find((item) => item.id === selectedPlayers[index]);
+                const hasSelectedPlayer = Boolean(member);
 
                 return (
                   <div
@@ -349,25 +355,44 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                     style={{ left: `${position.x}%`, top: `${position.y}%` }}
                   >
                     <div
-                      className={`flex size-12 items-center justify-center overflow-hidden rounded-full border-2 shadow-lg sm:size-16 ${
-                        member
-                          ? "border-[#d8ad45] bg-[#061426] shadow-[#d8ad45]/20"
-                          : "border-white/45 bg-white/15"
-                      }`}
+                      className={`lineup-marker group relative flex flex-col items-center outline-none ${
+                        hasSelectedPlayer ? "lineup-marker-selected" : "lineup-marker-empty"
+                      } ${recentlyChangedPosition === index ? "lineup-marker-bounce" : ""}`}
+                      onAnimationEnd={() => {
+                        if (recentlyChangedPosition === index) {
+                          setRecentlyChangedPosition(null);
+                        }
+                      }}
+                      tabIndex={0}
                     >
-                      {member?.photo_url ? (
-                        <img
-                          alt={publicMemberName(member.nickname)}
-                          className="h-full w-full object-cover object-center"
-                          src={member.photo_url}
-                        />
-                      ) : member ? (
-                        <span className="text-xs font-black text-[#f4d58a] sm:text-sm">
-                          {initials(publicMemberName(member.nickname))}
-                        </span>
-                      ) : (
-                        <span className="text-xs font-black text-white/80">{position.label}</span>
-                      )}
+                      <div
+                        className={`lineup-marker-circle relative z-10 flex size-12 items-center justify-center overflow-hidden rounded-full border-2 shadow-lg transition duration-300 sm:size-16 ${
+                          member
+                            ? "border-[#d8ad45] bg-[#061426] shadow-[#d8ad45]/30"
+                            : "border-white/55 bg-white/15"
+                        }`}
+                      >
+                        {member?.photo_url ? (
+                          <img
+                            alt={publicMemberName(member.nickname)}
+                            className="h-full w-full object-cover object-center"
+                            src={member.photo_url}
+                          />
+                        ) : member ? (
+                          <span className="text-xs font-black text-[#f4d58a] sm:text-sm">
+                            {initials(publicMemberName(member.nickname))}
+                          </span>
+                        ) : (
+                          <span className="text-xs font-black text-white/85">{position.label}</span>
+                        )}
+                      </div>
+                      <span
+                        className={`lineup-marker-tail -mt-1 block size-3 rotate-45 rounded-[2px] sm:size-4 ${
+                          member
+                            ? "bg-gradient-to-br from-[#f4d58a] to-[#d8ad45]"
+                            : "bg-white/30"
+                        }`}
+                      />
                     </div>
                     <div className="mt-1 max-w-[88px] rounded-md border border-black/10 bg-[#061426]/90 px-1.5 py-1 text-[10px] font-black leading-tight text-white shadow-lg shadow-black/20 sm:max-w-[112px] sm:text-xs">
                       {member ? (
@@ -391,6 +416,79 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
           </div>
         </div>
       </section>
+      <style jsx>{`
+        .lineup-marker {
+          transform-origin: center bottom;
+          filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.28));
+        }
+
+        .lineup-marker-selected .lineup-marker-circle {
+          box-shadow:
+            0 0 0 3px rgba(216, 173, 69, 0.14),
+            0 14px 24px rgba(0, 0, 0, 0.34),
+            0 0 20px rgba(216, 173, 69, 0.22);
+        }
+
+        .lineup-marker-selected:hover,
+        .lineup-marker-selected:focus-visible {
+          transform: translateY(-4px);
+        }
+
+        .lineup-marker-selected:hover .lineup-marker-circle,
+        .lineup-marker-selected:focus-visible .lineup-marker-circle {
+          box-shadow:
+            0 0 0 3px rgba(244, 213, 138, 0.18),
+            0 18px 30px rgba(0, 0, 0, 0.38),
+            0 0 26px rgba(216, 173, 69, 0.32);
+        }
+
+        .lineup-marker-empty {
+          animation: lineup-empty-pulse 2.8s ease-in-out infinite;
+        }
+
+        .lineup-marker-bounce {
+          animation: lineup-marker-bounce 460ms cubic-bezier(0.2, 0.78, 0.25, 1);
+        }
+
+        @keyframes lineup-marker-bounce {
+          0% {
+            transform: translateY(0) scale(0.96);
+            opacity: 0.86;
+          }
+          45% {
+            transform: translateY(-10px) scale(1.04);
+            opacity: 1;
+          }
+          72% {
+            transform: translateY(2px) scale(0.99);
+          }
+          100% {
+            transform: translateY(0) scale(1);
+          }
+        }
+
+        @keyframes lineup-empty-pulse {
+          0%,
+          100% {
+            opacity: 0.78;
+            filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.18));
+          }
+          50% {
+            opacity: 1;
+            filter: drop-shadow(0 0 16px rgba(255, 255, 255, 0.22));
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .lineup-marker,
+          .lineup-marker-empty,
+          .lineup-marker-bounce,
+          .lineup-marker-circle {
+            animation: none !important;
+            transition: none !important;
+          }
+        }
+      `}</style>
     </main>
   );
 }
