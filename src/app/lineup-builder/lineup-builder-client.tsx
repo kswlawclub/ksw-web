@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, useMemo, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 
 export type LineupMember = {
   id: string;
@@ -265,7 +265,8 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
   const [selectedPlayers, setSelectedPlayers] = useState<Record<number, string>>({});
   const [recentlyChangedPosition, setRecentlyChangedPosition] = useState<number | null>(null);
   const [openDropdown, setOpenDropdown] = useState<number | null>(null);
-  const [mobileDetailPosition, setMobileDetailPosition] = useState<number | null>(null);
+  const [activePickerPosition, setActivePickerPosition] = useState<number | null>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
 
   const positions = useMemo(() => formationPositions(formation), [formation]);
   const opponent = opponents.find((team) => team.id === opponentId) ?? null;
@@ -277,34 +278,42 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
     () => [...members].sort(compareMembersByDisplayAge),
     [members],
   );
-  const mobileDetail = useMemo(() => {
-    if (mobileDetailPosition === null) {
-      return null;
+  const activePosition = activePickerPosition === null ? null : positions[activePickerPosition] ?? null;
+
+  useEffect(() => {
+    if (activePickerPosition === null) {
+      return;
     }
 
-    const position = positions[mobileDetailPosition];
-    const member = members.find((item) => item.id === selectedPlayers[mobileDetailPosition]);
-
-    if (!position || !member) {
-      return null;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setActivePickerPosition(null);
+      }
     }
 
-    const age = displayAge(member);
+    function closeOnOutsideClick(event: MouseEvent) {
+      if (pickerRef.current?.contains(event.target as Node)) {
+        return;
+      }
 
-    return {
-      age,
-      group: ageGroup(age),
-      member,
-      position,
+      setActivePickerPosition(null);
+    }
+
+    document.addEventListener("keydown", closeOnEscape);
+    document.addEventListener("mousedown", closeOnOutsideClick);
+
+    return () => {
+      document.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener("mousedown", closeOnOutsideClick);
     };
-  }, [members, mobileDetailPosition, positions, selectedPlayers]);
+  }, [activePickerPosition]);
 
   function selectFormation(value: Formation) {
     setFormation(value);
     setSelectedPlayers({});
     setRecentlyChangedPosition(null);
     setOpenDropdown(null);
-    setMobileDetailPosition(null);
+    setActivePickerPosition(null);
   }
 
   function selectPlayer(positionIndex: number, playerId: string) {
@@ -321,6 +330,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
 
       return next;
     });
+    setActivePickerPosition(null);
   }
 
   function clearPosition(positionIndex: number) {
@@ -330,14 +340,14 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
       return next;
     });
     setOpenDropdown((current) => (current === positionIndex ? null : current));
-    setMobileDetailPosition((current) => (current === positionIndex ? null : current));
+    setActivePickerPosition((current) => (current === positionIndex ? null : current));
   }
 
   function clearAll() {
     setSelectedPlayers({});
     setRecentlyChangedPosition(null);
     setOpenDropdown(null);
-    setMobileDetailPosition(null);
+    setActivePickerPosition(null);
   }
 
   function resetFormation() {
@@ -345,7 +355,100 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
     setSelectedPlayers({});
     setRecentlyChangedPosition(null);
     setOpenDropdown(null);
-    setMobileDetailPosition(null);
+    setActivePickerPosition(null);
+  }
+
+  function openPositionPicker(positionIndex: number) {
+    setActivePickerPosition(positionIndex);
+    setOpenDropdown(null);
+  }
+
+  function pickerAlignmentClass(position: PositionSlot) {
+    if (position.x < 28) return "left-2 translate-x-0";
+    if (position.x > 72) return "right-2 translate-x-0";
+    return "left-1/2 -translate-x-1/2";
+  }
+
+  function renderPlayerPicker(positionIndex: number, variant: "desktop" | "mobile") {
+    const position = positions[positionIndex];
+    const selectedId = selectedPlayers[positionIndex] ?? "";
+    const hasSelection = Boolean(selectedId);
+
+    return (
+      <div className={variant === "mobile" ? "flex max-h-[72vh] flex-col" : ""}>
+        <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-3">
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#d8ad45]">
+              Select Player
+            </p>
+            <h3 className="mt-1 text-lg font-black text-white">
+              Select Player for {position.label}
+            </h3>
+          </div>
+          <button
+            aria-label="Close player picker"
+            className="rounded-full border border-white/15 px-3 py-1 text-sm font-black text-slate-300 transition-colors hover:bg-white/10"
+            onClick={() => setActivePickerPosition(null)}
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="mt-3 grid gap-2 overflow-y-auto pr-1">
+          {!sortedMembers.length ? (
+            <p className="rounded-lg border border-white/10 bg-white/[0.04] p-3 text-sm font-bold text-slate-300">
+              No active members available.
+            </p>
+          ) : (
+            sortedMembers.map((member) => {
+              const disabled = selectedIds.has(member.id) && selectedId !== member.id;
+              const optionAgeGroup = ageGroup(displayAge(member));
+              const isCurrent = selectedId === member.id;
+
+              return (
+                <button
+                  className={`flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm font-black transition-colors ${
+                    isCurrent
+                      ? "border-[#d8ad45]/60 bg-[#d8ad45]/12"
+                      : "border-white/10 bg-white/[0.04] hover:border-[#d8ad45]/40 hover:bg-white/[0.08]"
+                  } disabled:cursor-not-allowed disabled:opacity-35`}
+                  disabled={disabled}
+                  key={member.id}
+                  onClick={() => selectPlayer(positionIndex, member.id)}
+                  style={{ color: optionAgeGroup.textColor }}
+                  type="button"
+                >
+                  <span className="min-w-0 truncate">{memberOptionLabel(member)}</span>
+                  <span className="flex shrink-0 items-center gap-2 text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+                    <span className={`size-2.5 rounded-full ${optionAgeGroup.sampleClass}`} />
+                    {disabled ? "Picked" : isCurrent ? "Current" : optionAgeGroup.label}
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        <div className="mt-3 grid gap-2 border-t border-white/10 pt-3 sm:grid-cols-2">
+          <button
+            className="min-h-11 rounded-lg border border-[#9b1c1f]/45 px-4 py-2 text-sm font-black text-[#ffb4b7] transition-colors hover:bg-[#9b1c1f]/15 disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={!hasSelection}
+            onClick={() => clearPosition(positionIndex)}
+            type="button"
+          >
+            Clear Position
+          </button>
+          <button
+            className="min-h-11 rounded-lg border border-white/15 px-4 py-2 text-sm font-black text-slate-200 transition-colors hover:bg-white/10"
+            onClick={() => setActivePickerPosition(null)}
+            type="button"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -585,21 +688,18 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                     key={`${formation}-preview-${index}-${position.label}`}
                     style={{ left: `${position.x}%`, top: `${position.y}%` }}
                   >
-                    <div
-                      className={`lineup-marker group relative flex flex-col items-center outline-none ${
+                    <button
+                      aria-label={`Select player for ${position.label}`}
+                      className={`lineup-marker group relative flex cursor-pointer flex-col items-center appearance-none border-0 bg-transparent p-0 outline-none ${
                         hasSelectedPlayer ? "lineup-marker-selected" : "lineup-marker-empty"
                       } ${recentlyChangedPosition === index ? "lineup-marker-bounce" : ""}`}
-                      onClick={() => {
-                        if (member) {
-                          setMobileDetailPosition(index);
-                        }
-                      }}
+                      onClick={() => openPositionPicker(index)}
                       onAnimationEnd={() => {
                         if (recentlyChangedPosition === index) {
                           setRecentlyChangedPosition(null);
                         }
                       }}
-                      tabIndex={0}
+                      type="button"
                     >
                       <div
                         className={`lineup-marker-circle relative z-10 flex size-12 items-center justify-center overflow-hidden rounded-full shadow-lg transition duration-300 sm:size-16 ${
@@ -634,7 +734,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                             : "bg-white/30"
                         }`}
                       />
-                    </div>
+                    </button>
                     <div className="mt-0.5 flex max-w-[58px] flex-col items-center gap-0.5 text-[9px] font-black leading-none sm:hidden">
                       {member ? (
                         <>
@@ -672,59 +772,25 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                   </div>
                 );
               })}
+
+              {activePosition ? (
+                <div
+                  className={`absolute z-40 hidden w-[min(360px,calc(100%-16px))] rounded-2xl border border-[#d8ad45]/35 bg-[#061426]/95 p-4 shadow-2xl shadow-black/50 backdrop-blur sm:block ${pickerAlignmentClass(
+                    activePosition,
+                  )}`}
+                  ref={pickerRef}
+                  role="dialog"
+                  style={{ top: `${Math.min(78, Math.max(8, activePosition.y + 6))}%` }}
+                >
+                  {renderPlayerPicker(activePickerPosition ?? 0, "desktop")}
+                </div>
+              ) : null}
             </div>
 
-            {mobileDetail ? (
-              <div className="mt-4 rounded-xl border border-[#d8ad45]/25 bg-[#061426]/90 p-3 shadow-xl shadow-black/25 sm:hidden">
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 ${markerGroupForPosition(
-                      mobileDetail.position.label,
-                      mobileDetail.age,
-                    ).borderClass} bg-[#061426]`}
-                    style={
-                      {
-                        "--lineup-age-glow": markerGroupForPosition(
-                          mobileDetail.position.label,
-                          mobileDetail.age,
-                        ).glow,
-                      } as CSSProperties
-                    }
-                  >
-                    {mobileDetail.member.photo_url ? (
-                      <img
-                        alt={formatPublicLawyerName(mobileDetail.member.nickname)}
-                        className="h-full w-full object-cover object-center"
-                        src={mobileDetail.member.photo_url}
-                      />
-                    ) : (
-                      <span className="text-xs font-black text-[#f4d58a]">
-                        {initials(formatPublicLawyerName(mobileDetail.member.nickname))}
-                      </span>
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-base font-black text-white">
-                      {formatPublicLawyerName(mobileDetail.member.nickname)}
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-black uppercase tracking-[0.08em]">
-                      <span className="rounded-full bg-[#d8ad45] px-2 py-1 text-[#061426]">
-                        {mobileDetail.member.shirt_number ? `#${mobileDetail.member.shirt_number}` : "No #"}
-                      </span>
-                      <span className="rounded-full border border-white/15 px-2 py-1 text-white">
-                        {mobileDetail.position.label}
-                      </span>
-                      <span className="rounded-full border border-white/15 px-2 py-1 text-white">
-                        Age {mobileDetail.age ?? "-"}
-                      </span>
-                      <span
-                        className="rounded-full border border-white/15 px-2 py-1"
-                        style={{ color: mobileDetail.group.textColor }}
-                      >
-                        {mobileDetail.group.label}
-                      </span>
-                    </div>
-                  </div>
+            {activePosition ? (
+              <div className="fixed inset-x-0 bottom-0 z-50 border-t border-[#d8ad45]/35 bg-[#061426]/98 p-4 shadow-2xl shadow-black/60 backdrop-blur sm:hidden">
+                <div className="mx-auto w-full max-w-md" ref={pickerRef} role="dialog">
+                  {renderPlayerPicker(activePickerPosition ?? 0, "mobile")}
                 </div>
               </div>
             ) : null}
