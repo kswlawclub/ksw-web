@@ -161,6 +161,7 @@ const ageGroupStyles = [
     label: "U35",
     sampleClass: "bg-[#c93a3a]",
     borderClass: "border-[#c93a3a]",
+    textColor: "#ff8b8b",
     glow: "rgba(201,58,58,0.3)",
     match: (age: number | null) => age !== null && age < 35,
   },
@@ -168,6 +169,7 @@ const ageGroupStyles = [
     label: "35-39",
     sampleClass: "bg-[#e7c947]",
     borderClass: "border-[#e7c947]",
+    textColor: "#f4d85f",
     glow: "rgba(231,201,71,0.32)",
     match: (age: number | null) => age !== null && age >= 35 && age <= 39,
   },
@@ -175,6 +177,7 @@ const ageGroupStyles = [
     label: "40-44",
     sampleClass: "bg-white ring-1 ring-slate-300",
     borderClass: "border-white",
+    textColor: "#ffffff",
     glow: "rgba(255,255,255,0.34)",
     match: (age: number | null) => age !== null && age >= 40 && age <= 44,
   },
@@ -182,6 +185,7 @@ const ageGroupStyles = [
     label: "45-49",
     sampleClass: "bg-[#3b82c4]",
     borderClass: "border-[#3b82c4]",
+    textColor: "#8fc5ff",
     glow: "rgba(59,130,196,0.34)",
     match: (age: number | null) => age !== null && age >= 45 && age <= 49,
   },
@@ -189,6 +193,7 @@ const ageGroupStyles = [
     label: "50+",
     sampleClass: "bg-[#d8ad45]",
     borderClass: "border-[#d8ad45]",
+    textColor: "#f4d58a",
     glow: "rgba(216,173,69,0.36)",
     match: (age: number | null) => age !== null && age >= 50,
   },
@@ -197,12 +202,14 @@ const missingAgeGroup = {
   label: "Age -",
   sampleClass: "bg-slate-400",
   borderClass: "border-slate-400",
+  textColor: "#cbd5e1",
   glow: "rgba(148,163,184,0.26)",
 };
 const goalkeeperAgeGroup = {
   label: "GK",
   sampleClass: "bg-[#d8ad45]",
   borderClass: "border-[#d8ad45]",
+  textColor: "#f4d58a",
   glow: "rgba(216,173,69,0.38)",
 };
 const ageLegend = [...ageGroupStyles, missingAgeGroup];
@@ -217,15 +224,25 @@ function markerGroupForPosition(positionLabel: string, age: number | null) {
   return positionLabel === "GK" ? goalkeeperAgeGroup : ageGroup(age);
 }
 
-function ageDisplayText(age: number | null) {
-  return age === null ? "Age -" : String(age);
-}
-
 function memberOptionLabel(member: LineupMember) {
   const number = member.shirt_number ? `#${member.shirt_number} ` : "";
   const age = displayAge(member);
 
-  return `${number}${publicMemberName(member.nickname)} · ${ageDisplayText(age)}`;
+  return `${number}${publicMemberName(member.nickname)} · ${age === null ? "Age -" : `Age ${age}`}`;
+}
+
+function compareMembersByDisplayAge(a: LineupMember, b: LineupMember) {
+  const leftAge = displayAge(a);
+  const rightAge = displayAge(b);
+
+  if (leftAge === null && rightAge === null) {
+    return publicMemberName(a.nickname).localeCompare(publicMemberName(b.nickname));
+  }
+
+  if (leftAge === null) return 1;
+  if (rightAge === null) return -1;
+
+  return leftAge - rightAge || publicMemberName(a.nickname).localeCompare(publicMemberName(b.nickname));
 }
 
 function initials(value: string) {
@@ -249,6 +266,10 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
   const selectedIds = useMemo(
     () => new Set(Object.values(selectedPlayers).filter(Boolean)),
     [selectedPlayers],
+  );
+  const sortedMembers = useMemo(
+    () => [...members].sort(compareMembersByDisplayAge),
+    [members],
   );
 
   function selectFormation(value: Formation) {
@@ -418,11 +439,20 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                         value={selectedId}
                       >
                         <option value="">Choose player</option>
-                        {members.map((member) => {
+                        {sortedMembers.map((member) => {
                           const disabled = selectedIds.has(member.id) && selectedId !== member.id;
+                          const optionAgeGroup = ageGroup(displayAge(member));
 
                           return (
-                            <option disabled={disabled} key={member.id} value={member.id}>
+                            <option
+                              disabled={disabled}
+                              key={member.id}
+                              style={{
+                                backgroundColor: "#061426",
+                                color: optionAgeGroup.textColor,
+                              }}
+                              value={member.id}
+                            >
                               {memberOptionLabel(member)}
                             </option>
                           );
