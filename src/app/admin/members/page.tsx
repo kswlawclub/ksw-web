@@ -129,6 +129,17 @@ function calculatedAge(
   return age >= 0 ? String(age) : "-";
 }
 
+function displayAge(yearValue: string | number | null) {
+  const birthYear = validNumber(yearValue);
+  const year = currentBuddhistYear();
+
+  if (!birthYear || birthYear < 2400 || birthYear > year) {
+    return "-";
+  }
+
+  return String(year - birthYear);
+}
+
 function numberOrNull(value: string) {
   return value.trim() === "" ? null : Number(value);
 }
@@ -536,13 +547,23 @@ export default function AdminMembersPage() {
               </label>
             </div>
 
-            <div className="rounded-md border border-slate-200 bg-[#f8f3e7] px-3 py-2">
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
-                Age
-              </p>
-              <p className="mt-1 text-base font-black text-[#061426]">
-                {calculatedAge(form.birthYearBe, form.birthMonth, form.birthDay)}
-              </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-md border border-slate-200 bg-[#f8f3e7] px-3 py-2">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                  Exact Age
+                </p>
+                <p className="mt-1 text-base font-black text-[#061426]">
+                  {calculatedAge(form.birthYearBe, form.birthMonth, form.birthDay)}
+                </p>
+              </div>
+              <div className="rounded-md border border-slate-200 bg-[#f8f3e7] px-3 py-2">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                  Display Age
+                </p>
+                <p className="mt-1 text-base font-black text-[#061426]">
+                  {displayAge(form.birthYearBe)}
+                </p>
+              </div>
             </div>
 
             <label className="grid gap-2 text-sm font-black">
@@ -668,7 +689,7 @@ export default function AdminMembersPage() {
             <p className="p-5 text-sm font-bold text-slate-600">Loading members...</p>
           ) : members.length ? (
             <div className="w-full overflow-x-auto">
-              <table className="w-full min-w-[1380px] border-collapse text-left text-sm">
+              <table className="w-full min-w-[1460px] border-collapse text-left text-sm">
                 <thead className="bg-[#061426] text-xs uppercase tracking-[0.14em] text-[#f4d58a]">
                   <tr>
                     <th className="px-4 py-3">Photo</th>
@@ -676,7 +697,8 @@ export default function AdminMembersPage() {
                     <th className="px-4 py-3">Nickname</th>
                     <th className="px-4 py-3">Public Display</th>
                     <th className="px-4 py-3">Birth Date (B.E.)</th>
-                    <th className="px-4 py-3">Age</th>
+                    <th className="px-4 py-3">Exact Age</th>
+                    <th className="px-4 py-3">Display Age</th>
                     <th className="px-4 py-3">Shirt No.</th>
                     <th className="px-4 py-3">License No.</th>
                     <th className="px-4 py-3">Phone</th>
@@ -713,6 +735,7 @@ export default function AdminMembersPage() {
                       <td className="px-4 py-3 text-slate-600">
                         {calculatedAge(member.birth_year_be, member.birth_month, member.birth_day)}
                       </td>
+                      <td className="px-4 py-3 text-slate-600">{displayAge(member.birth_year_be)}</td>
                       <td className="px-4 py-3 text-slate-600">{member.shirt_number ?? "-"}</td>
                       <td className="px-4 py-3 text-slate-600">{member.lawyer_license_no ?? "-"}</td>
                       <td className="px-4 py-3 text-slate-600">{member.phone ?? "-"}</td>

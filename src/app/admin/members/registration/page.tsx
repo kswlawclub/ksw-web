@@ -52,6 +52,14 @@ function calculatedAge(member: Pick<ClubMember, "birth_day" | "birth_month" | "b
   return age >= 0 ? String(age) : "-";
 }
 
+function displayAge(member: Pick<ClubMember, "birth_year_be">) {
+  if (!validBirthYear(member.birth_year_be)) {
+    return "-";
+  }
+
+  return String(currentBuddhistYear() - member.birth_year_be!);
+}
+
 function fullName(member: Pick<ClubMember, "first_name" | "last_name">) {
   return [member.first_name, member.last_name].filter(Boolean).join(" ") || "-";
 }
@@ -199,14 +207,15 @@ export default function MemberRegistrationPage() {
             <p className="p-5 text-sm font-bold text-[#9b1c1f]">{error}</p>
           ) : visibleMembers.length ? (
             <div className="w-full overflow-x-auto">
-              <table className="w-full min-w-[1120px] border-collapse text-left text-sm">
+              <table className="w-full min-w-[1200px] border-collapse text-left text-sm">
                 <thead className="bg-[#061426] text-xs uppercase tracking-[0.14em] text-[#f4d58a]">
                   <tr>
                     <th className="px-4 py-3">No.</th>
                     <th className="min-w-[220px] px-4 py-3">Full Name</th>
                     <th className="px-4 py-3">Lawyer License No.</th>
                     <th className="px-4 py-3">Birth Date (B.E.)</th>
-                    <th className="px-4 py-3">Age</th>
+                    <th className="px-4 py-3">Exact Age</th>
+                    <th className="px-4 py-3">Display Age</th>
                     <th className="px-4 py-3">Shirt No.</th>
                     <th className="px-4 py-3">Nickname</th>
                     <th className="px-4 py-3">Phone</th>
@@ -223,6 +232,7 @@ export default function MemberRegistrationPage() {
                       <td className="px-4 py-3">{member.lawyer_license_no ?? "-"}</td>
                       <td className="px-4 py-3">{birthDateDisplay(member)}</td>
                       <td className="px-4 py-3">{calculatedAge(member)}</td>
+                      <td className="px-4 py-3">{displayAge(member)}</td>
                       <td className="px-4 py-3">{member.shirt_number ?? "-"}</td>
                       <td className="px-4 py-3">{member.nickname}</td>
                       <td className="px-4 py-3">{member.phone ?? "-"}</td>
