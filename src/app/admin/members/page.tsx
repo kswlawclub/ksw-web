@@ -24,6 +24,7 @@ type ClubMember = {
   phone: string | null;
   photo_url: string | null;
   is_active: boolean;
+  lineup_enabled: boolean;
   created_at: string;
   updated_at: string | null;
 };
@@ -41,6 +42,7 @@ type MemberForm = {
   phone: string;
   photoUrl: string;
   isActive: boolean;
+  lineupEnabled: boolean;
 };
 
 type SortOption = "youngest" | "oldest" | "birthDate" | "nickname" | "shirtNo" | "recent";
@@ -58,6 +60,7 @@ const emptyForm: MemberForm = {
   phone: "",
   photoUrl: "",
   isActive: true,
+  lineupEnabled: true,
 };
 
 const maxPhotoSize = 2 * 1024 * 1024;
@@ -367,6 +370,7 @@ export default function AdminMembersPage() {
       phone: member.phone ?? "",
       photoUrl: member.photo_url ?? "",
       isActive: member.is_active,
+      lineupEnabled: member.lineup_enabled,
     });
     setPhotoFile(null);
     setMessage("");
@@ -437,6 +441,7 @@ export default function AdminMembersPage() {
         phone: form.phone.trim() || null,
         photo_url: photoUrl,
         is_active: form.isActive,
+        lineup_enabled: form.lineupEnabled,
       };
       const result = form.id ? await updateMember(form.id, payload) : await createMember(payload);
 
@@ -772,6 +777,16 @@ export default function AdminMembersPage() {
               Active
             </label>
 
+            <label className="flex items-center gap-3 rounded-md border border-slate-200 px-3 py-3 text-sm font-black">
+              <input
+                checked={form.lineupEnabled}
+                className="size-4 accent-[#d8ad45]"
+                onChange={(event) => setForm((current) => ({ ...current, lineupEnabled: event.target.checked }))}
+                type="checkbox"
+              />
+              Available for Lineup Builder
+            </label>
+
             {error ? (
               <p className="rounded-md border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-3 py-2 text-sm font-bold text-[#9b1c1f]">
                 {error}
@@ -820,7 +835,7 @@ export default function AdminMembersPage() {
             <p className="p-5 text-sm font-bold text-slate-600">Loading members...</p>
           ) : members.length ? (
             <div className="w-full overflow-x-auto">
-              <table className="w-full min-w-[1460px] border-collapse text-left text-sm">
+              <table className="w-full min-w-[1560px] border-collapse text-left text-sm">
                 <thead className="bg-[#061426] text-xs uppercase tracking-[0.14em] text-[#f4d58a]">
                   <tr>
                     <th className="px-4 py-3">Photo</th>
@@ -840,6 +855,7 @@ export default function AdminMembersPage() {
                     <th className="px-4 py-3">License No.</th>
                     <th className="px-4 py-3">Phone</th>
                     <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Lineup</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -889,6 +905,17 @@ export default function AdminMembersPage() {
                           }`}
                         >
                           {member.is_active ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-black ${
+                            member.lineup_enabled
+                              ? "bg-[#fff8e3] text-[#061426]"
+                              : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {member.lineup_enabled ? "Available" : "Hidden"}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right">

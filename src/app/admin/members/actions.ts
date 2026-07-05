@@ -16,6 +16,7 @@ type MemberPayload = {
   phone: string | null;
   photo_url: string | null;
   is_active: boolean;
+  lineup_enabled: boolean;
 };
 
 type ClubMember = {
@@ -31,6 +32,7 @@ type ClubMember = {
   phone: string | null;
   photo_url: string | null;
   is_active: boolean;
+  lineup_enabled: boolean;
   created_at: string;
   updated_at: string | null;
 };
@@ -122,7 +124,7 @@ export async function listMembers(): Promise<ListResult> {
   const result = await supabase
     .from("club_members")
     .select(
-      "id, first_name, last_name, nickname, birth_day, birth_month, birth_year_be, shirt_number, lawyer_license_no, phone, photo_url, is_active, created_at, updated_at",
+      "id, first_name, last_name, nickname, birth_day, birth_month, birth_year_be, shirt_number, lawyer_license_no, phone, photo_url, is_active, lineup_enabled, created_at, updated_at",
     )
     .order("created_at", { ascending: false });
 

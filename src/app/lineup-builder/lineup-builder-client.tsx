@@ -9,6 +9,7 @@ export type LineupMember = {
   shirt_number: number | null;
   birth_year_be: number | null;
   is_active: boolean;
+  lineup_enabled: boolean;
 };
 
 export type OpponentTeam = {
