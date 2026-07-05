@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 
 export type LineupMember = {
   id: string;
@@ -23,6 +23,8 @@ type PositionSlot = {
   x: number;
   y: number;
 };
+
+type MarkerCoordinate = Pick<PositionSlot, "x" | "y">;
 
 type LineupBuilderProps = {
   members: LineupMember[];
@@ -263,12 +265,23 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
   const [formation, setFormation] = useState<Formation>("4-3-3");
   const [opponentId, setOpponentId] = useState("");
   const [selectedPlayers, setSelectedPlayers] = useState<Record<number, string>>({});
+  const [customPositions, setCustomPositions] = useState<Record<number, MarkerCoordinate>>({});
+  const [movePositionsMode, setMovePositionsMode] = useState(false);
+  const [draggingPosition, setDraggingPosition] = useState<number | null>(null);
   const [recentlyChangedPosition, setRecentlyChangedPosition] = useState<number | null>(null);
-  const [openDropdown, setOpenDropdown] = useState<number | null>(null);
   const [activePickerPosition, setActivePickerPosition] = useState<number | null>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
+  const pitchRef = useRef<HTMLDivElement>(null);
 
-  const positions = useMemo(() => formationPositions(formation), [formation]);
+  const defaultPositions = useMemo(() => formationPositions(formation), [formation]);
+  const positions = useMemo(
+    () =>
+      defaultPositions.map((position, index) => ({
+        ...position,
+        ...(customPositions[index] ?? {}),
+      })),
+    [customPositions, defaultPositions],
+  );
   const opponent = opponents.find((team) => team.id === opponentId) ?? null;
   const selectedIds = useMemo(
     () => new Set(Object.values(selectedPlayers).filter(Boolean)),
@@ -308,11 +321,52 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
     };
   }, [activePickerPosition]);
 
+  useEffect(() => {
+    if (draggingPosition === null || !movePositionsMode) {
+      return;
+    }
+
+    const positionIndex = draggingPosition;
+
+    function updateDraggedPosition(event: PointerEvent) {
+      const pitch = pitchRef.current;
+
+      if (!pitch) {
+        return;
+      }
+
+      event.preventDefault();
+      const rect = pitch.getBoundingClientRect();
+      const x = Math.min(95, Math.max(5, ((event.clientX - rect.left) / rect.width) * 100));
+      const y = Math.min(95, Math.max(5, ((event.clientY - rect.top) / rect.height) * 100));
+
+      setCustomPositions((current) => ({
+        ...current,
+        [positionIndex]: { x, y },
+      }));
+    }
+
+    function stopDragging() {
+      setDraggingPosition(null);
+    }
+
+    document.addEventListener("pointermove", updateDraggedPosition, { passive: false });
+    document.addEventListener("pointerup", stopDragging);
+    document.addEventListener("pointercancel", stopDragging);
+
+    return () => {
+      document.removeEventListener("pointermove", updateDraggedPosition);
+      document.removeEventListener("pointerup", stopDragging);
+      document.removeEventListener("pointercancel", stopDragging);
+    };
+  }, [draggingPosition, movePositionsMode]);
+
   function selectFormation(value: Formation) {
     setFormation(value);
     setSelectedPlayers({});
+    setCustomPositions({});
+    setDraggingPosition(null);
     setRecentlyChangedPosition(null);
-    setOpenDropdown(null);
     setActivePickerPosition(null);
   }
 
@@ -323,7 +377,6 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
       if (playerId) {
         next[positionIndex] = playerId;
         setRecentlyChangedPosition(positionIndex);
-        setOpenDropdown(null);
       } else {
         delete next[positionIndex];
       }
@@ -339,28 +392,38 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
       delete next[positionIndex];
       return next;
     });
-    setOpenDropdown((current) => (current === positionIndex ? null : current));
     setActivePickerPosition((current) => (current === positionIndex ? null : current));
   }
 
   function clearAll() {
     setSelectedPlayers({});
     setRecentlyChangedPosition(null);
-    setOpenDropdown(null);
     setActivePickerPosition(null);
   }
 
-  function resetFormation() {
-    setFormation("4-3-3");
-    setSelectedPlayers({});
+  function resetPositions() {
+    setCustomPositions({});
+    setDraggingPosition(null);
     setRecentlyChangedPosition(null);
-    setOpenDropdown(null);
     setActivePickerPosition(null);
   }
 
   function openPositionPicker(positionIndex: number) {
+    if (movePositionsMode) {
+      return;
+    }
+
     setActivePickerPosition(positionIndex);
-    setOpenDropdown(null);
+  }
+
+  function startMarkerDrag(positionIndex: number, event: ReactPointerEvent<HTMLButtonElement>) {
+    if (!movePositionsMode) {
+      return;
+    }
+
+    event.preventDefault();
+    setDraggingPosition(positionIndex);
+    setActivePickerPosition(null);
   }
 
   function renderPlayerPicker(positionIndex: number) {
@@ -464,7 +527,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
 
       <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-10">
         <div className="rounded-2xl border border-[#d8ad45]/25 bg-white/[0.06] p-4 shadow-2xl shadow-black/20 backdrop-blur sm:p-5">
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px_160px] lg:items-end">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_220px_170px_160px_150px] xl:items-end">
             <label className="grid gap-2 text-sm font-black text-[#f4d58a]">
               Opponent
               <select
@@ -501,23 +564,53 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
               </select>
             </label>
 
-            <div className="flex gap-2">
+            <label className="grid gap-2 text-sm font-black text-[#f4d58a]">
+              Move Positions
               <button
-                className="min-h-12 flex-1 rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-4 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/20 transition-transform hover:scale-[1.01]"
+                aria-pressed={movePositionsMode}
+                className={`min-h-12 rounded-md border px-4 py-3 text-sm font-black transition-colors ${
+                  movePositionsMode
+                    ? "border-[#d8ad45] bg-[#d8ad45] text-[#061426] shadow-lg shadow-[#d8ad45]/20"
+                    : "border-[#d8ad45]/40 text-[#f4d58a] hover:bg-[#d8ad45]/10"
+                }`}
+                onClick={() => {
+                  setMovePositionsMode((current) => !current);
+                  setActivePickerPosition(null);
+                  setDraggingPosition(null);
+                }}
+                type="button"
+              >
+                {movePositionsMode ? "On" : "Off"}
+              </button>
+            </label>
+
+            <div className="grid gap-2 text-sm font-black text-[#f4d58a]">
+              Reset Positions
+              <button
+                className="min-h-12 rounded-md border border-[#d8ad45]/40 px-4 py-3 text-sm font-black text-[#f4d58a] transition-colors hover:bg-[#d8ad45]/10"
+                onClick={resetPositions}
+                type="button"
+              >
+                Reset Positions
+              </button>
+            </div>
+
+            <div className="grid gap-2 text-sm font-black text-[#f4d58a]">
+              Clear Players
+              <button
+                className="min-h-12 rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-4 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/20 transition-transform hover:scale-[1.01]"
                 onClick={clearAll}
                 type="button"
               >
-                Clear All
-              </button>
-              <button
-                className="min-h-12 rounded-md border border-[#d8ad45]/40 px-4 py-3 text-sm font-black text-[#f4d58a] transition-colors hover:bg-[#d8ad45]/10"
-                onClick={resetFormation}
-                type="button"
-              >
-                Reset
+                Clear Players
               </button>
             </div>
           </div>
+          {movePositionsMode ? (
+            <p className="mt-4 rounded-lg border border-[#d8ad45]/25 bg-[#d8ad45]/10 px-3 py-2 text-sm font-bold text-[#f4d58a]">
+              Drag markers to adjust positions.
+            </p>
+          ) : null}
           <div className="mt-5 rounded-xl border border-white/10 bg-[#071b31]/70 p-3">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-[#d8ad45]">
               Age Groups
@@ -536,105 +629,8 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
           </div>
         </div>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[390px_minmax(0,1fr)]">
-          <div className="order-2 rounded-2xl border border-[#d8ad45]/25 bg-white/[0.06] p-4 shadow-2xl shadow-black/20 backdrop-blur lg:order-1">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-[#d8ad45]">
-                  Select Players
-                </p>
-                <h2 className="mt-1 text-2xl font-black">Position List</h2>
-              </div>
-              <span className="rounded-full border border-[#d8ad45]/35 px-3 py-1 text-xs font-black text-[#f4d58a]">
-                {formation}
-              </span>
-            </div>
-
-            {!members.length ? (
-              <p className="rounded-lg border border-white/10 bg-white/[0.04] p-4 text-sm font-bold text-slate-300">
-                No active members available.
-              </p>
-            ) : (
-              <div className="grid gap-3">
-                {positions.map((position, index) => {
-                  const selectedId = selectedPlayers[index] ?? "";
-                  const selectedMember = members.find((member) => member.id === selectedId);
-                  const selectedAgeGroup = selectedMember ? ageGroup(displayAge(selectedMember)) : null;
-
-                  return (
-                    <div
-                      className="grid gap-2 rounded-lg border border-white/10 bg-[#071b31]/80 p-3 sm:grid-cols-[58px_minmax(0,1fr)_auto] sm:items-center"
-                      key={`${formation}-${index}-${position.label}`}
-                    >
-                      <span className="rounded-md bg-[#d8ad45] px-3 py-2 text-center text-sm font-black text-[#061426]">
-                        {position.label}
-                      </span>
-                      <div className="relative min-w-0">
-                        <button
-                          aria-expanded={openDropdown === index}
-                          className="flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-md border border-white/15 bg-[#061426] px-3 py-2 text-left text-sm font-bold outline-none transition-colors hover:border-[#d8ad45]/70 focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/25"
-                          onClick={() => setOpenDropdown((current) => (current === index ? null : index))}
-                          style={{ color: selectedAgeGroup?.textColor ?? "#cbd5e1" }}
-                          type="button"
-                        >
-                          <span className="min-w-0 truncate">
-                            {selectedMember ? memberOptionLabel(selectedMember) : "Choose player"}
-                          </span>
-                          <span className="shrink-0 text-[#f4d58a]">⌄</span>
-                        </button>
-                        {openDropdown === index ? (
-                          <div
-                            className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-72 overflow-y-auto rounded-lg border border-[#d8ad45]/35 bg-[#061426] p-1 shadow-2xl shadow-black/45"
-                            role="listbox"
-                          >
-                            <button
-                              className="flex w-full rounded-md px-3 py-2 text-left text-sm font-bold text-slate-300 hover:bg-white/10"
-                              onClick={() => selectPlayer(index, "")}
-                              type="button"
-                            >
-                              Choose player
-                            </button>
-                            {sortedMembers.map((member) => {
-                              const disabled = selectedIds.has(member.id) && selectedId !== member.id;
-                              const optionAgeGroup = ageGroup(displayAge(member));
-
-                              return (
-                                <button
-                                  className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm font-black transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
-                                  disabled={disabled}
-                                  key={member.id}
-                                  onClick={() => selectPlayer(index, member.id)}
-                                  style={{ color: optionAgeGroup.textColor }}
-                                  type="button"
-                                >
-                                  <span className="min-w-0 truncate">{memberOptionLabel(member)}</span>
-                                  {disabled ? (
-                                    <span className="shrink-0 text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
-                                      Picked
-                                    </span>
-                                  ) : null}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        ) : null}
-                      </div>
-                      <button
-                        className="min-h-10 rounded-md border border-[#9b1c1f]/45 px-3 py-2 text-xs font-black text-[#ffb4b7] transition-colors hover:bg-[#9b1c1f]/15 disabled:cursor-not-allowed disabled:opacity-40"
-                        disabled={!selectedId}
-                        onClick={() => clearPosition(index)}
-                        type="button"
-                      >
-                        Clear
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <div className="order-1 rounded-2xl border border-[#d8ad45]/25 bg-white/[0.06] p-4 shadow-2xl shadow-black/20 backdrop-blur sm:p-5 lg:order-2">
+        <div className="mt-6">
+          <div className="rounded-2xl border border-[#d8ad45]/25 bg-white/[0.06] p-4 shadow-2xl shadow-black/20 backdrop-blur sm:p-5">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-[#d8ad45]">
@@ -663,7 +659,12 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
               </div>
             </div>
 
-            <div className="relative mx-auto aspect-[3/4] w-full max-w-[720px] overflow-hidden rounded-2xl border border-[#d8ad45]/40 bg-[radial-gradient(circle_at_center,rgba(216,173,69,0.16),transparent_34%),linear-gradient(180deg,#1d6a42,#0b3d2d)] shadow-inner shadow-black/40">
+            <div
+              className={`relative mx-auto aspect-[3/4] w-full max-w-[760px] overflow-hidden rounded-2xl border bg-[radial-gradient(circle_at_center,rgba(216,173,69,0.16),transparent_34%),linear-gradient(180deg,#1d6a42,#0b3d2d)] shadow-inner shadow-black/40 ${
+                movePositionsMode ? "border-[#f4d58a] ring-2 ring-[#d8ad45]/25" : "border-[#d8ad45]/40"
+              }`}
+              ref={pitchRef}
+            >
               <div className="absolute inset-4 rounded-xl border-2 border-white/45" />
               <div className="absolute left-1/2 top-1/2 size-28 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/35 sm:size-36" />
               <div className="absolute left-4 right-4 top-1/2 h-0.5 -translate-y-1/2 bg-white/35" />
@@ -683,11 +684,18 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                     style={{ left: `${position.x}%`, top: `${position.y}%` }}
                   >
                     <button
-                      aria-label={`Select player for ${position.label}`}
-                      className={`lineup-marker group relative flex cursor-pointer flex-col items-center appearance-none border-0 bg-transparent p-0 outline-none ${
+                      aria-label={
+                        movePositionsMode
+                          ? `Move ${position.label} marker`
+                          : `Select player for ${position.label}`
+                      }
+                      className={`lineup-marker group relative flex flex-col items-center appearance-none border-0 bg-transparent p-0 outline-none ${
                         hasSelectedPlayer ? "lineup-marker-selected" : "lineup-marker-empty"
+                      } ${movePositionsMode ? "lineup-marker-movable" : "cursor-pointer"} ${
+                        draggingPosition === index ? "lineup-marker-dragging" : ""
                       } ${recentlyChangedPosition === index ? "lineup-marker-bounce" : ""}`}
                       onClick={() => openPositionPicker(index)}
+                      onPointerDown={(event) => startMarkerDrag(index, event)}
                       onAnimationEnd={() => {
                         if (recentlyChangedPosition === index) {
                           setRecentlyChangedPosition(null);
@@ -787,6 +795,16 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
         .lineup-marker {
           transform-origin: center bottom;
           filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.28));
+        }
+
+        .lineup-marker-movable {
+          cursor: grab;
+          touch-action: none;
+        }
+
+        .lineup-marker-dragging {
+          cursor: grabbing;
+          transform: translateY(-3px) scale(1.03);
         }
 
         .lineup-marker-selected .lineup-marker-circle {
