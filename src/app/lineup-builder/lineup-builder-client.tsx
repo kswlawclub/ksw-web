@@ -114,210 +114,210 @@ const formationOptions = Object.keys(formations) as Formation[];
 
 const dutyText = {
   backFour:
-    "Defenders keep the back line compact and help the fullbacks. Midfielders connect play and protect the center. Forwards stretch the pitch, press early, and finish attacks.",
+    "กองหลังต้องยืนเป็นแผงและคุมพื้นที่ให้แน่น กองกลางต้องช่วยทั้งรับและรุก ส่วนแนวรุกต้องหาพื้นที่และช่วยกดดันคู่แข่งตั้งแต่แดนบน",
   backThree:
-    "The three center backs protect the middle. Wingbacks must run both ways. Midfielders stay connected, and forwards give clear passing options.",
+    "เซ็นเตอร์สามคนต้องสื่อสารกันตลอด วิงแบ็กต้องช่วยทั้งริมเส้นเกมรับและเกมรุก กองกลางต้องยืนใกล้กัน ส่วนกองหน้าต้องเป็นตัวเลือกให้เพื่อนจ่ายบอล",
   backFive:
-    "The back five protects wide and central areas. Wingbacks move forward when safe. Midfielders must stay compact, and forwards hold the ball well.",
+    "แนวรับห้าคนต้องคุมพื้นที่ให้แน่น วิงแบ็กเติมเกมเมื่อมีจังหวะปลอดภัย กองกลางต้องไม่ยืนห่างกัน และกองหน้าต้องพักบอลเพื่อรอเพื่อนเติม",
 };
 
 const formationGuides: Partial<Record<Formation, FormationGuide>> = {
   "4-4-2": {
-    overview: "A simple balanced shape with two clear banks of four and two forwards.",
-    strengths: ["Easy for everyone to understand.", "Good wide cover.", "Two strikers can support each other."],
-    watchOut: ["Central midfield can be outnumbered.", "Wide players must track back.", "The team can become too flat."],
+    overview: "แผนพื้นฐานที่เข้าใจง่าย เหมาะกับทีมที่ต้องการเล่นเป็นระบบ มีสองกองหน้าช่วยกันกดดันและหาจังหวะจบสกอร์",
+    strengths: ["เล่นเป็นระบบ เข้าใจง่าย", "มีตัวช่วยเกมรับริมเส้น", "กองหน้าสองคนประสานงานกันได้ดี"],
+    watchOut: ["แดนกลางอาจเสียเปรียบจำนวน", "ปีกต้องลงมาช่วยแบ็ก", "ถ้ายืนแบนเกินไป เกมรุกจะคาดเดาง่าย"],
     duties: dutyText.backFour,
   },
   "4-4-1-1": {
-    overview: "A 4-4-2 style shape with one support forward between midfield and striker.",
-    strengths: ["Good defensive shape.", "Support forward can link play.", "Useful for quick counters."],
-    watchOut: ["Striker can become isolated.", "Support forward must work hard.", "Midfield must stay compact."],
+    overview: "คล้าย 4-4-2 แต่มีตัวสนับสนุนยืนหลังกองหน้า เหมาะกับทีมที่อยากเชื่อมเกมจากกลางไปหน้าให้แน่นขึ้น",
+    strengths: ["รักษารูปทรงเกมรับได้ดี", "ตัวสนับสนุนช่วยเชื่อมเกม", "สวนกลับได้ง่ายกว่า 4-5-1"],
+    watchOut: ["กองหน้าอาจโดดเดี่ยว", "ตัวสนับสนุนต้องช่วยทั้งรับและรุก", "แดนกลางต้องยืนไม่ห่างกัน"],
     duties: dutyText.backFour,
   },
   "4-3-3": {
-    overview: "A balanced attacking shape using wide forwards and three midfielders to control the center.",
-    strengths: ["Gives width in attack.", "Helps pressing from the front.", "Gives passing options in midfield."],
-    watchOut: ["Fullbacks must recover quickly.", "Midfield must not leave big gaps.", "Wingers need to help defensively."],
+    overview: "แผนนี้เน้นความสมดุล มีผู้เล่นแดนกลางช่วยเชื่อมเกม และมีตัวริมเส้นช่วยเปิดพื้นที่ด้านข้าง เหมาะกับทีมที่อยากบุกกดดัน",
+    strengths: ["ใช้พื้นที่ริมเส้นได้ดี", "เพรสซิ่งแดนบนได้ง่าย", "แดนกลางมีตัวจ่ายบอลหลายทาง"],
+    watchOut: ["แบ็กต้องระวังเติมแล้วลงไม่ทัน", "กองกลางห้ามยืนห่างกันเกินไป", "ปีกต้องช่วยเกมรับด้วย"],
     duties: dutyText.backFour,
   },
   "4-2-3-1": {
-    overview: "A controlled shape with two holding midfielders and three attacking midfielders behind one striker.",
-    strengths: ["Strong central protection.", "Good passing lanes.", "Attacking players can rotate."],
-    watchOut: ["Striker may be alone.", "Wide players must defend.", "Too many players can crowd the middle."],
+    overview: "แผนที่คุมพื้นที่กลางสนามได้ดี มีมิดฟิลด์รับสองคนคอยช่วยป้องกัน และมีสามตัวรุกคอยสนับสนุนกองหน้า",
+    strengths: ["กลางสนามแน่นและปลอดภัย", "มีตัวเชื่อมเกมรุกหลายคน", "ปรับเป็นรับหรือรุกได้ง่าย"],
+    watchOut: ["กองหน้าอาจโดดเดี่ยว", "ตัวริมเส้นต้องลงมาช่วยเกมรับ", "ถ้ายืนชิดกันเกินไป พื้นที่จะตัน"],
     duties: dutyText.backFour,
   },
   "4-1-4-1": {
-    overview: "A compact shape with one defensive midfielder screening behind a four-player midfield line.",
-    strengths: ["Strong defensive balance.", "Good midfield numbers.", "Easy to press in a line."],
-    watchOut: ["Lone striker needs support.", "Defensive midfielder must read danger.", "Attack can become slow."],
+    overview: "แผนที่เน้นความแน่น มีมิดฟิลด์รับหนึ่งคนคอยกันหน้าแผงหลัง เหมาะกับทีมที่อยากคุมจังหวะและไม่เปิดพื้นที่ง่าย",
+    strengths: ["เกมรับสมดุล", "แดนกลางมีจำนวนผู้เล่นเยอะ", "ยืนบีบพื้นที่เป็นแผงได้ดี"],
+    watchOut: ["กองหน้าตัวเดียวต้องมีคนเติมช่วย", "มิดฟิลด์รับต้องอ่านเกมดี", "เกมรุกอาจช้าเกินไป"],
     duties: dutyText.backFour,
   },
   "4-5-1": {
-    overview: "A cautious shape with five midfielders and one striker, useful when control is important.",
-    strengths: ["Strong midfield cover.", "Good for protecting a lead.", "Wide midfielders can counter."],
-    watchOut: ["Striker can be isolated.", "Team may sit too deep.", "Needs quick support in attack."],
+    overview: "แผนที่เน้นความรัดกุม มีผู้เล่นแดนกลางห้าคน เหมาะกับทีมที่ต้องการคุมเกมหรือรับมือคู่แข่งที่แข็งกว่า",
+    strengths: ["ปิดพื้นที่แดนกลางได้ดี", "เหมาะกับการรักษาสกอร์", "ปีกสวนกลับได้เร็ว"],
+    watchOut: ["กองหน้าอาจขาดคนสนับสนุน", "ทีมอาจถอยลึกเกินไป", "ต้องเติมเกมรุกให้เร็วเมื่อได้บอล"],
     duties: dutyText.backFour,
   },
   "4-3-1-2": {
-    overview: "A narrow shape with an attacking midfielder behind two strikers.",
-    strengths: ["Strong central combinations.", "Two strikers stay close.", "Good for short passing."],
-    watchOut: ["Limited natural width.", "Fullbacks must provide width.", "Wide defending can be difficult."],
+    overview: "แผนบุกตรงกลาง มีตัวรุกหลังกองหน้าสองคน เหมาะกับทีมที่ชอบเล่นบอลสั้นและเจาะตรงกลาง",
+    strengths: ["ต่อบอลกลางสนามได้ดี", "กองหน้าสองคนอยู่ใกล้กัน", "ตัวรุกกลางช่วยสร้างโอกาส"],
+    watchOut: ["พื้นที่ริมเส้นมีน้อย", "แบ็กต้องเติมให้ถูกจังหวะ", "อาจโดนเจาะด้านข้าง"],
     duties: dutyText.backFour,
   },
   "4-3-2-1": {
-    overview: "A narrow attacking shape with two support players behind one striker.",
-    strengths: ["Good central overloads.", "Support players can find pockets.", "Three midfielders protect transitions."],
-    watchOut: ["Can be too narrow.", "Fullbacks need energy.", "Striker needs close support."],
+    overview: "แผนแคบที่มีตัวสนับสนุนสองคนหลังหน้าเป้า เหมาะกับทีมที่อยากเจาะช่องกลางและเล่นชิ่งสั้น",
+    strengths: ["สร้างจำนวนผู้เล่นตรงกลางได้ดี", "ตัวสนับสนุนหาพื้นที่ระหว่างไลน์", "มีกองกลางสามคนช่วยกันรับ"],
+    watchOut: ["แผนอาจแคบเกินไป", "แบ็กต้องใช้พลังเยอะ", "หน้าเป้าต้องมีคนเติมใกล้ๆ"],
     duties: dutyText.backFour,
   },
   "4-2-2-2": {
-    overview: "A compact attacking shape with two holders, two creators, and two strikers.",
-    strengths: ["Strong central attacks.", "Two strikers press well.", "Two holders protect counters."],
-    watchOut: ["Wide areas can be open.", "Creators must help defend.", "Spacing can become crowded."],
+    overview: "แผนที่มีมิดฟิลด์รับสองคน ตัวสร้างเกมสองคน และกองหน้าสองคน เหมาะกับทีมที่อยากบุกกลางสนามเร็ว",
+    strengths: ["บุกตรงกลางได้อันตราย", "กองหน้าสองคนช่วยเพรส", "มิดฟิลด์รับสองคนช่วยกันกันสวนกลับ"],
+    watchOut: ["ริมเส้นอาจเปิดโล่ง", "ตัวรุกต้องช่วยเกมรับ", "ระยะยืนอาจแออัดเกินไป"],
     duties: dutyText.backFour,
   },
   "4-1-2-1-2": {
-    overview: "A diamond midfield shape built for central passing and two-striker support.",
-    strengths: ["Strong through the middle.", "Clear defensive midfielder role.", "Two strikers stay connected."],
-    watchOut: ["Needs fullbacks for width.", "Wide opponents can overload.", "Midfield distances must stay tight."],
+    overview: "แผนไดมอนด์ที่เน้นต่อบอลตรงกลางและมีกองหน้าสองคน เหมาะกับทีมที่มีมิดฟิลด์ขยันและเข้าใจตำแหน่ง",
+    strengths: ["กลางสนามแน่นมาก", "บทบาทมิดฟิลด์รับชัดเจน", "กองหน้าสองคนช่วยกันได้ดี"],
+    watchOut: ["ต้องใช้แบ็กสร้างความกว้าง", "คู่แข่งริมเส้นอาจสร้างปัญหา", "กองกลางต้องรักษาระยะให้ดี"],
     duties: dutyText.backFour,
   },
   "4-2-4": {
-    overview: "An aggressive attacking shape with four forward players and two central midfielders.",
-    strengths: ["Many attacking options.", "Good for chasing a goal.", "Wide forwards can stretch defenders."],
-    watchOut: ["Midfield can be exposed.", "Needs strong recovery runs.", "Risky against counter attacks."],
+    overview: "แผนบุกเต็มตัว มีแนวรุกสี่คน เหมาะกับช่วงที่ต้องการประตูหรือกดดันคู่แข่งหนักๆ",
+    strengths: ["มีตัวเลือกเกมรุกเยอะ", "เหมาะกับการไล่สกอร์", "ตัวริมเส้นดึงแนวรับคู่แข่งได้"],
+    watchOut: ["แดนกลางอาจโดนเจาะง่าย", "ทุกคนต้องรีบลงมาช่วยรับ", "เสี่ยงโดนสวนกลับ"],
     duties: dutyText.backFour,
   },
   "3-5-2": {
-    overview: "A three-center-back shape with wingbacks and two strikers.",
-    strengths: ["Strong central defense.", "Wingbacks give width.", "Two strikers support each other."],
-    watchOut: ["Wingbacks need stamina.", "Wide spaces can open behind.", "Midfield must shift together."],
+    overview: "แผนหลังสามที่ใช้วิงแบ็กช่วยริมเส้นและมีกองหน้าสองคน เหมาะกับทีมที่มีวิงแบ็กฟิตและขยัน",
+    strengths: ["เกมรับตรงกลางแข็งแรง", "วิงแบ็กช่วยสร้างความกว้าง", "กองหน้าสองคนประสานงานกันได้"],
+    watchOut: ["วิงแบ็กต้องใช้แรงเยอะ", "พื้นที่หลังวิงแบ็กอาจเปิด", "กองกลางต้องขยับช่วยกันเป็นชุด"],
     duties: dutyText.backThree,
   },
   "3-4-3": {
-    overview: "A bold shape with three defenders, wide midfield support, and three forwards.",
-    strengths: ["Strong attacking width.", "Good front pressing.", "Three center backs cover counters."],
-    watchOut: ["Wide midfielders work hard.", "Can be open between lines.", "Needs disciplined center backs."],
+    overview: "แผนหลังสามที่มีแนวรุกสามคน เหมาะกับทีมที่อยากบุกกดดันและใช้พื้นที่ริมเส้นอย่างชัดเจน",
+    strengths: ["เกมรุกมีความกว้าง", "เพรสแดนหน้าได้ดี", "เซ็นเตอร์สามคนช่วยกันรับมือสวนกลับ"],
+    watchOut: ["ตัวริมเส้นต้องขึ้นลงเยอะ", "ช่องว่างระหว่างไลน์อาจเปิด", "เซ็นเตอร์ต้องมีวินัยสูง"],
     duties: dutyText.backThree,
   },
   "3-4-2-1": {
-    overview: "A three-back shape with two support attackers behind one striker.",
-    strengths: ["Good central attacking pockets.", "Wingbacks provide width.", "Useful for quick combinations."],
-    watchOut: ["Striker needs support quickly.", "Wingbacks must defend wide.", "Support attackers must track runners."],
+    overview: "แผนหลังสามที่มีตัวรุกสองคนคอยช่วยหน้าเป้า เหมาะกับทีมที่ชอบหาพื้นที่ระหว่างกองกลางกับกองหลังคู่แข่ง",
+    strengths: ["ตัวรุกมีพื้นที่ให้เล่น", "วิงแบ็กช่วยเปิดริมเส้น", "เล่นชิ่งเร็วได้ดี"],
+    watchOut: ["หน้าเป้าต้องมีคนเติมทัน", "วิงแบ็กต้องรับผิดชอบริมเส้น", "ตัวรุกต้องช่วยไล่บอล"],
     duties: dutyText.backThree,
   },
   "3-4-1-2": {
-    overview: "A three-back system with a playmaker behind two strikers.",
-    strengths: ["Two strikers plus a creator.", "Strong central presence.", "Wingbacks can attack space."],
-    watchOut: ["Wide areas depend on wingbacks.", "Playmaker must help without the ball.", "Back three must communicate."],
+    overview: "แผนหลังสามที่มีตัวทำเกมหลังกองหน้าสองคน เหมาะกับทีมที่มีเพลย์เมกเกอร์และกองหน้าที่เล่นร่วมกันดี",
+    strengths: ["มีสองกองหน้ากับตัวสร้างสรรค์เกม", "ตรงกลางมีคนเยอะ", "วิงแบ็กเติมพื้นที่ว่างได้"],
+    watchOut: ["ริมเส้นขึ้นอยู่กับวิงแบ็กมาก", "เพลย์เมกเกอร์ต้องช่วยตอนเสียบอล", "หลังสามต้องสื่อสารกันตลอด"],
     duties: dutyText.backThree,
   },
   "3-3-3-1": {
-    overview: "A layered shape with three defenders, three midfielders, three attackers, and one striker.",
-    strengths: ["Good passing triangles.", "Many central options.", "Can press in waves."],
-    watchOut: ["Needs clear spacing.", "Wide defense can be exposed.", "Players must understand their zones."],
+    overview: "แผนแบ่งเป็นหลายชั้น มีตัวเลือกจ่ายบอลหลายจุด เหมาะกับทีมที่เข้าใจพื้นที่และเคลื่อนที่เป็นระบบ",
+    strengths: ["สร้างสามเหลี่ยมจ่ายบอลได้ดี", "มีตัวเลือกตรงกลางหลายคน", "เพรสเป็นชั้นได้"],
+    watchOut: ["ต้องรักษาระยะยืนให้ชัด", "เกมรับริมเส้นอาจเปิด", "ผู้เล่นต้องเข้าใจโซนของตัวเอง"],
     duties: dutyText.backThree,
   },
   "3-2-4-1": {
-    overview: "A modern attacking shape with two holders and four players behind the striker.",
-    strengths: ["Strong attacking support.", "Two holders protect the back three.", "Good for possession play."],
-    watchOut: ["Can be risky if holders split.", "Wide attackers must recover.", "Requires calm passing."],
+    overview: "แผนบุกสมัยใหม่ มีมิดฟิลด์รับสองคนและตัวรุกสี่คนหลังหน้าเป้า เหมาะกับทีมที่ครองบอลนิ่ง",
+    strengths: ["สนับสนุนเกมรุกได้มาก", "มิดฟิลด์รับสองคนช่วยกันป้องกัน", "เหมาะกับการครองบอล"],
+    watchOut: ["ถ้ามิดฟิลด์รับแยกกันมากจะเสี่ยง", "ตัวริมเส้นต้องรีบลงมาช่วย", "ต้องจ่ายบอลอย่างใจเย็น"],
     duties: dutyText.backThree,
   },
   "3-5-1-1": {
-    overview: "A 3-5-2 variation with one support forward behind the striker.",
-    strengths: ["Strong midfield numbers.", "Support forward links counters.", "Wingbacks keep width."],
-    watchOut: ["Striker can be isolated.", "Support forward must defend.", "Wingbacks carry a heavy load."],
+    overview: "แผนคล้าย 3-5-2 แต่มีตัวสนับสนุนยืนหลังกองหน้า เหมาะกับทีมที่อยากแน่นกลางและสวนกลับเป็นระบบ",
+    strengths: ["แดนกลางมีจำนวนเยอะ", "ตัวสนับสนุนเชื่อมเกมสวนกลับ", "วิงแบ็กช่วยคุมริมเส้น"],
+    watchOut: ["กองหน้าอาจโดดเดี่ยว", "ตัวสนับสนุนต้องช่วยเกมรับ", "วิงแบ็กต้องรับภาระหนัก"],
     duties: dutyText.backThree,
   },
   "3-6-1": {
-    overview: "A control-focused shape with many midfield players and one striker.",
-    strengths: ["Excellent midfield numbers.", "Good for keeping the ball.", "Can block central spaces."],
-    watchOut: ["Needs runners beyond the striker.", "Attack can lack depth.", "Roles must be very clear."],
+    overview: "แผนที่เน้นคุมแดนกลางมากเป็นพิเศษ เหมาะกับทีมที่ต้องการเก็บบอลและปิดพื้นที่ตรงกลาง",
+    strengths: ["แดนกลางมีผู้เล่นเยอะมาก", "ครองบอลได้ดี", "ปิดช่องกลางได้แน่น"],
+    watchOut: ["ต้องมีคนวิ่งทะลุเลยหน้าเป้า", "เกมรุกอาจขาดความลึก", "บทบาทแต่ละคนต้องชัดเจน"],
     duties: dutyText.backThree,
   },
   "5-3-2": {
-    overview: "A secure defensive shape with five defenders, three midfielders, and two strikers.",
-    strengths: ["Very strong defensive cover.", "Two strikers help counters.", "Wingbacks can choose moments to attack."],
-    watchOut: ["Can sit too deep.", "Midfield may be stretched.", "Wingbacks must time forward runs."],
+    overview: "แผนรับแน่น มีหลังห้า กองกลางสาม และกองหน้าสองคน เหมาะกับทีมที่อยากปลอดภัยแต่ยังสวนกลับได้",
+    strengths: ["เกมรับแน่นมาก", "กองหน้าสองคนช่วยสวนกลับ", "วิงแบ็กเลือกจังหวะเติมได้"],
+    watchOut: ["อาจถอยลึกเกินไป", "แดนกลางอาจโดนดึงกว้าง", "วิงแบ็กต้องเติมให้ถูกจังหวะ"],
     duties: dutyText.backFive,
   },
   "5-4-1": {
-    overview: "A protective shape with a back five and four midfielders in front.",
-    strengths: ["Hard to break down.", "Good wide protection.", "Useful against strong opponents."],
-    watchOut: ["Lone striker needs support.", "Can invite pressure.", "Counters must be quick."],
+    overview: "แผนเน้นป้องกัน มีหลังห้าและกองกลางสี่คน เหมาะกับการรับมือทีมที่บุกหนักหรือรักษาสกอร์",
+    strengths: ["คู่แข่งเจาะยาก", "ปิดริมเส้นได้ดี", "เหมาะกับการเจอคู่แข่งแข็ง"],
+    watchOut: ["หน้าเป้าต้องการคนช่วย", "อาจโดนกดดันต่อเนื่อง", "สวนกลับต้องเร็วและแม่น"],
     duties: dutyText.backFive,
   },
   "5-2-3": {
-    overview: "A back-five shape with three forwards ready to counter quickly.",
-    strengths: ["Good defensive base.", "Front three can attack fast.", "Wingbacks add width."],
-    watchOut: ["Only two central midfielders.", "Forwards must help press.", "Gaps can appear in midfield."],
+    overview: "แผนหลังห้าที่มีแนวรุกสามคน เหมาะกับทีมที่อยากรับแน่นแล้วสวนกลับเร็วด้วยตัวริมเส้น",
+    strengths: ["ฐานเกมรับมั่นคง", "สามตัวหน้าสวนกลับเร็ว", "วิงแบ็กช่วยสร้างความกว้าง"],
+    watchOut: ["กองกลางตรงกลางมีแค่สองคน", "แนวรุกต้องช่วยเพรส", "ช่องว่างกลางสนามอาจเกิดง่าย"],
     duties: dutyText.backFive,
   },
   "5-2-1-2": {
-    overview: "A defensive base with an attacking midfielder supporting two strikers.",
-    strengths: ["Strong central counter shape.", "Two strikers stay connected.", "Back five protects wide areas."],
-    watchOut: ["Midfield pair can be overloaded.", "Attacking midfielder must work back.", "Wingbacks need discipline."],
+    overview: "แผนรับแน่นที่มีตัวรุกกลางช่วยกองหน้าสองคน เหมาะกับทีมที่ต้องการสวนกลับตรงกลาง",
+    strengths: ["สวนกลับตรงกลางได้ดี", "กองหน้าสองคนอยู่ใกล้กัน", "หลังห้าช่วยคุมริมเส้น"],
+    watchOut: ["มิดฟิลด์สองคนอาจโดนรุม", "ตัวรุกกลางต้องช่วยไล่บอล", "วิงแบ็กต้องมีวินัย"],
     duties: dutyText.backFive,
   },
   "5-1-3-1": {
-    overview: "A cautious shape with one defensive midfielder and three attacking midfielders behind the striker.",
-    strengths: ["Good defensive screen.", "Three attackers can support counters.", "Back five gives security."],
-    watchOut: ["Defensive midfielder has a big job.", "Striker can be isolated.", "Wide support must be quick."],
+    overview: "แผนรัดกุม มีมิดฟิลด์รับหนึ่งคนและตัวรุกสามคนหลังหน้าเป้า เหมาะกับการรับแน่นแล้วหาจังหวะสวน",
+    strengths: ["มีตัวคุมหน้าแผงหลัง", "สามตัวรุกช่วยสวนกลับได้", "หลังห้าให้ความปลอดภัย"],
+    watchOut: ["มิดฟิลด์รับรับภาระหนัก", "หน้าเป้าอาจโดดเดี่ยว", "ตัวริมเส้นต้องเติมให้เร็ว"],
     duties: dutyText.backFive,
   },
   "4-1-3-2": {
-    overview: "A back-four shape with one holder, three midfielders, and two strikers.",
-    strengths: ["Good striker support.", "Holder protects the center.", "Flexible midfield line."],
-    watchOut: ["Wide cover can be weak.", "Holder must stay disciplined.", "Midfield must not rush forward together."],
+    overview: "แผนหลังสี่ที่มีมิดฟิลด์รับหนึ่งคน กองกลางสามคน และกองหน้าสองคน เหมาะกับทีมที่อยากบุกแต่ยังมีตัวกันกลาง",
+    strengths: ["กองหน้ามีคนช่วย", "มิดฟิลด์รับคุมพื้นที่กลาง", "แดนกลางปรับตำแหน่งได้ยืดหยุ่น"],
+    watchOut: ["ริมเส้นอาจไม่แน่นพอ", "มิดฟิลด์รับต้องมีวินัย", "กองกลางห้ามเติมพร้อมกันหมด"],
     duties: dutyText.backFour,
   },
   "4-2-1-3": {
-    overview: "A shape with two holding midfielders, one creator, and a front three.",
-    strengths: ["Good defensive base.", "Creator links to the front three.", "Wide forwards stretch play."],
-    watchOut: ["Creator can be marked tightly.", "Fullbacks must balance runs.", "Front three must press together."],
+    overview: "แผนที่มีมิดฟิลด์รับสองคน ตัวสร้างเกมหนึ่งคน และแนวรุกสามคน เหมาะกับทีมที่อยากบุกแบบมีฐานรับ",
+    strengths: ["ฐานเกมรับดี", "ตัวสร้างเกมเชื่อมไปแนวรุก", "ปีกช่วยเปิดพื้นที่"],
+    watchOut: ["ตัวสร้างเกมอาจโดนประกบแน่น", "แบ็กต้องเลือกจังหวะเติม", "แนวรุกสามคนต้องเพรสพร้อมกัน"],
     duties: dutyText.backFour,
   },
   "4-3-3 False 9": {
-    overview: "A 4-3-3 where the central forward drops deeper to create space for wide runners.",
-    strengths: ["Creates central overloads.", "Wide forwards can run behind.", "Hard for defenders to mark."],
-    watchOut: ["Needs smart movement.", "May lack a fixed target.", "Wide forwards must attack the box."],
+    overview: "แผน 4-3-3 ที่กองหน้าตัวกลางถอยลงมาเชื่อมเกม เพื่อเปิดพื้นที่ให้ตัวริมเส้นวิ่งเข้าไปทำประตู",
+    strengths: ["สร้างจำนวนผู้เล่นตรงกลางได้", "ปีกมีพื้นที่วิ่งทะลุ", "กองหลังคู่แข่งจับทางยาก"],
+    watchOut: ["ต้องเคลื่อนที่ฉลาด", "อาจไม่มีตัวค้ำในกรอบ", "ปีกต้องกล้าเติมเข้าทำ"],
     duties: dutyText.backFour,
   },
   "4-3-3 Holding": {
-    overview: "A 4-3-3 with a clear defensive midfielder protecting two central midfielders.",
-    strengths: ["Good balance.", "Defensive midfielder protects counters.", "Wide forwards keep attacking width."],
-    watchOut: ["Holder must not get pulled away.", "Midfielders need to support attacks.", "Fullbacks must recover."],
+    overview: "แผน 4-3-3 ที่มีมิดฟิลด์รับชัดเจน เหมาะกับทีมที่อยากบุกริมเส้นแต่ยังคุมเกมรับตรงกลาง",
+    strengths: ["สมดุลดี", "มิดฟิลด์รับช่วยกันสวนกลับ", "แนวรุกริมเส้นเปิดพื้นที่ได้"],
+    watchOut: ["มิดฟิลด์รับห้ามหลุดตำแหน่ง", "กองกลางต้องเติมช่วยเกมรุก", "แบ็กต้องรีบลงเมื่อเสียบอล"],
     duties: dutyText.backFour,
   },
   "4-3-3 Attack": {
-    overview: "A more attacking 4-3-3 with one advanced midfielder joining the front line.",
-    strengths: ["Extra support near the striker.", "Good for pressing high.", "Creates chances between lines."],
-    watchOut: ["Can leave space behind midfield.", "Advanced midfielder must recover.", "Back line needs protection."],
+    overview: "แผน 4-3-3 ที่ดันมิดฟิลด์ตัวหนึ่งขึ้นสูง เหมาะกับทีมที่ต้องการเพิ่มตัวรุกและกดดันคู่แข่ง",
+    strengths: ["มีตัวช่วยใกล้กองหน้า", "เพรสสูงได้ดี", "สร้างโอกาสระหว่างไลน์"],
+    watchOut: ["หลังแดนกลางอาจมีช่อง", "มิดฟิลด์ตัวรุกต้องลงมาช่วย", "แนวรับต้องมีคนคอยป้องกัน"],
     duties: dutyText.backFour,
   },
   "4-4-2 Diamond": {
-    overview: "A narrow 4-4-2 with a midfield diamond and two strikers.",
-    strengths: ["Strong central passing.", "Clear playmaker role.", "Two strikers stay close."],
-    watchOut: ["Needs fullbacks for width.", "Can be attacked wide.", "Diamond must shift as a unit."],
+    overview: "แผน 4-4-2 แบบไดมอนด์ เน้นการเล่นตรงกลาง มีกองหน้าสองคนและตัวทำเกมอยู่หลัง",
+    strengths: ["ต่อบอลตรงกลางแข็งแรง", "บทบาทตัวทำเกมชัดเจน", "กองหน้าสองคนอยู่ใกล้กัน"],
+    watchOut: ["ต้องใช้แบ็กสร้างความกว้าง", "อาจโดนโจมตีด้านข้าง", "แดนกลางต้องขยับพร้อมกัน"],
     duties: dutyText.backFour,
   },
   "4-4-2 Flat": {
-    overview: "A classic flat 4-4-2 with simple roles and strong team shape.",
-    strengths: ["Very easy to organize.", "Good wide balance.", "Two forwards press together."],
-    watchOut: ["Can lack midfield numbers.", "Lines must not be too far apart.", "Wide midfielders must defend."],
+    overview: "แผน 4-4-2 แบบคลาสสิก บทบาทชัดเจน เหมาะกับทีมที่ต้องการความเป็นระเบียบและเล่นง่าย",
+    strengths: ["จัดทีมง่ายมาก", "สมดุลริมเส้นดี", "กองหน้าสองคนช่วยกันเพรส"],
+    watchOut: ["กลางสนามอาจคนน้อยกว่า", "แนวรับกับแดนกลางห้ามห่างกัน", "ปีกต้องช่วยเกมรับ"],
     duties: dutyText.backFour,
   },
   "4-2-3-1 Wide": {
-    overview: "A 4-2-3-1 that uses wide attackers to stretch the opponent.",
-    strengths: ["Good width.", "Two holders protect midfield.", "Wide players can isolate defenders."],
-    watchOut: ["Striker needs support.", "Wide players must track fullbacks.", "Holders must cover counters."],
+    overview: "แผน 4-2-3-1 ที่ใช้ตัวริมเส้นถ่างแนวรับคู่แข่ง เหมาะกับทีมที่มีปีกหรือผู้เล่นริมเส้นเล่นหนึ่งต่อหนึ่งได้",
+    strengths: ["มีความกว้างชัดเจน", "มิดฟิลด์รับสองคนช่วยคุมกลาง", "ปีกดวลกับกองหลังคู่แข่งได้"],
+    watchOut: ["หน้าเป้าต้องมีคนเติมช่วย", "ปีกต้องตามแบ็กคู่แข่ง", "มิดฟิลด์รับต้องกันสวนกลับ"],
     duties: dutyText.backFour,
   },
   "4-2-3-1 Narrow": {
-    overview: "A compact 4-2-3-1 with three central attacking midfielders.",
-    strengths: ["Strong central combinations.", "Many players between lines.", "Good for short passing."],
-    watchOut: ["Needs fullbacks for width.", "Can get crowded in the middle.", "Wide defense can be late."],
+    overview: "แผน 4-2-3-1 แบบแคบ ใช้ตัวรุกกลางสามคน เหมาะกับทีมที่ชอบต่อบอลสั้นและหาช่องตรงกลาง",
+    strengths: ["เล่นชิ่งตรงกลางได้ดี", "มีผู้เล่นระหว่างไลน์หลายคน", "เหมาะกับบอลสั้น"],
+    watchOut: ["ต้องใช้แบ็กเติมริมเส้น", "ตรงกลางอาจแออัด", "เกมรับริมเส้นอาจลงไม่ทัน"],
     duties: dutyText.backFour,
   },
 };
@@ -870,7 +870,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
             <div className="flex flex-col gap-3 border-b border-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]">
-                  Formation Guide
+                  คู่มือแผนการเล่น
                 </p>
                 <h2 className="mt-1 text-2xl font-black text-white">{formation}</h2>
               </div>
@@ -879,7 +879,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                 onClick={() => setGuideExpanded((current) => !current)}
                 type="button"
               >
-                {guideExpanded ? "Hide Guide" : "Show Guide"}
+                {guideExpanded ? "ซ่อนคำอธิบาย" : "แสดงคำอธิบาย"}
               </button>
             </div>
             {guideExpanded ? (
@@ -887,27 +887,27 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                 <div className="grid gap-4 p-4 lg:grid-cols-[1.15fr_0.85fr]">
                   <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
                     <p className="text-xs font-black uppercase tracking-[0.18em] text-[#d8ad45]">
-                      Overview
+                      ภาพรวม
                     </p>
                     <p className="mt-3 text-sm font-semibold leading-7 text-slate-200">
                       {formationGuide.overview}
                     </p>
                     <div className="mt-5 rounded-lg border border-[#d8ad45]/20 bg-[#d8ad45]/10 p-3">
                       <p className="text-xs font-black uppercase tracking-[0.18em] text-[#f4d58a]">
-                        Basic Duties
+                        หน้าที่โดยรวม
                       </p>
                       <p className="mt-2 text-sm font-semibold leading-7 text-slate-200">
                         {formationGuide.duties}
                       </p>
                     </div>
                     <p className="mt-4 text-xs font-bold leading-5 text-slate-400">
-                      Use this as a simple guide. Adjust positions based on players, opponent, and match situation.
+                      ใช้คำอธิบายนี้เป็นแนวทางเบื้องต้นเท่านั้น สามารถปรับตำแหน่งและวิธีเล่นให้เหมาะกับผู้เล่น คู่แข่ง และสถานการณ์จริงในสนามได้
                     </p>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
                     <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
                       <p className="text-xs font-black uppercase tracking-[0.18em] text-[#d8ad45]">
-                        Strengths
+                        จุดเด่น
                       </p>
                       <ul className="mt-3 space-y-2">
                         {formationGuide.strengths.map((item) => (
@@ -920,7 +920,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                     </div>
                     <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
                       <p className="text-xs font-black uppercase tracking-[0.18em] text-[#d8ad45]">
-                        Watch Out
+                        จุดที่ต้องระวัง
                       </p>
                       <ul className="mt-3 space-y-2">
                         {formationGuide.watchOut.map((item) => (
@@ -936,7 +936,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
               ) : (
                 <div className="p-4">
                   <p className="rounded-lg border border-white/10 bg-white/[0.04] p-4 text-sm font-bold text-slate-300">
-                    This formation guide is being prepared.
+                    คำอธิบายแผนนี้กำลังจัดเตรียมเพิ่มเติม
                   </p>
                 </div>
               )
