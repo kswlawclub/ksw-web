@@ -10,6 +10,7 @@ const navItems = [
   ["Team", "/team"],
   ["Gallery", "/gallery"],
   ["Partners", "/partners"],
+  ["Tactics Board", "/lineup-builder"],
   ["League Center", "/#league-center"],
 ];
 const facebookUrl = "https://web.facebook.com/KlongSamWaLawyers";
