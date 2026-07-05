@@ -32,11 +32,19 @@ type LineupBuilderProps = {
   opponents: OpponentTeam[];
 };
 
+type FormationResource = {
+  title: string;
+  type: "Article" | "Video" | "Tactical Guide";
+  source: string;
+  url: string;
+};
+
 type FormationGuide = {
   overview: string;
   strengths: string[];
   watchOut: string[];
   duties: string;
+  resources?: FormationResource[];
 };
 
 type Formation =
@@ -139,12 +147,40 @@ const formationGuides: Partial<Record<Formation, FormationGuide>> = {
     strengths: ["ใช้พื้นที่ริมเส้นได้ดี", "เพรสซิ่งแดนบนได้ง่าย", "แดนกลางมีตัวจ่ายบอลหลายทาง"],
     watchOut: ["แบ็กต้องระวังเติมแล้วลงไม่ทัน", "กองกลางห้ามยืนห่างกันเกินไป", "ปีกต้องช่วยเกมรับด้วย"],
     duties: dutyText.backFour,
+    resources: [
+      {
+        title: "7 Build-Up Mistakes in a 4-3-3",
+        type: "Video",
+        source: "YouTube",
+        url: "https://www.youtube.com/watch?v=c0dt77GtOTY",
+      },
+    ],
   },
   "4-2-3-1": {
     overview: "แผนที่คุมพื้นที่กลางสนามได้ดี มีมิดฟิลด์รับสองคนคอยช่วยป้องกัน และมีสามตัวรุกคอยสนับสนุนกองหน้า",
     strengths: ["กลางสนามแน่นและปลอดภัย", "มีตัวเชื่อมเกมรุกหลายคน", "ปรับเป็นรับหรือรุกได้ง่าย"],
     watchOut: ["กองหน้าอาจโดดเดี่ยว", "ตัวริมเส้นต้องลงมาช่วยเกมรับ", "ถ้ายืนชิดกันเกินไป พื้นที่จะตัน"],
     duties: dutyText.backFour,
+    resources: [
+      {
+        title: "The 4-2-3-1: football tactics explained",
+        type: "Article",
+        source: "Coaches’ Voice",
+        url: "https://learning.coachesvoice.com/cv/the-4-2-3-1-football-tactics-pochettino-guardiola-flick-southgate/",
+      },
+      {
+        title: "Fundamentals of the 4-2-3-1 formation",
+        type: "Article",
+        source: "Coachbetter",
+        url: "https://www.coachbetter.com/blog/fundamentals-of-the-4-2-3-1-formation",
+      },
+      {
+        title: "4-2-3-1 Formation Explained",
+        type: "Video",
+        source: "YouTube",
+        url: "https://www.youtube.com/watch?v=e2ZMTJmNdDg",
+      },
+    ],
   },
   "4-1-4-1": {
     overview: "แผนที่เน้นความแน่น มีมิดฟิลด์รับหนึ่งคนคอยกันหน้าแผงหลัง เหมาะกับทีมที่อยากคุมจังหวะและไม่เปิดพื้นที่ง่าย",
@@ -884,55 +920,103 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
             </div>
             {guideExpanded ? (
               formationGuide ? (
-                <div className="grid gap-4 p-4 lg:grid-cols-[1.15fr_0.85fr]">
-                  <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
-                    <p className="text-xs font-black uppercase tracking-[0.18em] text-[#d8ad45]">
-                      ภาพรวม
-                    </p>
-                    <p className="mt-3 text-sm font-semibold leading-7 text-slate-200">
-                      {formationGuide.overview}
-                    </p>
-                    <div className="mt-5 rounded-lg border border-[#d8ad45]/20 bg-[#d8ad45]/10 p-3">
-                      <p className="text-xs font-black uppercase tracking-[0.18em] text-[#f4d58a]">
-                        หน้าที่โดยรวม
-                      </p>
-                      <p className="mt-2 text-sm font-semibold leading-7 text-slate-200">
-                        {formationGuide.duties}
-                      </p>
-                    </div>
-                    <p className="mt-4 text-xs font-bold leading-5 text-slate-400">
-                      ใช้คำอธิบายนี้เป็นแนวทางเบื้องต้นเท่านั้น สามารถปรับตำแหน่งและวิธีเล่นให้เหมาะกับผู้เล่น คู่แข่ง และสถานการณ์จริงในสนามได้
-                    </p>
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                <>
+                  <div className="grid gap-4 p-4 lg:grid-cols-[1.15fr_0.85fr]">
                     <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
                       <p className="text-xs font-black uppercase tracking-[0.18em] text-[#d8ad45]">
-                        จุดเด่น
+                        ภาพรวม
                       </p>
-                      <ul className="mt-3 space-y-2">
-                        {formationGuide.strengths.map((item) => (
-                          <li className="flex gap-2 text-sm font-semibold leading-6 text-slate-200" key={item}>
-                            <span className="mt-2 size-1.5 shrink-0 rounded-full bg-[#d8ad45]" />
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
+                      <p className="mt-3 text-sm font-semibold leading-7 text-slate-200">
+                        {formationGuide.overview}
+                      </p>
+                      <div className="mt-5 rounded-lg border border-[#d8ad45]/20 bg-[#d8ad45]/10 p-3">
+                        <p className="text-xs font-black uppercase tracking-[0.18em] text-[#f4d58a]">
+                          หน้าที่โดยรวม
+                        </p>
+                        <p className="mt-2 text-sm font-semibold leading-7 text-slate-200">
+                          {formationGuide.duties}
+                        </p>
+                      </div>
+                      <p className="mt-4 text-xs font-bold leading-5 text-slate-400">
+                        ใช้คำอธิบายนี้เป็นแนวทางเบื้องต้นเท่านั้น สามารถปรับตำแหน่งและวิธีเล่นให้เหมาะกับผู้เล่น คู่แข่ง และสถานการณ์จริงในสนามได้
+                      </p>
                     </div>
-                    <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
-                      <p className="text-xs font-black uppercase tracking-[0.18em] text-[#d8ad45]">
-                        จุดที่ต้องระวัง
-                      </p>
-                      <ul className="mt-3 space-y-2">
-                        {formationGuide.watchOut.map((item) => (
-                          <li className="flex gap-2 text-sm font-semibold leading-6 text-slate-200" key={item}>
-                            <span className="mt-2 size-1.5 shrink-0 rounded-full bg-[#9b1c1f]" />
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                      <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-xs font-black uppercase tracking-[0.18em] text-[#d8ad45]">
+                          จุดเด่น
+                        </p>
+                        <ul className="mt-3 space-y-2">
+                          {formationGuide.strengths.map((item) => (
+                            <li className="flex gap-2 text-sm font-semibold leading-6 text-slate-200" key={item}>
+                              <span className="mt-2 size-1.5 shrink-0 rounded-full bg-[#d8ad45]" />
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-xs font-black uppercase tracking-[0.18em] text-[#d8ad45]">
+                          จุดที่ต้องระวัง
+                        </p>
+                        <ul className="mt-3 space-y-2">
+                          {formationGuide.watchOut.map((item) => (
+                            <li className="flex gap-2 text-sm font-semibold leading-6 text-slate-200" key={item}>
+                              <span className="mt-2 size-1.5 shrink-0 rounded-full bg-[#9b1c1f]" />
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     </div>
                   </div>
-                </div>
+                  <div className="border-t border-white/10 p-4">
+                    <div className="rounded-lg border border-[#d8ad45]/20 bg-white/[0.04] p-4">
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-[#d8ad45]">
+                        แหล่งเรียนรู้เพิ่มเติม
+                      </p>
+                      {formationGuide.resources?.length ? (
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                          {formationGuide.resources.map((resource) => {
+                            const typeLabel =
+                              resource.type === "Video"
+                                ? "ดูวิดีโอ"
+                                : resource.type === "Tactical Guide"
+                                  ? "บทวิเคราะห์"
+                                  : "อ่านเพิ่มเติม";
+
+                            return (
+                              <a
+                                className="group rounded-lg border border-white/10 bg-[#061426]/70 p-3 transition hover:-translate-y-0.5 hover:border-[#d8ad45]/45 hover:bg-[#0a203a]"
+                                href={resource.url}
+                                key={`${resource.title}-${resource.url}`}
+                                rel="noopener noreferrer"
+                                target="_blank"
+                              >
+                                <span className="inline-flex rounded-full border border-[#d8ad45]/30 bg-[#d8ad45]/10 px-2.5 py-1 text-[11px] font-black text-[#f4d58a]">
+                                  {typeLabel}
+                                </span>
+                                <span className="mt-3 block text-sm font-black leading-6 text-white group-hover:text-[#f4d58a]">
+                                  {resource.title}
+                                </span>
+                                <span className="mt-2 block text-xs font-bold text-slate-400">
+                                  {resource.source}
+                                </span>
+                              </a>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="mt-3 rounded-md border border-white/10 bg-[#061426]/60 p-3 text-sm font-bold text-slate-300">
+                          ยังไม่มีแหล่งเรียนรู้เพิ่มเติมสำหรับแผนนี้
+                        </p>
+                      )}
+                      <p className="mt-3 text-xs font-bold leading-5 text-slate-400">
+                        แหล่งเรียนรู้เหล่านี้เป็นข้อมูลประกอบเท่านั้น การนำไปใช้จริงควรปรับให้เหมาะกับผู้เล่นและสถานการณ์ของทีม
+                      </p>
+                    </div>
+                  </div>
+                </>
               ) : (
                 <div className="p-4">
                   <p className="rounded-lg border border-white/10 bg-white/[0.04] p-4 text-sm font-bold text-slate-300">
