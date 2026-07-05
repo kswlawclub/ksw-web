@@ -780,6 +780,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
   const [draggingPosition, setDraggingPosition] = useState<number | null>(null);
   const [recentlyChangedPosition, setRecentlyChangedPosition] = useState<number | null>(null);
   const [activePickerPosition, setActivePickerPosition] = useState<number | null>(null);
+  const [mobileRoleGuideExpanded, setMobileRoleGuideExpanded] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
   const pitchRef = useRef<HTMLDivElement>(null);
 
@@ -809,6 +810,8 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
     if (activePickerPosition === null) {
       return;
     }
+
+    setMobileRoleGuideExpanded(false);
 
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -965,7 +968,20 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
           </button>
         </div>
 
-        <div className="mt-3 shrink-0 rounded-lg border border-[#d8ad45]/20 bg-[#d8ad45]/10 p-3">
+        <button
+          aria-expanded={mobileRoleGuideExpanded}
+          className="mt-3 inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg border border-[#d8ad45]/35 bg-[#d8ad45]/10 px-3 py-2 text-sm font-black text-[#f4d58a] transition-colors hover:bg-[#d8ad45]/15 md:hidden"
+          onClick={() => setMobileRoleGuideExpanded((current) => !current)}
+          type="button"
+        >
+          {mobileRoleGuideExpanded ? "ซ่อนหน้าที่ตำแหน่งนี้" : "ดูหน้าที่ตำแหน่งนี้"}
+        </button>
+
+        <div
+          className={`mt-3 shrink-0 rounded-lg border border-[#d8ad45]/20 bg-[#d8ad45]/10 p-3 ${
+            mobileRoleGuideExpanded ? "block" : "hidden"
+          } md:block`}
+        >
           <p className="text-xs font-black uppercase tracking-[0.16em] text-[#f4d58a]">
             หน้าที่ของตำแหน่ง {position.label}
           </p>
