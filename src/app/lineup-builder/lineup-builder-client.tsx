@@ -47,6 +47,11 @@ type FormationGuide = {
   resources?: FormationResource[];
 };
 
+type FormationResourceResult = {
+  resources: FormationResource[];
+  inheritedFrom: Formation | null;
+};
+
 type Formation =
   | "4-4-2"
   | "4-4-1-1"
@@ -358,6 +363,37 @@ const formationGuides: Partial<Record<Formation, FormationGuide>> = {
   },
 };
 
+const formationResourceParents: Partial<Record<Formation, Formation>> = {
+  "4-3-3 False 9": "4-3-3",
+  "4-3-3 Holding": "4-3-3",
+  "4-3-3 Attack": "4-3-3",
+  "4-2-3-1 Wide": "4-2-3-1",
+  "4-2-3-1 Narrow": "4-2-3-1",
+  "4-4-2 Flat": "4-4-2",
+  "4-4-2 Diamond": "4-4-2",
+  "4-4-1-1": "4-4-2",
+  "3-4-3": "3-5-2",
+  "3-4-2-1": "3-5-2",
+  "3-4-1-2": "3-5-2",
+  "3-5-1-1": "3-5-2",
+};
+
+function getFormationResources(formationName: Formation): FormationResourceResult {
+  const directResources = formationGuides[formationName]?.resources ?? [];
+
+  if (directResources.length > 0) {
+    return { resources: directResources, inheritedFrom: null };
+  }
+
+  const parentFormation = formationResourceParents[formationName] ?? null;
+  const parentResources = parentFormation ? (formationGuides[parentFormation]?.resources ?? []) : [];
+
+  return {
+    resources: parentResources,
+    inheritedFrom: parentResources.length > 0 ? parentFormation : null,
+  };
+}
+
 const rowYByCount: Record<number, number[]> = {
   4: [90, 71, 48, 22],
   5: [90, 73, 56, 39, 20],
@@ -549,6 +585,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
     [members],
   );
   const formationGuide = formationGuides[formation];
+  const formationResources = getFormationResources(formation);
   const activePosition = activePickerPosition === null ? null : positions[activePickerPosition] ?? null;
 
   useEffect(() => {
@@ -975,9 +1012,14 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                       <p className="text-xs font-black uppercase tracking-[0.18em] text-[#d8ad45]">
                         แหล่งเรียนรู้เพิ่มเติม
                       </p>
-                      {formationGuide.resources?.length ? (
+                      {formationResources.inheritedFrom ? (
+                        <p className="mt-2 text-xs font-bold leading-5 text-slate-400">
+                          แหล่งเรียนรู้นี้อ้างอิงจากแผนใกล้เคียง
+                        </p>
+                      ) : null}
+                      {formationResources.resources.length ? (
                         <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                          {formationGuide.resources.map((resource) => {
+                          {formationResources.resources.map((resource) => {
                             const typeLabel =
                               resource.type === "Video"
                                 ? "ดูวิดีโอ"
