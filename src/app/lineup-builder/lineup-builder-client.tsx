@@ -140,6 +140,26 @@ const formationGuides: Partial<Record<Formation, FormationGuide>> = {
     strengths: ["เล่นเป็นระบบ เข้าใจง่าย", "มีตัวช่วยเกมรับริมเส้น", "กองหน้าสองคนประสานงานกันได้ดี"],
     watchOut: ["แดนกลางอาจเสียเปรียบจำนวน", "ปีกต้องลงมาช่วยแบ็ก", "ถ้ายืนแบนเกินไป เกมรุกจะคาดเดาง่าย"],
     duties: dutyText.backFour,
+    resources: [
+      {
+        title: "The 4-4-2: football tactics explained",
+        type: "Tactical Guide",
+        source: "Coaches’ Voice",
+        url: "https://learning.coachesvoice.com/cv/4-4-2-football-tactics-ferguson-simeone-hasenhuttl-dyche/",
+      },
+      {
+        title: "Two up front: football tactics explained",
+        type: "Tactical Guide",
+        source: "Coaches’ Voice",
+        url: "https://learning.coachesvoice.com/cv/two-up-front-football-tactics-explained-simeone-conte-atletico-juventus/",
+      },
+      {
+        title: "Formations: football tactics explained",
+        type: "Tactical Guide",
+        source: "Coaches’ Voice",
+        url: "https://learning.coachesvoice.com/cv/formations-football-tactics-explained-best-most-used/",
+      },
+    ],
   },
   "4-4-1-1": {
     overview: "คล้าย 4-4-2 แต่มีตัวสนับสนุนยืนหลังกองหน้า เหมาะกับทีมที่อยากเชื่อมเกมจากกลางไปหน้าให้แน่นขึ้น",
@@ -192,12 +212,28 @@ const formationGuides: Partial<Record<Formation, FormationGuide>> = {
     strengths: ["เกมรับสมดุล", "แดนกลางมีจำนวนผู้เล่นเยอะ", "ยืนบีบพื้นที่เป็นแผงได้ดี"],
     watchOut: ["กองหน้าตัวเดียวต้องมีคนเติมช่วย", "มิดฟิลด์รับต้องอ่านเกมดี", "เกมรุกอาจช้าเกินไป"],
     duties: dutyText.backFour,
+    resources: [
+      {
+        title: "The 4-1-4-1 formation: football tactics explained",
+        type: "Tactical Guide",
+        source: "Coaches’ Voice",
+        url: "https://learning.coachesvoice.com/cv/4-1-4-1-formation-football-tactics-explained/",
+      },
+    ],
   },
   "4-5-1": {
     overview: "แผนที่เน้นความรัดกุม มีผู้เล่นแดนกลางห้าคน เหมาะกับทีมที่ต้องการคุมเกมหรือรับมือคู่แข่งที่แข็งกว่า",
     strengths: ["ปิดพื้นที่แดนกลางได้ดี", "เหมาะกับการรักษาสกอร์", "ปีกสวนกลับได้เร็ว"],
     watchOut: ["กองหน้าอาจขาดคนสนับสนุน", "ทีมอาจถอยลึกเกินไป", "ต้องเติมเกมรุกให้เร็วเมื่อได้บอล"],
     duties: dutyText.backFour,
+    resources: [
+      {
+        title: "The 4-5-1 formation: football tactics explained",
+        type: "Tactical Guide",
+        source: "Coaches’ Voice",
+        url: "https://learning.coachesvoice.com/cv/4-5-1-formation-football-tactics/",
+      },
+    ],
   },
   "4-3-1-2": {
     overview: "แผนบุกตรงกลาง มีตัวรุกหลังกองหน้าสองคน เหมาะกับทีมที่ชอบเล่นบอลสั้นและเจาะตรงกลาง",
@@ -210,12 +246,28 @@ const formationGuides: Partial<Record<Formation, FormationGuide>> = {
     strengths: ["สร้างจำนวนผู้เล่นตรงกลางได้ดี", "ตัวสนับสนุนหาพื้นที่ระหว่างไลน์", "มีกองกลางสามคนช่วยกันรับ"],
     watchOut: ["แผนอาจแคบเกินไป", "แบ็กต้องใช้พลังเยอะ", "หน้าเป้าต้องมีคนเติมใกล้ๆ"],
     duties: dutyText.backFour,
+    resources: [
+      {
+        title: "The 4-3-2-1 formation: football tactics explained",
+        type: "Tactical Guide",
+        source: "Coaches’ Voice",
+        url: "https://learning.coachesvoice.com/cv/4-3-2-1-formation-football-tactics/",
+      },
+    ],
   },
   "4-2-2-2": {
     overview: "แผนที่มีมิดฟิลด์รับสองคน ตัวสร้างเกมสองคน และกองหน้าสองคน เหมาะกับทีมที่อยากบุกกลางสนามเร็ว",
     strengths: ["บุกตรงกลางได้อันตราย", "กองหน้าสองคนช่วยเพรส", "มิดฟิลด์รับสองคนช่วยกันกันสวนกลับ"],
     watchOut: ["ริมเส้นอาจเปิดโล่ง", "ตัวรุกต้องช่วยเกมรับ", "ระยะยืนอาจแออัดเกินไป"],
     duties: dutyText.backFour,
+    resources: [
+      {
+        title: "The 4-2-2-2: football tactics explained",
+        type: "Tactical Guide",
+        source: "Coaches’ Voice",
+        url: "https://learning.coachesvoice.com/cv/4-2-2-2-football-tactics-explained-rangnick-hasenhuttl-pellegrini/",
+      },
+    ],
   },
   "4-1-2-1-2": {
     overview: "แผนไดมอนด์ที่เน้นต่อบอลตรงกลางและมีกองหน้าสองคน เหมาะกับทีมที่มีมิดฟิลด์ขยันและเข้าใจตำแหน่ง",
@@ -228,12 +280,46 @@ const formationGuides: Partial<Record<Formation, FormationGuide>> = {
     strengths: ["มีตัวเลือกเกมรุกเยอะ", "เหมาะกับการไล่สกอร์", "ตัวริมเส้นดึงแนวรับคู่แข่งได้"],
     watchOut: ["แดนกลางอาจโดนเจาะง่าย", "ทุกคนต้องรีบลงมาช่วยรับ", "เสี่ยงโดนสวนกลับ"],
     duties: dutyText.backFour,
+    resources: [
+      {
+        title: "The 4-2-4 formation: football tactics explained",
+        type: "Tactical Guide",
+        source: "Coaches’ Voice",
+        url: "https://learning.coachesvoice.com/cv/4-2-4-formation/",
+      },
+    ],
   },
   "3-5-2": {
     overview: "แผนหลังสามที่ใช้วิงแบ็กช่วยริมเส้นและมีกองหน้าสองคน เหมาะกับทีมที่มีวิงแบ็กฟิตและขยัน",
     strengths: ["เกมรับตรงกลางแข็งแรง", "วิงแบ็กช่วยสร้างความกว้าง", "กองหน้าสองคนประสานงานกันได้"],
     watchOut: ["วิงแบ็กต้องใช้แรงเยอะ", "พื้นที่หลังวิงแบ็กอาจเปิด", "กองกลางต้องขยับช่วยกันเป็นชุด"],
     duties: dutyText.backThree,
+    resources: [
+      {
+        title: "The 3-5-2 formation: five key points",
+        type: "Tactical Guide",
+        source: "Coaches’ Voice",
+        url: "https://learning.coachesvoice.com/cv/3-5-2-formation-conte-mourinho-guardiola/",
+      },
+      {
+        title: "Why is the 3-5-2 the formation of the future?",
+        type: "Article",
+        source: "Coachbetter",
+        url: "https://www.coachbetter.com/blog/soccer-experts-why-the-3-5-2-is-the-formation-of-the-future",
+      },
+      {
+        title: "Formations: football tactics explained",
+        type: "Tactical Guide",
+        source: "Coaches’ Voice",
+        url: "https://learning.coachesvoice.com/cv/formations-football-tactics-explained-best-most-used/",
+      },
+      {
+        title: "Wing-backs: football tactics explained",
+        type: "Tactical Guide",
+        source: "Coaches’ Voice",
+        url: "https://learning.coachesvoice.com/cv/wing-backs-football-tactics-explained-conte-tuchel/",
+      },
+    ],
   },
   "3-4-3": {
     overview: "แผนหลังสามที่มีแนวรุกสามคน เหมาะกับทีมที่อยากบุกกดดันและใช้พื้นที่ริมเส้นอย่างชัดเจน",
@@ -264,6 +350,14 @@ const formationGuides: Partial<Record<Formation, FormationGuide>> = {
     strengths: ["สนับสนุนเกมรุกได้มาก", "มิดฟิลด์รับสองคนช่วยกันป้องกัน", "เหมาะกับการครองบอล"],
     watchOut: ["ถ้ามิดฟิลด์รับแยกกันมากจะเสี่ยง", "ตัวริมเส้นต้องรีบลงมาช่วย", "ต้องจ่ายบอลอย่างใจเย็น"],
     duties: dutyText.backThree,
+    resources: [
+      {
+        title: "The 3-2-4-1 formation: football tactics explained",
+        type: "Tactical Guide",
+        source: "Coaches’ Voice",
+        url: "https://learning.coachesvoice.com/cv/3-2-4-1-formation-tactics-explained/",
+      },
+    ],
   },
   "3-5-1-1": {
     overview: "แผนคล้าย 3-5-2 แต่มีตัวสนับสนุนยืนหลังกองหน้า เหมาะกับทีมที่อยากแน่นกลางและสวนกลับเป็นระบบ",
@@ -282,6 +376,26 @@ const formationGuides: Partial<Record<Formation, FormationGuide>> = {
     strengths: ["เกมรับแน่นมาก", "กองหน้าสองคนช่วยสวนกลับ", "วิงแบ็กเลือกจังหวะเติมได้"],
     watchOut: ["อาจถอยลึกเกินไป", "แดนกลางอาจโดนดึงกว้าง", "วิงแบ็กต้องเติมให้ถูกจังหวะ"],
     duties: dutyText.backFive,
+    resources: [
+      {
+        title: "In Focus: Defending in wide areas",
+        type: "Tactical Guide",
+        source: "Coaches’ Voice",
+        url: "https://learning.coachesvoice.com/cv/in-focus-defending-in-wide-areas/",
+      },
+      {
+        title: "Why is the 3-5-2 the formation of the future?",
+        type: "Article",
+        source: "Coachbetter",
+        url: "https://www.coachbetter.com/blog/soccer-experts-why-the-3-5-2-is-the-formation-of-the-future",
+      },
+      {
+        title: "Wing-backs: football tactics explained",
+        type: "Tactical Guide",
+        source: "Coaches’ Voice",
+        url: "https://learning.coachesvoice.com/cv/wing-backs-football-tactics-explained-conte-tuchel/",
+      },
+    ],
   },
   "5-4-1": {
     overview: "แผนเน้นป้องกัน มีหลังห้าและกองกลางสี่คน เหมาะกับการรับมือทีมที่บุกหนักหรือรักษาสกอร์",
@@ -376,6 +490,10 @@ const formationResourceParents: Partial<Record<Formation, Formation>> = {
   "3-4-2-1": "3-5-2",
   "3-4-1-2": "3-5-2",
   "3-5-1-1": "3-5-2",
+  "5-4-1": "5-3-2",
+  "5-2-3": "5-3-2",
+  "5-2-1-2": "5-3-2",
+  "5-1-3-1": "5-3-2",
 };
 
 function getFormationResources(formationName: Formation): FormationResourceResult {
