@@ -268,6 +268,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
   const [selectedPlayers, setSelectedPlayers] = useState<Record<number, string>>({});
   const [customPositions, setCustomPositions] = useState<Record<number, MarkerCoordinate>>({});
   const [movePositionsMode, setMovePositionsMode] = useState(false);
+  const [tacticalZonesEnabled, setTacticalZonesEnabled] = useState(true);
   const [draggingPosition, setDraggingPosition] = useState<number | null>(null);
   const [recentlyChangedPosition, setRecentlyChangedPosition] = useState<number | null>(null);
   const [activePickerPosition, setActivePickerPosition] = useState<number | null>(null);
@@ -528,7 +529,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
 
       <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-10">
         <div className="rounded-2xl border border-[#d8ad45]/25 bg-white/[0.06] p-4 shadow-2xl shadow-black/20 backdrop-blur sm:p-5">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_220px_170px_160px_150px] xl:items-end">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_220px_150px_170px_160px_150px] xl:items-end">
             <label className="grid gap-2 text-sm font-black text-[#f4d58a]">
               Opponent
               <select
@@ -563,6 +564,22 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                   </option>
                 ))}
               </select>
+            </label>
+
+            <label className="grid gap-2 text-sm font-black text-[#f4d58a]">
+              Tactical Zones
+              <button
+                aria-pressed={tacticalZonesEnabled}
+                className={`min-h-12 rounded-md border px-4 py-3 text-sm font-black transition-colors ${
+                  tacticalZonesEnabled
+                    ? "border-[#d8ad45] bg-[#d8ad45] text-[#061426] shadow-lg shadow-[#d8ad45]/20"
+                    : "border-[#d8ad45]/40 text-[#f4d58a] hover:bg-[#d8ad45]/10"
+                }`}
+                onClick={() => setTacticalZonesEnabled((current) => !current)}
+                type="button"
+              >
+                {tacticalZonesEnabled ? "On" : "Off"}
+              </button>
             </label>
 
             <label className="grid gap-2 text-sm font-black text-[#f4d58a]">
@@ -661,16 +678,56 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
             </div>
 
             <div
-              className={`relative mx-auto aspect-[3/4] w-full max-w-[760px] overflow-hidden rounded-2xl border bg-[radial-gradient(circle_at_center,rgba(216,173,69,0.16),transparent_34%),linear-gradient(180deg,#1d6a42,#0b3d2d)] shadow-inner shadow-black/40 ${
+              className={`lineup-premium-pitch relative mx-auto aspect-[3/4] w-full max-w-[760px] overflow-hidden rounded-2xl border ${
                 movePositionsMode ? "border-[#f4d58a] ring-2 ring-[#d8ad45]/25" : "border-[#d8ad45]/40"
               }`}
               ref={pitchRef}
             >
-              <div className="absolute inset-4 rounded-xl border-2 border-white/45" />
-              <div className="absolute left-1/2 top-1/2 size-28 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/35 sm:size-36" />
-              <div className="absolute left-4 right-4 top-1/2 h-0.5 -translate-y-1/2 bg-white/35" />
-              <div className="absolute left-1/2 top-4 h-14 w-32 -translate-x-1/2 rounded-b-full border-x-2 border-b-2 border-white/35 sm:w-44" />
-              <div className="absolute bottom-4 left-1/2 h-14 w-32 -translate-x-1/2 rounded-t-full border-x-2 border-t-2 border-white/35 sm:w-44" />
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.14),transparent_24%),radial-gradient(circle_at_bottom,rgba(6,20,38,0.35),transparent_32%)]" />
+              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.04)_0_12.5%,transparent_12.5%_25%,rgba(255,255,255,0.035)_25%_37.5%,transparent_37.5%_50%,rgba(255,255,255,0.035)_50%_62.5%,transparent_62.5%_75%,rgba(255,255,255,0.035)_75%_87.5%,transparent_87.5%_100%)]" />
+              <div className="pointer-events-none absolute inset-0 bg-[repeating-linear-gradient(115deg,rgba(255,255,255,0.035)_0_1px,transparent_1px_14px)] opacity-60" />
+
+              {tacticalZonesEnabled ? (
+                <div className="pointer-events-none absolute inset-4 z-10 overflow-hidden rounded-xl">
+                  <div className="absolute inset-x-0 bottom-0 h-1/3 bg-[#0c3554]/25" />
+                  <div className="absolute inset-x-0 top-1/3 h-1/3 bg-[#d8ad45]/10" />
+                  <div className="absolute inset-x-0 top-0 h-1/3 bg-[#d8ad45]/16" />
+                  <div className="absolute inset-y-0 left-0 w-[17%] bg-white/[0.055]" />
+                  <div className="absolute inset-y-0 right-0 w-[17%] bg-white/[0.055]" />
+                  <div className="absolute inset-y-0 left-[28%] w-[12%] bg-[#f4d58a]/[0.075]" />
+                  <div className="absolute inset-y-0 right-[28%] w-[12%] bg-[#f4d58a]/[0.075]" />
+                  <span className="absolute bottom-[17%] left-1/2 hidden -translate-x-1/2 text-[10px] font-black uppercase tracking-[0.22em] text-white/35 sm:block">
+                    Defensive
+                  </span>
+                  <span className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 text-[10px] font-black uppercase tracking-[0.22em] text-white/35 sm:block">
+                    Midfield
+                  </span>
+                  <span className="absolute left-1/2 top-[15%] hidden -translate-x-1/2 text-[10px] font-black uppercase tracking-[0.22em] text-[#f4d58a]/45 sm:block">
+                    Attacking
+                  </span>
+                  <span className="absolute left-[8%] top-1/2 hidden -translate-y-1/2 rotate-[-90deg] text-[9px] font-black uppercase tracking-[0.2em] text-white/30 sm:block">
+                    Wide
+                  </span>
+                  <span className="absolute right-[8%] top-1/2 hidden -translate-y-1/2 rotate-90 text-[9px] font-black uppercase tracking-[0.2em] text-white/30 sm:block">
+                    Wide
+                  </span>
+                  <span className="absolute left-[34%] top-[46%] hidden -translate-x-1/2 rotate-[-90deg] text-[8px] font-black uppercase tracking-[0.16em] text-[#f4d58a]/35 sm:block">
+                    Half Space
+                  </span>
+                  <span className="absolute right-[34%] top-[46%] hidden translate-x-1/2 rotate-90 text-[8px] font-black uppercase tracking-[0.16em] text-[#f4d58a]/35 sm:block">
+                    Half Space
+                  </span>
+                </div>
+              ) : null}
+
+              <div className="pointer-events-none absolute inset-4 z-20 rounded-xl border-2 border-white/55 shadow-[inset_0_0_26px_rgba(255,255,255,0.08)]" />
+              <div className="pointer-events-none absolute left-1/2 top-1/2 z-20 size-28 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/45 sm:size-36" />
+              <div className="pointer-events-none absolute left-4 right-4 top-1/2 z-20 h-0.5 -translate-y-1/2 bg-white/45" />
+              <div className="pointer-events-none absolute left-1/2 top-4 z-20 h-14 w-32 -translate-x-1/2 rounded-b-full border-x-2 border-b-2 border-white/45 sm:w-44" />
+              <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 h-14 w-32 -translate-x-1/2 rounded-t-full border-x-2 border-t-2 border-white/45 sm:w-44" />
+              <div className="pointer-events-none absolute left-1/2 top-4 z-20 h-7 w-16 -translate-x-1/2 rounded-b-lg border-x border-b border-white/35 sm:w-24" />
+              <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 h-7 w-16 -translate-x-1/2 rounded-t-lg border-x border-t border-white/35 sm:w-24" />
+              <div className="pointer-events-none absolute inset-0 z-30 shadow-[inset_0_0_70px_rgba(0,0,0,0.36)]" />
 
               {positions.map((position, index) => {
                 const member = members.find((item) => item.id === selectedPlayers[index]);
@@ -680,7 +737,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
 
                 return (
                   <div
-                    className="absolute flex w-[58px] -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center sm:w-[96px]"
+                    className="absolute z-40 flex w-[58px] -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center sm:w-[96px]"
                     key={`${formation}-preview-${index}-${position.label}`}
                     style={{ left: `${position.x}%`, top: `${position.y}%` }}
                   >
@@ -793,6 +850,26 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
       ) : null}
 
       <style jsx>{`
+        .lineup-premium-pitch {
+          background:
+            radial-gradient(circle at 50% 36%, rgba(244, 213, 138, 0.14), transparent 28%),
+            radial-gradient(circle at 50% 15%, rgba(255, 255, 255, 0.12), transparent 24%),
+            linear-gradient(180deg, rgba(6, 20, 38, 0.18), transparent 22%, transparent 78%, rgba(6, 20, 38, 0.36)),
+            repeating-linear-gradient(
+              90deg,
+              rgba(48, 138, 78, 0.92) 0%,
+              rgba(48, 138, 78, 0.92) 10%,
+              rgba(27, 112, 68, 0.96) 10%,
+              rgba(27, 112, 68, 0.96) 20%
+            ),
+            linear-gradient(180deg, #2c8f52 0%, #176f46 48%, #0d4f38 100%);
+          box-shadow:
+            inset 0 0 72px rgba(0, 0, 0, 0.42),
+            inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+            0 22px 52px rgba(0, 0, 0, 0.28),
+            0 0 38px rgba(216, 173, 69, 0.14);
+        }
+
         .lineup-marker {
           transform-origin: center bottom;
           filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.28));
