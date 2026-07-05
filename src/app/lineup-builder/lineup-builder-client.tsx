@@ -32,6 +32,13 @@ type LineupBuilderProps = {
   opponents: OpponentTeam[];
 };
 
+type FormationGuide = {
+  overview: string;
+  strengths: string[];
+  watchOut: string[];
+  duties: string;
+};
+
 type Formation =
   | "4-4-2"
   | "4-4-1-1"
@@ -104,6 +111,217 @@ const formations: Record<Formation, string[][]> = {
 };
 
 const formationOptions = Object.keys(formations) as Formation[];
+
+const dutyText = {
+  backFour:
+    "Defenders keep the back line compact and help the fullbacks. Midfielders connect play and protect the center. Forwards stretch the pitch, press early, and finish attacks.",
+  backThree:
+    "The three center backs protect the middle. Wingbacks must run both ways. Midfielders stay connected, and forwards give clear passing options.",
+  backFive:
+    "The back five protects wide and central areas. Wingbacks move forward when safe. Midfielders must stay compact, and forwards hold the ball well.",
+};
+
+const formationGuides: Partial<Record<Formation, FormationGuide>> = {
+  "4-4-2": {
+    overview: "A simple balanced shape with two clear banks of four and two forwards.",
+    strengths: ["Easy for everyone to understand.", "Good wide cover.", "Two strikers can support each other."],
+    watchOut: ["Central midfield can be outnumbered.", "Wide players must track back.", "The team can become too flat."],
+    duties: dutyText.backFour,
+  },
+  "4-4-1-1": {
+    overview: "A 4-4-2 style shape with one support forward between midfield and striker.",
+    strengths: ["Good defensive shape.", "Support forward can link play.", "Useful for quick counters."],
+    watchOut: ["Striker can become isolated.", "Support forward must work hard.", "Midfield must stay compact."],
+    duties: dutyText.backFour,
+  },
+  "4-3-3": {
+    overview: "A balanced attacking shape using wide forwards and three midfielders to control the center.",
+    strengths: ["Gives width in attack.", "Helps pressing from the front.", "Gives passing options in midfield."],
+    watchOut: ["Fullbacks must recover quickly.", "Midfield must not leave big gaps.", "Wingers need to help defensively."],
+    duties: dutyText.backFour,
+  },
+  "4-2-3-1": {
+    overview: "A controlled shape with two holding midfielders and three attacking midfielders behind one striker.",
+    strengths: ["Strong central protection.", "Good passing lanes.", "Attacking players can rotate."],
+    watchOut: ["Striker may be alone.", "Wide players must defend.", "Too many players can crowd the middle."],
+    duties: dutyText.backFour,
+  },
+  "4-1-4-1": {
+    overview: "A compact shape with one defensive midfielder screening behind a four-player midfield line.",
+    strengths: ["Strong defensive balance.", "Good midfield numbers.", "Easy to press in a line."],
+    watchOut: ["Lone striker needs support.", "Defensive midfielder must read danger.", "Attack can become slow."],
+    duties: dutyText.backFour,
+  },
+  "4-5-1": {
+    overview: "A cautious shape with five midfielders and one striker, useful when control is important.",
+    strengths: ["Strong midfield cover.", "Good for protecting a lead.", "Wide midfielders can counter."],
+    watchOut: ["Striker can be isolated.", "Team may sit too deep.", "Needs quick support in attack."],
+    duties: dutyText.backFour,
+  },
+  "4-3-1-2": {
+    overview: "A narrow shape with an attacking midfielder behind two strikers.",
+    strengths: ["Strong central combinations.", "Two strikers stay close.", "Good for short passing."],
+    watchOut: ["Limited natural width.", "Fullbacks must provide width.", "Wide defending can be difficult."],
+    duties: dutyText.backFour,
+  },
+  "4-3-2-1": {
+    overview: "A narrow attacking shape with two support players behind one striker.",
+    strengths: ["Good central overloads.", "Support players can find pockets.", "Three midfielders protect transitions."],
+    watchOut: ["Can be too narrow.", "Fullbacks need energy.", "Striker needs close support."],
+    duties: dutyText.backFour,
+  },
+  "4-2-2-2": {
+    overview: "A compact attacking shape with two holders, two creators, and two strikers.",
+    strengths: ["Strong central attacks.", "Two strikers press well.", "Two holders protect counters."],
+    watchOut: ["Wide areas can be open.", "Creators must help defend.", "Spacing can become crowded."],
+    duties: dutyText.backFour,
+  },
+  "4-1-2-1-2": {
+    overview: "A diamond midfield shape built for central passing and two-striker support.",
+    strengths: ["Strong through the middle.", "Clear defensive midfielder role.", "Two strikers stay connected."],
+    watchOut: ["Needs fullbacks for width.", "Wide opponents can overload.", "Midfield distances must stay tight."],
+    duties: dutyText.backFour,
+  },
+  "4-2-4": {
+    overview: "An aggressive attacking shape with four forward players and two central midfielders.",
+    strengths: ["Many attacking options.", "Good for chasing a goal.", "Wide forwards can stretch defenders."],
+    watchOut: ["Midfield can be exposed.", "Needs strong recovery runs.", "Risky against counter attacks."],
+    duties: dutyText.backFour,
+  },
+  "3-5-2": {
+    overview: "A three-center-back shape with wingbacks and two strikers.",
+    strengths: ["Strong central defense.", "Wingbacks give width.", "Two strikers support each other."],
+    watchOut: ["Wingbacks need stamina.", "Wide spaces can open behind.", "Midfield must shift together."],
+    duties: dutyText.backThree,
+  },
+  "3-4-3": {
+    overview: "A bold shape with three defenders, wide midfield support, and three forwards.",
+    strengths: ["Strong attacking width.", "Good front pressing.", "Three center backs cover counters."],
+    watchOut: ["Wide midfielders work hard.", "Can be open between lines.", "Needs disciplined center backs."],
+    duties: dutyText.backThree,
+  },
+  "3-4-2-1": {
+    overview: "A three-back shape with two support attackers behind one striker.",
+    strengths: ["Good central attacking pockets.", "Wingbacks provide width.", "Useful for quick combinations."],
+    watchOut: ["Striker needs support quickly.", "Wingbacks must defend wide.", "Support attackers must track runners."],
+    duties: dutyText.backThree,
+  },
+  "3-4-1-2": {
+    overview: "A three-back system with a playmaker behind two strikers.",
+    strengths: ["Two strikers plus a creator.", "Strong central presence.", "Wingbacks can attack space."],
+    watchOut: ["Wide areas depend on wingbacks.", "Playmaker must help without the ball.", "Back three must communicate."],
+    duties: dutyText.backThree,
+  },
+  "3-3-3-1": {
+    overview: "A layered shape with three defenders, three midfielders, three attackers, and one striker.",
+    strengths: ["Good passing triangles.", "Many central options.", "Can press in waves."],
+    watchOut: ["Needs clear spacing.", "Wide defense can be exposed.", "Players must understand their zones."],
+    duties: dutyText.backThree,
+  },
+  "3-2-4-1": {
+    overview: "A modern attacking shape with two holders and four players behind the striker.",
+    strengths: ["Strong attacking support.", "Two holders protect the back three.", "Good for possession play."],
+    watchOut: ["Can be risky if holders split.", "Wide attackers must recover.", "Requires calm passing."],
+    duties: dutyText.backThree,
+  },
+  "3-5-1-1": {
+    overview: "A 3-5-2 variation with one support forward behind the striker.",
+    strengths: ["Strong midfield numbers.", "Support forward links counters.", "Wingbacks keep width."],
+    watchOut: ["Striker can be isolated.", "Support forward must defend.", "Wingbacks carry a heavy load."],
+    duties: dutyText.backThree,
+  },
+  "3-6-1": {
+    overview: "A control-focused shape with many midfield players and one striker.",
+    strengths: ["Excellent midfield numbers.", "Good for keeping the ball.", "Can block central spaces."],
+    watchOut: ["Needs runners beyond the striker.", "Attack can lack depth.", "Roles must be very clear."],
+    duties: dutyText.backThree,
+  },
+  "5-3-2": {
+    overview: "A secure defensive shape with five defenders, three midfielders, and two strikers.",
+    strengths: ["Very strong defensive cover.", "Two strikers help counters.", "Wingbacks can choose moments to attack."],
+    watchOut: ["Can sit too deep.", "Midfield may be stretched.", "Wingbacks must time forward runs."],
+    duties: dutyText.backFive,
+  },
+  "5-4-1": {
+    overview: "A protective shape with a back five and four midfielders in front.",
+    strengths: ["Hard to break down.", "Good wide protection.", "Useful against strong opponents."],
+    watchOut: ["Lone striker needs support.", "Can invite pressure.", "Counters must be quick."],
+    duties: dutyText.backFive,
+  },
+  "5-2-3": {
+    overview: "A back-five shape with three forwards ready to counter quickly.",
+    strengths: ["Good defensive base.", "Front three can attack fast.", "Wingbacks add width."],
+    watchOut: ["Only two central midfielders.", "Forwards must help press.", "Gaps can appear in midfield."],
+    duties: dutyText.backFive,
+  },
+  "5-2-1-2": {
+    overview: "A defensive base with an attacking midfielder supporting two strikers.",
+    strengths: ["Strong central counter shape.", "Two strikers stay connected.", "Back five protects wide areas."],
+    watchOut: ["Midfield pair can be overloaded.", "Attacking midfielder must work back.", "Wingbacks need discipline."],
+    duties: dutyText.backFive,
+  },
+  "5-1-3-1": {
+    overview: "A cautious shape with one defensive midfielder and three attacking midfielders behind the striker.",
+    strengths: ["Good defensive screen.", "Three attackers can support counters.", "Back five gives security."],
+    watchOut: ["Defensive midfielder has a big job.", "Striker can be isolated.", "Wide support must be quick."],
+    duties: dutyText.backFive,
+  },
+  "4-1-3-2": {
+    overview: "A back-four shape with one holder, three midfielders, and two strikers.",
+    strengths: ["Good striker support.", "Holder protects the center.", "Flexible midfield line."],
+    watchOut: ["Wide cover can be weak.", "Holder must stay disciplined.", "Midfield must not rush forward together."],
+    duties: dutyText.backFour,
+  },
+  "4-2-1-3": {
+    overview: "A shape with two holding midfielders, one creator, and a front three.",
+    strengths: ["Good defensive base.", "Creator links to the front three.", "Wide forwards stretch play."],
+    watchOut: ["Creator can be marked tightly.", "Fullbacks must balance runs.", "Front three must press together."],
+    duties: dutyText.backFour,
+  },
+  "4-3-3 False 9": {
+    overview: "A 4-3-3 where the central forward drops deeper to create space for wide runners.",
+    strengths: ["Creates central overloads.", "Wide forwards can run behind.", "Hard for defenders to mark."],
+    watchOut: ["Needs smart movement.", "May lack a fixed target.", "Wide forwards must attack the box."],
+    duties: dutyText.backFour,
+  },
+  "4-3-3 Holding": {
+    overview: "A 4-3-3 with a clear defensive midfielder protecting two central midfielders.",
+    strengths: ["Good balance.", "Defensive midfielder protects counters.", "Wide forwards keep attacking width."],
+    watchOut: ["Holder must not get pulled away.", "Midfielders need to support attacks.", "Fullbacks must recover."],
+    duties: dutyText.backFour,
+  },
+  "4-3-3 Attack": {
+    overview: "A more attacking 4-3-3 with one advanced midfielder joining the front line.",
+    strengths: ["Extra support near the striker.", "Good for pressing high.", "Creates chances between lines."],
+    watchOut: ["Can leave space behind midfield.", "Advanced midfielder must recover.", "Back line needs protection."],
+    duties: dutyText.backFour,
+  },
+  "4-4-2 Diamond": {
+    overview: "A narrow 4-4-2 with a midfield diamond and two strikers.",
+    strengths: ["Strong central passing.", "Clear playmaker role.", "Two strikers stay close."],
+    watchOut: ["Needs fullbacks for width.", "Can be attacked wide.", "Diamond must shift as a unit."],
+    duties: dutyText.backFour,
+  },
+  "4-4-2 Flat": {
+    overview: "A classic flat 4-4-2 with simple roles and strong team shape.",
+    strengths: ["Very easy to organize.", "Good wide balance.", "Two forwards press together."],
+    watchOut: ["Can lack midfield numbers.", "Lines must not be too far apart.", "Wide midfielders must defend."],
+    duties: dutyText.backFour,
+  },
+  "4-2-3-1 Wide": {
+    overview: "A 4-2-3-1 that uses wide attackers to stretch the opponent.",
+    strengths: ["Good width.", "Two holders protect midfield.", "Wide players can isolate defenders."],
+    watchOut: ["Striker needs support.", "Wide players must track fullbacks.", "Holders must cover counters."],
+    duties: dutyText.backFour,
+  },
+  "4-2-3-1 Narrow": {
+    overview: "A compact 4-2-3-1 with three central attacking midfielders.",
+    strengths: ["Strong central combinations.", "Many players between lines.", "Good for short passing."],
+    watchOut: ["Needs fullbacks for width.", "Can get crowded in the middle.", "Wide defense can be late."],
+    duties: dutyText.backFour,
+  },
+};
+
 const rowYByCount: Record<number, number[]> = {
   4: [90, 71, 48, 22],
   5: [90, 73, 56, 39, 20],
@@ -269,6 +487,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
   const [customPositions, setCustomPositions] = useState<Record<number, MarkerCoordinate>>({});
   const [movePositionsMode, setMovePositionsMode] = useState(false);
   const [tacticalZonesEnabled, setTacticalZonesEnabled] = useState(true);
+  const [guideExpanded, setGuideExpanded] = useState(true);
   const [draggingPosition, setDraggingPosition] = useState<number | null>(null);
   const [recentlyChangedPosition, setRecentlyChangedPosition] = useState<number | null>(null);
   const [activePickerPosition, setActivePickerPosition] = useState<number | null>(null);
@@ -293,6 +512,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
     () => [...members].sort(compareMembersByDisplayAge),
     [members],
   );
+  const formationGuide = formationGuides[formation];
   const activePosition = activePickerPosition === null ? null : positions[activePickerPosition] ?? null;
 
   useEffect(() => {
@@ -644,6 +864,83 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                 </span>
               ))}
             </div>
+          </div>
+
+          <div className="mt-5 overflow-hidden rounded-xl border border-[#d8ad45]/25 bg-[#061426]/75 shadow-xl shadow-black/10">
+            <div className="flex flex-col gap-3 border-b border-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]">
+                  Formation Guide
+                </p>
+                <h2 className="mt-1 text-2xl font-black text-white">{formation}</h2>
+              </div>
+              <button
+                className="inline-flex min-h-10 items-center justify-center rounded-md border border-[#d8ad45]/40 px-4 py-2 text-sm font-black text-[#f4d58a] transition-colors hover:bg-[#d8ad45]/10"
+                onClick={() => setGuideExpanded((current) => !current)}
+                type="button"
+              >
+                {guideExpanded ? "Hide Guide" : "Show Guide"}
+              </button>
+            </div>
+            {guideExpanded ? (
+              formationGuide ? (
+                <div className="grid gap-4 p-4 lg:grid-cols-[1.15fr_0.85fr]">
+                  <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-[#d8ad45]">
+                      Overview
+                    </p>
+                    <p className="mt-3 text-sm font-semibold leading-7 text-slate-200">
+                      {formationGuide.overview}
+                    </p>
+                    <div className="mt-5 rounded-lg border border-[#d8ad45]/20 bg-[#d8ad45]/10 p-3">
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-[#f4d58a]">
+                        Basic Duties
+                      </p>
+                      <p className="mt-2 text-sm font-semibold leading-7 text-slate-200">
+                        {formationGuide.duties}
+                      </p>
+                    </div>
+                    <p className="mt-4 text-xs font-bold leading-5 text-slate-400">
+                      Use this as a simple guide. Adjust positions based on players, opponent, and match situation.
+                    </p>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                    <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-[#d8ad45]">
+                        Strengths
+                      </p>
+                      <ul className="mt-3 space-y-2">
+                        {formationGuide.strengths.map((item) => (
+                          <li className="flex gap-2 text-sm font-semibold leading-6 text-slate-200" key={item}>
+                            <span className="mt-2 size-1.5 shrink-0 rounded-full bg-[#d8ad45]" />
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-[#d8ad45]">
+                        Watch Out
+                      </p>
+                      <ul className="mt-3 space-y-2">
+                        {formationGuide.watchOut.map((item) => (
+                          <li className="flex gap-2 text-sm font-semibold leading-6 text-slate-200" key={item}>
+                            <span className="mt-2 size-1.5 shrink-0 rounded-full bg-[#9b1c1f]" />
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4">
+                  <p className="rounded-lg border border-white/10 bg-white/[0.04] p-4 text-sm font-bold text-slate-300">
+                    This formation guide is being prepared.
+                  </p>
+                </div>
+              )
+            ) : null}
           </div>
         </div>
 
