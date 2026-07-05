@@ -10,34 +10,6 @@ type ClubMember = {
   nickname: string;
   photo_url: string | null;
 };
-const coachBio = [
-  "อดีตเยาวชนทีมชาติไทย",
-  "อดีตนักฟุตบอลทีมทนายไทย",
-  "อดีตนักฟุตบอลโรงเรียนเทพศิรินทร์",
-];
-const coachExperience = [
-  "ผู้ช่วยผู้ฝึกสอน ลพบุรี UTD",
-  "ผู้ช่วยผู้ฝึกสอน BFB พัทยาซิตี้ T3",
-];
-const coachLicenses = ["AFC C License", "กำลังศึกษา AFC B License", "AFC G License"];
-const coachAchievements = [
-  "แชมป์ Asia Lawyer 2019–2023",
-  "Assistant Coach – Lawyer All Star 2019–2024",
-  "แชมป์ Lawyers Cup",
-  "แชมป์ Thai Lawyers League 2022–2025",
-];
-const assistantPlayerExperience = [
-  "BEC Tero 2009–2011",
-  "Bangkok FC 2012–2015",
-  "Trat FC 2016",
-  "Yala FC 2017",
-  "Samut Sakhon City 2018",
-];
-const assistantCoachingExperience = [
-  "Assistant Coach – Samut Sakhon City 2019",
-  "Assistant Coach – Rayong FC 2020",
-  "Assistant Coach – Kabin United / Kabinburi City 2021–2022",
-];
 const teamStaff = [
   ["เฟี๊ยต", "/images/staff/staff-01.png"],
   ["เหงี่ยม", "/images/staff/staff-02.png"],
@@ -214,129 +186,38 @@ export default async function TeamPage() {
           </p>
           <h2 className="mt-3 text-3xl font-black text-[#061426]">Coaching Staff</h2>
 
-          <article className="mt-7 overflow-hidden rounded-lg border border-[#d8ad45]/35 bg-white shadow-2xl shadow-slate-900/10 md:grid md:grid-cols-[0.9fr_1.1fr]">
-            <div className="relative min-h-[280px] overflow-hidden md:min-h-full">
-              <img
-                alt="Coach Nat"
-                className="absolute inset-0 size-full object-cover"
-                fetchPriority="high"
-                height={1305}
-                loading="eager"
-                src="/images/staff/head-coach.jpg"
-                style={{
-                  objectPosition: "center 25%",
-                }}
-                width={1044}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#061426]/75 via-transparent to-transparent md:bg-gradient-to-r" />
-            </div>
-            <div className="p-5 sm:p-7">
-              <div className="h-0.5 w-14 rounded-full bg-[#d8ad45]" />
-              <div className="mt-5 flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-black text-[#9b1c1f]">
-                    กวีวัฒน์ รัตนหนูพงศ์
-                  </p>
-                  <h3 className="mt-1 text-2xl font-black text-[#061426]">
-                    COACH NAT (แนท)
-                  </h3>
-                </div>
-                <span className="rounded-full border border-[#d8ad45]/45 bg-[#fff8e3] px-3 py-1 text-xs font-black uppercase tracking-wide text-[#061426]">
-                  AFC C License
-                </span>
-              </div>
-
-              <div className="mt-6 grid gap-5 sm:grid-cols-2">
-                {[
-                  ["Bio", coachBio],
-                  ["Club Coaching Experience", coachExperience],
-                  ["Coaching License", coachLicenses],
-                  ["Achievements", coachAchievements],
-                ].map(([title, items]) => (
-                  <div key={title as string}>
-                    <h4 className="text-xs font-black uppercase tracking-[0.18em] text-[#d8ad45]">
-                      {title as string}
-                    </h4>
-                    <ul className="mt-3 space-y-2">
-                      {(items as string[]).map((item) => (
-                        <li className="flex gap-2 text-sm font-semibold leading-6 text-slate-700" key={item}>
-                          <span className="mt-2 size-1.5 shrink-0 rounded-full bg-[#9b1c1f]" />
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+          <article className="relative mt-7 overflow-hidden rounded-2xl border border-[#d8ad45]/35 bg-[#061426] px-5 py-10 text-white shadow-2xl shadow-slate-900/15 sm:px-8 sm:py-12">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.24),transparent_32%),linear-gradient(135deg,#061426,#0b2745_62%,#071b31)]" />
+            <div className="absolute -right-16 -top-16 size-56 rounded-full border border-[#d8ad45]/15 sm:size-72" />
+            <div className="absolute bottom-8 left-6 right-6 h-px bg-white/10" />
+            <div className="absolute bottom-16 left-1/2 size-28 -translate-x-1/2 rounded-full border border-white/10 sm:size-36" />
+            <div className="absolute inset-y-8 left-1/2 w-px bg-white/10" />
+            <div className="relative mx-auto flex max-w-4xl flex-col items-center text-center">
+              <div className="flex flex-wrap justify-center gap-2">
+                {["KSW L.C.", "Team Operations", "Season 6"].map((badge) => (
+                  <span
+                    className="rounded-full border border-[#d8ad45]/35 bg-white/[0.06] px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-[#f4d58a]"
+                    key={badge}
+                  >
+                    {badge}
+                  </span>
                 ))}
               </div>
-              <div className="mt-6 rounded-lg border border-[#d8ad45]/25 bg-[#fffdf7] p-4">
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#9b1c1f]">
-                  Current
-                </p>
-                <p className="mt-2 text-sm font-bold text-[#061426]">
-                  Coach ผู้ฝึกสอน – ชมรมทนายความคลองสามวา
-                </p>
+              <div className="mt-8 flex size-20 items-center justify-center rounded-full border border-[#d8ad45]/35 bg-[#d8ad45]/10 text-sm font-black tracking-[0.16em] text-[#f4d58a] shadow-lg shadow-[#d8ad45]/15">
+                KSW
               </div>
-            </div>
-          </article>
-
-          <article className="mt-14 overflow-hidden rounded-lg border border-[#d8ad45]/30 border-t-[#d8ad45]/45 bg-white pt-8 shadow-xl shadow-slate-900/10 sm:grid sm:grid-cols-[40%_60%]">
-            <div className="relative min-h-[260px] overflow-hidden bg-white sm:min-h-full">
-              <img
-                alt="Solomon Ukutu"
-                className="absolute inset-0 size-full object-contain object-center"
-                fetchPriority="high"
-                height={1469}
-                loading="eager"
-                src="/images/staff/assistant-coach.jpg"
-                width={720}
-              />
-            </div>
-            <div className="p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-2xl font-black uppercase tracking-wide text-[#061426]">
-                    Solomon Ukutu
-                  </h3>
-                  <p className="mt-1 text-sm font-black text-[#9b1c1f]">
-                    Assistant Coach
-                  </p>
-                </div>
-                <span className="rounded-full border border-[#d8ad45]/45 bg-[#fff8e3] px-3 py-1 text-xs font-black uppercase tracking-wide text-[#061426]">
-                  AFC C License
-                </span>
-              </div>
-              <p className="mt-4 max-w-3xl text-sm font-semibold leading-7 text-slate-700">
-                Solomon Ukutu เป็นอดีตนักฟุตบอลอาชีพที่มีประสบการณ์ในลีกไทยหลายสโมสร
-                ทั้งในฐานะผู้เล่นและผู้ช่วยผู้ฝึกสอน
+              <p className="mt-8 text-xs font-black uppercase tracking-[0.26em] text-[#d8ad45]">
+                CLUB OPERATIONS
               </p>
-              <div className="mt-5 grid gap-5 md:grid-cols-2">
-                {[
-                  ["Player Experience", assistantPlayerExperience],
-                  ["Coaching Experience", assistantCoachingExperience],
-                ].map(([title, items]) => (
-                  <div key={title as string}>
-                    <h4 className="text-xs font-black uppercase tracking-[0.18em] text-[#d8ad45]">
-                      {title as string}
-                    </h4>
-                    <ul className="mt-3 space-y-2">
-                      {(items as string[]).map((item) => (
-                        <li className="flex gap-2 text-sm font-semibold leading-6 text-slate-700" key={item}>
-                          <span className="mt-2 size-1.5 shrink-0 rounded-full bg-[#9b1c1f]" />
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-5 rounded-lg border border-[#d8ad45]/25 bg-[#fffdf7] p-4">
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#9b1c1f]">
-                  Current
-                </p>
-                <p className="mt-2 text-sm font-bold text-[#061426]">
-                  Assistant Coach – ชมรมทนายความคลองสามวา
-                </p>
-              </div>
+              <h3 className="mt-3 text-4xl font-black tracking-tight text-white sm:text-6xl">
+                Coming Soon
+              </h3>
+              <p className="mt-4 text-lg font-black text-[#f4d58a] sm:text-xl">
+                Coaching staff information is being updated.
+              </p>
+              <p className="mt-4 max-w-2xl text-sm font-semibold leading-7 text-slate-300 sm:text-base">
+                Stay tuned for the official KSW L.C. coaching profile and team operations update.
+              </p>
             </div>
           </article>
 
