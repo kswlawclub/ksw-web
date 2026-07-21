@@ -238,6 +238,46 @@ function movementClass(movement: number | null) {
   return "text-slate-400";
 }
 
+function MovementBadge({ movement }: { movement: number | null }) {
+  if (movement === null) {
+    return (
+      <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-400/10 px-1 text-[9px] font-black text-slate-400 ring-1 ring-slate-300/10 sm:h-6 sm:min-w-8 sm:px-2 sm:text-[10px]">
+        NEW
+      </span>
+    );
+  }
+
+  if (movement === 0) {
+    return (
+      <span className="inline-flex size-5 items-center justify-center rounded-full bg-slate-400/10 text-[12px] font-black leading-none text-slate-400 ring-1 ring-slate-300/10 sm:size-6">
+        -
+      </span>
+    );
+  }
+
+  const isUp = movement > 0;
+
+  return (
+    <span
+      className={`inline-flex h-5 min-w-7 items-center justify-center gap-0.5 rounded-full px-1 text-[9px] font-black leading-none ring-1 sm:h-6 sm:min-w-9 sm:gap-1 sm:px-2 sm:text-[10px] ${
+        isUp
+          ? "bg-emerald-400/12 text-emerald-200 ring-emerald-300/20"
+          : "bg-red-400/12 text-red-200 ring-red-300/20"
+      }`}
+    >
+      <span
+        aria-hidden="true"
+        className={`inline-block size-0 border-x-[3px] border-x-transparent sm:border-x-4 ${
+          isUp
+            ? "border-b-[5px] border-b-emerald-200 sm:border-b-[6px]"
+            : "border-t-[5px] border-t-red-200 sm:border-t-[6px]"
+        }`}
+      />
+      <span>{Math.abs(movement)}</span>
+    </span>
+  );
+}
+
 function goalDifferenceClass(value: number) {
   if (value > 0) return "text-emerald-200";
   if (value < 0) return "text-red-200";
@@ -393,18 +433,18 @@ export function LeagueTable({ standings, finishedMatches, previousSnapshot }: Le
         </div>
       ) : null}
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[820px] table-fixed text-left text-xs sm:text-sm">
-          <thead className="bg-[#061426]/80 text-[10px] uppercase tracking-wider text-slate-400 sm:text-xs">
+      <div className="overflow-hidden lg:overflow-x-auto">
+        <table className="w-full table-fixed text-left text-[10px] sm:text-sm lg:min-w-[820px]">
+          <thead className="bg-[#061426]/80 text-[8px] uppercase tracking-[0.08em] text-slate-400 sm:text-xs sm:tracking-wider">
             <tr>
-              <th className="w-14 px-3 py-3">Pos</th>
-              <th className="w-14 px-2 py-3 text-center">Move</th>
-              <th className="px-3 py-3">Team</th>
+              <th className="w-7 px-1 py-2 sm:w-14 sm:px-3 sm:py-3">Pos</th>
+              <th className="w-9 px-0.5 py-2 text-center sm:w-14 sm:px-2 sm:py-3">Move</th>
+              <th className="px-1 py-2 sm:px-3 sm:py-3">Team</th>
               {statColumns.map((column) => (
                 <th
                   key={column}
-                  className={`px-2 py-3 text-right ${
-                    column === "FORM" ? "w-32 text-center" : "w-12"
+                  className={`px-0.5 py-2 text-right sm:px-2 sm:py-3 ${
+                    column === "FORM" ? "w-14 text-center sm:w-32" : "w-6 sm:w-12"
                   } ${column === "GF" || column === "GA" ? "hidden md:table-cell" : ""}`}
                 >
                   {column}
@@ -445,43 +485,43 @@ export function LeagueTable({ standings, finishedMatches, previousSnapshot }: Le
                     }
                   >
                     <td
-                      className={`px-3 py-3 font-bold ${
+                      className={`px-1 py-2 font-bold sm:px-3 sm:py-3 ${
                         index < 3 ? "text-[#f4d58a]" : "text-slate-300"
                       }`}
                     >
                       {currentPosition}
                     </td>
-                    <td className={`px-2 py-3 text-center text-xs font-black ${movementClass(movement)}`}>
-                      {movementLabel(movement)}
+                    <td className={`px-0.5 py-2 text-center font-black sm:px-2 sm:py-3 ${movementClass(movement)}`}>
+                      <MovementBadge movement={movement} />
                     </td>
-                    <td className="min-w-0 px-3 py-3 text-white">
-                      <div className="flex min-w-0 items-center gap-2">
+                    <td className="min-w-0 px-1 py-2 text-white sm:px-3 sm:py-3">
+                      <div className="flex min-w-0 items-center gap-1 sm:gap-2">
                         <TeamLogo
-                          className="size-7 md:size-8"
+                          className="size-5 sm:size-7 md:size-8"
                           initials={teamInitials(row)}
                           logoUrl={text(row, ["logo_url"], "")}
                           teamName={teamName}
                         />
-                        <span className="min-w-0 truncate font-bold leading-5">
+                        <span className="min-w-0 truncate text-[10px] font-bold leading-4 sm:text-sm sm:leading-5">
                           {teamName}
                         </span>
                       </div>
                     </td>
-                    <td className="px-2 py-3 text-right">{number(row, ["played", "p"])}</td>
-                    <td className="px-2 py-3 text-right">{number(row, ["won", "w"])}</td>
-                    <td className="px-2 py-3 text-right">{number(row, ["drawn", "draws", "d"])}</td>
-                    <td className="px-2 py-3 text-right">{number(row, ["lost", "l"])}</td>
+                    <td className="px-0.5 py-2 text-right sm:px-2 sm:py-3">{number(row, ["played", "p"])}</td>
+                    <td className="px-0.5 py-2 text-right sm:px-2 sm:py-3">{number(row, ["won", "w"])}</td>
+                    <td className="px-0.5 py-2 text-right sm:px-2 sm:py-3">{number(row, ["drawn", "draws", "d"])}</td>
+                    <td className="px-0.5 py-2 text-right sm:px-2 sm:py-3">{number(row, ["lost", "l"])}</td>
                     <td className="hidden px-2 py-3 text-right md:table-cell">{number(row, ["goals_for", "gf"])}</td>
                     <td className="hidden px-2 py-3 text-right md:table-cell">{number(row, ["goals_against", "ga"])}</td>
-                    <td className={`px-2 py-3 text-right font-black ${goalDifferenceClass(goalDifference)}`}>
+                    <td className={`px-0.5 py-2 text-right font-black sm:px-2 sm:py-3 ${goalDifferenceClass(goalDifference)}`}>
                       {goalDifferenceText(goalDifference)}
                     </td>
-                    <td className="px-2 py-3">
-                      <div className="flex justify-center gap-1">
+                    <td className="px-0.5 py-2 sm:px-2 sm:py-3">
+                      <div className="flex justify-center gap-0.5 sm:gap-1">
                         {form.length ? (
                           form.map((result, formIndex) => (
                             <span
-                              className={`inline-flex size-6 items-center justify-center rounded-full text-[10px] font-black ring-1 ${formClass(result)}`}
+                              className={`inline-flex size-4 items-center justify-center rounded-full text-[8px] font-black ring-1 sm:size-6 sm:text-[10px] ${formClass(result)}`}
                               key={`${teamId}-${result}-${formIndex}`}
                             >
                               {result}
@@ -492,7 +532,7 @@ export function LeagueTable({ standings, finishedMatches, previousSnapshot }: Le
                         )}
                       </div>
                     </td>
-                    <td className="px-2 py-3 text-right font-black text-white">
+                    <td className="px-0.5 py-2 text-right font-black text-white sm:px-2 sm:py-3">
                       {number(row, ["points", "pts"])}
                     </td>
                   </tr>
