@@ -107,6 +107,99 @@ function matchTime(match: Row) {
   return Number.isNaN(time) ? 0 : time;
 }
 
+function bangkokDateKey(value: unknown) {
+  if (typeof value !== "string" || !value) {
+    return "";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+  }).format(date);
+}
+
+function latestFinishedMatchDateKey(matches: Row[]) {
+  const latestMatch = [...matches]
+    .filter((match) => bangkokDateKey(text(match, ["match_date", "date", "kickoff_at"], "")))
+    .sort((a, b) => matchTime(b) - matchTime(a))[0];
+
+  return latestMatch ? bangkokDateKey(text(latestMatch, ["match_date", "date", "kickoff_at"], "")) : "";
+}
+
+function standingsBeforeLatestMatchDay(standings: Row[], matches: Row[]) {
+  const latestDateKey = latestFinishedMatchDateKey(matches);
+  const previousRows = new Map<string, Row>();
+
+  standings.forEach((row) => {
+    const teamId = text(row, ["team_id", "id"], "");
+
+    if (!teamId) {
+      return;
+    }
+
+    previousRows.set(teamId, {
+      ...row,
+      played: 0,
+      won: 0,
+      drawn: 0,
+      lost: 0,
+      goals_for: 0,
+      goals_against: 0,
+      goal_difference: 0,
+      points: 0,
+    });
+  });
+
+  matches
+    .filter((match) => {
+      const matchDate = text(match, ["match_date", "date", "kickoff_at"], "");
+      return !latestDateKey || bangkokDateKey(matchDate) !== latestDateKey;
+    })
+    .forEach((match) => {
+      const homeTeamId = text(match, ["home_team_id"], "");
+      const awayTeamId = text(match, ["away_team_id"], "");
+      const homeRow = previousRows.get(homeTeamId);
+      const awayRow = previousRows.get(awayTeamId);
+
+      if (!homeRow || !awayRow) {
+        return;
+      }
+
+      const homeScore = number(match, ["home_score"]);
+      const awayScore = number(match, ["away_score"]);
+      const homeWon = homeScore > awayScore;
+      const awayWon = awayScore > homeScore;
+      const drawn = homeScore === awayScore;
+
+      homeRow.played = number(homeRow, ["played"]) + 1;
+      homeRow.won = number(homeRow, ["won"]) + (homeWon ? 1 : 0);
+      homeRow.drawn = number(homeRow, ["drawn"]) + (drawn ? 1 : 0);
+      homeRow.lost = number(homeRow, ["lost"]) + (awayWon ? 1 : 0);
+      homeRow.goals_for = number(homeRow, ["goals_for"]) + homeScore;
+      homeRow.goals_against = number(homeRow, ["goals_against"]) + awayScore;
+      homeRow.goal_difference = number(homeRow, ["goals_for"]) - number(homeRow, ["goals_against"]);
+      homeRow.points = number(homeRow, ["won"]) * 3 + number(homeRow, ["drawn"]);
+
+      awayRow.played = number(awayRow, ["played"]) + 1;
+      awayRow.won = number(awayRow, ["won"]) + (awayWon ? 1 : 0);
+      awayRow.drawn = number(awayRow, ["drawn"]) + (drawn ? 1 : 0);
+      awayRow.lost = number(awayRow, ["lost"]) + (homeWon ? 1 : 0);
+      awayRow.goals_for = number(awayRow, ["goals_for"]) + awayScore;
+      awayRow.goals_against = number(awayRow, ["goals_against"]) + homeScore;
+      awayRow.goal_difference = number(awayRow, ["goals_for"]) - number(awayRow, ["goals_against"]);
+      awayRow.points = number(awayRow, ["won"]) * 3 + number(awayRow, ["drawn"]);
+    });
+
+  return sortStandings(Array.from(previousRows.values()));
+}
+
 function latestForm(teamId: string, matches: Row[]) {
   return [...matches]
     .filter((match) => text(match, ["home_team_id"], "") === teamId || text(match, ["away_team_id"], "") === teamId)
@@ -202,9 +295,13 @@ export function LeagueTable({ standings, finishedMatches, previousSnapshot }: Le
   const [animateRows, setAnimateRows] = useState(false);
   const animationStarted = useRef(false);
   const sortedStandings = useMemo(() => sortStandings(standings), [standings]);
+  const previousStandings = useMemo(
+    () => standingsBeforeLatestMatchDay(standings, finishedMatches),
+    [finishedMatches, standings],
+  );
   const previousByTeam = useMemo(
-    () => new Map(previousSnapshot.map((row) => [text(row, ["team_id"], ""), row])),
-    [previousSnapshot],
+    () => new Map(previousStandings.map((row, index) => [text(row, ["team_id"], ""), index + 1])),
+    [previousStandings],
   );
   const hasSnapshot = previousSnapshot.length > 0;
   const latestSnapshotCreatedAt = previousSnapshot
@@ -215,7 +312,7 @@ export function LeagueTable({ standings, finishedMatches, previousSnapshot }: Le
   const latestSnapshotMatchday = Math.max(...previousSnapshot.map((row) => number(row, ["matchday"])), 0);
   const movements = sortedStandings.map((row, index) => {
     const currentPosition = index + 1;
-    const previousPosition = number(previousByTeam.get(text(row, ["team_id"], "")) ?? {}, ["position"]) || null;
+    const previousPosition = previousByTeam.get(text(row, ["team_id"], "")) ?? null;
     const movement = previousPosition ? previousPosition - currentPosition : null;
 
     return { row, currentPosition, previousPosition, movement };
