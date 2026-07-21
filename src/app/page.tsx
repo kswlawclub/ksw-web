@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { LiveCountdown } from "@/components/live-countdown";
+import { LeagueTable } from "@/components/league-table";
 import { TeamLogo } from "@/components/team-logo";
 import { getSupabase, getSupabaseConfig } from "@/lib/supabase";
 
@@ -7,12 +9,13 @@ export const revalidate = 0;
 
 type Row = Record<string, unknown>;
 
-const statColumns = ["P", "W", "D", "L", "GF", "GA", "GD", "PTS"];
 const teamColumns = "id, name, short_name, logo_url, is_ksw";
 const standingsColumns =
   "team_id, league_id, team_name, short_name, logo_url, is_ksw, played, won, drawn, lost, goals_for, goals_against, goal_difference, points";
 const matchColumns =
   "id, league_id, match_date, home_team_id, away_team_id, home_score, away_score, venue, status, match_type";
+const snapshotColumns =
+  "snapshot_id, league_id, team_id, position, played, won, drawn, lost, goals_for, goals_against, goal_difference, points, matchday, created_at";
 const sponsorColumns =
   "id, name, logo_url, website_url, tier, sort_order, is_active";
 
@@ -46,24 +49,6 @@ function number(row: Row, keys: string[]) {
   }
 
   return 0;
-}
-
-function formatMatchDate(value: unknown) {
-  if (typeof value !== "string" || !value) {
-    return "Date unavailable";
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat("en", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    timeZone: "Asia/Bangkok",
-  }).format(date);
 }
 
 function formatMatchTime(value: unknown) {
@@ -100,23 +85,6 @@ function formatMatchDateLong(value: unknown) {
     day: "2-digit",
     month: "long",
     year: "numeric",
-    timeZone: "Asia/Bangkok",
-  }).format(date);
-}
-
-function formatMatchDateShort(value: unknown) {
-  if (typeof value !== "string" || !value) {
-    return "";
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  return new Intl.DateTimeFormat("en", {
-    day: "2-digit",
-    month: "short",
     timeZone: "Asia/Bangkok",
   }).format(date);
 }
@@ -395,17 +363,26 @@ function sponsorSlots(sponsors: Row[], minimumSlots: number) {
   return slots;
 }
 
-function sortMatches(matches: Row[]) {
-  return [...matches].sort((a, b) => {
-    const dateA = new Date(text(a, ["match_date", "date", "kickoff_at"], "")).getTime();
-    const dateB = new Date(text(b, ["match_date", "date", "kickoff_at"], "")).getTime();
+function latestStandingSnapshotRows(rows: Row[]) {
+  const latestSnapshotId = text(rows[0], ["snapshot_id"], "");
 
-    if (Number.isNaN(dateA) || Number.isNaN(dateB)) {
-      return 0;
-    }
+  if (latestSnapshotId) {
+    return rows.filter((row) => text(row, ["snapshot_id"], "") === latestSnapshotId);
+  }
 
-    return dateB - dateA;
-  });
+  const latestCreatedAt = text(rows[0], ["created_at"], "");
+
+  return latestCreatedAt
+    ? rows.filter((row) => text(row, ["created_at"], "") === latestCreatedAt)
+    : [];
+}
+
+function primaryLeagueId(rows: Row[]) {
+  const kswLeagueRow = rows.find(
+    (row) => row.is_ksw === true || text(row, ["team_name", "name", "team"]).toLowerCase().includes("ksw"),
+  );
+
+  return text(kswLeagueRow ?? rows[0], ["league_id"], "");
 }
 
 function teamById(teams: Row[]) {
@@ -544,6 +521,7 @@ async function loadHomeData() {
       matches: [] as Row[],
       scheduledMatches: [] as Row[],
       sponsors: [] as Row[],
+      standingsSnapshots: [] as Row[],
     };
   }
 
@@ -561,7 +539,6 @@ async function loadHomeData() {
         .select(matchColumns)
         .eq("status", "finished")
         .order("match_date", { ascending: false })
-        .limit(12),
     ),
     runSupabaseQuery(
       "scheduled_matches",
@@ -581,6 +558,19 @@ async function loadHomeData() {
     ),
   ]);
 
+  const standingsLeagueId = primaryLeagueId(standings);
+  const standingsSnapshots = standingsLeagueId
+    ? await runSupabaseQuery(
+        "league_standings_snapshots",
+        supabase
+          .from("league_standings_snapshots")
+          .select(snapshotColumns)
+          .eq("league_id", standingsLeagueId)
+          .order("created_at", { ascending: false })
+          .limit(100),
+      )
+    : [];
+
   const teamRows = allTeams.length ? allTeams : teams;
 
   return {
@@ -590,11 +580,12 @@ async function loadHomeData() {
     matches: withMatchTeams(finishedMatches, teamRows),
     scheduledMatches: withMatchTeams(scheduledMatches, teamRows),
     sponsors,
+    standingsSnapshots,
   };
 }
 
 export default async function Home() {
-  const { configured, teams, standings, matches, scheduledMatches, sponsors } = await loadHomeData();
+  const { configured, teams, standings, matches, scheduledMatches, sponsors, standingsSnapshots } = await loadHomeData();
   const club = teams[0];
   const logoUrl = club?.logo_url;
   const sponsorGroups = groupSponsorsByTier(sponsors);
@@ -676,6 +667,7 @@ export default async function Home() {
       (match) => typeof match.home_score === "number" && typeof match.away_score === "number",
     )
     .slice(0, 12);
+  const previousStandingsSnapshot = latestStandingSnapshotRows(standingsSnapshots);
   const resultGroups = latestResults.reduce<Array<{ key: string; date: unknown; matches: Row[] }>>(
     (groups, match) => {
       const matchDate = match.match_date ?? match.date ?? match.kickoff_at;
@@ -733,18 +725,18 @@ export default async function Home() {
               THAI LAWYERS LEAGUE • SEASON 6
             </div>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-              <a
+              <Link
                 className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/15 transition-transform hover:scale-[1.02]"
                 href="/#next-fixtures"
               >
                 View Next Fixtures
-              </a>
-              <a
+              </Link>
+              <Link
                 className="inline-flex items-center justify-center rounded-md border border-[#d8ad45]/50 bg-white/[0.03] px-5 py-3 text-sm font-black text-[#f4d58a] backdrop-blur transition-colors hover:bg-[#d8ad45]/10"
                 href="/partners"
               >
                 Partner With KSW
-              </a>
+              </Link>
             </div>
             {!configured ? (
               <p className="mt-6 inline-flex max-w-full rounded-md border border-[#d8ad45]/50 bg-[#d8ad45]/10 px-4 py-3 text-sm text-[#f4d58a] sm:mt-8">
@@ -1143,106 +1135,11 @@ export default async function Home() {
           </div>
         </div>
         <div id="league-table" className="mt-8 min-w-0">
-        <div className="min-w-0 overflow-hidden rounded-2xl border border-[#d8ad45]/25 bg-[linear-gradient(135deg,#061426,#0b2745_58%,#071b31)] shadow-2xl shadow-[#061426]/25">
-          <div className="grid gap-4 border-b border-[#d8ad45]/20 px-4 py-5 sm:px-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]">
-                KSW League
-              </p>
-              <h2 className="mt-2 text-2xl font-black tracking-tight text-white sm:text-3xl">
-                League Table
-              </h2>
-              <p className="mt-1 text-sm font-semibold text-slate-300">
-                Thai Lawyers League • Season 6
-              </p>
-            </div>
-            <span className="inline-flex items-center gap-2 rounded-full border border-[#f4d58a]/35 bg-[#d8ad45]/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.2em] text-[#f4d58a] shadow-lg shadow-[#d8ad45]/10">
-              <span className="ksw-live-dot size-2 rounded-full bg-[#f4d58a]" />
-              LIVE
-            </span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full table-fixed text-left text-xs sm:text-sm">
-              <thead className="bg-[#061426]/80 text-[10px] uppercase tracking-wider text-slate-400 sm:text-xs">
-                <tr>
-                  <th className="w-8 px-1 py-3 sm:w-14 sm:px-4">Pos</th>
-                  <th className="px-1 py-3 sm:px-4">Team</th>
-                  {statColumns.map((column) => (
-                    <th
-                      key={column}
-                      className={`w-7 px-1 py-3 text-right sm:w-11 sm:px-3 ${
-                        column === "GF" || column === "GA" ? "hidden md:table-cell" : ""
-                      }`}
-                    >
-                      {column}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10">
-                {sortedStandings.length ? (
-                  sortedStandings.map((row, index) => (
-                    <tr
-                      className={`cursor-pointer border-l-4 transition-colors hover:bg-white/[0.09] ${
-                        text(row, ["team_name", "name", "team"]).toLowerCase().includes("ksw")
-                          ? "border-l-[#d8ad45] bg-gradient-to-r from-[#d8ad45]/18 via-white/[0.06] to-transparent shadow-[inset_0_0_22px_rgba(216,173,69,0.12)]"
-                          : index < 3
-                            ? "border-l-[#f4d58a]/50 bg-white/[0.045]"
-                            : "border-l-transparent"
-                      }`}
-                      key={text(row, ["id", "team_id", "team_name", "name"], String(index))}
-                    >
-                      <td
-                        className={`px-1 py-3 font-bold sm:px-4 ${
-                          index < 3 ? "text-[#f4d58a]" : "text-slate-300"
-                        }`}
-                      >
-                        {index + 1}
-                      </td>
-                      <td className="min-w-0 px-1 py-3 text-white sm:px-4">
-                        <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
-                          <TeamLogo
-                            className="size-[22px] sm:size-7 md:size-8"
-                            initials={teamInitials(row)}
-                            logoUrl={text(row, ["logo_url"], "")}
-                            teamName={text(row, ["team_name", "name", "team"])}
-                          />
-                          <span className="min-w-0 truncate font-bold leading-5 sm:hidden">
-                            {text(row, ["short_name"], teamInitials(row))}
-                          </span>
-                          <span className="hidden min-w-0 truncate font-bold leading-5 sm:inline">
-                            {text(row, ["team_name", "name", "team"])}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-1 py-3 text-right sm:px-3">{number(row, ["played", "p"])}</td>
-                      <td className="px-1 py-3 text-right sm:px-3">{number(row, ["won", "w"])}</td>
-                      <td className="px-1 py-3 text-right sm:px-3">{number(row, ["drawn", "draws", "d"])}</td>
-                      <td className="px-1 py-3 text-right sm:px-3">{number(row, ["lost", "l"])}</td>
-                      <td className="hidden px-1 py-3 text-right md:table-cell sm:px-3">{number(row, ["goals_for", "gf"])}</td>
-                      <td className="hidden px-1 py-3 text-right md:table-cell sm:px-3">{number(row, ["goals_against", "ga"])}</td>
-                      <td className="px-1 py-3 text-right sm:px-3">{number(row, ["goal_difference", "gd"])}</td>
-                      <td className="px-1 py-3 text-right font-black text-white sm:px-3">
-                        {number(row, ["points", "pts"])}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td className="px-4 py-8 text-center text-slate-400" colSpan={10}>
-                      No league table rows available.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          <div className="border-t border-[#d8ad45]/15 px-4 py-3 text-right sm:px-6">
-            <p className="text-xs font-semibold leading-5 text-slate-400">
-              ข้อมูลการแข่งขันอ้างอิงจากฝ่ายจัดการแข่งขัน Thai Lawyers League Season 6
-            </p>
-          </div>
-        </div>
+          <LeagueTable
+            finishedMatches={matches}
+            previousSnapshot={previousStandingsSnapshot}
+            standings={standings}
+          />
         </div>
 
         <div id="latest-results" className="mt-8 min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/10">
