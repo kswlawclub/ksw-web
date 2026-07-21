@@ -218,17 +218,44 @@ function latestForm(teamId: string, matches: Row[]) {
     });
 }
 
-function formClass(result: string) {
-  if (result === "W") return "bg-emerald-400/16 text-emerald-200 ring-emerald-300/25";
-  if (result === "L") return "bg-red-400/14 text-red-200 ring-red-300/25";
-  return "bg-slate-200/12 text-slate-200 ring-white/15";
+function formLabel(result: string) {
+  if (result === "W") return "ชนะ";
+  if (result === "L") return "แพ้";
+  return "เสมอ";
 }
 
-function movementLabel(movement: number | null) {
-  if (movement === null) return "NEW";
-  if (movement > 0) return `↑ ${movement}`;
-  if (movement < 0) return `↓ ${Math.abs(movement)}`;
-  return "—";
+function FormIcon({ isLatest, result }: { isLatest: boolean; result: string }) {
+  const label = formLabel(result);
+  const tone =
+    result === "W"
+      ? "bg-emerald-500"
+      : result === "L"
+        ? "bg-red-500"
+        : "bg-slate-500";
+
+  return (
+    <span
+      aria-label={`${label}${isLatest ? " นัดล่าสุด" : ""}`}
+      className={`inline-flex size-[13px] items-center justify-center rounded-full text-white shadow-sm sm:size-5 ${
+        isLatest ? "ring-2 ring-white/75 ring-offset-1 ring-offset-[#061426]" : ""
+      } ${tone}`}
+      title={`${label}${isLatest ? " นัดล่าสุด" : ""}`}
+    >
+      {result === "W" ? (
+        <svg aria-hidden="true" className="size-2.5 sm:size-3.5" fill="none" viewBox="0 0 16 16">
+          <path d="M3.2 8.2 6.5 11.5 12.8 4.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.4" />
+        </svg>
+      ) : result === "L" ? (
+        <svg aria-hidden="true" className="size-2.5 sm:size-3.5" fill="none" viewBox="0 0 16 16">
+          <path d="M4.5 4.5 11.5 11.5M11.5 4.5 4.5 11.5" stroke="currentColor" strokeLinecap="round" strokeWidth="2.4" />
+        </svg>
+      ) : (
+        <svg aria-hidden="true" className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5" fill="none" viewBox="0 0 16 16">
+          <path d="M4 8h8" stroke="currentColor" strokeLinecap="round" strokeWidth="2.6" />
+        </svg>
+      )}
+    </span>
+  );
 }
 
 function movementClass(movement: number | null) {
@@ -238,10 +265,26 @@ function movementClass(movement: number | null) {
   return "text-slate-400";
 }
 
-function MovementBadge({ movement }: { movement: number | null }) {
+function MovementBadge({
+  animate,
+  movement,
+  rowIndex,
+}: {
+  animate: boolean;
+  movement: number | null;
+  rowIndex: number;
+}) {
+  const direction = movement === null ? "new" : movement > 0 ? "up" : movement < 0 ? "down" : "same";
+  const delay = `${Math.min(rowIndex * 45, 420)}ms`;
+
   if (movement === null) {
     return (
-      <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-400/10 px-1 text-[9px] font-black text-slate-400 ring-1 ring-slate-300/10 sm:h-6 sm:min-w-8 sm:px-2 sm:text-[10px]">
+      <span
+        className="move-indicator inline-flex items-center justify-center text-[8px] font-black leading-none text-slate-400 sm:text-[10px]"
+        data-animate={animate ? "true" : "false"}
+        data-direction={direction}
+        style={{ "--move-delay": delay } as CSSProperties}
+      >
         NEW
       </span>
     );
@@ -249,8 +292,15 @@ function MovementBadge({ movement }: { movement: number | null }) {
 
   if (movement === 0) {
     return (
-      <span className="inline-flex size-5 items-center justify-center rounded-full bg-slate-400/10 text-[12px] font-black leading-none text-slate-400 ring-1 ring-slate-300/10 sm:size-6">
-        -
+      <span
+        aria-label="อันดับไม่เปลี่ยน"
+        className="move-indicator inline-flex items-center justify-center text-[#f4d58a]"
+        data-animate={animate ? "true" : "false"}
+        data-direction={direction}
+        style={{ "--move-delay": delay } as CSSProperties}
+        title="อันดับไม่เปลี่ยน"
+      >
+        <span className="h-1 w-3 rounded-full bg-current sm:h-1.5 sm:w-5" />
       </span>
     );
   }
@@ -259,20 +309,22 @@ function MovementBadge({ movement }: { movement: number | null }) {
 
   return (
     <span
-      className={`inline-flex h-5 min-w-7 items-center justify-center gap-0.5 rounded-full px-1 text-[9px] font-black leading-none ring-1 sm:h-6 sm:min-w-9 sm:gap-1 sm:px-2 sm:text-[10px] ${
-        isUp
-          ? "bg-emerald-400/12 text-emerald-200 ring-emerald-300/20"
-          : "bg-red-400/12 text-red-200 ring-red-300/20"
+      aria-label={`${isUp ? "อันดับขึ้น" : "อันดับลง"} ${Math.abs(movement)} อันดับ`}
+      className={`move-indicator inline-flex items-center justify-center gap-0.5 text-[9px] font-black leading-none sm:gap-1 sm:text-xs ${
+        isUp ? "text-emerald-400" : "text-red-400"
       }`}
+      data-animate={animate ? "true" : "false"}
+      data-direction={direction}
+      style={{ "--move-delay": delay } as CSSProperties}
+      title={`${isUp ? "อันดับขึ้น" : "อันดับลง"} ${Math.abs(movement)} อันดับ`}
     >
-      <span
-        aria-hidden="true"
-        className={`inline-block size-0 border-x-[3px] border-x-transparent sm:border-x-4 ${
-          isUp
-            ? "border-b-[5px] border-b-emerald-200 sm:border-b-[6px]"
-            : "border-t-[5px] border-t-red-200 sm:border-t-[6px]"
-        }`}
-      />
+      <svg aria-hidden="true" className="h-3.5 w-2.5 sm:h-5 sm:w-3.5" fill="currentColor" viewBox="0 0 12 20">
+        {isUp ? (
+          <path d="M6 .9 11.3 7H8.2v12.1H3.8V7H.7L6 .9Z" />
+        ) : (
+          <path d="M6 19.1.7 13h3.1V.9h4.4V13h3.1L6 19.1Z" />
+        )}
+      </svg>
       <span>{Math.abs(movement)}</span>
     </span>
   );
@@ -370,7 +422,7 @@ export function LeagueTable({ standings, finishedMatches, previousSnapshot }: Le
   const battleText = kswBattleText(sortedStandings);
 
   useEffect(() => {
-    if (!hasSnapshot || animationStarted.current) {
+    if (animationStarted.current) {
       return;
     }
 
@@ -378,7 +430,7 @@ export function LeagueTable({ standings, finishedMatches, previousSnapshot }: Le
     const animationFrame = requestAnimationFrame(() => setAnimateRows(true));
 
     return () => cancelAnimationFrame(animationFrame);
-  }, [hasSnapshot]);
+  }, []);
 
   return (
     <div className="min-w-0 overflow-hidden rounded-2xl border border-[#d8ad45]/25 bg-[linear-gradient(135deg,#061426,#0b2745_58%,#071b31)] shadow-2xl shadow-[#061426]/25">
@@ -444,7 +496,7 @@ export function LeagueTable({ standings, finishedMatches, previousSnapshot }: Le
                 <th
                   key={column}
                   className={`px-0.5 py-2 text-right sm:px-2 sm:py-3 ${
-                    column === "FORM" ? "w-14 text-center sm:w-32" : "w-6 sm:w-12"
+                    column === "FORM" ? "w-[76px] text-center sm:w-32" : "w-6 sm:w-12"
                   } ${column === "GF" || column === "GA" ? "hidden md:table-cell" : ""}`}
                 >
                   {column}
@@ -459,12 +511,6 @@ export function LeagueTable({ standings, finishedMatches, previousSnapshot }: Le
                 const teamId = text(row, ["team_id", "id"], "");
                 const form = latestForm(teamId, finishedMatches);
                 const goalDifference = number(row, ["goal_difference", "gd"]);
-                const rowOffset = previousPosition ? (previousPosition - currentPosition) * 54 : 0;
-                const movementTone = movement === null ? "rgba(148,163,184,0.22)" : movement > 0
-                  ? "rgba(74,222,128,0.22)"
-                  : movement < 0
-                    ? "rgba(248,113,113,0.2)"
-                    : "rgba(148,163,184,0.12)";
 
                 return (
                   <tr
@@ -475,14 +521,7 @@ export function LeagueTable({ standings, finishedMatches, previousSnapshot }: Le
                           ? "border-l-[#f4d58a]/50 bg-white/[0.045]"
                           : "border-l-transparent"
                     }`}
-                    data-animate={animateRows && hasSnapshot && previousPosition && movement !== 0 ? "true" : "false"}
                     key={teamId || teamName || String(index)}
-                    style={
-                      {
-                        "--rank-offset": `${rowOffset}px`,
-                        "--rank-glow": movementTone,
-                      } as CSSProperties
-                    }
                   >
                     <td
                       className={`px-1 py-2 font-bold sm:px-3 sm:py-3 ${
@@ -492,7 +531,7 @@ export function LeagueTable({ standings, finishedMatches, previousSnapshot }: Le
                       {currentPosition}
                     </td>
                     <td className={`px-0.5 py-2 text-center font-black sm:px-2 sm:py-3 ${movementClass(movement)}`}>
-                      <MovementBadge movement={movement} />
+                      <MovementBadge animate={animateRows} movement={movement} rowIndex={index} />
                     </td>
                     <td className="min-w-0 px-1 py-2 text-white sm:px-3 sm:py-3">
                       <div className="flex min-w-0 items-center gap-1 sm:gap-2">
@@ -520,12 +559,11 @@ export function LeagueTable({ standings, finishedMatches, previousSnapshot }: Le
                       <div className="flex justify-center gap-0.5 sm:gap-1">
                         {form.length ? (
                           form.map((result, formIndex) => (
-                            <span
-                              className={`inline-flex size-4 items-center justify-center rounded-full text-[8px] font-black ring-1 sm:size-6 sm:text-[10px] ${formClass(result)}`}
+                            <FormIcon
+                              isLatest={formIndex === 0}
                               key={`${teamId}-${result}-${formIndex}`}
-                            >
-                              {result}
-                            </span>
+                              result={result}
+                            />
                           ))
                         ) : (
                           <span className="text-xs font-bold text-slate-500">—</span>
@@ -554,34 +592,55 @@ export function LeagueTable({ standings, finishedMatches, previousSnapshot }: Le
         </p>
       </div>
       <style jsx>{`
-        .league-rank-row[data-animate="true"] {
-          animation:
-            kswRankSlide 760ms cubic-bezier(0.22, 1, 0.36, 1),
-            kswRankGlow 1800ms ease-out;
-          will-change: transform, box-shadow;
+        .move-indicator[data-animate="true"] {
+          animation: kswMoveFade 540ms cubic-bezier(0.22, 1, 0.36, 1) both;
+          animation-delay: var(--move-delay);
+          will-change: transform, opacity;
         }
 
-        @keyframes kswRankSlide {
+        .move-indicator[data-animate="true"][data-direction="up"] {
+          animation-name: kswMoveUp;
+        }
+
+        .move-indicator[data-animate="true"][data-direction="down"] {
+          animation-name: kswMoveDown;
+        }
+
+        @keyframes kswMoveUp {
           from {
-            transform: translateY(var(--rank-offset));
+            opacity: 0;
+            transform: translateY(7px);
           }
           to {
+            opacity: 1;
             transform: translateY(0);
           }
         }
 
-        @keyframes kswRankGlow {
-          0%,
-          62% {
-            box-shadow: inset 0 0 28px var(--rank-glow);
+        @keyframes kswMoveDown {
+          from {
+            opacity: 0;
+            transform: translateY(-7px);
           }
-          100% {
-            box-shadow: inset 0 0 0 transparent;
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes kswMoveFade {
+          from {
+            opacity: 0;
+            transform: translateY(2px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
           }
         }
 
         @media (prefers-reduced-motion: reduce) {
-          .league-rank-row[data-animate="true"] {
+          .move-indicator[data-animate="true"] {
             animation: none;
           }
         }
