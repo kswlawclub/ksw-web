@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { TeamLogo } from "@/components/team-logo";
 
 type Row = Record<string, unknown>;
@@ -9,6 +9,24 @@ type LeagueTableProps = {
   standings: Row[];
   finishedMatches: Row[];
   previousSnapshot: Row[];
+};
+
+type FormItem = {
+  id: string;
+  awayTeamName: string;
+  homeTeamName: string;
+  matchDate: string;
+  result: string;
+  role: "home" | "away";
+  scoreText: string;
+  venue: string;
+};
+
+type ActiveFormPopover = {
+  id: string;
+  item: FormItem;
+  left: number;
+  top: number;
 };
 
 const statColumns = ["P", "W", "D", "L", "GF", "GA", "GD", "FORM", "PTS"];
@@ -207,14 +225,24 @@ function latestForm(teamId: string, matches: Row[]) {
     .slice(0, 5)
     .map((match) => {
       const homeTeamId = text(match, ["home_team_id"], "");
+      const awayTeamId = text(match, ["away_team_id"], "");
       const homeScore = number(match, ["home_score"]);
       const awayScore = number(match, ["away_score"]);
       const teamScore = homeTeamId === teamId ? homeScore : awayScore;
       const opponentScore = homeTeamId === teamId ? awayScore : homeScore;
+      const role = homeTeamId === teamId ? "home" : "away";
+      const result = teamScore > opponentScore ? "W" : teamScore < opponentScore ? "L" : "D";
 
-      if (teamScore > opponentScore) return "W";
-      if (teamScore < opponentScore) return "L";
-      return "D";
+      return {
+        id: text(match, ["id", "match_id"], `${homeTeamId}-${awayTeamId}-${matchTime(match)}`),
+        awayTeamName: text(match, ["away_team_name", "away_name", "away_team"], "Away team unavailable"),
+        homeTeamName: text(match, ["home_team_name", "home_name", "home_team"], "Home team unavailable"),
+        matchDate: text(match, ["match_date", "date", "kickoff_at"], ""),
+        result,
+        role,
+        scoreText: `${teamScore}\u2013${opponentScore}`,
+        venue: text(match, ["venue"], ""),
+      } satisfies FormItem;
     });
 }
 
@@ -224,28 +252,83 @@ function formLabel(result: string) {
   return "เสมอ";
 }
 
-function FormIcon({ isLatest, result }: { isLatest: boolean; result: string }) {
-  const label = formLabel(result);
+function formPopoverPosition(rect: DOMRect) {
+  const width = 260;
+  const margin = 8;
+
+  return {
+    left: Math.min(Math.max(rect.left + rect.width / 2 - width / 2, margin), window.innerWidth - width - margin),
+    top: Math.max(Math.min(rect.bottom + 10, window.innerHeight - 158), margin),
+  };
+}
+
+function FormIcon({
+  isLatest,
+  item,
+  onClose,
+  onOpen,
+  open,
+}: {
+  isLatest: boolean;
+  item: FormItem;
+  onClose: () => void;
+  onOpen: (item: FormItem, rect: DOMRect) => void;
+  open: boolean;
+}) {
+  const label = formLabel(item.result);
   const tone =
-    result === "W"
+    item.result === "W"
       ? "bg-emerald-500"
-      : result === "L"
+      : item.result === "L"
         ? "bg-red-500"
         : "bg-slate-500";
+  const ariaLabel = `${label} ${item.scoreText}, ${item.homeTeamName} vs ${item.awayTeamName}`;
+
+  function handleOpen(event: MouseEvent<HTMLButtonElement>) {
+    onOpen(item, event.currentTarget.getBoundingClientRect());
+  }
+
+  function handleClick(event: MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+
+    if (open) {
+      onClose();
+      return;
+    }
+
+    handleOpen(event);
+  }
+
+  function handleMouseEnter(event: MouseEvent<HTMLButtonElement>) {
+    if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+      handleOpen(event);
+    }
+  }
+
+  function handleMouseLeave() {
+    if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+      onClose();
+    }
+  }
 
   return (
-    <span
-      aria-label={`${label}${isLatest ? " นัดล่าสุด" : ""}`}
-      className={`inline-flex size-[13px] items-center justify-center rounded-full text-white shadow-sm sm:size-5 ${
+    <button
+      aria-expanded={open}
+      aria-label={ariaLabel}
+      className={`inline-flex size-[13px] items-center justify-center rounded-full text-white shadow-sm outline-none transition-transform focus-visible:ring-2 focus-visible:ring-[#f4d58a] focus-visible:ring-offset-1 focus-visible:ring-offset-[#061426] sm:size-5 ${
         isLatest ? "ring-2 ring-white/75 ring-offset-1 ring-offset-[#061426]" : ""
       } ${tone}`}
-      title={`${label}${isLatest ? " นัดล่าสุด" : ""}`}
+      data-form-trigger="true"
+      onClick={handleClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      type="button"
     >
-      {result === "W" ? (
+      {item.result === "W" ? (
         <svg aria-hidden="true" className="size-2.5 sm:size-3.5" fill="none" viewBox="0 0 16 16">
           <path d="M3.2 8.2 6.5 11.5 12.8 4.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.4" />
         </svg>
-      ) : result === "L" ? (
+      ) : item.result === "L" ? (
         <svg aria-hidden="true" className="size-2.5 sm:size-3.5" fill="none" viewBox="0 0 16 16">
           <path d="M4.5 4.5 11.5 11.5M11.5 4.5 4.5 11.5" stroke="currentColor" strokeLinecap="round" strokeWidth="2.4" />
         </svg>
@@ -254,7 +337,33 @@ function FormIcon({ isLatest, result }: { isLatest: boolean; result: string }) {
           <path d="M4 8h8" stroke="currentColor" strokeLinecap="round" strokeWidth="2.6" />
         </svg>
       )}
-    </span>
+    </button>
+  );
+}
+
+function FormPopover({ active }: { active: ActiveFormPopover }) {
+  return (
+    <div
+      className="fixed z-[80] w-[260px] rounded-xl border border-[#d8ad45]/30 bg-[#061426] p-3 text-left text-xs text-slate-200 shadow-2xl shadow-black/30"
+      data-form-popover="true"
+      role="dialog"
+      style={{ left: active.left, top: active.top }}
+    >
+      <span className="absolute -top-1.5 left-1/2 size-3 -translate-x-1/2 rotate-45 border-l border-t border-[#d8ad45]/30 bg-[#061426]" />
+      <p className="text-sm font-black text-white">
+        {formLabel(active.item.result)} {active.item.scoreText}
+      </p>
+      <p className="mt-1 font-bold text-[#f4d58a]">
+        {active.item.homeTeamName} vs {active.item.awayTeamName}
+      </p>
+      <p className="mt-1 text-slate-300">{formatBangkokDateTime(active.item.matchDate)}</p>
+      <p className="mt-1 text-slate-400">
+        ทีมนี้เป็น{active.item.role === "home" ? "เจ้าบ้าน" : "ทีมเยือน"}
+      </p>
+      {active.item.venue ? (
+        <p className="mt-1 text-slate-400">สนาม: {active.item.venue}</p>
+      ) : null}
+    </div>
   );
 }
 
@@ -384,6 +493,7 @@ function kswBattleText(rows: Row[]) {
 }
 
 export function LeagueTable({ standings, finishedMatches, previousSnapshot }: LeagueTableProps) {
+  const [activeFormPopover, setActiveFormPopover] = useState<ActiveFormPopover | null>(null);
   const [animateRows, setAnimateRows] = useState(false);
   const animationStarted = useRef(false);
   const sortedStandings = useMemo(() => sortStandings(standings), [standings]);
@@ -431,6 +541,40 @@ export function LeagueTable({ standings, finishedMatches, previousSnapshot }: Le
 
     return () => cancelAnimationFrame(animationFrame);
   }, []);
+
+  useEffect(() => {
+    if (!activeFormPopover) {
+      return;
+    }
+
+    function closeOnOutsidePointer(event: PointerEvent) {
+      const target = event.target;
+
+      if (!(target instanceof Element)) {
+        return;
+      }
+
+      if (target.closest("[data-form-popover]") || target.closest("[data-form-trigger]")) {
+        return;
+      }
+
+      setActiveFormPopover(null);
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setActiveFormPopover(null);
+      }
+    }
+
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [activeFormPopover]);
 
   return (
     <div className="min-w-0 overflow-hidden rounded-2xl border border-[#d8ad45]/25 bg-[linear-gradient(135deg,#061426,#0b2745_58%,#071b31)] shadow-2xl shadow-[#061426]/25">
@@ -558,11 +702,20 @@ export function LeagueTable({ standings, finishedMatches, previousSnapshot }: Le
                     <td className="px-0.5 py-2 sm:px-2 sm:py-3">
                       <div className="flex justify-center gap-0.5 sm:gap-1">
                         {form.length ? (
-                          form.map((result, formIndex) => (
+                          form.map((item, formIndex) => (
                             <FormIcon
                               isLatest={formIndex === 0}
-                              key={`${teamId}-${result}-${formIndex}`}
-                              result={result}
+                              item={item}
+                              key={`${teamId}-${item.id}-${formIndex}`}
+                              onClose={() => setActiveFormPopover(null)}
+                              onOpen={(formItem, rect) =>
+                                setActiveFormPopover({
+                                  id: `${teamId}-${formItem.id}-${formIndex}`,
+                                  item: formItem,
+                                  ...formPopoverPosition(rect),
+                                })
+                              }
+                              open={activeFormPopover?.id === `${teamId}-${item.id}-${formIndex}`}
                             />
                           ))
                         ) : (
@@ -586,6 +739,7 @@ export function LeagueTable({ standings, finishedMatches, previousSnapshot }: Le
           </tbody>
         </table>
       </div>
+      {activeFormPopover ? <FormPopover active={activeFormPopover} /> : null}
       <div className="border-t border-[#d8ad45]/15 px-4 py-3 text-right sm:px-6">
         <p className="text-xs font-semibold leading-5 text-slate-400">
           ข้อมูลการแข่งขันอ้างอิงจากฝ่ายจัดการแข่งขัน Thai Lawyers League Season 6
