@@ -1,6 +1,10 @@
 "use server";
 
-import sharp from "sharp";
+import {
+  imagePathFromPublicUrl,
+  safeImageSlug,
+  uploadProcessedImageVariants,
+} from "@/lib/admin-storage-images";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAdminSession } from "@/lib/admin-server-auth";
 
@@ -53,11 +57,6 @@ type GalleryListResult = ActionResult & {
 
 const bucketName = "gallery-images";
 const maxImageSize = 5 * 1024 * 1024;
-const allowedImageTypes = new Map([
-  ["image/png", "png"],
-  ["image/jpeg", "jpg"],
-  ["image/webp", "webp"],
-]);
 
 function getAdminClient() {
   const supabase = getSupabaseAdmin();
@@ -89,24 +88,7 @@ function validatePayload(payload: GalleryPayload) {
 }
 
 function pathFromPublicUrl(publicUrl: string) {
-  const marker = `/storage/v1/object/public/${bucketName}/`;
-  const index = publicUrl.indexOf(marker);
-
-  if (index === -1) {
-    return "";
-  }
-
-  return decodeURIComponent(publicUrl.slice(index + marker.length));
-}
-
-function slugify(value: string) {
-  const slug = value
-    .toLowerCase()
-    .replace(/\.[^.]+$/, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-  return slug || "gallery";
+  return imagePathFromPublicUrl(bucketName, publicUrl);
 }
 
 export async function uploadGalleryImage(formData: FormData): Promise<UploadResult> {
@@ -119,14 +101,6 @@ export async function uploadGalleryImage(formData: FormData): Promise<UploadResu
     return { ok: false, error: "Please choose an image file." };
   }
 
-  if (!allowedImageTypes.has(file.type)) {
-    return { ok: false, error: "Image must be a png, jpg, jpeg, or webp file." };
-  }
-
-  if (file.size > maxImageSize) {
-    return { ok: false, error: "Image file must be 5MB or smaller." };
-  }
-
   const { supabase, error } = getAdminClient();
 
   if (!supabase) {
@@ -135,65 +109,31 @@ export async function uploadGalleryImage(formData: FormData): Promise<UploadResu
 
   const safeCategory = category.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "gallery";
   const timestamp = Date.now();
-  const slug = slugify(file.name || safeCategory);
+  const slug = safeImageSlug(file.name || safeCategory, "gallery");
   const fullPath = `full/${timestamp}-${slug}.webp`;
   const thumbnailPath = `thumb/${timestamp}-${slug}.webp`;
-  const inputBuffer = Buffer.from(await file.arrayBuffer());
-
-  let fullBytes: Buffer;
-  let thumbnailBytes: Buffer;
-
-  try {
-    fullBytes = await sharp(inputBuffer)
-      .rotate()
-      .resize({ width: 1600, withoutEnlargement: true })
-      .webp({ quality: 82 })
-      .toBuffer();
-
-    thumbnailBytes = await sharp(inputBuffer)
-      .rotate()
-      .resize({ width: 500, withoutEnlargement: true })
-      .webp({ quality: 82 })
-      .toBuffer();
-  } catch (processingError) {
-    console.error("admin gallery image processing failed", processingError);
-    return { ok: false, error: "Image could not be processed." };
-  }
-
-  const fullUpload = await supabase.storage.from(bucketName).upload(fullPath, fullBytes, {
-    contentType: "image/webp",
-    upsert: false,
+  const uploadResult = await uploadProcessedImageVariants({
+    bucketName,
+    file,
+    maxFileSize: maxImageSize,
+    maxFileSizeLabel: "5MB",
+    supabase,
+    variants: [
+      { key: "full", path: fullPath, width: 1600 },
+      { key: "thumbnail", path: thumbnailPath, width: 500 },
+    ],
   });
 
-  if (fullUpload.error) {
-    console.error("admin gallery full image upload failed", fullUpload.error);
-    return { ok: false, error: fullUpload.error.message };
+  if (!uploadResult.ok || !uploadResult.uploads?.full || !uploadResult.uploads.thumbnail) {
+    return { ok: false, error: uploadResult.error ?? "Image upload failed." };
   }
-
-  const thumbnailUpload = await supabase.storage.from(bucketName).upload(
-    thumbnailPath,
-    thumbnailBytes,
-    {
-      contentType: "image/webp",
-      upsert: false,
-    },
-  );
-
-  if (thumbnailUpload.error) {
-    console.error("admin gallery thumbnail upload failed", thumbnailUpload.error);
-    await supabase.storage.from(bucketName).remove([fullPath]);
-    return { ok: false, error: thumbnailUpload.error.message };
-  }
-
-  const { data: fullData } = supabase.storage.from(bucketName).getPublicUrl(fullPath);
-  const { data: thumbnailData } = supabase.storage.from(bucketName).getPublicUrl(thumbnailPath);
 
   return {
     ok: true,
     path: fullPath,
     thumbnailPath,
-    publicUrl: fullData.publicUrl,
-    thumbnailUrl: thumbnailData.publicUrl,
+    publicUrl: uploadResult.uploads.full.publicUrl,
+    thumbnailUrl: uploadResult.uploads.thumbnail.publicUrl,
   };
 }
 

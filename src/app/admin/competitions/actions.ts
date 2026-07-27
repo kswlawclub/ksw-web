@@ -1,5 +1,10 @@
 "use server";
 
+import {
+  imagePathFromPublicUrl,
+  safeImageSlug,
+  uploadProcessedImageVariants,
+} from "@/lib/admin-storage-images";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAdminSession } from "@/lib/admin-server-auth";
 
@@ -28,7 +33,12 @@ type CompetitionPayload = {
 type ActionResult = {
   ok: boolean;
   error?: string;
+  id?: string;
 };
+
+const bucketName = "gallery-images";
+const coverPathPrefix = "competitions/covers/";
+const maxCoverImageSize = 6 * 1024 * 1024;
 
 function getAdminClient() {
   const supabase = getSupabaseAdmin();
@@ -111,9 +121,67 @@ function competitionErrorMessage(message: string) {
   return message;
 }
 
-export async function createCompetition(payload: CompetitionPayload): Promise<ActionResult> {
+function coverFileFromFormData(formData?: FormData | null) {
+  const file = formData?.get("cover");
+  return file instanceof File && file.size > 0 ? file : null;
+}
+
+function coverPathFromPublicUrl(publicUrl: string | null | undefined) {
+  return publicUrl ? imagePathFromPublicUrl(bucketName, publicUrl, coverPathPrefix) : "";
+}
+
+async function removeCompetitionCover(publicUrl: string | null | undefined) {
+  const { supabase } = getAdminClient();
+  const path = coverPathFromPublicUrl(publicUrl);
+
+  if (!supabase || !path) {
+    return;
+  }
+
+  const result = await supabase.storage.from(bucketName).remove([path]);
+
+  if (result.error) {
+    console.error("admin competition cover delete failed", result.error);
+  }
+}
+
+async function uploadCompetitionCover(competitionId: string, file: File) {
+  const { supabase, error } = getAdminClient();
+
+  if (!supabase) {
+    return { ok: false, error };
+  }
+
+  const timestamp = Date.now();
+  const slug = safeImageSlug(file.name || "cover", "cover");
+  const path = `${coverPathPrefix}${competitionId}-${timestamp}-${slug}.webp`;
+  const uploadResult = await uploadProcessedImageVariants({
+    bucketName,
+    file,
+    maxFileSize: maxCoverImageSize,
+    maxFileSizeLabel: "6MB",
+    supabase,
+    variants: [{ key: "cover", path, width: 1920 }],
+  });
+
+  if (!uploadResult.ok || !uploadResult.uploads?.cover) {
+    return { ok: false, error: uploadResult.error ?? "Cover image upload failed." };
+  }
+
+  return {
+    ok: true,
+    path: uploadResult.uploads.cover.path,
+    publicUrl: uploadResult.uploads.cover.publicUrl,
+  };
+}
+
+export async function createCompetition(
+  payload: CompetitionPayload,
+  coverFormData?: FormData | null,
+): Promise<ActionResult> {
   await requireAdminSession();
   const normalizedPayload = normalizePayload(payload);
+  const coverFile = coverFileFromFormData(coverFormData);
 
   const validationError = validatePayload(normalizedPayload);
 
@@ -127,22 +195,60 @@ export async function createCompetition(payload: CompetitionPayload): Promise<Ac
     return { ok: false, error };
   }
 
-  const result = await supabase.from("leagues").insert(normalizedPayload);
+  const initialPayload = coverFile ? { ...normalizedPayload, cover_image_url: null } : normalizedPayload;
+  const result = await supabase.from("leagues").insert(initialPayload).select("id").single();
 
   if (result.error) {
     console.error("admin competition insert failed", result.error);
     return { ok: false, error: competitionErrorMessage(result.error.message) };
   }
 
-  return { ok: true };
+  const competitionId = String(result.data?.id ?? "");
+
+  if (!competitionId) {
+    return { ok: false, error: "Competition was created, but its id was not returned." };
+  }
+
+  if (!coverFile) {
+    return { ok: true, id: competitionId };
+  }
+
+  const upload = await uploadCompetitionCover(competitionId, coverFile);
+
+  if (!upload.ok || !upload.publicUrl) {
+    await supabase.from("leagues").delete().eq("id", competitionId);
+    return {
+      ok: false,
+      error: `${upload.error ?? "Cover image upload failed."} Competition was not saved.`,
+    };
+  }
+
+  const coverUpdate = await supabase
+    .from("leagues")
+    .update({ cover_image_url: upload.publicUrl })
+    .eq("id", competitionId);
+
+  if (coverUpdate.error) {
+    console.error("admin competition cover update failed", coverUpdate.error);
+    await supabase.storage.from(bucketName).remove([upload.path]);
+    await supabase.from("leagues").delete().eq("id", competitionId);
+    return {
+      ok: false,
+      error: `${competitionErrorMessage(coverUpdate.error.message)} Competition was not saved.`,
+    };
+  }
+
+  return { ok: true, id: competitionId };
 }
 
 export async function updateCompetition(
   id: string,
   payload: CompetitionPayload,
+  coverFormData?: FormData | null,
 ): Promise<ActionResult> {
   await requireAdminSession();
   const normalizedPayload = normalizePayload(payload);
+  const coverFile = coverFileFromFormData(coverFormData);
 
   const validationError = validatePayload(normalizedPayload);
 
@@ -156,11 +262,41 @@ export async function updateCompetition(
     return { ok: false, error };
   }
 
-  const result = await supabase.from("leagues").update(normalizedPayload).eq("id", id);
+  const current = await supabase.from("leagues").select("cover_image_url").eq("id", id).single();
+  const oldCoverUrl =
+    !current.error && typeof current.data?.cover_image_url === "string"
+      ? current.data.cover_image_url
+      : null;
+  let uploadedCover: { path: string; publicUrl: string } | null = null;
+
+  if (coverFile) {
+    const upload = await uploadCompetitionCover(id, coverFile);
+
+    if (!upload.ok || !upload.publicUrl || !upload.path) {
+      return { ok: false, error: upload.error ?? "Cover image upload failed." };
+    }
+
+    uploadedCover = {
+      path: upload.path,
+      publicUrl: upload.publicUrl,
+    };
+  }
+
+  const finalPayload = uploadedCover
+    ? { ...normalizedPayload, cover_image_url: uploadedCover.publicUrl }
+    : normalizedPayload;
+  const result = await supabase.from("leagues").update(finalPayload).eq("id", id);
 
   if (result.error) {
     console.error("admin competition update failed", result.error);
+    if (uploadedCover) {
+      await supabase.storage.from(bucketName).remove([uploadedCover.path]);
+    }
     return { ok: false, error: competitionErrorMessage(result.error.message) };
+  }
+
+  if (uploadedCover || normalizedPayload.cover_image_url !== oldCoverUrl) {
+    await removeCompetitionCover(oldCoverUrl);
   }
 
   return { ok: true };
@@ -175,12 +311,19 @@ export async function deleteCompetitionById(id: string): Promise<ActionResult> {
     return { ok: false, error };
   }
 
+  const current = await supabase.from("leagues").select("cover_image_url").eq("id", id).single();
+  const oldCoverUrl =
+    !current.error && typeof current.data?.cover_image_url === "string"
+      ? current.data.cover_image_url
+      : null;
   const result = await supabase.from("leagues").delete().eq("id", id);
 
   if (result.error) {
     console.error("admin competition delete failed", result.error);
     return { ok: false, error: result.error.message };
   }
+
+  await removeCompetitionCover(oldCoverUrl);
 
   return { ok: true };
 }

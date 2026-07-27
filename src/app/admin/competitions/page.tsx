@@ -73,6 +73,9 @@ const emptyForm: CompetitionForm = {
   isPublished: true,
 };
 
+const maxCoverImageSize = 6 * 1024 * 1024;
+const coverImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+
 function isCompetitionType(value: string): value is CompetitionType {
   return ["league", "cup", "friendly", "tournament"].includes(value);
 }
@@ -132,14 +135,26 @@ export default function AdminCompetitionsPage() {
   const [saving, setSaving] = useState(false);
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [form, setForm] = useState<CompetitionForm>(emptyForm);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState("");
+  const [removeCoverImage, setRemoveCoverImage] = useState(false);
   const [slugEditedManually, setSlugEditedManually] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
   const firstFieldRef = useRef<HTMLInputElement>(null);
+  const coverObjectUrlRef = useRef("");
 
   useEffect(() => {
     void loadData();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (coverObjectUrlRef.current) {
+        URL.revokeObjectURL(coverObjectUrlRef.current);
+      }
+    };
   }, []);
 
   async function loadData() {
@@ -181,6 +196,13 @@ export default function AdminCompetitionsPage() {
 
   function resetForm() {
     setForm(emptyForm);
+    setCoverFile(null);
+    if (coverObjectUrlRef.current) {
+      URL.revokeObjectURL(coverObjectUrlRef.current);
+      coverObjectUrlRef.current = "";
+    }
+    setCoverPreviewUrl("");
+    setRemoveCoverImage(false);
     setSlugEditedManually(false);
     setMessage("");
     setError("");
@@ -213,6 +235,13 @@ export default function AdminCompetitionsPage() {
       isFeatured: competition.is_featured,
       isPublished: competition.is_published,
     });
+    setCoverFile(null);
+    if (coverObjectUrlRef.current) {
+      URL.revokeObjectURL(coverObjectUrlRef.current);
+      coverObjectUrlRef.current = "";
+    }
+    setCoverPreviewUrl("");
+    setRemoveCoverImage(false);
     setSlugEditedManually(true);
     setMessage("");
     setError("");
@@ -228,7 +257,7 @@ export default function AdminCompetitionsPage() {
       slug: nullableText(normalizeSlug(form.slug)),
       short_description: nullableText(form.shortDescription),
       description: nullableText(form.description),
-      cover_image_url: nullableText(form.coverImageUrl),
+      cover_image_url: removeCoverImage ? null : nullableText(form.coverImageUrl),
       edition_number: nullableNumber(form.editionNumber),
       start_date: nullableText(form.startDate),
       end_date: nullableText(form.endDate),
@@ -245,9 +274,15 @@ export default function AdminCompetitionsPage() {
     setMessage("");
     setError("");
 
+    const coverData = new FormData();
+
+    if (coverFile) {
+      coverData.append("cover", coverFile);
+    }
+
     const result = form.id
-      ? await updateCompetition(form.id, payload)
-      : await createCompetition(payload);
+      ? await updateCompetition(form.id, payload, coverFile ? coverData : null)
+      : await createCompetition(payload, coverFile ? coverData : null);
 
     setSaving(false);
 
@@ -258,8 +293,75 @@ export default function AdminCompetitionsPage() {
 
     setMessage(form.id ? "Competition updated." : "Competition added.");
     setForm(emptyForm);
+    setCoverFile(null);
+    if (coverObjectUrlRef.current) {
+      URL.revokeObjectURL(coverObjectUrlRef.current);
+      coverObjectUrlRef.current = "";
+    }
+    setCoverPreviewUrl("");
+    setRemoveCoverImage(false);
     setSlugEditedManually(false);
     await loadData();
+  }
+
+  function selectCoverFile(file: File | null) {
+    setMessage("");
+
+    if (!file) {
+      setCoverFile(null);
+      if (coverObjectUrlRef.current) {
+        URL.revokeObjectURL(coverObjectUrlRef.current);
+        coverObjectUrlRef.current = "";
+      }
+      setCoverPreviewUrl("");
+      return;
+    }
+
+    if (!coverImageTypes.has(file.type)) {
+      setError("Cover image must be a PNG, JPG, JPEG, or WebP file.");
+      setCoverFile(null);
+      if (coverObjectUrlRef.current) {
+        URL.revokeObjectURL(coverObjectUrlRef.current);
+        coverObjectUrlRef.current = "";
+      }
+      setCoverPreviewUrl("");
+      return;
+    }
+
+    if (file.size > maxCoverImageSize) {
+      setError("Cover image file must be 6MB or smaller.");
+      setCoverFile(null);
+      if (coverObjectUrlRef.current) {
+        URL.revokeObjectURL(coverObjectUrlRef.current);
+        coverObjectUrlRef.current = "";
+      }
+      setCoverPreviewUrl("");
+      return;
+    }
+
+    if (coverObjectUrlRef.current) {
+      URL.revokeObjectURL(coverObjectUrlRef.current);
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    coverObjectUrlRef.current = previewUrl;
+    setError("");
+    setCoverFile(file);
+    setCoverPreviewUrl(previewUrl);
+    setRemoveCoverImage(false);
+  }
+
+  function markCoverForRemoval() {
+    setCoverFile(null);
+    if (coverObjectUrlRef.current) {
+      URL.revokeObjectURL(coverObjectUrlRef.current);
+      coverObjectUrlRef.current = "";
+    }
+    setCoverPreviewUrl("");
+    setRemoveCoverImage(true);
+    setForm((current) => ({ ...current, coverImageUrl: "" }));
+    setMessage("");
+    setError("");
   }
 
   function updateName(value: string) {
@@ -297,6 +399,8 @@ export default function AdminCompetitionsPage() {
     setMessage("Competition deleted.");
     await loadData();
   }
+
+  const displayedCoverUrl = coverPreviewUrl || (!removeCoverImage ? form.coverImageUrl : "");
 
   return (
     <main className="min-h-screen overflow-x-auto bg-[#f6f2ea] text-[#061426]">
@@ -406,15 +510,73 @@ export default function AdminCompetitionsPage() {
               />
             </label>
 
-            <label className="grid gap-2 text-sm font-black">
-              Cover Image URL
-              <input
-                className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
-                onChange={(event) => setForm((current) => ({ ...current, coverImageUrl: event.target.value }))}
-                type="url"
-                value={form.coverImageUrl}
-              />
-            </label>
+            <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div>
+                <p className="text-sm font-black">Cover Image</p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">
+                  Upload PNG, JPG, JPEG, or WebP. Max 6MB. Uploaded files are resized and converted to WebP.
+                </p>
+              </div>
+
+              {displayedCoverUrl ? (
+                <div
+                  aria-label="Competition cover preview"
+                  className="aspect-video w-full overflow-hidden rounded-md border border-[#d8ad45]/30 bg-white bg-cover bg-center"
+                  role="img"
+                  style={{ backgroundImage: `url("${displayedCoverUrl}")` }}
+                />
+              ) : (
+                <div className="flex aspect-video items-center justify-center rounded-md border border-dashed border-slate-300 bg-white text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                  No Cover Image
+                </div>
+              )}
+
+              {coverFile ? (
+                <p className="text-xs font-bold text-emerald-700">
+                  New file selected: {coverFile.name}
+                </p>
+              ) : null}
+
+              {removeCoverImage ? (
+                <p className="rounded-md border border-[#d8ad45]/30 bg-[#fff7e6] px-3 py-2 text-xs font-bold text-[#8a6418]">
+                  Cover image will be removed when you save.
+                </p>
+              ) : null}
+
+              <label className="grid gap-2 text-sm font-black">
+                Upload Cover Image
+                <input
+                  accept="image/jpeg,image/png,image/webp"
+                  className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-[#061426] file:px-3 file:py-2 file:text-xs file:font-black file:text-white file:hover:bg-[#0d2745]"
+                  onChange={(event) => selectCoverFile(event.target.files?.[0] ?? null)}
+                  type="file"
+                />
+              </label>
+
+              <label className="grid gap-2 text-sm font-black">
+                Cover Image URL <span className="text-xs font-semibold text-slate-500">Advanced / optional fallback</span>
+                <input
+                  className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                  onChange={(event) => {
+                    setRemoveCoverImage(false);
+                    setForm((current) => ({ ...current, coverImageUrl: event.target.value }));
+                  }}
+                  placeholder="https://..."
+                  type="url"
+                  value={form.coverImageUrl}
+                />
+              </label>
+
+              {displayedCoverUrl || coverFile || form.coverImageUrl ? (
+                <button
+                  className="rounded-md border border-[#9b1c1f]/30 px-3 py-2 text-xs font-black text-[#9b1c1f] hover:bg-[#9b1c1f]/10"
+                  onClick={markCoverForRemoval}
+                  type="button"
+                >
+                  Remove Cover Image
+                </button>
+              ) : null}
+            </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <label className="grid gap-2 text-sm font-black">
