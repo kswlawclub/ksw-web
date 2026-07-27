@@ -76,6 +76,11 @@ function CompetitionCard({ competition }: { competition: Row }) {
   const slug = text(competition, ["slug"], "");
   const coverImageUrl = text(competition, ["cover_image_url"], "");
   const competitionType = text(competition, ["competition_type"], "league");
+  const description = text(
+    competition,
+    ["short_description"],
+    slug ? "Open this competition archive for fixtures, results, teams, and partners." : "Archive details are being prepared.",
+  );
   const metadata = [
     text(competition, ["season"], ""),
     text(competition, ["edition_number"], "") ? `Edition ${text(competition, ["edition_number"], "")}` : "",
@@ -83,8 +88,8 @@ function CompetitionCard({ competition }: { competition: Row }) {
     text(competition, ["location"], ""),
   ].filter(Boolean);
 
-  return (
-    <article className="group min-w-0 overflow-hidden rounded-2xl border border-[#d8ad45]/25 bg-white shadow-xl shadow-slate-900/10">
+  const cardContent = (
+    <>
       <div className="relative aspect-[16/9] overflow-hidden bg-[radial-gradient(circle_at_top,rgba(216,173,69,0.2),transparent_35%),linear-gradient(135deg,#071b31,#061426)]">
         {coverImageUrl ? (
           <Image
@@ -112,35 +117,47 @@ function CompetitionCard({ competition }: { competition: Row }) {
           {metadata.length ? (
             <p className="mt-2 text-sm font-bold text-slate-500">{metadata.join(" • ")}</p>
           ) : null}
-          <p className="mt-3 text-sm leading-6 text-slate-600">
-            {text(competition, ["short_description"], "Archive details are being prepared.")}
-          </p>
+          <p className="mt-3 text-sm leading-6 text-slate-600">{description}</p>
         </div>
         {slug ? (
-          <Link
-            className="inline-flex items-center justify-center rounded-md bg-[#061426] px-4 py-2.5 text-sm font-black text-[#f4d58a] shadow-lg shadow-slate-900/10 transition-colors hover:bg-[#0b2745]"
-            href={`/competitions/${slug}`}
-          >
+          <span className="inline-flex items-center justify-center rounded-md bg-[#061426] px-4 py-2.5 text-sm font-black text-[#f4d58a] shadow-lg shadow-slate-900/10 transition-colors group-hover:bg-[#0b2745]">
             View Archive
-          </Link>
+          </span>
         ) : (
           <p className="rounded-md border border-slate-200 bg-slate-50 px-4 py-2.5 text-center text-sm font-black text-slate-500">
             Archive details are being prepared.
           </p>
         )}
       </div>
+    </>
+  );
+
+  if (slug) {
+    return (
+      <Link
+        className="group block min-w-0 overflow-hidden rounded-2xl border border-[#d8ad45]/25 bg-white shadow-xl shadow-slate-900/10 transition-transform hover:-translate-y-0.5"
+        href={`/competitions/${slug}`}
+      >
+        {cardContent}
+      </Link>
+    );
+  }
+
+  return (
+    <article className="group min-w-0 overflow-hidden rounded-2xl border border-[#d8ad45]/25 bg-white shadow-xl shadow-slate-900/10">
+      {cardContent}
     </article>
   );
 }
 
-function CompetitionSection({ items, title }: { items: Row[]; title: string }) {
+function CompetitionSection({ items, showAccent = true, title }: { items: Row[]; showAccent?: boolean; title: string }) {
   if (!items.length) return null;
 
   return (
     <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
       <div className="mb-5 flex items-end justify-between gap-4">
         <div>
-          <div className="mb-3 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
+          {showAccent ? <div className="mb-3 h-0.5 w-12 rounded-full bg-[#d8ad45]" /> : null}
           <h2 className="text-2xl font-black text-[#061426]">{title}</h2>
         </div>
       </div>
@@ -158,11 +175,13 @@ export default async function CompetitionsPage() {
   const currentOrFeatured = competitions.filter(
     (competition) => competition.is_featured === true || text(competition, ["season_status"], "active") === "active",
   );
-  const leagues = competitions.filter((competition) => text(competition, ["competition_type"], "league") === "league");
-  const cupsAndTournaments = competitions.filter((competition) =>
+  const featuredIds = new Set(currentOrFeatured.map((competition) => text(competition, ["id"], "")).filter(Boolean));
+  const categoryCompetitions = competitions.filter((competition) => !featuredIds.has(text(competition, ["id"], "")));
+  const leagues = categoryCompetitions.filter((competition) => text(competition, ["competition_type"], "league") === "league");
+  const cupsAndTournaments = categoryCompetitions.filter((competition) =>
     ["cup", "tournament"].includes(text(competition, ["competition_type"], "league")),
   );
-  const specialMatches = competitions.filter(
+  const specialMatches = categoryCompetitions.filter(
     (competition) => text(competition, ["competition_type"], "league") === "friendly",
   );
 
@@ -182,7 +201,7 @@ export default async function CompetitionsPage() {
 
       {competitions.length ? (
         <>
-          <CompetitionSection items={currentOrFeatured} title="Current / Featured" />
+          <CompetitionSection items={currentOrFeatured} showAccent={false} title="Current / Featured" />
           <CompetitionSection items={leagues} title="League Seasons" />
           <CompetitionSection items={cupsAndTournaments} title="Cups & Tournaments" />
           <CompetitionSection items={specialMatches} title="Special Matches" />

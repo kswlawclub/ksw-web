@@ -592,7 +592,7 @@ async function loadHomeData() {
 export default async function Home() {
   const { configured, teams, standings, matches, scheduledMatches, sponsors, currentLeague } = await loadHomeData();
   const club = teams[0];
-  const logoUrl = club?.logo_url;
+  const logoUrl = isString(club?.logo_url) ? String(club?.logo_url) : "/team-logos/ksw-lc.png";
   const sponsorGroups = groupSponsorsByTier(sponsors);
 	  const sponsorSections = [
     {
@@ -771,21 +771,12 @@ export default async function Home() {
           <div className="ksw-float-logo relative mx-auto flex w-full max-w-[17rem] min-w-0 items-center justify-center sm:max-w-xs md:max-w-sm">
               <div className="absolute inset-0 -z-10 rounded-full bg-[#d8ad45]/20 blur-3xl" />
               <div className="absolute inset-x-6 inset-y-10 -z-10 rounded-full bg-[#f4d58a]/10 blur-2xl" />
-              {isString(logoUrl) ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  alt="KSW L.C. logo"
-                  className="max-h-[305px] w-full object-contain drop-shadow-[0_22px_48px_rgba(216,173,69,0.28)]"
-                  src={logoUrl}
-                />
-              ) : (
-                <div className="text-center">
-                  <p className="text-6xl font-black text-[#d8ad45] drop-shadow-[0_18px_40px_rgba(216,173,69,0.22)] sm:text-8xl">KSW</p>
-                  <p className="mt-3 text-xs font-bold uppercase tracking-[0.24em] text-slate-300 sm:text-sm sm:tracking-[0.35em]">
-                    Law Club
-                  </p>
-                </div>
-              )}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                alt="KSW L.C. logo"
+                className="max-h-[305px] w-full object-contain drop-shadow-[0_22px_48px_rgba(216,173,69,0.28)]"
+                src={logoUrl}
+              />
           </div>
         </div>
       </section>

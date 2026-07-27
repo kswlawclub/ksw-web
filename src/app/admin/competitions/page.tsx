@@ -479,11 +479,14 @@ export default function AdminCompetitionsPage() {
                   onClick={generateSlugFromCurrentName}
                   type="button"
                 >
-                  Generate from name
+                  Regenerate from name
                 </button>
               </div>
               <span className="text-xs font-semibold text-slate-500">
                 Lowercase English letters, numbers, and hyphens only.
+              </span>
+              <span className="text-xs font-semibold text-slate-500">
+                Slug is used in the public URL. Changing it may break existing links.
               </span>
               <span className="break-all rounded-md bg-slate-50 px-3 py-2 font-mono text-xs font-bold text-slate-600">
                 {form.slug ? `/competitions/${form.slug}` : "/competitions/[slug]"}
