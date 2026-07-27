@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { CompetitionResultsTable } from "@/components/competition-results-table";
 import { LeagueTable } from "@/components/league-table";
 import { TeamLogo } from "@/components/team-logo";
 import {
@@ -50,19 +51,6 @@ function formatDateTime(value: unknown) {
   }).format(date);
 }
 
-function bangkokDateKey(value: unknown) {
-  if (typeof value !== "string" || !value) return "date-unavailable";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-
-  return new Intl.DateTimeFormat("en-CA", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "Asia/Bangkok",
-    year: "numeric",
-  }).format(date);
-}
-
 function typeLabel(type: string) {
   if (type === "cup") return "Cup";
   if (type === "tournament") return "Tournament";
@@ -107,20 +95,6 @@ function latestStandingSnapshotRows(rows: Row[]) {
 
   const latestCreatedAt = text(rows[0], ["created_at"], "");
   return latestCreatedAt ? rows.filter((row) => text(row, ["created_at"], "") === latestCreatedAt) : [];
-}
-
-function resultGroups(matches: Row[]) {
-  return matches.reduce<Array<{ key: string; date: unknown; matches: Row[] }>>((groups, match) => {
-    const matchDate = match.match_date ?? match.date ?? match.kickoff_at;
-    const key = bangkokDateKey(matchDate);
-    const existingGroup = groups.find((group) => group.key === key);
-    if (existingGroup) {
-      existingGroup.matches.push(match);
-    } else {
-      groups.push({ key, date: matchDate, matches: [match] });
-    }
-    return groups;
-  }, []);
 }
 
 function dateRange(competition: Row) {
@@ -274,7 +248,7 @@ function SponsorsSection({ sponsors }: { sponsors: Row[] }) {
   if (!sponsors.some((sponsor) => sponsor.is_active !== false)) return null;
 
   return (
-    <section id="sponsors" className="bg-gradient-to-br from-[#071b31] via-[#0b2745] to-[#061426]">
+    <section id="partners" className="bg-gradient-to-br from-[#071b31] via-[#0b2745] to-[#061426]">
       <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
         <div className="rounded-lg border border-[#d8ad45]/25 bg-white/[0.08] p-6 shadow-2xl shadow-black/30 backdrop-blur sm:p-8">
           <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]">KSW Partnership</p>
@@ -356,7 +330,6 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
   const kswStanding = kswIndex >= 0 ? sortedStandings[kswIndex] : undefined;
   const kswMatchesNewest = matches.filter(isKswMatch).sort((a, b) => matchTime(b) - matchTime(a));
   const kswMatchesOldest = [...kswMatchesNewest].reverse();
-  const allResults = resultGroups(matches);
   const allFixtures = [...scheduledMatches, ...matches].sort((a, b) => matchTime(a) - matchTime(b));
   const summaryStats = kswStanding
     ? [
@@ -483,27 +456,7 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
       ) : null}
 
       {!isFriendly && matches.length ? (
-        <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="all-results">
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
-            <div className="border-b border-slate-200 px-4 py-5 sm:px-6">
-              <h2 className="text-2xl font-black">{isLeague ? "All Match Results" : "Competition Results"}</h2>
-              <p className="mt-1 text-sm font-semibold text-slate-600">Finished matches for this competition.</p>
-            </div>
-            <div className="grid gap-6 bg-slate-100 px-4 py-5 sm:px-6">
-              {allResults.map((group) => (
-                <div className="grid gap-3" key={group.key}>
-                  <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                    <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">Results</p>
-                    <p className="text-sm font-bold text-slate-600">{formatDate(group.date)}</p>
-                  </div>
-                  <div className="grid gap-3">
-                    {group.matches.map((match) => <ResultCard key={text(match, ["id"])} match={match} />)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
+        <CompetitionResultsTable isLeague={isLeague} matches={matches} />
       ) : null}
 
       {teams.length ? (

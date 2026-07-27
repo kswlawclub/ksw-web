@@ -67,6 +67,7 @@ function teamById(teams: Row[]) {
     teams.map((team) => [
       text(team, ["id"], ""),
       {
+        isKsw: team.is_ksw === true,
         name: text(team, ["name", "short_name"], "Team unavailable"),
         shortName: text(team, ["short_name"], ""),
         logoUrl: text(team, ["logo_url"], ""),
@@ -88,9 +89,11 @@ export function withMatchTeams(matches: Row[], teams: Row[]): Row[] {
     return {
       ...match,
       away_team_logo_url: awayTeam?.logoUrl ?? "",
+      away_team_is_ksw: awayTeam?.isKsw === true,
       away_team_name: awayTeam?.name ?? "Away team unavailable",
       away_team_short_name: awayTeam?.shortName ?? "",
       home_team_logo_url: homeTeam?.logoUrl ?? "",
+      home_team_is_ksw: homeTeam?.isKsw === true,
       home_team_name: homeTeam?.name ?? "Home team unavailable",
       home_team_short_name: homeTeam?.shortName ?? "",
       score: hasScore ? `${homeScore} - ${awayScore}` : "VS",
