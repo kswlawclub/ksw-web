@@ -6,7 +6,7 @@ const footerLinks = [
   ["Team", "/team"],
   ["Gallery", "/gallery"],
   ["Partners", "/partners"],
-  ["League Center", "/#league-center"],
+  ["Season Archive", "/seasons/thai-lawyers-league-season-6"],
 ];
 const facebookUrl = "https://web.facebook.com/KlongSamWaLawyers";
 

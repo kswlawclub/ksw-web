@@ -11,7 +11,7 @@ const navItems = [
   ["Gallery", "/gallery"],
   ["Partners", "/partners"],
   ["Tactics Board", "/lineup-builder"],
-  ["League Center", "/#league-center"],
+  ["Season Archive", "/seasons/thai-lawyers-league-season-6"],
 ];
 const facebookUrl = "https://web.facebook.com/KlongSamWaLawyers";
 
@@ -56,13 +56,7 @@ export function SiteHeader() {
     };
   }, [pathname]);
 
-  const isActive = (href: string) => {
-    if (href === "/#league-center") {
-      return false;
-    }
-
-    return pathname === href;
-  };
+  const isActive = (href: string) => pathname === href;
 
   return (
     <header className="sticky top-0 z-50 border-b border-[#d8ad45]/20 bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.16),transparent_34%),linear-gradient(135deg,#061426,#091f39)] text-white shadow-lg shadow-black/20">

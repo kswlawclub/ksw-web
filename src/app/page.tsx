@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { LiveCountdown } from "@/components/live-countdown";
-import { LeagueTable } from "@/components/league-table";
 import { TeamLogo } from "@/components/team-logo";
 import { getSupabase, getSupabaseConfig } from "@/lib/supabase";
 
@@ -14,11 +13,10 @@ const standingsColumns =
   "team_id, league_id, team_name, short_name, logo_url, is_ksw, played, won, drawn, lost, goals_for, goals_against, goal_difference, points";
 const matchColumns =
   "id, league_id, match_date, home_team_id, away_team_id, home_score, away_score, venue, status, match_type";
-const snapshotColumns =
-  "snapshot_id, league_id, team_id, position, played, won, drawn, lost, goals_for, goals_against, goal_difference, points, matchday, created_at";
 const leagueColumns = "id, name, season, competition_type, season_status, is_active, created_at";
 const sponsorColumns =
   "id, name, logo_url, website_url, tier, sort_order, is_active";
+const seasonArchiveHref = "/seasons/thai-lawyers-league-season-6";
 
 function text(row: Row | undefined, keys: string[], fallback = "") {
   if (!row) {
@@ -207,9 +205,7 @@ function FixtureMetaBadge({
       : "bg-[#061426] text-white";
 
   return (
-    <span
-      className={`fixtureMetaBadge ${toneClass}`}
-    >
+    <span className={`fixtureMetaBadge ${toneClass}`}>
       <span aria-hidden="true" className="fixtureMetaBadge__icon">
         {icon}
       </span>
@@ -364,20 +360,6 @@ function sponsorSlots(sponsors: Row[], minimumSlots: number) {
   return slots;
 }
 
-function latestStandingSnapshotRows(rows: Row[]) {
-  const latestSnapshotId = text(rows[0], ["snapshot_id"], "");
-
-  if (latestSnapshotId) {
-    return rows.filter((row) => text(row, ["snapshot_id"], "") === latestSnapshotId);
-  }
-
-  const latestCreatedAt = text(rows[0], ["created_at"], "");
-
-  return latestCreatedAt
-    ? rows.filter((row) => text(row, ["created_at"], "") === latestCreatedAt)
-    : [];
-}
-
 function teamById(teams: Row[]) {
   return new Map(
     teams.map((team) => [
@@ -514,7 +496,6 @@ async function loadHomeData() {
       matches: [] as Row[],
       scheduledMatches: [] as Row[],
       sponsors: [] as Row[],
-      standingsSnapshots: [] as Row[],
       currentLeague: undefined as Row | undefined,
     };
   }
@@ -543,8 +524,18 @@ async function loadHomeData() {
   const currentLeagueId = text(currentLeague, ["id"], "");
 
   const [teams, allTeams, standings, finishedMatches, scheduledMatches, sponsors] = await Promise.all([
-    runSupabaseQuery("teams", supabase.from("teams").select(teamColumns).eq("is_ksw", true)),
-    runSupabaseQuery("teams_all", supabase.from("teams").select(teamColumns)),
+    currentLeagueId
+      ? runSupabaseQuery(
+          "teams",
+          supabase.from("teams").select(teamColumns).eq("league_id", currentLeagueId).eq("is_ksw", true),
+        )
+      : Promise.resolve([] as Row[]),
+    currentLeagueId
+      ? runSupabaseQuery(
+          "teams_all",
+          supabase.from("teams").select(teamColumns).eq("league_id", currentLeagueId),
+        )
+      : Promise.resolve([] as Row[]),
     currentLeagueId
       ? runSupabaseQuery(
           "league_standings_view",
@@ -578,25 +569,13 @@ async function loadHomeData() {
         )
       : Promise.resolve([] as Row[]),
     runSupabaseQuery(
-      "sponsors",
-      supabase
+	      "sponsors",
+	      supabase
         .from("sponsors")
         .select(sponsorColumns)
         .order("sort_order", { ascending: true, nullsFirst: false }),
     ),
   ]);
-
-  const standingsSnapshots = currentLeagueId
-    ? await runSupabaseQuery(
-        "league_standings_snapshots",
-        supabase
-          .from("league_standings_snapshots")
-          .select(snapshotColumns)
-          .eq("league_id", currentLeagueId)
-          .order("created_at", { ascending: false })
-          .limit(100),
-      )
-    : [];
 
   const teamRows = allTeams.length ? allTeams : teams;
 
@@ -607,17 +586,16 @@ async function loadHomeData() {
     matches: withMatchTeams(finishedMatches, teamRows),
     scheduledMatches: withMatchTeams(scheduledMatches, teamRows),
     sponsors,
-    standingsSnapshots,
     currentLeague,
   };
 }
 
 export default async function Home() {
-  const { configured, teams, standings, matches, scheduledMatches, sponsors, standingsSnapshots, currentLeague } = await loadHomeData();
+  const { configured, teams, standings, matches, scheduledMatches, sponsors, currentLeague } = await loadHomeData();
   const club = teams[0];
   const logoUrl = club?.logo_url;
   const sponsorGroups = groupSponsorsByTier(sponsors);
-  const sponsorSections = [
+	  const sponsorSections = [
     {
       key: "main",
       label: "Main Partner",
@@ -638,8 +616,8 @@ export default async function Home() {
       items: sponsorSlots(sponsorGroups.supporter, 9),
       logoSlotSize: "h-14 w-full max-w-28 sm:h-16 sm:max-w-32 lg:h-[72px] lg:max-w-36",
       wrapperClass: "mx-auto grid w-full grid-cols-2 place-items-center gap-x-5 gap-y-4 lg:grid-cols-3",
-    },
-  ];
+	    },
+	  ];
   const now = new Date();
   const sortedScheduledMatches = sortUpcomingFixtures(scheduledMatches);
   const upcomingKswMatches = sortedScheduledMatches.filter((match) => {
@@ -668,8 +646,7 @@ export default async function Home() {
     },
     [],
   );
-
-  const sortedStandings = [...standings].sort((a, b) => {
+	  const sortedStandings = [...standings].sort((a, b) => {
     const pointsDiff = number(b, ["points", "pts"]) - number(a, ["points", "pts"]);
     if (pointsDiff) return pointsDiff;
 
@@ -683,41 +660,35 @@ export default async function Home() {
       text(b, ["team_name", "name", "team"]),
     );
   });
-  const leagueTeams = [...sortedStandings].sort((a, b) => {
-    if (a.is_ksw === true) return -1;
-    if (b.is_ksw === true) return 1;
-    return text(a, ["team_name", "name", "team"]).localeCompare(
-      text(b, ["team_name", "name", "team"]),
-    );
-  });
   const seasonStatus = text(currentLeague, ["season_status"], "active").toLowerCase();
   const isSeasonCompleted = seasonStatus === "completed";
   const kswStandingIndex = sortedStandings.findIndex(
     (row) => row.is_ksw === true || text(row, ["team_name", "name", "team"]).toLowerCase().includes("ksw"),
   );
-  const kswStanding = kswStandingIndex >= 0 ? sortedStandings[kswStandingIndex] : undefined;
-  const finalPositionText = kswStanding
-    ? `${kswStandingIndex + 1} / ${sortedStandings.length}`
-    : "Season Complete";
+	  const kswStanding = kswStandingIndex >= 0 ? sortedStandings[kswStandingIndex] : undefined;
+	  const finalPositionText = kswStanding
+	    ? `${kswStandingIndex + 1} / ${sortedStandings.length}`
+	    : isSeasonCompleted
+	      ? "Season Complete"
+	      : "Unavailable";
   const finalKswStats = kswStanding
     ? [
         ["Played", number(kswStanding, ["played", "p"])],
         ["Won", number(kswStanding, ["won", "w"])],
         ["Drawn", number(kswStanding, ["drawn", "draws", "d"])],
         ["Lost", number(kswStanding, ["lost", "l"])],
-        ["GF", number(kswStanding, ["goals_for", "gf"])],
-        ["GA", number(kswStanding, ["goals_against", "ga"])],
-        ["GD", number(kswStanding, ["goal_difference", "gd"])],
         ["Points", number(kswStanding, ["points", "pts"])],
       ]
     : [];
-  const latestResults = matches
+  const recentKswResults = matches
     .filter(
-      (match) => typeof match.home_score === "number" && typeof match.away_score === "number",
+      (match) =>
+        isKswFixture(match) &&
+        typeof match.home_score === "number" &&
+        typeof match.away_score === "number",
     )
-    .slice(0, 12);
-  const previousStandingsSnapshot = latestStandingSnapshotRows(standingsSnapshots);
-  const resultGroups = latestResults.reduce<Array<{ key: string; date: unknown; matches: Row[] }>>(
+    .slice(0, 5);
+  const resultGroups = recentKswResults.reduce<Array<{ key: string; date: unknown; matches: Row[] }>>(
     (groups, match) => {
       const matchDate = match.match_date ?? match.date ?? match.kickoff_at;
       const key = bangkokDateKey(matchDate);
@@ -776,9 +747,9 @@ export default async function Home() {
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <Link
                 className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/15 transition-transform hover:scale-[1.02]"
-                href={isSeasonCompleted ? "/#league-table" : "/#next-fixtures"}
+                href={isSeasonCompleted ? seasonArchiveHref : "/#next-fixtures"}
               >
-                {isSeasonCompleted ? "View Final Table" : "View Next Fixtures"}
+                {isSeasonCompleted ? "View Season Archive" : "View Next Fixtures"}
               </Link>
               <Link
                 className="inline-flex items-center justify-center rounded-md border border-[#d8ad45]/50 bg-white/[0.03] px-5 py-3 text-sm font-black text-[#f4d58a] backdrop-blur transition-colors hover:bg-[#d8ad45]/10"
@@ -936,348 +907,341 @@ export default async function Home() {
             </a>
           </div>
         </div>
-      </section>
+	      </section>
 
-      <div id="league-center">
-      <section className="bg-slate-100">
-        <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
-        <div id="next-fixtures" className="min-w-0 overflow-hidden rounded-2xl border border-[#d8ad45]/35 bg-[linear-gradient(135deg,#061426,#0b2745_58%,#071b31)] shadow-2xl shadow-[#061426]/25">
-          {isSeasonCompleted ? (
-            <>
+      {!isSeasonCompleted ? (
+        <section className="bg-slate-100">
+          <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
+            <div id="next-fixtures" className="min-w-0 overflow-hidden rounded-2xl border border-[#d8ad45]/35 bg-[linear-gradient(135deg,#061426,#0b2745_58%,#071b31)] shadow-2xl shadow-[#061426]/25">
               <div className="grid gap-5 border-b border-[#d8ad45]/20 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
                 <div className="flex min-w-0 items-start gap-3">
                   <span className="mt-1 inline-flex size-11 shrink-0 items-center justify-center rounded-full border border-[#d8ad45]/35 bg-[#d8ad45]/10 text-[#f4d58a] shadow-lg shadow-[#d8ad45]/10">
                     <svg aria-hidden="true" className="size-5" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M7 4h10v2h3v4a5 5 0 0 1-4.05 4.9A6.01 6.01 0 0 1 13 17.92V20h3v2H8v-2h3v-2.08A6.01 6.01 0 0 1 8.05 14.9 5 5 0 0 1 4 10V6h3V4Zm10 4v4.8A3 3 0 0 0 18 10V8h-1ZM6 8v2a3 3 0 0 0 1 2.24V8H6Zm3-2v6a3 3 0 1 0 6 0V6H9Z" />
+                      <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm3.9 4.2 1.8 1.3-.7 2.1-2.1.5-1.6-1.4.1-2.2 2.5-.3Zm-7.8 0 2.5.3.1 2.2-1.6 1.4-2.1-.5-.7-2.1 1.8-1.3ZM5.3 15.3l-.8-2.3 1.5-1.7 2.2.4 1 1.9-1.1 1.9-2.8-.2Zm8.7 3.4h-4l-1.2-2.1 1.2-2.1h4l1.2 2.1-1.2 2.1Zm-2-5.8-2-1.5.8-2.4h2.4l.8 2.4-2 1.5Zm6.7 2.4-2.8.2-1.1-1.9 1-1.9 2.2-.4 1.5 1.7-.8 2.3Z" />
                     </svg>
                   </span>
                   <div>
                     <h2 className="text-2xl font-black tracking-tight text-white sm:text-3xl">
-                      Season Complete
+                      Next Fixtures
                     </h2>
                     <p className="mt-1 text-sm font-semibold text-slate-300">
-                      Thai Lawyers League • Season 6 has concluded.
+                      Upcoming KSW match schedule.
                     </p>
                   </div>
                 </div>
-                <div className="rounded-xl border border-[#d8ad45]/35 bg-white/[0.08] p-4 text-left shadow-xl shadow-black/15 backdrop-blur lg:min-w-64">
-                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f4d58a]">
-                    Final Position
-                  </p>
-                  <p className="mt-2 text-3xl font-black text-white">{finalPositionText}</p>
-                  <p className="mt-1 text-sm font-bold text-slate-300">
-                    KSW L.C. final league standing
-                  </p>
-                </div>
-              </div>
-              <div className="grid gap-5 px-4 py-5 sm:px-6">
-                {kswStanding ? (
-                  <div className="rounded-xl border border-white/10 bg-white/[0.08] p-4 shadow-xl shadow-black/15 sm:p-5">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f4d58a]">
-                          KSW Season Summary
-                        </p>
-                        <h3 className="mt-2 text-xl font-black text-white">
-                          Final numbers from the standings table
-                        </h3>
-                      </div>
-                      <p className="text-sm font-bold text-slate-300">
-                        {text(kswStanding, ["team_name", "name", "team"], "KSW L.C.")}
+                <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[32rem]">
+                  {nextKswKickoffMatches.length ? (
+                    nextKswKickoffMatches.map((match, index) => {
+                      const matchDate = fixtureDateValue(match);
+                      const venue = text(match, ["venue"], "");
+
+                      return (
+                        <div
+                          className="rounded-xl border border-[#d8ad45]/35 bg-white/[0.08] p-4 text-left shadow-xl shadow-black/15 backdrop-blur"
+                          key={text(match, ["id", "match_id"], `ksw-kickoff-${index}`)}
+                        >
+                          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f4d58a]">
+                            Next Kickoff
+                          </p>
+                          <LiveCountdown
+                            className="mt-2 text-3xl font-black text-white"
+                            targetDate={typeof matchDate === "string" ? matchDate : ""}
+                          />
+                          <p className="mt-1 text-sm font-bold text-slate-300">
+                            {formatMatchDateLong(matchDate)} • {formatMatchTime(matchDate) || "TBC"}
+                          </p>
+                          <p className="mt-2 text-sm font-black text-white">
+                            vs {opponentForKsw(match)}
+                          </p>
+                          {venue ? (
+                            <p className="mt-2 inline-flex rounded-full border border-[#d8ad45]/35 bg-[#d8ad45]/15 px-3 py-1 text-xs font-black text-[#f4d58a]">
+                              📍 {formatVenue(venue)}
+                            </p>
+                          ) : null}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="rounded-xl border border-[#d8ad45]/35 bg-white/[0.08] p-4 text-left shadow-xl shadow-black/15 backdrop-blur sm:col-span-2 lg:ml-auto lg:min-w-64">
+                      <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f4d58a]">
+                        Next Kickoff
+                      </p>
+                      <p className="mt-2 text-3xl font-black text-white">TBC</p>
+                      <p className="mt-1 text-sm font-bold text-slate-300">
+                        KSW match schedule to be confirmed
                       </p>
                     </div>
-                    <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                      {finalKswStats.map(([label, value]) => (
-                        <div
-                          className="rounded-lg border border-white/10 bg-[#061426]/55 px-3 py-3 text-center"
-                          key={label}
-                        >
-                          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
-                            {label}
-                          </p>
-                          <p className="mt-1 text-2xl font-black text-white">{value}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <p className="rounded-xl border border-white/10 bg-white/[0.08] px-4 py-8 text-slate-200 sm:px-5">
-                    Season complete. Final KSW standing details are currently unavailable.
-                  </p>
-                )}
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <Link
-                    className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/15 transition-transform hover:scale-[1.02]"
-                    href="/#league-table"
-                  >
-                    View Final Table
-                  </Link>
-                  <Link
-                    className="inline-flex items-center justify-center rounded-md border border-[#d8ad45]/50 bg-white/[0.03] px-5 py-3 text-sm font-black text-[#f4d58a] backdrop-blur transition-colors hover:bg-[#d8ad45]/10"
-                    href="/#latest-results"
-                  >
-                    View Season Results
-                  </Link>
+                  )}
                 </div>
               </div>
-            </>
-          ) : (
-            <>
+              <div className="grid gap-6 px-4 py-5 sm:px-6">
+                {fixtureGroups.length ? (
+                  fixtureGroups.map((group, groupIndex) => (
+                    <div className="grid gap-3" key={group.key}>
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                        <p className="text-xs font-black uppercase tracking-[0.22em] text-[#f4d58a]">
+                          Matchday {groupIndex + 1}
+                        </p>
+                        <p className="text-sm font-bold text-slate-300">
+                          {formatMatchDateLong(group.date)}
+                        </p>
+                      </div>
+                      <div className="grid gap-3">
+                        {group.matches.map((fixture, index) => {
+                          const matchDate = fixtureDateValue(fixture);
+                          const matchTime = formatMatchTime(matchDate);
+                          const homeName = text(fixture, ["home_team_name"], "Home team unavailable");
+                          const awayName = text(fixture, ["away_team_name"], "Away team unavailable");
+                          const homeShortName = text(
+                            fixture,
+                            ["home_team_short_name"],
+                            teamInitials({ team_name: homeName }),
+                          );
+                          const awayShortName = text(
+                            fixture,
+                            ["away_team_short_name"],
+                            teamInitials({ team_name: awayName }),
+                          );
+                          const venue = text(fixture, ["venue"], "");
+                          const isKswMatch = isKswFixture(fixture);
+                          const statusLabel = fixtureStatusLabel(fixture, matchDate, now);
+                          const startsIn = countdownText(matchDate, now);
+                          const fixtureKey = text(fixture, ["id", "match_id"], `${group.key}-${index}`);
+
+                          return (
+                            <div className="grid gap-3" key={fixtureKey}>
+                              <article
+                                className={`group overflow-hidden rounded-xl border bg-white p-4 shadow-lg lg:hidden ${
+                                  isKswMatch
+                                    ? "border-[#d8ad45] shadow-[#d8ad45]/20"
+                                    : "border-white/80 shadow-black/10"
+                                }`}
+                              >
+                                <div className="flex min-w-0 items-center justify-between gap-2">
+                                  <span className="inline-flex min-w-0 shrink-0 items-center gap-1.5 rounded-full bg-[#061426] px-3 py-2 text-sm font-black leading-none text-white">
+                                    <span aria-hidden="true">🕒</span>
+                                    {matchTime || "TBC"}
+                                  </span>
+                                  {venue ? (
+                                    <span className="inline-flex min-w-0 max-w-[58%] items-center gap-1.5 rounded-full border border-[#d8ad45]/45 bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-3 py-2 text-sm font-black leading-none text-[#061426]">
+                                      <span aria-hidden="true" className="shrink-0">
+                                        📍
+                                      </span>
+                                      <span className="truncate">{formatVenue(venue)}</span>
+                                    </span>
+                                  ) : null}
+                                </div>
+
+                                {isKswMatch ? (
+                                  <div className="mt-3">
+                                    <span className="rounded-full border border-[#d8ad45]/45 bg-[#fff4dc] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#061426]">
+                                      Featured Match
+                                    </span>
+                                  </div>
+                                ) : null}
+
+                                <div className="mt-5 grid gap-3">
+                                  <div className="flex min-w-0 items-center gap-3">
+                                    <TeamLogo
+                                      className="!size-12 shrink-0"
+                                      initials={homeShortName}
+                                      logoUrl={text(fixture, ["home_team_logo_url"], "")}
+                                      teamName={homeName}
+                                    />
+                                    <p className="min-w-0 text-base font-black leading-5 text-[#061426]">
+                                      {homeName}
+                                    </p>
+                                  </div>
+
+                                  <div className="grid justify-items-center">
+                                    <span className="rounded-lg border border-[#d8ad45]/45 bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] shadow-lg shadow-[#061426]/10">
+                                      VS
+                                    </span>
+                                  </div>
+
+                                  <div className="flex min-w-0 items-center gap-3">
+                                    <TeamLogo
+                                      className="!size-12 shrink-0"
+                                      initials={awayShortName}
+                                      logoUrl={text(fixture, ["away_team_logo_url"], "")}
+                                      teamName={awayName}
+                                    />
+                                    <p className="min-w-0 text-base font-black leading-5 text-[#061426]">
+                                      {awayName}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-4">
+                                  <span className="rounded-full border border-[#d8ad45]/45 bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-[#061426]">
+                                    {statusLabel}
+                                  </span>
+                                  <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                                    Starts in {startsIn}
+                                  </p>
+                                </div>
+                              </article>
+
+                              <article
+                                className={`group hidden overflow-hidden rounded-xl border bg-white p-4 shadow-lg transition duration-300 lg:grid lg:grid-cols-[150px_minmax(0,1fr)_150px] lg:items-center lg:gap-5 lg:p-5 lg:hover:-translate-y-0.5 ${
+                                  isKswMatch
+                                    ? "border-[#d8ad45] shadow-[#d8ad45]/25"
+                                    : "border-white/80 shadow-black/10 hover:shadow-black/20"
+                                }`}
+                              >
+                                <div className="mb-4 lg:mb-0">
+                                  <FixtureMetaBadgePair matchTime={matchTime} venue={venue} />
+                                </div>
+
+                                <div className="hidden min-w-0 grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)] items-center gap-5 lg:grid">
+                                  <div className="flex min-w-0 items-center gap-4">
+                                    <TeamLogo
+                                      className="!size-[68px] transition-transform duration-300 group-hover:scale-105"
+                                      initials={homeShortName}
+                                      logoUrl={text(fixture, ["home_team_logo_url"], "")}
+                                      teamName={homeName}
+                                    />
+                                    <p className="min-w-0 text-wrap text-lg font-black leading-6 text-[#061426]">
+                                      {homeName}
+                                    </p>
+                                  </div>
+                                  <div className="rounded-xl border border-[#d8ad45]/45 bg-[#061426] px-3 py-3 text-center text-base font-black text-[#f4d58a] shadow-lg shadow-[#061426]/15">
+                                    VS
+                                  </div>
+                                  <div className="flex min-w-0 items-center justify-end gap-4 text-right">
+                                    <p className="min-w-0 text-wrap text-lg font-black leading-6 text-[#061426]">
+                                      {awayName}
+                                    </p>
+                                    <TeamLogo
+                                      className="!size-[68px] transition-transform duration-300 group-hover:scale-105"
+                                      initials={awayShortName}
+                                      logoUrl={text(fixture, ["away_team_logo_url"], "")}
+                                      teamName={awayName}
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="mt-4 grid justify-items-center gap-2 lg:mt-0 lg:justify-items-end lg:text-right">
+                                  {isKswMatch ? (
+                                    <span className="hidden rounded-full border border-[#d8ad45]/45 bg-[#fff4dc] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#061426] lg:inline-flex">
+                                      Featured Match
+                                    </span>
+                                  ) : null}
+                                  <span className="rounded-full border border-[#d8ad45]/45 bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-[#061426]">
+                                    {statusLabel}
+                                  </span>
+                                  <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                                    Starts in {startsIn}
+                                  </p>
+                                </div>
+                              </article>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="rounded-xl border border-white/10 bg-white/[0.08] px-4 py-8 text-slate-200 sm:px-5">
+                    No scheduled fixtures available.
+                  </p>
+                )}
+              </div>
+              <div className="border-t border-[#d8ad45]/15 px-4 py-3 text-right sm:px-6">
+                <p className="text-xs font-semibold leading-5 text-slate-400">
+                  ข้อมูลการแข่งขันอ้างอิงจากฝ่ายจัดการแข่งขัน Thai Lawyers League Season 6
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      <section id="season-summary" className="bg-slate-100">
+        <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
+        <div className="min-w-0 overflow-hidden rounded-2xl border border-[#d8ad45]/35 bg-[linear-gradient(135deg,#061426,#0b2745_58%,#071b31)] shadow-2xl shadow-[#061426]/25">
           <div className="grid gap-5 border-b border-[#d8ad45]/20 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
             <div className="flex min-w-0 items-start gap-3">
               <span className="mt-1 inline-flex size-11 shrink-0 items-center justify-center rounded-full border border-[#d8ad45]/35 bg-[#d8ad45]/10 text-[#f4d58a] shadow-lg shadow-[#d8ad45]/10">
                 <svg aria-hidden="true" className="size-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm3.9 4.2 1.8 1.3-.7 2.1-2.1.5-1.6-1.4.1-2.2 2.5-.3Zm-7.8 0 2.5.3.1 2.2-1.6 1.4-2.1-.5-.7-2.1 1.8-1.3ZM5.3 15.3l-.8-2.3 1.5-1.7 2.2.4 1 1.9-1.1 1.9-2.8-.2Zm8.7 3.4h-4l-1.2-2.1 1.2-2.1h4l1.2 2.1-1.2 2.1Zm-2-5.8-2-1.5.8-2.4h2.4l.8 2.4-2 1.5Zm6.7 2.4-2.8.2-1.1-1.9 1-1.9 2.2-.4 1.5 1.7-.8 2.3Z" />
+                  <path d="M7 4h10v2h3v4a5 5 0 0 1-4.05 4.9A6.01 6.01 0 0 1 13 17.92V20h3v2H8v-2h3v-2.08A6.01 6.01 0 0 1 8.05 14.9 5 5 0 0 1 4 10V6h3V4Zm10 4v4.8A3 3 0 0 0 18 10V8h-1ZM6 8v2a3 3 0 0 0 1 2.24V8H6Zm3-2v6a3 3 0 1 0 6 0V6H9Z" />
                 </svg>
               </span>
               <div>
                 <h2 className="text-2xl font-black tracking-tight text-white sm:text-3xl">
-                  Next Fixtures
+                  {isSeasonCompleted ? "Season Complete" : "KSW Season Summary"}
                 </h2>
                 <p className="mt-1 text-sm font-semibold text-slate-300">
-                  Upcoming KSW match schedule.
+                  {isSeasonCompleted
+                    ? "Thai Lawyers League • Season 6 has concluded."
+                    : "Current KSW league numbers from Thai Lawyers League Season 6."}
                 </p>
               </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[32rem]">
-              {nextKswKickoffMatches.length ? (
-                nextKswKickoffMatches.map((match, index) => {
-                  const matchDate = fixtureDateValue(match);
-                  const venue = text(match, ["venue"], "");
-
-                  return (
-                    <div
-                      className="rounded-xl border border-[#d8ad45]/35 bg-white/[0.08] p-4 text-left shadow-xl shadow-black/15 backdrop-blur"
-                      key={text(match, ["id", "match_id"], `ksw-kickoff-${index}`)}
-                    >
-                      <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f4d58a]">
-                        Next Kickoff
-                      </p>
-                      <LiveCountdown
-                        className="mt-2 text-3xl font-black text-white"
-                        targetDate={typeof matchDate === "string" ? matchDate : ""}
-                      />
-                      <p className="mt-1 text-sm font-bold text-slate-300">
-                        {formatMatchDateLong(matchDate)} • {formatMatchTime(matchDate) || "TBC"}
-                      </p>
-                      <p className="mt-2 text-sm font-black text-white">
-                        vs {opponentForKsw(match)}
-                      </p>
-                      {venue ? (
-                        <p className="mt-2 inline-flex rounded-full border border-[#d8ad45]/35 bg-[#d8ad45]/15 px-3 py-1 text-xs font-black text-[#f4d58a]">
-                          📍 {formatVenue(venue)}
-                        </p>
-                      ) : null}
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="rounded-xl border border-[#d8ad45]/35 bg-white/[0.08] p-4 text-left shadow-xl shadow-black/15 backdrop-blur sm:col-span-2 lg:ml-auto lg:min-w-64">
-                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f4d58a]">
-                    Next Kickoff
-                  </p>
-                  <p className="mt-2 text-3xl font-black text-white">TBC</p>
-                  <p className="mt-1 text-sm font-bold text-slate-300">
-                    KSW match schedule to be confirmed
-                  </p>
-                </div>
-              )}
+            <div className="rounded-xl border border-[#d8ad45]/35 bg-white/[0.08] p-4 text-left shadow-xl shadow-black/15 backdrop-blur lg:min-w-64">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f4d58a]">
+                {isSeasonCompleted ? "Final Position" : "Current Position"}
+              </p>
+              <p className="mt-2 text-3xl font-black text-white">{finalPositionText}</p>
+              <p className="mt-1 text-sm font-bold text-slate-300">
+                {isSeasonCompleted ? "KSW L.C. final league standing" : "KSW L.C. league standing"}
+              </p>
             </div>
           </div>
-          <div className="grid gap-6 px-4 py-5 sm:px-6">
-            {fixtureGroups.length ? (
-              fixtureGroups.map((group, groupIndex) => (
-                <div className="grid gap-3" key={group.key}>
-                  <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                    <p className="text-xs font-black uppercase tracking-[0.22em] text-[#f4d58a]">
-                      Matchday {groupIndex + 1}
+          <div className="grid gap-5 px-4 py-5 sm:px-6">
+            {kswStanding ? (
+              <div className="rounded-xl border border-white/10 bg-white/[0.08] p-4 shadow-xl shadow-black/15 sm:p-5">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f4d58a]">
+                      {isSeasonCompleted ? "Final Numbers" : "Current Numbers"}
                     </p>
-                    <p className="text-sm font-bold text-slate-300">
-                      {formatMatchDateLong(group.date)}
-                    </p>
+                    <h3 className="mt-2 text-xl font-black text-white">
+                      {text(kswStanding, ["team_name", "name", "team"], "KSW L.C.")}
+                    </h3>
                   </div>
-                  <div className="grid gap-3">
-                    {group.matches.map((fixture, index) => {
-                      const matchDate = fixtureDateValue(fixture);
-                      const matchTime = formatMatchTime(matchDate);
-                      const homeName = text(fixture, ["home_team_name"], "Home team unavailable");
-                      const awayName = text(fixture, ["away_team_name"], "Away team unavailable");
-                      const homeShortName = text(
-                        fixture,
-                        ["home_team_short_name"],
-                        teamInitials({ team_name: homeName }),
-                      );
-                      const awayShortName = text(
-                        fixture,
-                        ["away_team_short_name"],
-                        teamInitials({ team_name: awayName }),
-                      );
-                      const venue = text(fixture, ["venue"], "");
-                      const isKswMatch = isKswFixture(fixture);
-                      const statusLabel = fixtureStatusLabel(fixture, matchDate, now);
-                      const startsIn = countdownText(matchDate, now);
-
-                      const fixtureKey = text(fixture, ["id", "match_id"], `${group.key}-${index}`);
-
-                      return (
-                        <div className="grid gap-3" key={fixtureKey}>
-                          <article
-                            className={`group overflow-hidden rounded-xl border bg-white p-4 shadow-lg lg:hidden ${
-                              isKswMatch
-                                ? "border-[#d8ad45] shadow-[#d8ad45]/20"
-                                : "border-white/80 shadow-black/10"
-                            }`}
-                          >
-                            <div className="flex min-w-0 items-center justify-between gap-2">
-                              <span className="inline-flex min-w-0 shrink-0 items-center gap-1.5 rounded-full bg-[#061426] px-3 py-2 text-sm font-black leading-none text-white">
-                                <span aria-hidden="true">🕒</span>
-                                {matchTime || "TBC"}
-                              </span>
-                              {venue ? (
-                                <span className="inline-flex min-w-0 max-w-[58%] items-center gap-1.5 rounded-full border border-[#d8ad45]/45 bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-3 py-2 text-sm font-black leading-none text-[#061426]">
-                                  <span aria-hidden="true" className="shrink-0">
-                                    📍
-                                  </span>
-                                  <span className="truncate">{formatVenue(venue)}</span>
-                                </span>
-                              ) : null}
-                            </div>
-
-                            {isKswMatch ? (
-                              <div className="mt-3">
-                                <span className="rounded-full border border-[#d8ad45]/45 bg-[#fff4dc] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#061426]">
-                                  Featured Match
-                                </span>
-                              </div>
-                            ) : null}
-
-                            <div className="mt-5 grid gap-3">
-                              <div className="flex min-w-0 items-center gap-3">
-                                <TeamLogo
-                                  className="!size-12 shrink-0"
-                                  initials={homeShortName}
-                                  logoUrl={text(fixture, ["home_team_logo_url"], "")}
-                                  teamName={homeName}
-                                />
-                                <p className="min-w-0 text-base font-black leading-5 text-[#061426]">
-                                  {homeName}
-                                </p>
-                              </div>
-
-                              <div className="grid justify-items-center">
-                                <span className="rounded-lg border border-[#d8ad45]/45 bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] shadow-lg shadow-[#061426]/10">
-                                  VS
-                                </span>
-                              </div>
-
-                              <div className="flex min-w-0 items-center gap-3">
-                                <TeamLogo
-                                  className="!size-12 shrink-0"
-                                  initials={awayShortName}
-                                  logoUrl={text(fixture, ["away_team_logo_url"], "")}
-                                  teamName={awayName}
-                                />
-                                <p className="min-w-0 text-base font-black leading-5 text-[#061426]">
-                                  {awayName}
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-4">
-                              <span className="rounded-full border border-[#d8ad45]/45 bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-[#061426]">
-                                {statusLabel}
-                              </span>
-                              <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-                                Starts in {startsIn}
-                              </p>
-                            </div>
-                          </article>
-
-                          <article
-                            className={`group hidden overflow-hidden rounded-xl border bg-white p-4 shadow-lg transition duration-300 lg:grid lg:grid-cols-[150px_minmax(0,1fr)_150px] lg:items-center lg:gap-5 lg:p-5 lg:hover:-translate-y-0.5 ${
-                              isKswMatch
-                                ? "border-[#d8ad45] shadow-[#d8ad45]/25"
-                                : "border-white/80 shadow-black/10 hover:shadow-black/20"
-                            }`}
-                          >
-                            <div className="mb-4 lg:mb-0">
-                              <FixtureMetaBadgePair matchTime={matchTime} venue={venue} />
-                            </div>
-
-                            <div className="hidden min-w-0 grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)] items-center gap-5 lg:grid">
-                            <div className="flex min-w-0 items-center gap-4">
-                              <TeamLogo
-                                className="!size-[68px] transition-transform duration-300 group-hover:scale-105"
-                                initials={homeShortName}
-                                logoUrl={text(fixture, ["home_team_logo_url"], "")}
-                                teamName={homeName}
-                              />
-                              <p className="min-w-0 text-wrap text-lg font-black leading-6 text-[#061426]">
-                                {homeName}
-                              </p>
-                            </div>
-                            <div className="rounded-xl border border-[#d8ad45]/45 bg-[#061426] px-3 py-3 text-center text-base font-black text-[#f4d58a] shadow-lg shadow-[#061426]/15">
-                              VS
-                            </div>
-                            <div className="flex min-w-0 items-center justify-end gap-4 text-right">
-                              <p className="min-w-0 text-wrap text-lg font-black leading-6 text-[#061426]">
-                                {awayName}
-                              </p>
-                              <TeamLogo
-                                className="!size-[68px] transition-transform duration-300 group-hover:scale-105"
-                                initials={awayShortName}
-                                logoUrl={text(fixture, ["away_team_logo_url"], "")}
-                                teamName={awayName}
-                              />
-                            </div>
-                          </div>
-
-                          <div className="mt-4 grid justify-items-center gap-2 lg:mt-0 lg:justify-items-end lg:text-right">
-                            {isKswMatch ? (
-                              <span className="hidden rounded-full border border-[#d8ad45]/45 bg-[#fff4dc] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#061426] lg:inline-flex">
-                                Featured Match
-                              </span>
-                            ) : null}
-                            <span className="rounded-full border border-[#d8ad45]/45 bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-[#061426]">
-                              {statusLabel}
-                            </span>
-                            <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-                              Starts in {startsIn}
-                            </p>
-                          </div>
-                          </article>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <Link
+                    className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/15 transition-transform hover:scale-[1.02]"
+                    href={seasonArchiveHref}
+                  >
+                    View Season Archive
+                  </Link>
                 </div>
-              ))
+                <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
+                  {finalKswStats.map(([label, value]) => (
+                    <div
+                      className="rounded-lg border border-white/10 bg-[#061426]/55 px-3 py-3 text-center"
+                      key={label}
+                    >
+                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                        {label}
+                      </p>
+                      <p className="mt-1 text-2xl font-black text-white">{value}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
             ) : (
               <p className="rounded-xl border border-white/10 bg-white/[0.08] px-4 py-8 text-slate-200 sm:px-5">
-                No scheduled fixtures available.
+                KSW standing details are currently unavailable.
               </p>
             )}
-          </div>
-            </>
-          )}
-          <div className="border-t border-[#d8ad45]/15 px-4 py-3 text-right sm:px-6">
-            <p className="text-xs font-semibold leading-5 text-slate-400">
-              ข้อมูลการแข่งขันอ้างอิงจากฝ่ายจัดการแข่งขัน Thai Lawyers League Season 6
-            </p>
+            <div className="border-t border-[#d8ad45]/15 pt-4 text-right">
+              <p className="text-xs font-semibold leading-5 text-slate-400">
+                ข้อมูลการแข่งขันอ้างอิงจากฝ่ายจัดการแข่งขัน Thai Lawyers League Season 6
+              </p>
+            </div>
           </div>
         </div>
-        <div id="league-table" className="mt-8 min-w-0">
-          <LeagueTable
-            finishedMatches={matches}
-            previousSnapshot={previousStandingsSnapshot}
-            seasonCompleted={isSeasonCompleted}
-            standings={standings}
-          />
         </div>
+      </section>
 
-        <div id="latest-results" className="mt-8 min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/10">
+      <section className="bg-slate-100">
+        <div className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
+        <div id="ksw-recent-results" className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/10">
           <div className="border-b border-slate-200 bg-gradient-to-r from-white via-slate-50 to-[#fff8e3] px-4 py-5 sm:px-6">
-            <div className="flex min-w-0 items-start gap-3">
+            <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex min-w-0 items-start gap-3">
               <span className="mt-1 inline-flex size-11 shrink-0 items-center justify-center rounded-full border border-[#d8ad45]/35 bg-[#fff4dc] text-[#9b1c1f] shadow-lg shadow-[#d8ad45]/10">
                 <svg aria-hidden="true" className="size-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M7 3h10v2h3v5a5 5 0 0 1-4.03 4.9A6.01 6.01 0 0 1 13 17.92V20h3v2H8v-2h3v-2.08A6.01 6.01 0 0 1 8.03 14.9 5 5 0 0 1 4 10V5h3V3Zm10 4v5.83A3 3 0 0 0 18 7h-1ZM6 7v3a3 3 0 0 0 1 2.24V7H6Zm3-2v7a3 3 0 1 0 6 0V5H9Z" />
@@ -1285,14 +1249,21 @@ export default async function Home() {
               </span>
               <div>
                 <h2 className="text-2xl font-black tracking-tight text-[#061426] sm:text-3xl">
-                  Latest Results
+                  KSW Recent Results
                 </h2>
                 <p className="mt-1 text-sm font-semibold text-slate-600">
                   {isSeasonCompleted
-                    ? "Final KSW league match results from Season 6."
-                    : "Completed KSW league match results."}
+                    ? "The latest KSW match results from the completed Season 6 campaign."
+                    : "The latest completed KSW league match results."}
                 </p>
               </div>
+              </div>
+              <Link
+                className="inline-flex items-center justify-center rounded-md bg-[#061426] px-4 py-2.5 text-sm font-black text-[#f4d58a] shadow-lg shadow-slate-900/10 transition-colors hover:bg-[#0b2745]"
+                href={`${seasonArchiveHref}#ksw-results`}
+              >
+                View All Season Results
+              </Link>
             </div>
           </div>
           <div className="grid gap-6 bg-slate-100 px-4 py-5 sm:px-6">
@@ -1438,7 +1409,7 @@ export default async function Home() {
               ))
             ) : (
               <p className="rounded-xl bg-white px-4 py-8 text-slate-600 sm:px-5">
-                No finished results available.
+                No KSW results available.
               </p>
             )}
           </div>
@@ -1450,40 +1421,6 @@ export default async function Home() {
         </div>
         </div>
       </section>
-
-      <section className="bg-[#e9eef4]">
-        <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h2 className="text-xl font-black text-[#061426]">League Teams</h2>
-              <p className="mt-1 text-sm text-slate-600">13 clubs across the legal football community.</p>
-            </div>
-          </div>
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-            {leagueTeams.map((team, index) => (
-              <div
-                className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4 shadow-sm transition-all duration-300 hover:scale-[1.03] hover:border-[#d8ad45]/60 hover:bg-white hover:shadow-xl hover:shadow-slate-900/10"
-                key={text(team, ["team_id", "id", "team_name"], String(index))}
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <TeamLogo
-                    className="size-7 sm:size-8 md:size-9"
-                    initials={teamInitials(team)}
-                    logoUrl={text(team, ["logo_url"], "")}
-                    teamName={text(team, ["team_name", "name", "team"])}
-                  />
-                  <p className="min-w-0 text-wrap text-sm font-black leading-5 text-[#061426]">
-                    {text(team, ["team_name", "name", "team"])}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        </div>
-      </section>
-      </div>
 
       <section id="sponsors" className="bg-gradient-to-br from-[#071b31] via-[#0b2745] to-[#061426]">
         <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
