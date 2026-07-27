@@ -9,6 +9,7 @@ type LeagueTableProps = {
   standings: Row[];
   finishedMatches: Row[];
   previousSnapshot: Row[];
+  seasonCompleted?: boolean;
 };
 
 type FormItem = {
@@ -492,7 +493,12 @@ function kswBattleText(rows: Row[]) {
   return "KSW L.C. เป็นทีมเดียวในตารางคะแนนปัจจุบัน";
 }
 
-export function LeagueTable({ standings, finishedMatches, previousSnapshot }: LeagueTableProps) {
+export function LeagueTable({
+  standings,
+  finishedMatches,
+  previousSnapshot,
+  seasonCompleted = false,
+}: LeagueTableProps) {
   const [activeFormPopover, setActiveFormPopover] = useState<ActiveFormPopover | null>(null);
   const [animateRows, setAnimateRows] = useState(false);
   const animationStarted = useRef(false);
@@ -530,6 +536,8 @@ export function LeagueTable({ standings, finishedMatches, previousSnapshot }: Le
     ? sortedStandings.filter((row) => number(row, ["goals_against", "ga"]) === lowestGoalsAgainst)
     : [];
   const battleText = kswBattleText(sortedStandings);
+  const kswRow = sortedStandings.find(isKswRow);
+  const kswPlayed = kswRow ? number(kswRow, ["played", "p"]) : 0;
 
   useEffect(() => {
     if (animationStarted.current) {
@@ -584,19 +592,27 @@ export function LeagueTable({ standings, finishedMatches, previousSnapshot }: Le
             KSW League
           </p>
           <h2 className="mt-2 text-2xl font-black tracking-tight text-white sm:text-3xl">
-            League Table
+            {seasonCompleted ? "Final League Table" : "League Table"}
           </h2>
           <p className="mt-1 text-sm font-semibold text-slate-300">
             Thai Lawyers League • Season 6
           </p>
           <div className="mt-3 space-y-1 text-xs font-bold leading-5 text-slate-400">
-            <p>{latestSnapshotMatchday > 0 ? `Updated after Matchday ${latestSnapshotMatchday}` : "Standings Updated"}</p>
+            <p>
+              {seasonCompleted
+                ? kswPlayed > 0
+                  ? `Final standings after ${kswPlayed} matches`
+                  : "Final standings"
+                : latestSnapshotMatchday > 0
+                  ? `Updated after Matchday ${latestSnapshotMatchday}`
+                  : "Standings Updated"}
+            </p>
             {latestSnapshotCreatedAt ? <p>Last updated: {formatBangkokDateTime(latestSnapshotCreatedAt)}</p> : null}
           </div>
         </div>
         <span className="inline-flex items-center gap-2 rounded-full border border-[#f4d58a]/35 bg-[#d8ad45]/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.2em] text-[#f4d58a] shadow-lg shadow-[#d8ad45]/10">
-          <span className="ksw-live-dot size-2 rounded-full bg-[#f4d58a]" />
-          LIVE
+          <span className={`size-2 rounded-full bg-[#f4d58a] ${seasonCompleted ? "" : "ksw-live-dot"}`} />
+          {seasonCompleted ? "SEASON COMPLETE" : "LIVE"}
         </span>
       </div>
 

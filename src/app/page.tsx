@@ -16,6 +16,7 @@ const matchColumns =
   "id, league_id, match_date, home_team_id, away_team_id, home_score, away_score, venue, status, match_type";
 const snapshotColumns =
   "snapshot_id, league_id, team_id, position, played, won, drawn, lost, goals_for, goals_against, goal_difference, points, matchday, created_at";
+const leagueColumns = "id, name, season, competition_type, season_status, is_active, created_at";
 const sponsorColumns =
   "id, name, logo_url, website_url, tier, sort_order, is_active";
 
@@ -377,14 +378,6 @@ function latestStandingSnapshotRows(rows: Row[]) {
     : [];
 }
 
-function primaryLeagueId(rows: Row[]) {
-  const kswLeagueRow = rows.find(
-    (row) => row.is_ksw === true || text(row, ["team_name", "name", "team"]).toLowerCase().includes("ksw"),
-  );
-
-  return text(kswLeagueRow ?? rows[0], ["league_id"], "");
-}
-
 function teamById(teams: Row[]) {
   return new Map(
     teams.map((team) => [
@@ -522,33 +515,68 @@ async function loadHomeData() {
       scheduledMatches: [] as Row[],
       sponsors: [] as Row[],
       standingsSnapshots: [] as Row[],
+      currentLeague: undefined as Row | undefined,
     };
   }
+
+  const leagueQuery = () =>
+    supabase
+      .from("leagues")
+      .select(leagueColumns)
+      .eq("is_active", true)
+      .order("created_at", { ascending: false })
+      .limit(1);
+  const leagueRows = await runSupabaseQuery(
+    "current_league",
+    supabase
+      .from("leagues")
+      .select(leagueColumns)
+      .eq("is_active", true)
+      .eq("competition_type", "league")
+      .order("created_at", { ascending: false })
+      .limit(1),
+  );
+  const currentLeagueRows = leagueRows.length
+    ? leagueRows
+    : await runSupabaseQuery("current_league_fallback", leagueQuery());
+  const currentLeague = currentLeagueRows[0];
+  const currentLeagueId = text(currentLeague, ["id"], "");
 
   const [teams, allTeams, standings, finishedMatches, scheduledMatches, sponsors] = await Promise.all([
     runSupabaseQuery("teams", supabase.from("teams").select(teamColumns).eq("is_ksw", true)),
     runSupabaseQuery("teams_all", supabase.from("teams").select(teamColumns)),
-    runSupabaseQuery(
-      "league_standings_view",
-      supabase.from("league_standings_view").select(standingsColumns),
-    ),
-    runSupabaseQuery(
-      "finished_matches",
-      supabase
-        .from("matches")
-        .select(matchColumns)
-        .eq("status", "finished")
-        .order("match_date", { ascending: false })
-    ),
-    runSupabaseQuery(
-      "scheduled_matches",
-      supabase
-        .from("matches")
-        .select(matchColumns)
-        .eq("status", "scheduled")
-        .order("match_date", { ascending: true })
-        .limit(16),
-    ),
+    currentLeagueId
+      ? runSupabaseQuery(
+          "league_standings_view",
+          supabase
+            .from("league_standings_view")
+            .select(standingsColumns)
+            .eq("league_id", currentLeagueId),
+        )
+      : Promise.resolve([] as Row[]),
+    currentLeagueId
+      ? runSupabaseQuery(
+          "finished_matches",
+          supabase
+            .from("matches")
+            .select(matchColumns)
+            .eq("league_id", currentLeagueId)
+            .eq("status", "finished")
+            .order("match_date", { ascending: false })
+        )
+      : Promise.resolve([] as Row[]),
+    currentLeagueId
+      ? runSupabaseQuery(
+          "scheduled_matches",
+          supabase
+            .from("matches")
+            .select(matchColumns)
+            .eq("league_id", currentLeagueId)
+            .eq("status", "scheduled")
+            .order("match_date", { ascending: true })
+            .limit(16),
+        )
+      : Promise.resolve([] as Row[]),
     runSupabaseQuery(
       "sponsors",
       supabase
@@ -558,14 +586,13 @@ async function loadHomeData() {
     ),
   ]);
 
-  const standingsLeagueId = primaryLeagueId(standings);
-  const standingsSnapshots = standingsLeagueId
+  const standingsSnapshots = currentLeagueId
     ? await runSupabaseQuery(
         "league_standings_snapshots",
         supabase
           .from("league_standings_snapshots")
           .select(snapshotColumns)
-          .eq("league_id", standingsLeagueId)
+          .eq("league_id", currentLeagueId)
           .order("created_at", { ascending: false })
           .limit(100),
       )
@@ -581,11 +608,12 @@ async function loadHomeData() {
     scheduledMatches: withMatchTeams(scheduledMatches, teamRows),
     sponsors,
     standingsSnapshots,
+    currentLeague,
   };
 }
 
 export default async function Home() {
-  const { configured, teams, standings, matches, scheduledMatches, sponsors, standingsSnapshots } = await loadHomeData();
+  const { configured, teams, standings, matches, scheduledMatches, sponsors, standingsSnapshots, currentLeague } = await loadHomeData();
   const club = teams[0];
   const logoUrl = club?.logo_url;
   const sponsorGroups = groupSponsorsByTier(sponsors);
@@ -662,6 +690,27 @@ export default async function Home() {
       text(b, ["team_name", "name", "team"]),
     );
   });
+  const seasonStatus = text(currentLeague, ["season_status"], "active").toLowerCase();
+  const isSeasonCompleted = seasonStatus === "completed";
+  const kswStandingIndex = sortedStandings.findIndex(
+    (row) => row.is_ksw === true || text(row, ["team_name", "name", "team"]).toLowerCase().includes("ksw"),
+  );
+  const kswStanding = kswStandingIndex >= 0 ? sortedStandings[kswStandingIndex] : undefined;
+  const finalPositionText = kswStanding
+    ? `${kswStandingIndex + 1} / ${sortedStandings.length}`
+    : "Season Complete";
+  const finalKswStats = kswStanding
+    ? [
+        ["Played", number(kswStanding, ["played", "p"])],
+        ["Won", number(kswStanding, ["won", "w"])],
+        ["Drawn", number(kswStanding, ["drawn", "draws", "d"])],
+        ["Lost", number(kswStanding, ["lost", "l"])],
+        ["GF", number(kswStanding, ["goals_for", "gf"])],
+        ["GA", number(kswStanding, ["goals_against", "ga"])],
+        ["GD", number(kswStanding, ["goal_difference", "gd"])],
+        ["Points", number(kswStanding, ["points", "pts"])],
+      ]
+    : [];
   const latestResults = matches
     .filter(
       (match) => typeof match.home_score === "number" && typeof match.away_score === "number",
@@ -727,9 +776,9 @@ export default async function Home() {
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <Link
                 className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/15 transition-transform hover:scale-[1.02]"
-                href="/#next-fixtures"
+                href={isSeasonCompleted ? "/#league-table" : "/#next-fixtures"}
               >
-                View Next Fixtures
+                {isSeasonCompleted ? "View Final Table" : "View Next Fixtures"}
               </Link>
               <Link
                 className="inline-flex items-center justify-center rounded-md border border-[#d8ad45]/50 bg-white/[0.03] px-5 py-3 text-sm font-black text-[#f4d58a] backdrop-blur transition-colors hover:bg-[#d8ad45]/10"
@@ -893,6 +942,87 @@ export default async function Home() {
       <section className="bg-slate-100">
         <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
         <div id="next-fixtures" className="min-w-0 overflow-hidden rounded-2xl border border-[#d8ad45]/35 bg-[linear-gradient(135deg,#061426,#0b2745_58%,#071b31)] shadow-2xl shadow-[#061426]/25">
+          {isSeasonCompleted ? (
+            <>
+              <div className="grid gap-5 border-b border-[#d8ad45]/20 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="mt-1 inline-flex size-11 shrink-0 items-center justify-center rounded-full border border-[#d8ad45]/35 bg-[#d8ad45]/10 text-[#f4d58a] shadow-lg shadow-[#d8ad45]/10">
+                    <svg aria-hidden="true" className="size-5" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M7 4h10v2h3v4a5 5 0 0 1-4.05 4.9A6.01 6.01 0 0 1 13 17.92V20h3v2H8v-2h3v-2.08A6.01 6.01 0 0 1 8.05 14.9 5 5 0 0 1 4 10V6h3V4Zm10 4v4.8A3 3 0 0 0 18 10V8h-1ZM6 8v2a3 3 0 0 0 1 2.24V8H6Zm3-2v6a3 3 0 1 0 6 0V6H9Z" />
+                    </svg>
+                  </span>
+                  <div>
+                    <h2 className="text-2xl font-black tracking-tight text-white sm:text-3xl">
+                      Season Complete
+                    </h2>
+                    <p className="mt-1 text-sm font-semibold text-slate-300">
+                      Thai Lawyers League • Season 6 has concluded.
+                    </p>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-[#d8ad45]/35 bg-white/[0.08] p-4 text-left shadow-xl shadow-black/15 backdrop-blur lg:min-w-64">
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f4d58a]">
+                    Final Position
+                  </p>
+                  <p className="mt-2 text-3xl font-black text-white">{finalPositionText}</p>
+                  <p className="mt-1 text-sm font-bold text-slate-300">
+                    KSW L.C. final league standing
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-5 px-4 py-5 sm:px-6">
+                {kswStanding ? (
+                  <div className="rounded-xl border border-white/10 bg-white/[0.08] p-4 shadow-xl shadow-black/15 sm:p-5">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f4d58a]">
+                          KSW Season Summary
+                        </p>
+                        <h3 className="mt-2 text-xl font-black text-white">
+                          Final numbers from the standings table
+                        </h3>
+                      </div>
+                      <p className="text-sm font-bold text-slate-300">
+                        {text(kswStanding, ["team_name", "name", "team"], "KSW L.C.")}
+                      </p>
+                    </div>
+                    <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      {finalKswStats.map(([label, value]) => (
+                        <div
+                          className="rounded-lg border border-white/10 bg-[#061426]/55 px-3 py-3 text-center"
+                          key={label}
+                        >
+                          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                            {label}
+                          </p>
+                          <p className="mt-1 text-2xl font-black text-white">{value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="rounded-xl border border-white/10 bg-white/[0.08] px-4 py-8 text-slate-200 sm:px-5">
+                    Season complete. Final KSW standing details are currently unavailable.
+                  </p>
+                )}
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <Link
+                    className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/15 transition-transform hover:scale-[1.02]"
+                    href="/#league-table"
+                  >
+                    View Final Table
+                  </Link>
+                  <Link
+                    className="inline-flex items-center justify-center rounded-md border border-[#d8ad45]/50 bg-white/[0.03] px-5 py-3 text-sm font-black text-[#f4d58a] backdrop-blur transition-colors hover:bg-[#d8ad45]/10"
+                    href="/#latest-results"
+                  >
+                    View Season Results
+                  </Link>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
           <div className="grid gap-5 border-b border-[#d8ad45]/20 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
             <div className="flex min-w-0 items-start gap-3">
               <span className="mt-1 inline-flex size-11 shrink-0 items-center justify-center rounded-full border border-[#d8ad45]/35 bg-[#d8ad45]/10 text-[#f4d58a] shadow-lg shadow-[#d8ad45]/10">
@@ -1128,6 +1258,8 @@ export default async function Home() {
               </p>
             )}
           </div>
+            </>
+          )}
           <div className="border-t border-[#d8ad45]/15 px-4 py-3 text-right sm:px-6">
             <p className="text-xs font-semibold leading-5 text-slate-400">
               ข้อมูลการแข่งขันอ้างอิงจากฝ่ายจัดการแข่งขัน Thai Lawyers League Season 6
@@ -1138,6 +1270,7 @@ export default async function Home() {
           <LeagueTable
             finishedMatches={matches}
             previousSnapshot={previousStandingsSnapshot}
+            seasonCompleted={isSeasonCompleted}
             standings={standings}
           />
         </div>
@@ -1155,7 +1288,9 @@ export default async function Home() {
                   Latest Results
                 </h2>
                 <p className="mt-1 text-sm font-semibold text-slate-600">
-                  Completed KSW league match results.
+                  {isSeasonCompleted
+                    ? "Final KSW league match results from Season 6."
+                    : "Completed KSW league match results."}
                 </p>
               </div>
             </div>

@@ -10,12 +10,14 @@ import {
 } from "./actions";
 
 type CompetitionType = "league" | "cup" | "friendly" | "tournament";
+type SeasonStatus = "upcoming" | "active" | "completed";
 
 type Competition = {
   id: string;
   name: string;
   season: string | null;
   competition_type: CompetitionType;
+  season_status: SeasonStatus;
   is_active: boolean;
   created_at: string;
 };
@@ -25,6 +27,7 @@ type CompetitionForm = {
   name: string;
   season: string;
   competitionType: CompetitionType;
+  seasonStatus: SeasonStatus;
   isActive: boolean;
 };
 
@@ -33,6 +36,7 @@ const emptyForm: CompetitionForm = {
   name: "",
   season: "",
   competitionType: "league",
+  seasonStatus: "active",
   isActive: true,
 };
 
@@ -42,6 +46,14 @@ function isCompetitionType(value: string): value is CompetitionType {
 
 function toCompetitionType(value: string | null): CompetitionType {
   return value && isCompetitionType(value) ? value : "league";
+}
+
+function isSeasonStatus(value: string): value is SeasonStatus {
+  return ["upcoming", "active", "completed"].includes(value);
+}
+
+function toSeasonStatus(value: string | null): SeasonStatus {
+  return value && isSeasonStatus(value) ? value : "active";
 }
 
 function formatDate(value: string) {
@@ -86,7 +98,7 @@ export default function AdminCompetitionsPage() {
 
     const result = await supabase
       .from("leagues")
-      .select("id, name, season, competition_type, is_active, created_at")
+      .select("id, name, season, competition_type, season_status, is_active, created_at")
       .order("created_at", { ascending: false });
 
     if (result.error) {
@@ -97,6 +109,7 @@ export default function AdminCompetitionsPage() {
         ((result.data ?? []) as Competition[]).map((competition) => ({
           ...competition,
           competition_type: toCompetitionType(competition.competition_type),
+          season_status: toSeasonStatus(competition.season_status),
         })),
       );
     }
@@ -123,6 +136,7 @@ export default function AdminCompetitionsPage() {
       name: competition.name,
       season: competition.season ?? "",
       competitionType: competition.competition_type,
+      seasonStatus: toSeasonStatus(competition.season_status),
       isActive: competition.is_active,
     });
     setMessage("");
@@ -137,6 +151,7 @@ export default function AdminCompetitionsPage() {
       name: form.name.trim(),
       season: form.season.trim() || null,
       competition_type: form.competitionType,
+      season_status: form.seasonStatus,
       is_active: form.isActive,
     };
 
@@ -259,6 +274,24 @@ export default function AdminCompetitionsPage() {
               </select>
             </label>
 
+            <label className="grid gap-2 text-sm font-black">
+              Season Status
+              <select
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    seasonStatus: toSeasonStatus(event.target.value),
+                  }))
+                }
+                value={form.seasonStatus}
+              >
+                <option value="upcoming">Upcoming — ยังไม่เริ่ม</option>
+                <option value="active">Active — กำลังแข่งขัน</option>
+                <option value="completed">Completed — จบฤดูกาลแล้ว</option>
+              </select>
+            </label>
+
             <label className="flex items-center gap-3 rounded-md border border-slate-200 px-3 py-3 text-sm font-black">
               <input
                 checked={form.isActive}
@@ -313,6 +346,7 @@ export default function AdminCompetitionsPage() {
                     <th className="px-4 py-3">Name</th>
                     <th className="px-4 py-3">Season</th>
                     <th className="px-4 py-3">Type</th>
+                    <th className="px-4 py-3">Season Status</th>
                     <th className="px-4 py-3">Active</th>
                     <th className="px-4 py-3">Created At</th>
                     <th className="px-4 py-3 text-right">Actions</th>
@@ -329,6 +363,11 @@ export default function AdminCompetitionsPage() {
                       <td className="px-4 py-3">
                         <span className="rounded-full border border-[#d8ad45]/40 bg-[#d8ad45]/10 px-3 py-1 text-xs font-black text-[#061426]">
                           {competition.competition_type}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-black capitalize text-[#061426]">
+                          {competition.season_status}
                         </span>
                       </td>
                       <td className="px-4 py-3">{competition.is_active ? "Yes" : "No"}</td>

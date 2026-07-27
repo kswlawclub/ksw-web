@@ -4,11 +4,13 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAdminSession } from "@/lib/admin-server-auth";
 
 type CompetitionType = "league" | "cup" | "friendly" | "tournament";
+type SeasonStatus = "upcoming" | "active" | "completed";
 
 type CompetitionPayload = {
   name: string;
   season: string | null;
   competition_type: CompetitionType;
+  season_status: SeasonStatus;
   is_active: boolean;
 };
 
