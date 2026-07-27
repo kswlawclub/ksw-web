@@ -1,9 +1,16 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { Metadata } from "next";
 import { loadPublishedCompetitions, Row, text } from "@/lib/competition-data";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+export const metadata: Metadata = {
+  title: "KSW Chronicle | KSW L.C.",
+  description:
+    "League seasons, Lawyer's Cup records, special matches, club stories, and history from KSW L.C.",
+};
 
 const statusPriority: Record<string, number> = {
   active: 0,
@@ -191,10 +198,10 @@ export default async function CompetitionsPage() {
         <div className="mx-auto w-full max-w-7xl px-4 py-14 sm:px-6 lg:px-10">
           <p className="text-xs font-black uppercase tracking-[0.24em] text-[#d8ad45]">KSW Digital Club Chronicle</p>
           <h1 className="mt-4 max-w-4xl text-4xl font-black tracking-tight sm:text-6xl">
-            Competitions & History
+            KSW Chronicle
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
-            League seasons, cup editions, tournament records, and special match archives for KSW L.C.
+            Competitions, special matches, stories, and memories from the history of KSW L.C.
           </p>
         </div>
       </section>

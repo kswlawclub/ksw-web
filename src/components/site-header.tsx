@@ -11,7 +11,7 @@ const navItems = [
   ["Gallery", "/gallery"],
   ["Partners", "/partners"],
   ["Tactics Board", "/lineup-builder"],
-  ["Competitions & History", "/competitions"],
+  ["KSW Chronicle", "/competitions"],
 ];
 const facebookUrl = "https://web.facebook.com/KlongSamWaLawyers";
 

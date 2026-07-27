@@ -6,7 +6,7 @@ const footerLinks = [
   ["Team", "/team"],
   ["Gallery", "/gallery"],
   ["Partners", "/partners"],
-  ["Competitions & History", "/competitions"],
+  ["KSW Chronicle", "/competitions"],
 ];
 const facebookUrl = "https://web.facebook.com/KlongSamWaLawyers";
 
