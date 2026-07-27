@@ -578,34 +578,34 @@ export default function AdminCompetitionsPage() {
               ) : null}
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <label className="grid gap-2 text-sm font-black">
-                Edition Number
-                <input
-                  className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
-                  min="1"
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, editionNumber: event.target.value }))
-                  }
-                  type="number"
-                  value={form.editionNumber}
-                />
-              </label>
+            <label className="grid min-w-0 gap-2 text-sm font-black">
+              Edition Number
+              <input
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                min="1"
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, editionNumber: event.target.value }))
+                }
+                type="number"
+                value={form.editionNumber}
+              />
+            </label>
 
-              <label className="grid gap-2 text-sm font-black">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="grid min-w-0 gap-2 text-sm font-black">
                 Start Date
                 <input
-                  className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                  className="w-full min-w-0 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                   onChange={(event) => setForm((current) => ({ ...current, startDate: event.target.value }))}
                   type="date"
                   value={form.startDate}
                 />
               </label>
 
-              <label className="grid gap-2 text-sm font-black">
+              <label className="grid min-w-0 gap-2 text-sm font-black">
                 End Date
                 <input
-                  className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                  className="w-full min-w-0 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                   onChange={(event) => setForm((current) => ({ ...current, endDate: event.target.value }))}
                   type="date"
                   value={form.endDate}
