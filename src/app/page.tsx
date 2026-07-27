@@ -13,10 +13,9 @@ const standingsColumns =
   "team_id, league_id, team_name, short_name, logo_url, is_ksw, played, won, drawn, lost, goals_for, goals_against, goal_difference, points";
 const matchColumns =
   "id, league_id, match_date, home_team_id, away_team_id, home_score, away_score, venue, status, match_type";
-const leagueColumns = "id, name, season, competition_type, season_status, is_active, created_at";
+const leagueColumns = "id, name, season, slug, competition_type, season_status, is_active, created_at";
 const sponsorColumns =
   "id, name, logo_url, website_url, tier, sort_order, is_active";
-const seasonArchiveHref = "/seasons/thai-lawyers-league-season-6";
 
 function text(row: Row | undefined, keys: string[], fallback = "") {
   if (!row) {
@@ -662,6 +661,9 @@ export default async function Home() {
   });
   const seasonStatus = text(currentLeague, ["season_status"], "active").toLowerCase();
   const isSeasonCompleted = seasonStatus === "completed";
+  const currentLeagueSlug = text(currentLeague, ["slug"], "");
+  const seasonArchiveHref = currentLeagueSlug ? `/competitions/${currentLeagueSlug}` : "/competitions";
+  const seasonResultsHref = currentLeagueSlug ? `${seasonArchiveHref}#ksw-results` : "/competitions";
   const kswStandingIndex = sortedStandings.findIndex(
     (row) => row.is_ksw === true || text(row, ["team_name", "name", "team"]).toLowerCase().includes("ksw"),
   );
@@ -1260,7 +1262,7 @@ export default async function Home() {
               </div>
               <Link
                 className="inline-flex items-center justify-center rounded-md bg-[#061426] px-4 py-2.5 text-sm font-black text-[#f4d58a] shadow-lg shadow-slate-900/10 transition-colors hover:bg-[#0b2745]"
-                href={`${seasonArchiveHref}#ksw-results`}
+                href={seasonResultsHref}
               >
                 View All Season Results
               </Link>

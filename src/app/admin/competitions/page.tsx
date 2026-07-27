@@ -16,9 +16,20 @@ type Competition = {
   id: string;
   name: string;
   season: string | null;
+  slug: string | null;
+  short_description: string | null;
+  description: string | null;
+  cover_image_url: string | null;
+  edition_number: number | null;
+  start_date: string | null;
+  end_date: string | null;
+  location: string | null;
+  display_order: number | null;
   competition_type: CompetitionType;
   season_status: SeasonStatus;
   is_active: boolean;
+  is_featured: boolean;
+  is_published: boolean;
   created_at: string;
 };
 
@@ -26,18 +37,40 @@ type CompetitionForm = {
   id: string;
   name: string;
   season: string;
+  slug: string;
+  shortDescription: string;
+  description: string;
+  coverImageUrl: string;
+  editionNumber: string;
+  startDate: string;
+  endDate: string;
+  location: string;
+  displayOrder: string;
   competitionType: CompetitionType;
   seasonStatus: SeasonStatus;
   isActive: boolean;
+  isFeatured: boolean;
+  isPublished: boolean;
 };
 
 const emptyForm: CompetitionForm = {
   id: "",
   name: "",
   season: "",
+  slug: "",
+  shortDescription: "",
+  description: "",
+  coverImageUrl: "",
+  editionNumber: "",
+  startDate: "",
+  endDate: "",
+  location: "",
+  displayOrder: "0",
   competitionType: "league",
   seasonStatus: "active",
   isActive: true,
+  isFeatured: false,
+  isPublished: true,
 };
 
 function isCompetitionType(value: string): value is CompetitionType {
@@ -70,11 +103,36 @@ function formatDate(value: string) {
   }).format(date);
 }
 
+function normalizeSlug(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[’'`]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function slugFromName(value: string) {
+  return normalizeSlug(value.normalize("NFKD"));
+}
+
+function nullableText(value: string) {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function nullableNumber(value: string) {
+  const trimmed = value.trim();
+  return trimmed ? Number(trimmed) : null;
+}
+
 export default function AdminCompetitionsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [form, setForm] = useState<CompetitionForm>(emptyForm);
+  const [slugEditedManually, setSlugEditedManually] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
@@ -98,12 +156,16 @@ export default function AdminCompetitionsPage() {
 
     const result = await supabase
       .from("leagues")
-      .select("id, name, season, competition_type, season_status, is_active, created_at")
+      .select(
+        "id, name, season, slug, short_description, description, cover_image_url, edition_number, start_date, end_date, location, display_order, competition_type, season_status, is_active, is_featured, is_published, created_at",
+      )
       .order("created_at", { ascending: false });
 
     if (result.error) {
       console.error("admin competitions query failed", result.error.message);
-      setError("Could not load competitions from leagues.");
+      setError(
+        `Could not load competitions from leagues. Apply the competition metadata migration if it has not been applied yet. ${result.error.message}`,
+      );
     } else {
       setCompetitions(
         ((result.data ?? []) as Competition[]).map((competition) => ({
@@ -119,6 +181,7 @@ export default function AdminCompetitionsPage() {
 
   function resetForm() {
     setForm(emptyForm);
+    setSlugEditedManually(false);
     setMessage("");
     setError("");
   }
@@ -135,10 +198,22 @@ export default function AdminCompetitionsPage() {
       id: competition.id,
       name: competition.name,
       season: competition.season ?? "",
+      slug: competition.slug ?? "",
+      shortDescription: competition.short_description ?? "",
+      description: competition.description ?? "",
+      coverImageUrl: competition.cover_image_url ?? "",
+      editionNumber: competition.edition_number === null ? "" : String(competition.edition_number),
+      startDate: competition.start_date ?? "",
+      endDate: competition.end_date ?? "",
+      location: competition.location ?? "",
+      displayOrder: competition.display_order === null ? "0" : String(competition.display_order),
       competitionType: competition.competition_type,
       seasonStatus: toSeasonStatus(competition.season_status),
       isActive: competition.is_active,
+      isFeatured: competition.is_featured,
+      isPublished: competition.is_published,
     });
+    setSlugEditedManually(true);
     setMessage("");
     setError("");
     scrollToEditForm();
@@ -150,9 +225,20 @@ export default function AdminCompetitionsPage() {
     const payload = {
       name: form.name.trim(),
       season: form.season.trim() || null,
+      slug: nullableText(normalizeSlug(form.slug)),
+      short_description: nullableText(form.shortDescription),
+      description: nullableText(form.description),
+      cover_image_url: nullableText(form.coverImageUrl),
+      edition_number: nullableNumber(form.editionNumber),
+      start_date: nullableText(form.startDate),
+      end_date: nullableText(form.endDate),
+      location: nullableText(form.location),
+      display_order: nullableNumber(form.displayOrder) ?? 0,
       competition_type: form.competitionType,
       season_status: form.seasonStatus,
       is_active: form.isActive,
+      is_featured: form.isFeatured,
+      is_published: form.isPublished,
     };
 
     setSaving(true);
@@ -172,7 +258,26 @@ export default function AdminCompetitionsPage() {
 
     setMessage(form.id ? "Competition updated." : "Competition added.");
     setForm(emptyForm);
+    setSlugEditedManually(false);
     await loadData();
+  }
+
+  function updateName(value: string) {
+    setForm((current) => ({
+      ...current,
+      name: value,
+      slug: current.id || slugEditedManually ? current.slug : slugFromName(value),
+    }));
+  }
+
+  function updateSlug(value: string) {
+    setSlugEditedManually(true);
+    setForm((current) => ({ ...current, slug: normalizeSlug(value) }));
+  }
+
+  function generateSlugFromCurrentName() {
+    setSlugEditedManually(true);
+    setForm((current) => ({ ...current, slug: slugFromName(current.name) }));
   }
 
   async function deleteCompetition(competition: Competition) {
@@ -239,7 +344,7 @@ export default function AdminCompetitionsPage() {
               Name
               <input
                 className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
-                onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+                onChange={(event) => updateName(event.target.value)}
                 ref={firstFieldRef}
                 required
                 value={form.name}
@@ -253,6 +358,122 @@ export default function AdminCompetitionsPage() {
                 onChange={(event) => setForm((current) => ({ ...current, season: event.target.value }))}
                 value={form.season}
               />
+            </label>
+
+            <label className="grid gap-2 text-sm font-black">
+              Slug
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  className="min-w-0 flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                  onChange={(event) => updateSlug(event.target.value)}
+                  pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+                  placeholder="thai-lawyers-league-season-6"
+                  value={form.slug}
+                />
+                <button
+                  className="rounded-md border border-[#d8ad45]/45 px-3 py-2 text-xs font-black text-[#061426] hover:bg-[#fff4dc]"
+                  onClick={generateSlugFromCurrentName}
+                  type="button"
+                >
+                  Generate from name
+                </button>
+              </div>
+              <span className="text-xs font-semibold text-slate-500">
+                Lowercase English letters, numbers, and hyphens only.
+              </span>
+              <span className="break-all rounded-md bg-slate-50 px-3 py-2 font-mono text-xs font-bold text-slate-600">
+                {form.slug ? `/competitions/${form.slug}` : "/competitions/[slug]"}
+              </span>
+            </label>
+
+            <label className="grid gap-2 text-sm font-black">
+              Short Description
+              <input
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, shortDescription: event.target.value }))
+                }
+                value={form.shortDescription}
+              />
+            </label>
+
+            <label className="grid gap-2 text-sm font-black">
+              Description
+              <textarea
+                className="min-h-28 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+                value={form.description}
+              />
+            </label>
+
+            <label className="grid gap-2 text-sm font-black">
+              Cover Image URL
+              <input
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                onChange={(event) => setForm((current) => ({ ...current, coverImageUrl: event.target.value }))}
+                type="url"
+                value={form.coverImageUrl}
+              />
+            </label>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <label className="grid gap-2 text-sm font-black">
+                Edition Number
+                <input
+                  className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                  min="1"
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, editionNumber: event.target.value }))
+                  }
+                  type="number"
+                  value={form.editionNumber}
+                />
+              </label>
+
+              <label className="grid gap-2 text-sm font-black">
+                Start Date
+                <input
+                  className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                  onChange={(event) => setForm((current) => ({ ...current, startDate: event.target.value }))}
+                  type="date"
+                  value={form.startDate}
+                />
+              </label>
+
+              <label className="grid gap-2 text-sm font-black">
+                End Date
+                <input
+                  className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                  onChange={(event) => setForm((current) => ({ ...current, endDate: event.target.value }))}
+                  type="date"
+                  value={form.endDate}
+                />
+              </label>
+            </div>
+
+            <label className="grid gap-2 text-sm font-black">
+              Location
+              <input
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))}
+                value={form.location}
+              />
+            </label>
+
+            <label className="grid gap-2 text-sm font-black">
+              Display Order
+              <input
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, displayOrder: event.target.value }))
+                }
+                step="1"
+                type="number"
+                value={form.displayOrder}
+              />
+              <span className="text-xs font-semibold text-slate-500">
+                Lower numbers appear first within the same section.
+              </span>
             </label>
 
             <label className="grid gap-2 text-sm font-black">
@@ -304,6 +525,30 @@ export default function AdminCompetitionsPage() {
               Active
             </label>
 
+            <label className="flex items-center gap-3 rounded-md border border-slate-200 px-3 py-3 text-sm font-black">
+              <input
+                checked={form.isFeatured}
+                className="size-4 accent-[#d8ad45]"
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, isFeatured: event.target.checked }))
+                }
+                type="checkbox"
+              />
+              Featured
+            </label>
+
+            <label className="flex items-center gap-3 rounded-md border border-slate-200 px-3 py-3 text-sm font-black">
+              <input
+                checked={form.isPublished}
+                className="size-4 accent-[#d8ad45]"
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, isPublished: event.target.checked }))
+                }
+                type="checkbox"
+              />
+              Published
+            </label>
+
             {error ? (
               <p className="rounded-md border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-3 py-2 text-sm font-bold text-[#9b1c1f]">
                 {error}
@@ -340,14 +585,19 @@ export default function AdminCompetitionsPage() {
             <p className="p-5 text-sm font-bold text-slate-600">Loading competitions...</p>
           ) : (
             <div className="w-full max-w-full overflow-x-auto">
-              <table className="w-full min-w-[780px] border-collapse text-left text-sm">
+              <table className="w-full min-w-[1080px] border-collapse text-left text-sm">
                 <thead className="bg-[#061426] text-xs uppercase tracking-[0.14em] text-[#f4d58a]">
                   <tr>
                     <th className="px-4 py-3">Name</th>
+                    <th className="px-4 py-3">Slug</th>
                     <th className="px-4 py-3">Season</th>
+                    <th className="px-4 py-3">Dates</th>
+                    <th className="px-4 py-3">Location</th>
+                    <th className="px-4 py-3 text-center">Display Order</th>
                     <th className="px-4 py-3">Type</th>
                     <th className="px-4 py-3">Season Status</th>
                     <th className="px-4 py-3">Active</th>
+                    <th className="px-4 py-3">Published</th>
                     <th className="px-4 py-3">Created At</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
@@ -359,7 +609,19 @@ export default function AdminCompetitionsPage() {
                       key={competition.id}
                     >
                       <td className="px-4 py-3 font-black">{competition.name}</td>
+                      <td className="px-4 py-3">
+                        {competition.slug ? (
+                          <span className="font-mono text-xs font-bold text-slate-600">{competition.slug}</span>
+                        ) : (
+                          <span className="text-xs font-bold text-slate-400">Preparing</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">{competition.season ?? "-"}</td>
+                      <td className="px-4 py-3">
+                        {[competition.start_date, competition.end_date].filter(Boolean).join(" - ") || "-"}
+                      </td>
+                      <td className="px-4 py-3">{competition.location ?? "-"}</td>
+                      <td className="px-4 py-3 text-center font-black">{competition.display_order ?? 0}</td>
                       <td className="px-4 py-3">
                         <span className="rounded-full border border-[#d8ad45]/40 bg-[#d8ad45]/10 px-3 py-1 text-xs font-black text-[#061426]">
                           {competition.competition_type}
@@ -371,6 +633,7 @@ export default function AdminCompetitionsPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3">{competition.is_active ? "Yes" : "No"}</td>
+                      <td className="px-4 py-3">{competition.is_published ? "Yes" : "No"}</td>
                       <td className="px-4 py-3">{formatDate(competition.created_at)}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-2">

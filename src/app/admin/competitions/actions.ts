@@ -9,9 +9,20 @@ type SeasonStatus = "upcoming" | "active" | "completed";
 type CompetitionPayload = {
   name: string;
   season: string | null;
+  slug: string | null;
+  short_description: string | null;
+  description: string | null;
+  cover_image_url: string | null;
+  edition_number: number | null;
+  start_date: string | null;
+  end_date: string | null;
+  location: string | null;
+  display_order: number;
   competition_type: CompetitionType;
   season_status: SeasonStatus;
   is_active: boolean;
+  is_featured: boolean;
+  is_published: boolean;
 };
 
 type ActionResult = {
@@ -37,13 +48,74 @@ function validatePayload(payload: CompetitionPayload) {
     return "Competition name is required.";
   }
 
+  if (payload.slug && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(payload.slug)) {
+    return "Slug must use lowercase English letters, numbers, and hyphens only.";
+  }
+
+  if (payload.edition_number !== null && (!Number.isInteger(payload.edition_number) || payload.edition_number < 1)) {
+    return "Edition number must be a positive whole number.";
+  }
+
+  if (!Number.isInteger(payload.display_order)) {
+    return "Display order must be a whole number.";
+  }
+
   return "";
+}
+
+function normalizeSlug(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const slug = value
+    .trim()
+    .toLowerCase()
+    .replace(/[’'`]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return slug || null;
+}
+
+function normalizePayload(payload: CompetitionPayload): CompetitionPayload {
+  return {
+    ...payload,
+    name: payload.name.trim(),
+    slug: normalizeSlug(payload.slug),
+  };
+}
+
+function competitionErrorMessage(message: string) {
+  if (message.toLowerCase().includes("duplicate") || message.toLowerCase().includes("leagues_slug_unique_idx")) {
+    return "Slug is already used by another competition.";
+  }
+
+  if (
+    message.includes("slug") ||
+    message.includes("short_description") ||
+    message.includes("description") ||
+    message.includes("cover_image_url") ||
+    message.includes("edition_number") ||
+    message.includes("start_date") ||
+    message.includes("end_date") ||
+    message.includes("location") ||
+    message.includes("display_order") ||
+    message.includes("is_featured") ||
+    message.includes("is_published")
+  ) {
+    return `${message} Apply the competition metadata migration before saving these fields.`;
+  }
+
+  return message;
 }
 
 export async function createCompetition(payload: CompetitionPayload): Promise<ActionResult> {
   await requireAdminSession();
+  const normalizedPayload = normalizePayload(payload);
 
-  const validationError = validatePayload(payload);
+  const validationError = validatePayload(normalizedPayload);
 
   if (validationError) {
     return { ok: false, error: validationError };
@@ -55,11 +127,11 @@ export async function createCompetition(payload: CompetitionPayload): Promise<Ac
     return { ok: false, error };
   }
 
-  const result = await supabase.from("leagues").insert(payload);
+  const result = await supabase.from("leagues").insert(normalizedPayload);
 
   if (result.error) {
     console.error("admin competition insert failed", result.error);
-    return { ok: false, error: result.error.message };
+    return { ok: false, error: competitionErrorMessage(result.error.message) };
   }
 
   return { ok: true };
@@ -70,8 +142,9 @@ export async function updateCompetition(
   payload: CompetitionPayload,
 ): Promise<ActionResult> {
   await requireAdminSession();
+  const normalizedPayload = normalizePayload(payload);
 
-  const validationError = validatePayload(payload);
+  const validationError = validatePayload(normalizedPayload);
 
   if (validationError) {
     return { ok: false, error: validationError };
@@ -83,11 +156,11 @@ export async function updateCompetition(
     return { ok: false, error };
   }
 
-  const result = await supabase.from("leagues").update(payload).eq("id", id);
+  const result = await supabase.from("leagues").update(normalizedPayload).eq("id", id);
 
   if (result.error) {
     console.error("admin competition update failed", result.error);
-    return { ok: false, error: result.error.message };
+    return { ok: false, error: competitionErrorMessage(result.error.message) };
   }
 
   return { ok: true };
