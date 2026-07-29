@@ -310,9 +310,9 @@ export default async function AdminCompetitionWorkspacePage({
           <a className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm font-black text-[#061426] shadow-lg shadow-slate-900/5 hover:border-[#d8ad45]" href="#teams-summary">
             Teams
           </a>
-          <a className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm font-black text-[#061426] shadow-lg shadow-slate-900/5 hover:border-[#d8ad45]" href="#matches-summary">
+          <Link className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm font-black text-[#061426] shadow-lg shadow-slate-900/5 hover:border-[#d8ad45]" href={`/admin/matches?competition=${encodeURIComponent(id)}`}>
             Matches
-          </a>
+          </Link>
           <a className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm font-black text-[#061426] shadow-lg shadow-slate-900/5 hover:border-[#d8ad45]" href="#settings-summary">
             Settings
           </a>
@@ -393,7 +393,7 @@ export default async function AdminCompetitionWorkspacePage({
                 Filtered match management will be added in Phase 2.
               </p>
             </div>
-            <Link className="inline-flex rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] hover:bg-[#091f39]" href="/admin/matches">
+            <Link className="inline-flex rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] hover:bg-[#091f39]" href={`/admin/matches?competition=${encodeURIComponent(id)}`}>
               Manage Matches
             </Link>
           </div>

@@ -19,6 +19,9 @@ type League = {
   name: string;
   season: string | null;
   competition_type: string | null;
+  season_status: string | null;
+  slug: string | null;
+  is_published: boolean | null;
 };
 
 type Match = {
@@ -30,7 +33,7 @@ type Match = {
   home_score: number | null;
   away_score: number | null;
   venue: string | null;
-  status: MatchStatus;
+  status: string;
 };
 
 type MatchForm = {
@@ -146,6 +149,29 @@ function venueValue(form: MatchForm) {
   return form.venueOption || null;
 }
 
+function readCompetitionParam() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  return new URLSearchParams(window.location.search).get("competition")?.trim() ?? "";
+}
+
+function competitionLabel(league: League | undefined) {
+  if (!league) {
+    return "Unknown competition";
+  }
+
+  return [league.name, league.season, league.competition_type].filter(Boolean).join(" - ");
+}
+
+function formForCompetition(competitionId: string) {
+  return {
+    ...emptyForm,
+    leagueId: competitionId,
+  };
+}
+
 export default function AdminMatchesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -153,6 +179,8 @@ export default function AdminMatchesPage() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [leagues, setLeagues] = useState<League[]>([]);
   const [form, setForm] = useState<MatchForm>(emptyForm);
+  const [contextCompetitionId, setContextCompetitionId] = useState<string | null>(null);
+  const [relationshipWarning, setRelationshipWarning] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
@@ -166,46 +194,91 @@ export default function AdminMatchesPage() {
     () => new Map(leagues.map((league) => [league.id, league])),
     [leagues],
   );
+  const isContextMode = Boolean(contextCompetitionId);
+  const contextCompetition = contextCompetitionId ? leaguesById.get(contextCompetitionId) : undefined;
+  const contextIsInvalid = Boolean(contextCompetitionId && !contextCompetition && !loading);
+  const selectedCompetitionId = isContextMode ? contextCompetitionId ?? "" : form.leagueId;
+  const formTeamsBelongToSelectedCompetition = Boolean(
+    selectedCompetitionId &&
+      form.homeTeamId &&
+      form.awayTeamId &&
+      teamsById.get(form.homeTeamId)?.league_id === selectedCompetitionId &&
+      teamsById.get(form.awayTeamId)?.league_id === selectedCompetitionId,
+  );
+  const filteredTeams = useMemo(
+    () =>
+      selectedCompetitionId
+        ? teams.filter((team) => team.league_id === selectedCompetitionId)
+        : [],
+    [selectedCompetitionId, teams],
+  );
+  const relationshipIssueCount = matches.filter((match) => {
+    const homeTeam = teamsById.get(match.home_team_id);
+    const awayTeam = teamsById.get(match.away_team_id);
+    return homeTeam?.league_id !== match.league_id || awayTeam?.league_id !== match.league_id;
+  }).length;
+  const unknownStatusCount = matches.filter((match) => !isMatchStatus(match.status)).length;
+  const canSubmit =
+    !contextIsInvalid &&
+    (form.id
+      ? formTeamsBelongToSelectedCompetition
+      : !selectedCompetitionId || filteredTeams.length >= 2);
 
-  useEffect(() => {
-    void loadData();
-  }, []);
-
-  async function loadData() {
+  async function loadData(competitionId: string, isCancelled = () => false) {
     const supabase = getSupabase();
 
     setLoading(true);
     setError("");
+    setMessage("");
+    setRelationshipWarning("");
+    setForm(formForCompetition(competitionId));
 
     if (!supabase) {
+      if (isCancelled()) return;
       setError("Supabase is not configured.");
       setLoading(false);
       return;
     }
 
+    const matchesQuery = competitionId
+      ? supabase
+          .from("matches")
+          .select("id, league_id, match_date, home_team_id, away_team_id, home_score, away_score, venue, status")
+          .eq("league_id", competitionId)
+          .order("match_date", { ascending: false })
+      : supabase
+          .from("matches")
+          .select("id, league_id, match_date, home_team_id, away_team_id, home_score, away_score, venue, status")
+          .order("match_date", { ascending: false });
+    const teamsQuery = competitionId
+      ? supabase.from("teams").select("id, name, short_name, league_id").eq("league_id", competitionId).order("name")
+      : supabase.from("teams").select("id, name, short_name, league_id").order("name");
+    const leaguesQuery = competitionId
+      ? supabase
+          .from("leagues")
+          .select("id, name, season, competition_type, season_status, slug, is_published")
+          .eq("id", competitionId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+      : supabase
+          .from("leagues")
+          .select("id, name, season, competition_type, season_status, slug, is_published")
+          .eq("is_active", true)
+          .order("created_at", { ascending: false });
+
     const [matchesResult, teamsResult, leaguesResult] = await Promise.all([
-      supabase
-        .from("matches")
-        .select("id, league_id, match_date, home_team_id, away_team_id, home_score, away_score, venue, status")
-        .order("match_date", { ascending: false }),
-      supabase.from("teams").select("id, name, short_name, league_id").order("name"),
-      supabase
-        .from("leagues")
-        .select("id, name, season, competition_type")
-        .eq("is_active", true)
-        .order("created_at", { ascending: false }),
+      matchesQuery,
+      teamsQuery,
+      leaguesQuery,
     ]);
+
+    if (isCancelled()) return;
 
     if (matchesResult.error) {
       console.error("admin matches query failed", matchesResult.error.message);
       setError("Could not load matches. Confirm the matches table exists and is readable.");
     } else {
-      setMatches(
-        ((matchesResult.data ?? []) as Match[]).map((match) => ({
-          ...match,
-          status: toMatchStatus(match.status),
-        })),
-      );
+      setMatches((matchesResult.data ?? []) as Match[]);
     }
 
     if (teamsResult.error) {
@@ -220,20 +293,70 @@ export default function AdminMatchesPage() {
     } else {
       const activeLeagues = (leaguesResult.data ?? []) as League[];
       setLeagues(activeLeagues);
-      setForm((current) =>
-        current.leagueId || !activeLeagues[0]
+      const validContext = competitionId ? activeLeagues.some((league) => league.id === competitionId) : true;
+
+      if (competitionId && !validContext) {
+        setError("Competition context was not found. Return to Competitions and choose a valid record.");
+      }
+
+      setForm((current) => {
+        if (competitionId) {
+          return validContext ? { ...current, leagueId: competitionId } : emptyForm;
+        }
+
+        return current.leagueId || !activeLeagues[0]
           ? current
-          : { ...current, leagueId: activeLeagues[0].id },
-      );
+          : { ...current, leagueId: activeLeagues[0].id };
+      });
     }
 
     setLoading(false);
   }
 
+  useEffect(() => {
+    function syncCompetitionParam() {
+      setContextCompetitionId(readCompetitionParam());
+    }
+
+    syncCompetitionParam();
+    window.addEventListener("popstate", syncCompetitionParam);
+
+    return () => {
+      window.removeEventListener("popstate", syncCompetitionParam);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (contextCompetitionId === null) {
+      return;
+    }
+
+    let cancelled = false;
+    const timeout = window.setTimeout(() => {
+      void loadData(contextCompetitionId, () => cancelled);
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [contextCompetitionId]);
+
   function resetForm() {
-    setForm(emptyForm);
+    setForm(formForCompetition(contextCompetitionId ?? ""));
     setMessage("");
     setError("");
+    setRelationshipWarning("");
+  }
+
+  function changeCompetition(leagueId: string) {
+    setForm((current) => ({
+      ...current,
+      leagueId,
+      homeTeamId: "",
+      awayTeamId: "",
+    }));
+    setRelationshipWarning("");
   }
 
   function scrollToEditForm() {
@@ -244,7 +367,21 @@ export default function AdminMatchesPage() {
   }
 
   function editMatch(match: Match) {
+    if (contextCompetitionId && match.league_id !== contextCompetitionId) {
+      setError("This match does not belong to the selected competition context.");
+      setMessage("");
+      setForm(formForCompetition(contextCompetitionId));
+      return;
+    }
+
     const venue = venueFields(match.venue);
+    const homeTeam = teamsById.get(match.home_team_id);
+    const awayTeam = teamsById.get(match.away_team_id);
+    const invalidRelationship =
+      homeTeam?.league_id !== match.league_id || awayTeam?.league_id !== match.league_id;
+    const legacyStatusWarning = !isMatchStatus(match.status)
+      ? "This match has a legacy or unknown status. Saving will require choosing scheduled or finished."
+      : "";
 
     setForm({
       id: match.id,
@@ -256,10 +393,20 @@ export default function AdminMatchesPage() {
       awayScore: match.away_score === null ? "" : String(match.away_score),
       venueOption: venue.venueOption,
       customVenue: venue.customVenue,
-      status: match.status,
+      status: toMatchStatus(match.status),
     });
     setMessage("");
     setError("");
+    setRelationshipWarning(
+      [
+        invalidRelationship
+          ? "This match references a team outside its competition. Review the team relationship before saving."
+          : "",
+        legacyStatusWarning,
+      ]
+        .filter(Boolean)
+        .join(" "),
+    );
     scrollToEditForm();
   }
 
@@ -273,7 +420,15 @@ export default function AdminMatchesPage() {
     setMessage("");
     setError("");
 
-    if (!form.leagueId) {
+    const payloadLeagueId = contextCompetitionId || form.leagueId;
+
+    if (contextCompetitionId && contextIsInvalid) {
+      setError("Competition context was not found. This match cannot be saved.");
+      setSaving(false);
+      return;
+    }
+
+    if (!payloadLeagueId) {
       setError("Competition is required.");
       setSaving(false);
       return;
@@ -291,6 +446,15 @@ export default function AdminMatchesPage() {
       return;
     }
 
+    const homeTeam = teamsById.get(form.homeTeamId);
+    const awayTeam = teamsById.get(form.awayTeamId);
+
+    if (homeTeam?.league_id !== payloadLeagueId || awayTeam?.league_id !== payloadLeagueId) {
+      setError("Home and away teams must belong to the selected competition.");
+      setSaving(false);
+      return;
+    }
+
     if (form.status === "finished" && (homeScore === null || awayScore === null)) {
       setError("Finished matches require both scores.");
       setSaving(false);
@@ -298,7 +462,7 @@ export default function AdminMatchesPage() {
     }
 
     const payload = {
-      league_id: form.leagueId,
+      league_id: payloadLeagueId,
       match_date: bangkokDateInputToIso(form.matchDate),
       home_team_id: form.homeTeamId,
       away_team_id: form.awayTeamId,
@@ -309,7 +473,7 @@ export default function AdminMatchesPage() {
     };
 
     const result = form.id
-      ? await updateMatch(form.id, payload)
+      ? await updateMatch(form.id, payload, contextCompetitionId || undefined)
       : await createMatch(payload);
 
     setSaving(false);
@@ -320,18 +484,23 @@ export default function AdminMatchesPage() {
     }
 
     setMessage(form.id ? "Match updated." : "Match added.");
-    setForm(emptyForm);
-    await loadData();
+    setForm(formForCompetition(contextCompetitionId ?? ""));
+    await loadData(contextCompetitionId ?? "");
   }
 
   async function deleteMatch(match: Match) {
+    if (contextCompetitionId && match.league_id !== contextCompetitionId) {
+      setError("This match does not belong to the selected competition context.");
+      return;
+    }
+
     const confirmed = window.confirm("Delete this match?");
 
     if (!confirmed) {
       return;
     }
 
-    const result = await deleteMatchById(match.id);
+    const result = await deleteMatchById(match.id, contextCompetitionId || undefined);
 
     if (!result.ok) {
       setError(result.error ?? "Could not delete match.");
@@ -339,7 +508,8 @@ export default function AdminMatchesPage() {
     }
 
     setMessage("Match deleted.");
-    await loadData();
+    setForm(formForCompetition(contextCompetitionId ?? ""));
+    await loadData(contextCompetitionId ?? "");
   }
 
   return (
@@ -357,6 +527,59 @@ export default function AdminMatchesPage() {
             <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300">
               Add, edit, and remove match fixtures and results.
             </p>
+            {contextCompetition ? (
+              <div className="mt-5 rounded-lg border border-[#d8ad45]/35 bg-white/[0.08] p-4">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]">
+                  Managing Matches For
+                </p>
+                <h2 className="mt-2 text-2xl font-black text-white">{contextCompetition.name}</h2>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {contextCompetition.season ? (
+                    <span className="rounded-full border border-white/15 bg-white/[0.08] px-3 py-1 text-xs font-black text-slate-100">
+                      {contextCompetition.season}
+                    </span>
+                  ) : null}
+                  {contextCompetition.competition_type ? (
+                    <span className="rounded-full border border-white/15 bg-white/[0.08] px-3 py-1 text-xs font-black uppercase text-slate-100">
+                      {contextCompetition.competition_type}
+                    </span>
+                  ) : null}
+                  {contextCompetition.season_status ? (
+                    <span className="rounded-full border border-white/15 bg-white/[0.08] px-3 py-1 text-xs font-black uppercase text-slate-100">
+                      {contextCompetition.season_status}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <Link
+                    className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-4 py-2 text-sm font-black text-[#061426]"
+                    href={`/admin/competitions/${contextCompetition.id}`}
+                  >
+                    Back to Workspace
+                  </Link>
+                  {contextCompetition.slug && contextCompetition.is_published ? (
+                    <Link
+                      className="inline-flex items-center justify-center rounded-md border border-[#d8ad45]/50 bg-white/[0.03] px-4 py-2 text-sm font-black text-[#f4d58a] hover:bg-[#d8ad45]/10"
+                      href={`/competitions/${contextCompetition.slug}`}
+                      rel="noopener noreferrer"
+                      target="_blank"
+                    >
+                      View Public Page
+                    </Link>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+            {contextIsInvalid ? (
+              <div className="mt-5 rounded-lg border border-[#9b1c1f]/30 bg-[#9b1c1f]/10 p-4 text-sm font-bold text-red-100">
+                Competition context was not found. Return to Competitions and choose a valid record.
+                <div className="mt-3">
+                  <Link className="text-[#f4d58a] underline-offset-4 hover:underline" href="/admin/competitions">
+                    Back to Competitions
+                  </Link>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       </section>
@@ -380,25 +603,55 @@ export default function AdminMatchesPage() {
           </div>
 
           <div className="grid gap-4">
-            <label className="grid gap-2 text-sm font-black">
-              Competition
-              <select
-                className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
-                onChange={(event) => setForm((current) => ({ ...current, leagueId: event.target.value }))}
-                ref={firstFieldRef}
-                required
-                value={form.leagueId}
-              >
-                <option value="">Select competition</option>
-                {leagues.map((league) => (
-                  <option key={league.id} value={league.id}>
-                    {[league.name, league.season, league.competition_type]
-                      .filter(Boolean)
-                      .join(" - ")}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {isContextMode || form.id ? (
+              <div className="grid gap-2 text-sm font-black">
+                Competition
+                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700">
+                  {contextCompetition
+                    ? competitionLabel(contextCompetition)
+                    : form.id
+                      ? competitionLabel(leaguesById.get(form.leagueId))
+                      : "Invalid competition context"}
+                </div>
+              </div>
+            ) : (
+              <label className="grid gap-2 text-sm font-black">
+                Competition
+                <select
+                  className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                  onChange={(event) => changeCompetition(event.target.value)}
+                  ref={firstFieldRef}
+                  required
+                  value={form.leagueId}
+                >
+                  <option value="">Select competition</option>
+                  {leagues.map((league) => (
+                    <option key={league.id} value={league.id}>
+                      {competitionLabel(league)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            {!form.id && selectedCompetitionId && filteredTeams.length < 2 ? (
+              <div className="rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] px-3 py-2 text-sm font-bold text-[#8a6418]">
+                At least two teams are required before creating a match.
+                {isContextMode ? (
+                  <div className="mt-2">
+                    <Link
+                      className="text-[#061426] underline-offset-4 hover:underline"
+                      href={`/admin/teams?competition=${encodeURIComponent(selectedCompetitionId)}`}
+                    >
+                      Manage Teams for this Competition
+                    </Link>
+                    <span className="ml-2 text-xs font-semibold text-[#8a6418]">
+                      Team context support will be completed in a later phase.
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             <label className="grid gap-2 text-sm font-black">
               Match Date & Time
@@ -420,7 +673,7 @@ export default function AdminMatchesPage() {
                 value={form.homeTeamId}
               >
                 <option value="">Select home team</option>
-                {teams.map((team) => (
+                {filteredTeams.map((team) => (
                   <option key={team.id} value={team.id}>
                     {team.name}
                   </option>
@@ -437,7 +690,7 @@ export default function AdminMatchesPage() {
                 value={form.awayTeamId}
               >
                 <option value="">Select away team</option>
-                {teams.map((team) => (
+                {filteredTeams.map((team) => (
                   <option key={team.id} value={team.id}>
                     {team.name}
                   </option>
@@ -529,6 +782,11 @@ export default function AdminMatchesPage() {
                 {error}
               </p>
             ) : null}
+            {relationshipWarning ? (
+              <p className="rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] px-3 py-2 text-sm font-bold text-[#8a6418]">
+                {relationshipWarning}
+              </p>
+            ) : null}
             {message ? (
               <p className="rounded-md border border-emerald-700/20 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">
                 {message}
@@ -537,7 +795,7 @@ export default function AdminMatchesPage() {
 
             <button
               className="rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/20 transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={saving}
+              disabled={saving || !canSubmit}
               type="submit"
             >
               {saving ? "Saving..." : form.id ? "Update Match" : "Add Match"}
@@ -551,8 +809,22 @@ export default function AdminMatchesPage() {
               <div className="mb-3 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
               <h2 className="text-2xl font-black">Match List</h2>
             </div>
-            <p className="text-sm font-bold text-slate-500">{matches.length} matches</p>
+            <p className="text-sm font-bold text-slate-500">
+              {matches.length} {isContextMode ? "linked matches" : "matches"}
+            </p>
           </div>
+
+          {relationshipIssueCount || unknownStatusCount ? (
+            <div className="border-b border-slate-200 bg-[#fff7e6] px-5 py-3 text-sm font-bold text-[#8a6418]">
+              {relationshipIssueCount ? (
+                <p>{relationshipIssueCount} match record references a team outside its competition.</p>
+              ) : null}
+              {unknownStatusCount ? (
+                <p>{unknownStatusCount} match record uses a status outside scheduled/finished.</p>
+              ) : null}
+              <p className="mt-1 text-xs font-semibold">No data was changed automatically.</p>
+            </div>
+          ) : null}
 
           {loading ? (
             <p className="p-5 text-sm font-bold text-slate-600">Loading matches...</p>
@@ -626,7 +898,9 @@ export default function AdminMatchesPage() {
                 </tbody>
               </table>
               {matches.length === 0 ? (
-                <p className="p-5 text-sm font-bold text-slate-600">No matches found.</p>
+                <p className="p-5 text-sm font-bold text-slate-600">
+                  {isContextMode ? "No matches linked to this competition." : "No matches found."}
+                </p>
               ) : null}
             </div>
           )}
