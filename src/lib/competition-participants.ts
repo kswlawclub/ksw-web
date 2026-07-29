@@ -25,6 +25,13 @@ type LoadOptions = {
   includeInactiveParticipants?: boolean;
 };
 
+type SupabaseReadError = {
+  code?: string;
+  details?: string;
+  hint?: string;
+  message?: string;
+};
+
 const teamSelect = "id, league_id, name, short_name, logo_url, is_ksw, is_active, created_at";
 
 function text(row: Row | undefined, key: string) {
@@ -45,20 +52,6 @@ function booleanValue(row: Row | undefined, key: string, fallback = false) {
 function numberValue(row: Row | undefined, key: string, fallback = 0) {
   const value = row?.[key];
   return typeof value === "number" ? value : fallback;
-}
-
-function nestedTeam(row: Row): Row | undefined {
-  const value = row.team ?? row.teams;
-
-  if (Array.isArray(value)) {
-    return value[0] as Row | undefined;
-  }
-
-  if (value && typeof value === "object") {
-    return value as Row;
-  }
-
-  return undefined;
 }
 
 function fromTeamRow(
@@ -98,6 +91,7 @@ function byDisplayOrderAndName(a: CompetitionParticipant, b: CompetitionParticip
 function mergeParticipants(
   junctionParticipants: CompetitionParticipant[],
   legacyParticipants: CompetitionParticipant[],
+  junctionTeamIds = new Set<string>(),
 ) {
   const byId = new Map<string, CompetitionParticipant>();
 
@@ -106,6 +100,10 @@ function mergeParticipants(
   }
 
   for (const participant of legacyParticipants) {
+    if (junctionTeamIds.has(participant.id) && !byId.has(participant.id)) {
+      continue;
+    }
+
     const existing = byId.get(participant.id);
 
     if (existing) {
@@ -121,6 +119,18 @@ function mergeParticipants(
   return Array.from(byId.values()).sort(byDisplayOrderAndName);
 }
 
+function logSupabaseReadError(source: string, error: unknown, context?: Record<string, unknown>) {
+  const supabaseError = error as SupabaseReadError | null;
+
+  console.error(source, {
+    code: supabaseError?.code,
+    details: supabaseError?.details,
+    hint: supabaseError?.hint,
+    message: supabaseError?.message,
+    ...context,
+  });
+}
+
 export async function loadCompetitionParticipants(
   supabase: SupabaseClient,
   competitionId: string,
@@ -132,31 +142,66 @@ export async function loadCompetitionParticipants(
 
   let junctionParticipants: CompetitionParticipant[] = [];
   let legacyParticipants: CompetitionParticipant[] = [];
+  let junctionTeamIds = new Set<string>();
 
   try {
-    let junctionQuery = supabase
+    const junctionResult = await supabase
       .from("competition_teams")
-      .select(`id, competition_id, team_id, is_active, display_order, team:teams(${teamSelect})`)
+      .select("team_id, is_active, display_order")
       .eq("competition_id", competitionId);
 
-    if (!options.includeInactiveParticipants) {
-      junctionQuery = junctionQuery.eq("is_active", true);
-    }
-
-    const junctionResult = await junctionQuery;
-
     if (junctionResult.error) {
-      console.warn("competition participants junction query failed", junctionResult.error);
+      logSupabaseReadError("loadCompetitionParticipants junction query failed", junctionResult.error, {
+        competitionId,
+      });
     } else {
-      junctionParticipants = ((junctionResult.data ?? []) as Row[])
-        .map((row) => {
-          const team = nestedTeam(row);
-          return team ? fromTeamRow(team, "junction", row) : undefined;
-        })
-        .filter((participant): participant is CompetitionParticipant => Boolean(participant));
+      const junctionRows = (junctionResult.data ?? []) as Row[];
+      junctionTeamIds = new Set(
+        junctionRows.map((row) => text(row, "team_id")).filter(Boolean),
+      );
+      const activeJunctionRows = options.includeInactiveParticipants
+        ? junctionRows
+        : junctionRows.filter((row) => booleanValue(row, "is_active", true));
+      const activeTeamIds = activeJunctionRows.map((row) => text(row, "team_id")).filter(Boolean);
+
+      if (activeTeamIds.length > 0) {
+        const teamsResult = await supabase
+          .from("teams")
+          .select(teamSelect)
+          .in("id", activeTeamIds);
+
+        if (teamsResult.error) {
+          logSupabaseReadError("loadCompetitionParticipants junction team query failed", teamsResult.error, {
+            competitionId,
+            teamCount: activeTeamIds.length,
+          });
+        } else {
+          const teamsById = new Map(
+            ((teamsResult.data ?? []) as Row[]).map((team) => [text(team, "id"), team]),
+          );
+
+          junctionParticipants = activeJunctionRows
+            .map((row) => {
+              const team = teamsById.get(text(row, "team_id"));
+
+              if (!team) {
+                console.error("loadCompetitionParticipants junction team missing", {
+                  competitionId,
+                  teamId: text(row, "team_id"),
+                });
+                return undefined;
+              }
+
+              return fromTeamRow(team, "junction", row);
+            })
+            .filter((participant): participant is CompetitionParticipant => Boolean(participant));
+        }
+      }
     }
   } catch (error) {
-    console.warn("competition participants junction query failed", error);
+    logSupabaseReadError("loadCompetitionParticipants junction query failed", error, {
+      competitionId,
+    });
   }
 
   if (options.includeLegacyFallback !== false) {
@@ -167,16 +212,20 @@ export async function loadCompetitionParticipants(
         .eq("league_id", competitionId);
 
       if (legacyResult.error) {
-        console.warn("competition participants legacy query failed", legacyResult.error);
+        logSupabaseReadError("loadCompetitionParticipants legacy query failed", legacyResult.error, {
+          competitionId,
+        });
       } else {
         legacyParticipants = ((legacyResult.data ?? []) as Row[])
           .map((team) => fromTeamRow(team, "legacy"))
           .filter((participant): participant is CompetitionParticipant => Boolean(participant));
       }
     } catch (error) {
-      console.warn("competition participants legacy query failed", error);
+      logSupabaseReadError("loadCompetitionParticipants legacy query failed", error, {
+        competitionId,
+      });
     }
   }
 
-  return mergeParticipants(junctionParticipants, legacyParticipants);
+  return mergeParticipants(junctionParticipants, legacyParticipants, junctionTeamIds);
 }
