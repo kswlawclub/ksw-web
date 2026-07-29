@@ -802,6 +802,12 @@ export default function AdminCompetitionsPage() {
                       <td className="px-4 py-3">{formatDate(competition.created_at)}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-2">
+                          <Link
+                            className="rounded-md border border-[#d8ad45]/45 px-3 py-2 text-xs font-black text-[#061426] hover:bg-[#fff4dc]"
+                            href={`/admin/competitions/${competition.id}`}
+                          >
+                            Open Workspace
+                          </Link>
                           <button
                             className="rounded-md border border-slate-200 px-3 py-2 text-xs font-black text-[#061426] hover:border-[#d8ad45]"
                             onClick={() => editCompetition(competition)}

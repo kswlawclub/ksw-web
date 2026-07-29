@@ -3,7 +3,12 @@ import { logoutAdmin } from "./actions";
 
 const modules = [
   { title: "Manage Matches", href: "/admin/matches", status: "Open module" },
-  { title: "Manage Competitions", href: "/admin/competitions", status: "Open module" },
+  {
+    title: "Competition Workspace",
+    href: "/admin/competitions",
+    status: "Open competitions",
+    description: "Open a competition to review its overview, teams, matches, and public page.",
+  },
   { title: "Manage Teams", href: "/admin/teams", status: "Open module" },
   { title: "Manage Members", href: "/admin/members", status: "Open module" },
   { title: "Manage Gallery", href: "/admin/gallery", status: "Open module" },
@@ -40,6 +45,9 @@ export default function AdminDashboardPage() {
           <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-6 shadow-xl shadow-slate-900/10" key={module.title}>
             <div className="mb-4 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
             <h2 className="text-2xl font-black text-[#061426]">{module.title}</h2>
+            {"description" in module ? (
+              <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">{module.description}</p>
+            ) : null}
             {module.href ? (
               <Link
                 className="mt-4 inline-flex rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] transition-colors hover:bg-[#091f39]"
