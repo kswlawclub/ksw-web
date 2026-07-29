@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TeamLogo } from "@/components/team-logo";
 import { loadCompetitionParticipants } from "@/lib/competition-participants";
-import { getSupabase } from "@/lib/supabase";
+import { requireAdminSession } from "@/lib/admin-server-auth";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 type Row = Record<string, unknown>;
 
@@ -120,7 +121,9 @@ async function runQuery<T>(
 }
 
 async function loadWorkspaceData(id: string) {
-  const supabase = getSupabase();
+  await requireAdminSession();
+
+  const supabase = getSupabaseAdmin();
 
   if (!supabase) {
     return {

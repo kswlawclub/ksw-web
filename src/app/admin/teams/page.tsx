@@ -2,12 +2,11 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { loadCompetitionParticipants } from "@/lib/competition-participants";
-import { getSupabase } from "@/lib/supabase";
 import {
   assignTeamsToCompetition,
   createTeam,
   deleteTeamById,
+  loadAdminTeamsData,
   removeTeamFromCompetition,
   updateTeam,
   uploadTeamLogo,
@@ -240,7 +239,6 @@ export default function AdminTeamsPage() {
     isCancelled = () => false,
     options: { preserveMessages?: boolean } = {},
   ) {
-    const supabase = getSupabase();
     let refreshOk = true;
 
     setLoading(true);
@@ -253,66 +251,25 @@ export default function AdminTeamsPage() {
     setLogoFile(null);
     setForm(formForCompetition(competitionId));
 
-    if (!supabase) {
+    let result: Awaited<ReturnType<typeof loadAdminTeamsData>>;
+
+    try {
+      result = await loadAdminTeamsData(competitionId);
+    } catch (loadError) {
+      console.error("admin teams server read failed", loadError);
       if (isCancelled()) return;
-      setError("Supabase is not configured.");
+      setError("Could not load teams. Please sign in again or reload the page.");
       setLoading(false);
       return false;
     }
 
-    const teamsQuery = competitionId
-      ? loadCompetitionParticipants(supabase, competitionId, {
-          includeInactiveParticipants: false,
-          includeLegacyFallback: false,
-        })
-      : supabase
-          .from("teams")
-          .select("id, league_id, name, short_name, logo_url, is_ksw, is_active, created_at")
-          .order("name");
-    const competitionsQuery = competitionId
-      ? supabase
-          .from("leagues")
-          .select("id, name, season, competition_type, season_status, slug, is_published")
-          .eq("id", competitionId)
-          .order("created_at", { ascending: false })
-          .limit(1)
-      : supabase
-          .from("leagues")
-          .select("id, name, season, competition_type, season_status, slug, is_published")
-          .eq("is_active", true)
-          .order("created_at", { ascending: false });
-    const availableTeamsQuery = competitionId
-      ? supabase
-          .from("teams")
-          .select("id, league_id, name, short_name, logo_url, is_ksw, is_active, created_at")
-          .eq("is_active", true)
-          .order("name")
-      : null;
-
-    const [teamsResult, competitionsResult, availableTeamsResult] = await Promise.all([
-      teamsQuery,
-      competitionsQuery,
-      availableTeamsQuery,
-    ]);
-
     if (isCancelled()) return;
 
-    if (Array.isArray(teamsResult)) {
-      setTeams(teamsResult as Team[]);
-    } else if (teamsResult.error) {
-      console.error("admin teams query failed", teamsResult.error.message);
-      setError("Could not load teams.");
+    if (!result.ok) {
+      setError(result.error ?? "Could not load teams.");
       refreshOk = false;
     } else {
-      setTeams((teamsResult.data ?? []) as Team[]);
-    }
-
-    if (competitionsResult.error) {
-      console.error("admin team competitions query failed", competitionsResult.error.message);
-      setError("Could not load competitions for the team form.");
-      refreshOk = false;
-    } else {
-      const activeCompetitions = (competitionsResult.data ?? []) as Competition[];
+      const activeCompetitions = result.competitions ?? [];
       setCompetitions(activeCompetitions);
       const validContext = competitionId
         ? activeCompetitions.some((competition) => competition.id === competitionId)
@@ -329,20 +286,8 @@ export default function AdminTeamsPage() {
 
         return current;
       });
-    }
-
-    if (availableTeamsResult?.error) {
-      console.error("admin available teams query failed", availableTeamsResult.error.message);
-      setError("Could not load available teams.");
-      refreshOk = false;
-    } else {
-      const assignedTeamIds = new Set(
-        Array.isArray(teamsResult) ? teamsResult.map((team) => team.id) : [],
-      );
-      const availableTeams = ((availableTeamsResult?.data ?? []) as Team[]).filter(
-        (team) => !assignedTeamIds.has(team.id),
-      );
-      setUnassignedTeams(availableTeams);
+      setTeams((result.teams ?? []) as Team[]);
+      setUnassignedTeams((result.availableTeams ?? []) as Team[]);
     }
 
     setLoading(false);

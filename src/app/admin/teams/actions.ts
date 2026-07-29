@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import sharp from "sharp";
+import { loadCompetitionParticipants } from "@/lib/competition-participants";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAdminSession } from "@/lib/admin-server-auth";
 
@@ -30,6 +31,36 @@ type UploadResult = ActionResult & {
   path?: string;
 };
 
+type CompetitionRow = {
+  id: string;
+  name: string;
+  season: string | null;
+  competition_type: string | null;
+  season_status: string | null;
+  slug: string | null;
+  is_published: boolean | null;
+};
+
+type TeamRow = {
+  id: string;
+  league_id: string | null;
+  name: string;
+  short_name: string | null;
+  logo_url: string | null;
+  is_ksw: boolean;
+  is_active: boolean;
+  created_at: string | null;
+  display_order?: number;
+  participant_is_active?: boolean;
+  participant_source?: string;
+};
+
+type AdminTeamsDataResult = ActionResult & {
+  competitions?: CompetitionRow[];
+  teams?: TeamRow[];
+  availableTeams?: TeamRow[];
+};
+
 type SupabaseActionError = {
   code?: string;
   details?: string;
@@ -49,6 +80,8 @@ const allowedLogoTypes = new Map([
 ]);
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const competitionColumns = "id, name, season, competition_type, season_status, slug, is_published";
+const teamColumns = "id, league_id, name, short_name, logo_url, is_ksw, is_active, created_at";
 
 function getAdminClient() {
   const supabase = getSupabaseAdmin();
@@ -110,6 +143,91 @@ async function validateCompetitionExists(
   }
 
   return "";
+}
+
+export async function loadAdminTeamsData(competitionId = ""): Promise<AdminTeamsDataResult> {
+  await requireAdminSession();
+
+  const normalizedCompetitionId = competitionId.trim();
+
+  if (normalizedCompetitionId && !uuidPattern.test(normalizedCompetitionId)) {
+    return { ok: false, error: "Competition id is invalid." };
+  }
+
+  const { supabase, error } = getAdminClient();
+
+  if (!supabase) {
+    return { ok: false, error };
+  }
+
+  const teamsQuery = normalizedCompetitionId
+    ? loadCompetitionParticipants(supabase, normalizedCompetitionId, {
+        includeInactiveParticipants: false,
+        includeLegacyFallback: false,
+      })
+    : supabase.from("teams").select(teamColumns).order("name");
+  const competitionsQuery = normalizedCompetitionId
+    ? supabase
+        .from("leagues")
+        .select(competitionColumns)
+        .eq("id", normalizedCompetitionId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+    : supabase
+        .from("leagues")
+        .select(competitionColumns)
+        .eq("is_active", true)
+        .order("created_at", { ascending: false });
+  const availableTeamsQuery = normalizedCompetitionId
+    ? supabase
+        .from("teams")
+        .select(teamColumns)
+        .eq("is_active", true)
+        .order("name")
+    : null;
+
+  const [teamsResult, competitionsResult, availableTeamsResult] = await Promise.all([
+    teamsQuery,
+    competitionsQuery,
+    availableTeamsQuery,
+  ]);
+
+  const teams = Array.isArray(teamsResult)
+    ? (teamsResult as TeamRow[])
+    : ((teamsResult.data ?? []) as TeamRow[]);
+
+  if (!Array.isArray(teamsResult) && teamsResult.error) {
+    logSupabaseActionError("admin teams load teams query failed", teamsResult.error, {
+      competitionId: normalizedCompetitionId || null,
+    });
+    return { ok: false, error: "Could not load teams." };
+  }
+
+  if (competitionsResult.error) {
+    logSupabaseActionError("admin teams load competitions query failed", competitionsResult.error, {
+      competitionId: normalizedCompetitionId || null,
+    });
+    return { ok: false, error: "Could not load competitions for the team form." };
+  }
+
+  if (availableTeamsResult?.error) {
+    logSupabaseActionError("admin teams load available teams query failed", availableTeamsResult.error, {
+      competitionId: normalizedCompetitionId,
+    });
+    return { ok: false, error: "Could not load available teams." };
+  }
+
+  const assignedTeamIds = new Set(teams.map((team) => team.id));
+  const availableTeams = ((availableTeamsResult?.data ?? []) as TeamRow[]).filter(
+    (team) => !assignedTeamIds.has(team.id),
+  );
+
+  return {
+    ok: true,
+    availableTeams,
+    competitions: (competitionsResult.data ?? []) as CompetitionRow[],
+    teams,
+  };
 }
 
 async function getExistingTeam(
