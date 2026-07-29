@@ -29,6 +29,13 @@ type UploadResult = ActionResult & {
   path?: string;
 };
 
+type SupabaseActionError = {
+  code?: string;
+  details?: string;
+  hint?: string;
+  message?: string;
+};
+
 const maxLogoSize = 2 * 1024 * 1024;
 const bucketName = "team-logos";
 const rasterLogoTypes = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp"]);
@@ -39,6 +46,8 @@ const allowedLogoTypes = new Map([
   ["image/webp", "webp"],
   ["image/svg+xml", "svg"],
 ]);
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function getAdminClient() {
   const supabase = getSupabaseAdmin();
@@ -63,6 +72,18 @@ function validatePayload(payload: TeamPayload) {
   }
 
   return "";
+}
+
+function logSupabaseActionError(source: string, error: unknown, context?: Record<string, unknown>) {
+  const supabaseError = error as SupabaseActionError | null;
+
+  console.error(source, {
+    code: supabaseError?.code,
+    details: supabaseError?.details,
+    hint: supabaseError?.hint,
+    message: supabaseError?.message,
+    ...context,
+  });
 }
 
 async function validateCompetitionExists(
@@ -290,6 +311,10 @@ export async function assignTeamsToCompetition(
     return { ok: false, error: "Select at least one team to assign." };
   }
 
+  if (!uuidPattern.test(competitionId) || uniqueTeamIds.some((teamId) => !uuidPattern.test(teamId))) {
+    return { ok: false, error: "Competition or team id is invalid." };
+  }
+
   const { supabase, error } = getAdminClient();
 
   if (!supabase) {
@@ -308,7 +333,9 @@ export async function assignTeamsToCompetition(
     .in("id", uniqueTeamIds);
 
   if (teams.error) {
-    console.error("admin team assign lookup failed", teams.error);
+    logSupabaseActionError("admin team assign lookup failed", teams.error, {
+      selectedTeamCount: uniqueTeamIds.length,
+    });
     return { ok: false, error: "Could not verify selected teams." };
   }
 
@@ -325,7 +352,10 @@ export async function assignTeamsToCompetition(
     .in("team_id", uniqueTeamIds);
 
   if (existingParticipants.error) {
-    console.error("admin team participant lookup failed", existingParticipants.error);
+    logSupabaseActionError("assignTeamsToCompetition existing participant query failed", existingParticipants.error, {
+      competitionId,
+      selectedTeamCount: uniqueTeamIds.length,
+    });
     return { ok: false, error: "Could not verify existing competition participants." };
   }
 
@@ -352,8 +382,19 @@ export async function assignTeamsToCompetition(
       .select("team_id");
 
     if (insertResult.error) {
-      console.error("admin team participant insert failed", insertResult.error);
-      return { ok: false, error: insertResult.error.message };
+      logSupabaseActionError("assignTeamsToCompetition participant insert failed", insertResult.error, {
+        competitionId,
+        insertCount: missingTeamIds.length,
+      });
+
+      if ((insertResult.error as SupabaseActionError).code === "23505") {
+        return {
+          ok: false,
+          error: "One or more selected teams were assigned by another session. Please reload and try again.",
+        };
+      }
+
+      return { ok: false, error: "Could not assign selected teams." };
     }
 
     assignedCount = (insertResult.data ?? []).length;
@@ -369,8 +410,11 @@ export async function assignTeamsToCompetition(
       .select("team_id");
 
     if (reactivateResult.error) {
-      console.error("admin team participant reactivate failed", reactivateResult.error);
-      return { ok: false, error: reactivateResult.error.message };
+      logSupabaseActionError("assignTeamsToCompetition participant reactivate failed", reactivateResult.error, {
+        competitionId,
+        reactivateCount: inactiveTeamIds.length,
+      });
+      return { ok: false, error: "Could not reactivate selected teams." };
     }
 
     reactivatedCount = (reactivateResult.data ?? []).length;
