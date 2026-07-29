@@ -173,7 +173,19 @@ function MobileResultRow({ match }: { match: Row }) {
   );
 }
 
-export function CompetitionResultsTable({ isLeague, matches }: { isLeague: boolean; matches: Row[] }) {
+export function CompetitionResultsTable({
+  isLeague,
+  matches,
+  sectionId = "all-results",
+  subtitle = "Complete results from every match in this competition.",
+  title,
+}: {
+  isLeague: boolean;
+  matches: Row[];
+  sectionId?: string;
+  subtitle?: string;
+  title?: string;
+}) {
   const groups = useMemo(
     () =>
       resultGroups([...matches].sort((a, b) => matchTime(b) - matchTime(a))).map((group) => ({
@@ -183,6 +195,8 @@ export function CompetitionResultsTable({ isLeague, matches }: { isLeague: boole
     [matches],
   );
   const [openGroups, setOpenGroups] = useState(() => new Set(groups[0] ? [groups[0].key] : []));
+  const singleMatch = groups.length === 1 && groups[0]?.matches.length === 1;
+  const sectionTitle = title ?? (isLeague ? "All Match Results" : "Competition Results");
 
   function toggleGroup(key: string) {
     setOpenGroups((current) => {
@@ -197,14 +211,14 @@ export function CompetitionResultsTable({ isLeague, matches }: { isLeague: boole
   }
 
   return (
-    <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="all-results">
+    <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id={sectionId}>
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
         <div className="border-b border-slate-200 px-4 py-5 sm:px-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="text-2xl font-black">{isLeague ? "All Match Results" : "Competition Results"}</h2>
+              <h2 className="text-2xl font-black">{sectionTitle}</h2>
               <p className="mt-1 text-sm font-semibold text-slate-600">
-                Complete results from every match in this competition.
+                {subtitle}
               </p>
             </div>
             <span className="w-fit rounded-full border border-[#d8ad45]/35 bg-[#fff4dc] px-3 py-1.5 text-xs font-black text-[#061426]">
@@ -214,61 +228,87 @@ export function CompetitionResultsTable({ isLeague, matches }: { isLeague: boole
         </div>
 
         <div className="grid gap-4 bg-slate-100 px-4 py-5 sm:px-6">
-          {groups.map((group) => {
-            const open = openGroups.has(group.key);
-            return (
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white" key={group.key}>
-                <button
-                  aria-expanded={open}
-                  className="flex w-full items-center justify-between gap-4 bg-[#061426] px-4 py-3 text-left text-white transition-colors hover:bg-[#0a223d]"
-                  onClick={() => toggleGroup(group.key)}
-                  type="button"
-                >
-                  <span>
-                    <span className="block text-xs font-black uppercase tracking-[0.18em] text-[#f4d58a]">Results</span>
-                    <span className="mt-1 block text-sm font-black">{formatDate(group.date) || "Date TBC"}</span>
-                  </span>
-                  <span className="flex shrink-0 items-center gap-3">
-                    <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-black">
-                      {group.matches.length} Matches
-                    </span>
-                    <span className={`text-lg font-black transition-transform ${open ? "rotate-180" : ""}`} aria-hidden="true">
-                      ˅
-                    </span>
-                  </span>
-                </button>
-
-                {open ? (
-                  <div>
-                    <div className="hidden lg:block">
-                      <table className="w-full border-collapse text-left">
-                        <thead>
-                          <tr className="bg-[#09213b] text-xs font-black uppercase tracking-[0.14em] text-[#f4d58a]">
-                            <th className="px-4 py-3">Date</th>
-                            <th className="px-4 py-3">Home Team</th>
-                            <th className="px-4 py-3 text-center">Score</th>
-                            <th className="px-4 py-3 text-right">Away Team</th>
-                            <th className="px-4 py-3">Venue</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {group.matches.map((match) => (
-                            <ResultRow key={text(match, ["id"])} match={match} />
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    <div className="grid gap-3 p-3 lg:hidden">
-                      {group.matches.map((match) => (
-                        <MobileResultRow key={text(match, ["id"])} match={match} />
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
+          {singleMatch ? (
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <div className="hidden lg:block">
+                <table className="w-full border-collapse text-left">
+                  <thead>
+                    <tr className="bg-[#09213b] text-xs font-black uppercase tracking-[0.14em] text-[#f4d58a]">
+                      <th className="px-4 py-3">Date</th>
+                      <th className="px-4 py-3">Home Team</th>
+                      <th className="px-4 py-3 text-center">Score</th>
+                      <th className="px-4 py-3 text-right">Away Team</th>
+                      <th className="px-4 py-3">Venue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <ResultRow match={groups[0].matches[0]} />
+                  </tbody>
+                </table>
               </div>
-            );
-          })}
+              <div className="grid gap-3 p-3 lg:hidden">
+                <MobileResultRow match={groups[0].matches[0]} />
+              </div>
+            </div>
+          ) : null}
+
+          {!singleMatch
+            ? groups.map((group) => {
+                const open = openGroups.has(group.key);
+                return (
+                  <div className="overflow-hidden rounded-xl border border-slate-200 bg-white" key={group.key}>
+                    <button
+                      aria-expanded={open}
+                      className="flex w-full items-center justify-between gap-4 bg-[#061426] px-4 py-3 text-left text-white transition-colors hover:bg-[#0a223d]"
+                      onClick={() => toggleGroup(group.key)}
+                      type="button"
+                    >
+                      <span>
+                        <span className="block text-xs font-black uppercase tracking-[0.18em] text-[#f4d58a]">Results</span>
+                        <span className="mt-1 block text-sm font-black">{formatDate(group.date) || "Date TBC"}</span>
+                      </span>
+                      <span className="flex shrink-0 items-center gap-3">
+                        <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-black">
+                          {group.matches.length} Matches
+                        </span>
+                        <span className={`text-lg font-black transition-transform ${open ? "rotate-180" : ""}`} aria-hidden="true">
+                          ˅
+                        </span>
+                      </span>
+                    </button>
+
+                    {open ? (
+                      <div>
+                        <div className="hidden lg:block">
+                          <table className="w-full border-collapse text-left">
+                            <thead>
+                              <tr className="bg-[#09213b] text-xs font-black uppercase tracking-[0.14em] text-[#f4d58a]">
+                                <th className="px-4 py-3">Date</th>
+                                <th className="px-4 py-3">Home Team</th>
+                                <th className="px-4 py-3 text-center">Score</th>
+                                <th className="px-4 py-3 text-right">Away Team</th>
+                                <th className="px-4 py-3">Venue</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {group.matches.map((match) => (
+                                <ResultRow key={text(match, ["id"])} match={match} />
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <div className="grid gap-3 p-3 lg:hidden">
+                          {group.matches.map((match) => (
+                            <MobileResultRow key={text(match, ["id"])} match={match} />
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })
+            : null}
         </div>
       </div>
     </section>

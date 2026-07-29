@@ -89,6 +89,33 @@ function isKswMatch(match: Row) {
   );
 }
 
+function isKswMatchByFlag(match: Row) {
+  return match.home_team_is_ksw === true || match.away_team_is_ksw === true;
+}
+
+function matchScoreLabel(match: Row) {
+  const homeScore = match.home_score;
+  const awayScore = match.away_score;
+  const hasScore = typeof homeScore === "number" && typeof awayScore === "number";
+  return hasScore ? `${homeScore} - ${awayScore}` : "VS";
+}
+
+function kswBadgeFromMatch(match: Row) {
+  const homeScore = match.home_score;
+  const awayScore = match.away_score;
+  const hasScore = typeof homeScore === "number" && typeof awayScore === "number";
+  const homeIsKsw = match.home_team_is_ksw === true;
+  const awayIsKsw = match.away_team_is_ksw === true;
+
+  if (!hasScore || (!homeIsKsw && !awayIsKsw)) return null;
+  if (homeScore === awayScore) return { label: "D", className: "border-slate-300 bg-slate-100 text-slate-700" };
+
+  const kswWon = homeIsKsw ? homeScore > awayScore : awayScore > homeScore;
+  return kswWon
+    ? { label: "W", className: "border-emerald-500/30 bg-emerald-50 text-emerald-700" }
+    : { label: "L", className: "border-[#9b1c1f]/30 bg-[#9b1c1f]/10 text-[#9b1c1f]" };
+}
+
 function latestStandingSnapshotRows(rows: Row[]) {
   const latestSnapshotId = text(rows[0], ["snapshot_id"], "");
   if (latestSnapshotId) return rows.filter((row) => text(row, ["snapshot_id"], "") === latestSnapshotId);
@@ -103,6 +130,24 @@ function dateRange(competition: Row) {
 
   if (startDate && endDate && startDate !== endDate) return `${startDate} - ${endDate}`;
   return startDate || endDate;
+}
+
+function editionLabel(competition: Row) {
+  const edition = number(competition, ["edition_number"]);
+  if (!edition) return "";
+
+  const suffix =
+    edition % 100 >= 11 && edition % 100 <= 13
+      ? "th"
+      : edition % 10 === 1
+        ? "st"
+        : edition % 10 === 2
+          ? "nd"
+          : edition % 10 === 3
+            ? "rd"
+            : "th";
+
+  return `${edition}${suffix} Edition`;
 }
 
 function sponsorTierGroup(sponsor: Row | undefined) {
@@ -319,18 +364,185 @@ function HeroCover({ competition }: { competition: Row }) {
   );
 }
 
+function TournamentOverview({
+  competition,
+  matches,
+  scheduledMatches,
+  teams,
+}: {
+  competition: Row;
+  matches: Row[];
+  scheduledMatches: Row[];
+  teams: Row[];
+}) {
+  const description = text(competition, ["description"], "");
+  const stats = [
+    ["Edition", editionLabel(competition)],
+    ["Dates", dateRange(competition)],
+    ["Location", text(competition, ["location"], "")],
+    ["Teams", teams.length ? String(teams.length) : ""],
+    ["Matches", String(matches.length + scheduledMatches.length)],
+    ["Status", statusLabel(text(competition, ["season_status"], "active"), text(competition, ["competition_type"], "cup"))],
+  ].filter(([, value]) => value);
+
+  return (
+    <section className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10" id="overview">
+      <div className="rounded-2xl border border-[#d8ad45]/30 bg-white p-5 shadow-xl shadow-slate-900/10 sm:p-6">
+        <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">Tournament Overview</p>
+        <h2 className="mt-3 text-2xl font-black text-[#061426]">About the Tournament</h2>
+        {description ? (
+          <p className="mt-4 max-w-4xl whitespace-pre-line text-sm leading-7 text-slate-700 sm:text-base">
+            {description}
+          </p>
+        ) : null}
+        {stats.length ? (
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {stats.map(([label, value]) => (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4" key={label}>
+                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">{label}</p>
+                <p className="mt-2 text-lg font-black text-[#061426]">{value}</p>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function TournamentJourneyCard({ match }: { match: Row }) {
+  const matchDate = match.match_date ?? match.date ?? match.kickoff_at;
+  const homeName = text(match, ["home_team_name"], "Home team unavailable");
+  const awayName = text(match, ["away_team_name"], "Away team unavailable");
+  const homeShortName = text(match, ["home_team_short_name"], teamInitials({ team_name: homeName }));
+  const awayShortName = text(match, ["away_team_short_name"], teamInitials({ team_name: awayName }));
+  const badge = kswBadgeFromMatch(match);
+  const venue = text(match, ["venue"], "");
+  const status = text(match, ["status"], "");
+
+  return (
+    <article className="rounded-xl border border-[#d8ad45]/30 bg-white p-4 shadow-lg shadow-slate-900/5">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+          {formatDateTime(matchDate) || "Date TBC"}
+        </p>
+        <div className="flex items-center gap-2">
+          {badge ? (
+            <span className={`inline-flex size-7 items-center justify-center rounded-full border text-xs font-black ${badge.className}`}>
+              {badge.label}
+            </span>
+          ) : null}
+          {status ? (
+            <span className="rounded-full border border-[#d8ad45]/35 bg-[#fff4dc] px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#061426]">
+              {status}
+            </span>
+          ) : null}
+        </div>
+      </div>
+      <div className="grid grid-cols-[minmax(0,1fr)_82px_minmax(0,1fr)] items-center gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <TeamLogo className="!size-8" initials={homeShortName} logoUrl={text(match, ["home_team_logo_url"], "")} teamName={homeName} />
+          <p className="min-w-0 text-wrap text-sm font-black leading-5 text-[#061426]">{homeName}</p>
+        </div>
+        <span className="inline-flex items-center justify-center rounded-full border border-[#d8ad45]/40 bg-[#061426] px-3 py-2 text-sm font-black text-white">
+          {matchScoreLabel(match)}
+        </span>
+        <div className="flex min-w-0 items-center justify-end gap-2 text-right">
+          <p className="min-w-0 text-wrap text-sm font-black leading-5 text-[#061426]">{awayName}</p>
+          <TeamLogo className="!size-8" initials={awayShortName} logoUrl={text(match, ["away_team_logo_url"], "")} teamName={awayName} />
+        </div>
+      </div>
+      {venue ? <p className="mt-3 text-xs font-bold text-slate-500">Field {venue}</p> : null}
+    </article>
+  );
+}
+
+function TournamentJourney({ matches }: { matches: Row[] }) {
+  if (!matches.length) return null;
+
+  return (
+    <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="ksw-journey">
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
+        <div className="border-b border-slate-200 px-4 py-5 sm:px-6">
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">KSW Tournament Journey</p>
+          <h2 className="mt-2 text-2xl font-black">KSW Match Journey</h2>
+        </div>
+        <div className="grid gap-3 bg-slate-100 px-4 py-5 sm:px-6">
+          {matches.map((match) => (
+            <TournamentJourneyCard key={text(match, ["id"])} match={match} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TournamentTeams({ teams }: { teams: Row[] }) {
+  if (!teams.length) return null;
+
+  return (
+    <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="participating-teams">
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10 sm:p-6">
+        <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">Participating Teams</p>
+        <h2 className="mt-2 text-2xl font-black">Clubs in This Tournament</h2>
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {teams.map((team) => {
+            const teamName = text(team, ["name"], "Team unavailable");
+            const shortName = text(team, ["short_name"], "");
+            return (
+              <div
+                className={`min-w-0 rounded-lg border p-4 shadow-sm ${
+                  team.is_ksw === true ? "border-[#d8ad45]/60 bg-[#fff9ea]" : "border-slate-200 bg-slate-50"
+                }`}
+                key={text(team, ["id"])}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <TeamLogo className="size-10" initials={teamInitials(team)} logoUrl={text(team, ["logo_url"], "")} teamName={teamName} />
+                  <div className="min-w-0">
+                    <p className="min-w-0 text-wrap text-sm font-black leading-5 text-[#061426]">{teamName}</p>
+                    {shortName ? <p className="mt-1 text-xs font-bold text-slate-500">{shortName}</p> : null}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TournamentLegacy({ competition }: { competition: Row }) {
+  const copy =
+    text(competition, ["short_description"], "") ||
+    text(competition, ["description"], "") ||
+    "This tournament is preserved as part of the KSW Chronicle.";
+
+  return (
+    <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
+      <div className="rounded-2xl border border-[#d8ad45]/25 bg-[#061426] p-5 text-white shadow-xl shadow-slate-900/20 sm:p-6">
+        <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]">Tournament Legacy</p>
+        <h2 className="mt-2 text-2xl font-black">A Chapter in KSW History</h2>
+        <p className="mt-4 max-w-3xl whitespace-pre-line text-sm leading-7 text-slate-300">{copy}</p>
+      </div>
+    </section>
+  );
+}
+
 export function CompetitionDetailPage({ data }: { data: CompetitionDetailData }) {
   const { competition, matches, scheduledMatches, snapshots, sponsors, standings, teams } = data;
   const competitionType = text(competition, ["competition_type"], "league").toLowerCase();
   const seasonStatus = text(competition, ["season_status"], "active").toLowerCase();
   const isLeague = competitionType === "league";
   const isFriendly = competitionType === "friendly";
+  const isTournamentArchive = competitionType === "cup" || competitionType === "tournament";
   const sortedStandings = sortStandings(standings);
   const kswIndex = sortedStandings.findIndex(isKswRow);
   const kswStanding = kswIndex >= 0 ? sortedStandings[kswIndex] : undefined;
   const kswMatchesNewest = matches.filter(isKswMatch).sort((a, b) => matchTime(b) - matchTime(a));
   const kswMatchesOldest = [...kswMatchesNewest].reverse();
   const allFixtures = [...scheduledMatches, ...matches].sort((a, b) => matchTime(a) - matchTime(b));
+  const kswTournamentJourney = allFixtures.filter(isKswMatchByFlag).sort((a, b) => matchTime(a) - matchTime(b));
   const summaryStats = kswStanding
     ? [
         [seasonStatus === "completed" ? "Final Position" : "Current Position", `${kswIndex + 1} / ${sortedStandings.length}`],
@@ -347,6 +559,92 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
     dateRange(competition),
     text(competition, ["location"], ""),
   ].filter(Boolean);
+
+  if (isTournamentArchive) {
+    const tournamentMetadata = [
+      editionLabel(competition),
+      text(competition, ["season"], ""),
+      dateRange(competition),
+      text(competition, ["location"], ""),
+    ].filter(Boolean);
+    const tournamentCtas = [
+      ["Overview", "#overview", true],
+      ["KSW Journey", "#ksw-journey", kswTournamentJourney.length > 0],
+      ["Tournament Results", "#tournament-results", matches.length > 0],
+      ["Participating Teams", "#participating-teams", teams.length > 0],
+      ["Partners", "#partners", sponsors.some((sponsor) => sponsor.is_active !== false)],
+    ] as const;
+
+    return (
+      <main className="min-h-screen overflow-x-hidden bg-slate-100 text-[#061426]">
+        <section className="bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.2),transparent_34%),linear-gradient(135deg,#061426,#091f39)] text-white">
+          <div className="mx-auto grid w-full max-w-7xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.72fr)] lg:px-10">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.24em] text-[#d8ad45]">
+                {typeLabel(competitionType)}
+              </p>
+              <h1 className="mt-4 max-w-4xl text-4xl font-black tracking-tight sm:text-5xl">
+                {text(competition, ["name"], "Competition")}
+              </h1>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <span className="rounded-full border border-[#d8ad45]/35 bg-[#d8ad45]/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.16em] text-[#f4d58a]">
+                  {statusLabel(seasonStatus, competitionType)}
+                </span>
+                {tournamentMetadata.map((item) => (
+                  <span className="rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5 text-xs font-bold text-slate-200" key={item}>
+                    {item}
+                  </span>
+                ))}
+              </div>
+              {text(competition, ["short_description"], "") ? (
+                <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300">
+                  {text(competition, ["short_description"], "")}
+                </p>
+              ) : null}
+              <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                {tournamentCtas
+                  .filter(([, , visible]) => visible)
+                  .map(([label, href]) => (
+                    <Link
+                      className={`inline-flex items-center justify-center rounded-md px-5 py-3 text-sm font-black transition-colors ${
+                        href === "#overview"
+                          ? "bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] text-[#061426] shadow-lg shadow-[#d8ad45]/15 hover:scale-[1.02]"
+                          : "border border-[#d8ad45]/50 bg-white/[0.03] text-[#f4d58a] backdrop-blur hover:bg-[#d8ad45]/10"
+                      }`}
+                      href={href}
+                      key={href}
+                    >
+                      {label}
+                    </Link>
+                  ))}
+              </div>
+            </div>
+            <HeroCover competition={competition} />
+          </div>
+        </section>
+
+        <TournamentOverview
+          competition={competition}
+          matches={matches}
+          scheduledMatches={scheduledMatches}
+          teams={teams}
+        />
+        <TournamentJourney matches={kswTournamentJourney} />
+        {matches.length ? (
+          <CompetitionResultsTable
+            isLeague={false}
+            matches={matches}
+            sectionId="tournament-results"
+            subtitle="Complete results from every match in this tournament."
+            title="Tournament Results"
+          />
+        ) : null}
+        <TournamentTeams teams={teams} />
+        {seasonStatus === "completed" ? <TournamentLegacy competition={competition} /> : null}
+        <SponsorsSection sponsors={sponsors} />
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-slate-100 text-[#061426]">
