@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TeamLogo } from "@/components/team-logo";
+import { loadCompetitionParticipants } from "@/lib/competition-participants";
 import { getSupabase } from "@/lib/supabase";
 
 type Row = Record<string, unknown>;
 
 const competitionColumns =
   "id, name, season, slug, short_description, description, cover_image_url, edition_number, start_date, end_date, location, display_order, competition_type, season_status, is_active, is_featured, is_published, created_at";
-const teamColumns = "id, name, short_name, logo_url, is_ksw, is_active";
 const matchColumns =
   "id, match_date, home_team_id, away_team_id, home_score, away_score, venue, status";
 
@@ -145,10 +145,7 @@ async function loadWorkspaceData(id: string) {
   }
 
   const [teams, matches] = await Promise.all([
-    runQuery(
-      "workspace_teams",
-      supabase.from("teams").select(teamColumns).eq("league_id", id).order("name", { ascending: true }),
-    ),
+    loadCompetitionParticipants(supabase, id, { includeInactiveParticipants: false }),
     runQuery(
       "workspace_matches",
       supabase.from("matches").select(matchColumns).eq("league_id", id).order("match_date", { ascending: true }),

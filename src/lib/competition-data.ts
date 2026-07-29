@@ -1,4 +1,5 @@
 import { getSupabase, getSupabaseConfig } from "@/lib/supabase";
+import { loadCompetitionParticipants } from "@/lib/competition-participants";
 
 export type Row = Record<string, unknown>;
 
@@ -10,7 +11,6 @@ export const matchColumns =
   "id, league_id, match_date, home_team_id, away_team_id, home_score, away_score, venue, status, match_type";
 export const snapshotColumns =
   "snapshot_id, league_id, team_id, position, played, won, drawn, lost, goals_for, goals_against, goal_difference, points, matchday, created_at";
-export const teamColumns = "id, league_id, name, short_name, logo_url, is_ksw, is_active";
 export const sponsorColumns = "id, name, logo_url, website_url, tier, sort_order, is_active";
 
 export const legacySeasonSlug = "thai-lawyers-league-season-6";
@@ -206,10 +206,7 @@ export async function loadCompetitionDetailData(competition: Row) {
         .order("created_at", { ascending: false })
         .limit(100),
     ),
-    runSupabaseQuery(
-      "competition_teams",
-      supabase.from("teams").select(teamColumns).eq("league_id", leagueId).order("name", { ascending: true }),
-    ),
+    loadCompetitionParticipants(supabase, leagueId, { includeInactiveParticipants: false }),
     runSupabaseQuery(
       "competition_sponsors",
       supabase.from("sponsors").select(sponsorColumns).order("sort_order", { ascending: true, nullsFirst: false }),

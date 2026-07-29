@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { LiveCountdown } from "@/components/live-countdown";
 import { TeamLogo } from "@/components/team-logo";
+import { loadCompetitionParticipants } from "@/lib/competition-participants";
 import { getSupabase, getSupabaseConfig } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +9,6 @@ export const revalidate = 0;
 
 type Row = Record<string, unknown>;
 
-const teamColumns = "id, name, short_name, logo_url, is_ksw";
 const standingsColumns =
   "team_id, league_id, team_name, short_name, logo_url, is_ksw, played, won, drawn, lost, goals_for, goals_against, goal_difference, points";
 const matchColumns =
@@ -579,18 +579,9 @@ async function loadHomeData() {
   const currentCompetition = selectCurrentCompetition(competitionRows);
   const currentCompetitionId = text(currentCompetition, ["id"], "");
 
-  const [teams, allTeams, standings, finishedMatches, scheduledMatches, sponsors] = await Promise.all([
+  const [allTeams, standings, finishedMatches, scheduledMatches, sponsors] = await Promise.all([
     currentCompetitionId
-      ? runSupabaseQuery(
-          "teams",
-          supabase.from("teams").select(teamColumns).eq("league_id", currentCompetitionId).eq("is_ksw", true),
-        )
-      : Promise.resolve([] as Row[]),
-    currentCompetitionId
-      ? runSupabaseQuery(
-          "teams_all",
-          supabase.from("teams").select(teamColumns).eq("league_id", currentCompetitionId),
-        )
+      ? loadCompetitionParticipants(supabase, currentCompetitionId, { includeInactiveParticipants: false })
       : Promise.resolve([] as Row[]),
     currentCompetitionId
       ? runSupabaseQuery(
@@ -633,14 +624,14 @@ async function loadHomeData() {
     ),
   ]);
 
-  const teamRows = allTeams.length ? allTeams : teams;
+  const teams = allTeams.filter((team) => team.is_ksw === true);
 
   return {
     configured: true,
     teams,
     standings,
-    matches: withMatchTeams(finishedMatches, teamRows),
-    scheduledMatches: withMatchTeams(scheduledMatches, teamRows),
+    matches: withMatchTeams(finishedMatches, allTeams),
+    scheduledMatches: withMatchTeams(scheduledMatches, allTeams),
     sponsors,
     currentCompetition,
   };
