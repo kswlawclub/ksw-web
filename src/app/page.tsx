@@ -13,7 +13,8 @@ const standingsColumns =
   "team_id, league_id, team_name, short_name, logo_url, is_ksw, played, won, drawn, lost, goals_for, goals_against, goal_difference, points";
 const matchColumns =
   "id, league_id, match_date, home_team_id, away_team_id, home_score, away_score, venue, status, match_type";
-const leagueColumns = "id, name, season, slug, competition_type, season_status, is_active, created_at";
+const leagueColumns =
+  "id, name, season, slug, competition_type, season_status, is_active, is_published, is_featured, display_order, start_date, end_date, created_at";
 const sponsorColumns =
   "id, name, logo_url, website_url, tier, sort_order, is_active";
 
@@ -153,25 +154,15 @@ function fixtureDateValue(match: Row) {
   return match.match_date ?? match.date ?? match.kickoff_at;
 }
 
-function isKswName(value: string) {
-  return value.toLowerCase().includes("ksw");
-}
-
 function isKswFixture(match: Row) {
-  return (
-    isKswName(text(match, ["home_team_name"], "")) ||
-    isKswName(text(match, ["away_team_name"], "")) ||
-    isKswName(text(match, ["home_team_short_name"], "")) ||
-    isKswName(text(match, ["away_team_short_name"], ""))
-  );
+  return match.home_team_is_ksw === true || match.away_team_is_ksw === true;
 }
 
 function opponentForKsw(match: Row) {
   const homeName = text(match, ["home_team_name"], "Home team unavailable");
   const awayName = text(match, ["away_team_name"], "Away team unavailable");
-  const homeShortName = text(match, ["home_team_short_name"], "");
 
-  return isKswName(homeName) || isKswName(homeShortName) ? awayName : homeName;
+  return match.home_team_is_ksw === true ? awayName : homeName;
 }
 
 function venueNumber(match: Row) {
@@ -243,6 +234,81 @@ function sortUpcomingFixtures(fixtures: Row[]) {
 
 function isString(value: unknown) {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function competitionTypeLabel(type: string) {
+  if (type === "cup") return "Cup";
+  if (type === "tournament") return "Tournament";
+  if (type === "friendly") return "Friendly";
+  return "League";
+}
+
+function competitionStatusLabel(status: string) {
+  if (status === "completed") return "Completed";
+  if (status === "upcoming") return "Upcoming";
+  return "Active";
+}
+
+function competitionStatusPriority(status: string) {
+  if (status === "active") return 0;
+  if (status === "upcoming") return 1;
+  if (status === "completed") return 2;
+  return 3;
+}
+
+function dateSortValue(row: Row) {
+  const value = text(row, ["start_date", "end_date", "created_at"], "");
+  const time = value ? new Date(value).getTime() : Number.NaN;
+  return Number.isNaN(time) ? 0 : time;
+}
+
+function displayOrderValue(row: Row) {
+  const value = row.display_order;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() && !Number.isNaN(Number(value))) return Number(value);
+  return 0;
+}
+
+function createdAtValue(row: Row) {
+  const value = text(row, ["created_at"], "");
+  const time = value ? new Date(value).getTime() : Number.NaN;
+  return Number.isNaN(time) ? 0 : time;
+}
+
+function selectCurrentCompetition(rows: Row[]) {
+  return [...rows]
+    .filter((row) => row.is_published === true)
+    .sort((a, b) => {
+      const statusDiff =
+        competitionStatusPriority(text(a, ["season_status"], "active").toLowerCase()) -
+        competitionStatusPriority(text(b, ["season_status"], "active").toLowerCase());
+      if (statusDiff) return statusDiff;
+
+      const featuredDiff = Number(b.is_featured === true) - Number(a.is_featured === true);
+      if (featuredDiff) return featuredDiff;
+
+      const displayOrderDiff = displayOrderValue(a) - displayOrderValue(b);
+      if (displayOrderDiff) return displayOrderDiff;
+
+      const dateDiff = dateSortValue(b) - dateSortValue(a);
+      if (dateDiff) return dateDiff;
+
+      return createdAtValue(b) - createdAtValue(a);
+    })[0];
+}
+
+function kswOutcome(match: Row) {
+  const homeScore = match.home_score;
+  const awayScore = match.away_score;
+  const hasScore = typeof homeScore === "number" && typeof awayScore === "number";
+  const homeIsKsw = match.home_team_is_ksw === true;
+  const awayIsKsw = match.away_team_is_ksw === true;
+
+  if (!hasScore || (!homeIsKsw && !awayIsKsw)) return "";
+  if (homeScore === awayScore) return "DRAW";
+
+  const kswWon = homeIsKsw ? homeScore > awayScore : awayScore > homeScore;
+  return kswWon ? "WIN" : "LOSS";
 }
 
 function teamInitials(row: Row) {
@@ -367,6 +433,7 @@ function teamById(teams: Row[]) {
         name: text(team, ["name", "short_name"], "Team unavailable"),
         shortName: text(team, ["short_name"], ""),
         logoUrl: text(team, ["logo_url"], ""),
+        isKsw: team.is_ksw === true,
       },
     ]),
   );
@@ -389,9 +456,11 @@ function withMatchTeams(matches: Row[], teams: Row[]): Row[] {
       home_team_name: homeTeam?.name ?? "Home team unavailable",
       home_team_short_name: homeTeam?.shortName ?? "",
       home_team_logo_url: homeTeam?.logoUrl ?? "",
+      home_team_is_ksw: homeTeam?.isKsw === true,
       away_team_name: awayTeam?.name ?? "Away team unavailable",
       away_team_short_name: awayTeam?.shortName ?? "",
       away_team_logo_url: awayTeam?.logoUrl ?? "",
+      away_team_is_ksw: awayTeam?.isKsw === true,
       score: hasScore ? `${homeScore} - ${awayScore}` : "VS",
     } satisfies Row;
   });
@@ -495,73 +564,61 @@ async function loadHomeData() {
       matches: [] as Row[],
       scheduledMatches: [] as Row[],
       sponsors: [] as Row[],
-      currentLeague: undefined as Row | undefined,
+      currentCompetition: undefined as Row | undefined,
     };
   }
 
-  const leagueQuery = () =>
+  const competitionRows = await runSupabaseQuery(
+    "current_competitions",
     supabase
       .from("leagues")
       .select(leagueColumns)
-      .eq("is_active", true)
-      .order("created_at", { ascending: false })
-      .limit(1);
-  const leagueRows = await runSupabaseQuery(
-    "current_league",
-    supabase
-      .from("leagues")
-      .select(leagueColumns)
-      .eq("is_active", true)
-      .eq("competition_type", "league")
-      .order("created_at", { ascending: false })
-      .limit(1),
+      .eq("is_published", true)
+      .order("created_at", { ascending: false }),
   );
-  const currentLeagueRows = leagueRows.length
-    ? leagueRows
-    : await runSupabaseQuery("current_league_fallback", leagueQuery());
-  const currentLeague = currentLeagueRows[0];
-  const currentLeagueId = text(currentLeague, ["id"], "");
+  const currentCompetition = selectCurrentCompetition(competitionRows);
+  const currentCompetitionId = text(currentCompetition, ["id"], "");
 
   const [teams, allTeams, standings, finishedMatches, scheduledMatches, sponsors] = await Promise.all([
-    currentLeagueId
+    currentCompetitionId
       ? runSupabaseQuery(
           "teams",
-          supabase.from("teams").select(teamColumns).eq("league_id", currentLeagueId).eq("is_ksw", true),
+          supabase.from("teams").select(teamColumns).eq("league_id", currentCompetitionId).eq("is_ksw", true),
         )
       : Promise.resolve([] as Row[]),
-    currentLeagueId
+    currentCompetitionId
       ? runSupabaseQuery(
           "teams_all",
-          supabase.from("teams").select(teamColumns).eq("league_id", currentLeagueId),
+          supabase.from("teams").select(teamColumns).eq("league_id", currentCompetitionId),
         )
       : Promise.resolve([] as Row[]),
-    currentLeagueId
+    currentCompetitionId
       ? runSupabaseQuery(
           "league_standings_view",
           supabase
             .from("league_standings_view")
             .select(standingsColumns)
-            .eq("league_id", currentLeagueId),
+            .eq("league_id", currentCompetitionId),
         )
       : Promise.resolve([] as Row[]),
-    currentLeagueId
+    currentCompetitionId
       ? runSupabaseQuery(
           "finished_matches",
           supabase
             .from("matches")
             .select(matchColumns)
-            .eq("league_id", currentLeagueId)
+            .eq("league_id", currentCompetitionId)
             .eq("status", "finished")
             .order("match_date", { ascending: false })
         )
       : Promise.resolve([] as Row[]),
-    currentLeagueId
+    currentCompetitionId
       ? runSupabaseQuery(
           "scheduled_matches",
           supabase
             .from("matches")
             .select(matchColumns)
-            .eq("league_id", currentLeagueId)
+            .eq("league_id", currentCompetitionId)
             .eq("status", "scheduled")
             .order("match_date", { ascending: true })
             .limit(16),
@@ -585,12 +642,12 @@ async function loadHomeData() {
     matches: withMatchTeams(finishedMatches, teamRows),
     scheduledMatches: withMatchTeams(scheduledMatches, teamRows),
     sponsors,
-    currentLeague,
+    currentCompetition,
   };
 }
 
 export default async function Home() {
-  const { configured, teams, standings, matches, scheduledMatches, sponsors, currentLeague } = await loadHomeData();
+  const { configured, teams, standings, matches, scheduledMatches, sponsors, currentCompetition } = await loadHomeData();
   const club = teams[0];
   const logoUrl = isString(club?.logo_url) ? String(club?.logo_url) : "/team-logos/ksw-lc.png";
   const sponsorGroups = groupSponsorsByTier(sponsors);
@@ -618,10 +675,20 @@ export default async function Home() {
 	    },
 	  ];
   const now = new Date();
-  const sortedScheduledMatches = sortUpcomingFixtures(scheduledMatches);
+  const competitionStatus = text(currentCompetition, ["season_status"], "active").toLowerCase();
+  const competitionType = text(currentCompetition, ["competition_type"], "league").toLowerCase();
+  const competitionName = text(currentCompetition, ["name"], "KSW Chronicle");
+  const competitionSlug = text(currentCompetition, ["slug"], "");
+  const competitionHref = competitionSlug ? `/competitions/${competitionSlug}` : "/competitions";
+  const competitionAnchorHref = competitionSlug ? competitionHref : "/competitions";
+  const hasCompetitionLink = Boolean(competitionSlug);
+  const isCompetitionCompleted = competitionStatus === "completed";
+  const isLeagueCompetition = competitionType === "league";
+  const isTournamentCompetition = competitionType === "cup" || competitionType === "tournament";
+  const sortedScheduledMatches = sortUpcomingFixtures(scheduledMatches.filter(isKswFixture));
   const upcomingKswMatches = sortedScheduledMatches.filter((match) => {
     const matchTime = fixtureTimeValue(match);
-    return isKswFixture(match) && matchTime >= now.getTime();
+    return matchTime >= now.getTime();
   });
   const nextKswDateKey = upcomingKswMatches[0]
     ? bangkokDateKey(fixtureDateValue(upcomingKswMatches[0]))
@@ -645,7 +712,7 @@ export default async function Home() {
     },
     [],
   );
-	  const sortedStandings = [...standings].sort((a, b) => {
+  const sortedStandings = [...standings].sort((a, b) => {
     const pointsDiff = number(b, ["points", "pts"]) - number(a, ["points", "pts"]);
     if (pointsDiff) return pointsDiff;
 
@@ -659,20 +726,9 @@ export default async function Home() {
       text(b, ["team_name", "name", "team"]),
     );
   });
-  const seasonStatus = text(currentLeague, ["season_status"], "active").toLowerCase();
-  const isSeasonCompleted = seasonStatus === "completed";
-  const currentLeagueSlug = text(currentLeague, ["slug"], "");
-  const seasonArchiveHref = currentLeagueSlug ? `/competitions/${currentLeagueSlug}` : "/competitions";
-  const seasonResultsHref = currentLeagueSlug ? `${seasonArchiveHref}#ksw-results` : "/competitions";
-  const kswStandingIndex = sortedStandings.findIndex(
-    (row) => row.is_ksw === true || text(row, ["team_name", "name", "team"]).toLowerCase().includes("ksw"),
-  );
+  const kswStandingIndex = sortedStandings.findIndex((row) => row.is_ksw === true);
 	  const kswStanding = kswStandingIndex >= 0 ? sortedStandings[kswStandingIndex] : undefined;
-	  const finalPositionText = kswStanding
-	    ? `${kswStandingIndex + 1} / ${sortedStandings.length}`
-	    : isSeasonCompleted
-	      ? "Season Complete"
-	      : "Unavailable";
+	  const finalPositionText = kswStanding ? `${kswStandingIndex + 1} / ${sortedStandings.length}` : "";
   const finalKswStats = kswStanding
     ? [
         ["Played", number(kswStanding, ["played", "p"])],
@@ -690,6 +746,53 @@ export default async function Home() {
         typeof match.away_score === "number",
     )
     .slice(0, 5);
+  const finishedKswMatches = matches.filter(
+    (match) =>
+      isKswFixture(match) &&
+      typeof match.home_score === "number" &&
+      typeof match.away_score === "number",
+  );
+  const tournamentRecord = finishedKswMatches.reduce<{ wins: number; draws: number; losses: number }>(
+    (record, match) => {
+      const outcome = kswOutcome(match);
+      if (outcome === "WIN") record.wins += 1;
+      if (outcome === "DRAW") record.draws += 1;
+      if (outcome === "LOSS") record.losses += 1;
+      return record;
+    },
+    { wins: 0, draws: 0, losses: 0 },
+  );
+  const competitionSummaryStats = isLeagueCompetition
+    ? finalKswStats
+    : [
+        ["KSW Matches", finishedKswMatches.length + sortedScheduledMatches.length],
+        ["Finished", finishedKswMatches.length],
+        ["Upcoming", sortedScheduledMatches.length],
+        ["Won", tournamentRecord.wins],
+        ["Drawn", tournamentRecord.draws],
+        ["Lost", tournamentRecord.losses],
+      ];
+  const summaryTitle = isLeagueCompetition
+    ? "KSW Season Summary"
+    : isTournamentCompetition
+      ? "KSW Tournament Summary"
+      : "KSW Match Summary";
+  const summarySubtitle = isLeagueCompetition
+    ? kswStanding
+      ? `${competitionName} ${isCompetitionCompleted ? "has concluded." : "league numbers are tracking live."}`
+      : `KSW standings are not available for ${competitionName}.`
+    : `KSW match numbers from ${competitionName}.`;
+  const resultsCtaLabel = isLeagueCompetition
+    ? "View All Season Results"
+    : isTournamentCompetition
+      ? "View Tournament Results"
+      : "View Match Archive";
+  const heroPrimaryHref = !isCompetitionCompleted && upcomingKswMatches.length ? "/#next-fixtures" : competitionAnchorHref;
+  const heroPrimaryLabel = !isCompetitionCompleted && upcomingKswMatches.length
+    ? "View Next Fixtures"
+    : hasCompetitionLink
+      ? "View Competition"
+      : "Open KSW Chronicle";
   const resultGroups = recentKswResults.reduce<Array<{ key: string; date: unknown; matches: Row[] }>>(
     (groups, match) => {
       const matchDate = match.match_date ?? match.date ?? match.kickoff_at;
@@ -744,14 +847,22 @@ export default async function Home() {
               ชุมชนฟุตบอลนักกฎหมายที่รวมการแข่งขัน มิตรภาพ และเครือข่ายวิชาชีพไว้ในสนามเดียวกัน
             </p>
             <div className="mt-5 inline-flex max-w-full items-center rounded-full border border-[#d8ad45]/35 bg-[#d8ad45]/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-[#f4d58a] shadow-lg shadow-[#d8ad45]/10 sm:text-xs">
-              THAI LAWYERS LEAGUE • SEASON 6
+              {competitionTypeLabel(competitionType)} • {competitionStatusLabel(competitionStatus)}
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm font-bold text-slate-300">
+              <span className="min-w-0">{competitionName}</span>
+              {hasCompetitionLink ? (
+                <Link className="text-[#f4d58a] underline-offset-4 hover:underline" href={competitionHref}>
+                  View Competition
+                </Link>
+              ) : null}
             </div>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <Link
                 className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/15 transition-transform hover:scale-[1.02]"
-                href={isSeasonCompleted ? seasonArchiveHref : "/#next-fixtures"}
+                href={heroPrimaryHref}
               >
-                {isSeasonCompleted ? "View Season Archive" : "View Next Fixtures"}
+                {heroPrimaryLabel}
               </Link>
               <Link
                 className="inline-flex items-center justify-center rounded-md border border-[#d8ad45]/50 bg-white/[0.03] px-5 py-3 text-sm font-black text-[#f4d58a] backdrop-blur transition-colors hover:bg-[#d8ad45]/10"
@@ -902,7 +1013,7 @@ export default async function Home() {
         </div>
 	      </section>
 
-      {!isSeasonCompleted ? (
+      {!isCompetitionCompleted ? (
         <section className="bg-slate-100">
           <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
             <div id="next-fixtures" className="min-w-0 overflow-hidden rounded-2xl border border-[#d8ad45]/35 bg-[linear-gradient(135deg,#061426,#0b2745_58%,#071b31)] shadow-2xl shadow-[#061426]/25">
@@ -917,8 +1028,8 @@ export default async function Home() {
                     <h2 className="text-2xl font-black tracking-tight text-white sm:text-3xl">
                       Next Fixtures
                     </h2>
-                    <p className="mt-1 text-sm font-semibold text-slate-300">
-                      Upcoming KSW match schedule.
+                      <p className="mt-1 text-sm font-semibold text-slate-300">
+                      Upcoming KSW match schedule in {competitionName}.
                     </p>
                   </div>
                 </div>
@@ -959,9 +1070,8 @@ export default async function Home() {
                       <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f4d58a]">
                         Next Kickoff
                       </p>
-                      <p className="mt-2 text-3xl font-black text-white">TBC</p>
-                      <p className="mt-1 text-sm font-bold text-slate-300">
-                        KSW match schedule to be confirmed
+                      <p className="mt-2 text-sm font-bold text-slate-200">
+                        No upcoming KSW fixtures in this competition.
                       </p>
                     </div>
                   )}
@@ -1135,14 +1245,14 @@ export default async function Home() {
                     </div>
                   ))
                 ) : (
-                  <p className="rounded-xl border border-white/10 bg-white/[0.08] px-4 py-8 text-slate-200 sm:px-5">
-                    No scheduled fixtures available.
+                  <p className="rounded-xl border border-white/10 bg-white/[0.08] px-4 py-4 text-sm font-semibold text-slate-200 sm:px-5">
+                    No upcoming KSW fixtures in {competitionName}.
                   </p>
                 )}
               </div>
               <div className="border-t border-[#d8ad45]/15 px-4 py-3 text-right sm:px-6">
                 <p className="text-xs font-semibold leading-5 text-slate-400">
-                  ข้อมูลการแข่งขันอ้างอิงจากฝ่ายจัดการแข่งขัน Thai Lawyers League Season 6
+                  ข้อมูลการแข่งขันอ้างอิงจาก {competitionName}
                 </p>
               </div>
             </div>
@@ -1153,7 +1263,9 @@ export default async function Home() {
       <section id="season-summary" className="bg-slate-100">
         <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
         <div className="min-w-0 overflow-hidden rounded-2xl border border-[#d8ad45]/35 bg-[linear-gradient(135deg,#061426,#0b2745_58%,#071b31)] shadow-2xl shadow-[#061426]/25">
-          <div className="grid gap-5 border-b border-[#d8ad45]/20 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+          <div className={`grid gap-5 border-b border-[#d8ad45]/20 px-4 py-5 sm:px-6 lg:items-center ${
+            isLeagueCompetition && kswStanding ? "lg:grid-cols-[minmax(0,1fr)_auto]" : ""
+          }`}>
             <div className="flex min-w-0 items-start gap-3">
               <span className="mt-1 inline-flex size-11 shrink-0 items-center justify-center rounded-full border border-[#d8ad45]/35 bg-[#d8ad45]/10 text-[#f4d58a] shadow-lg shadow-[#d8ad45]/10">
                 <svg aria-hidden="true" className="size-5" fill="currentColor" viewBox="0 0 24 24">
@@ -1162,46 +1274,50 @@ export default async function Home() {
               </span>
               <div>
                 <h2 className="text-2xl font-black tracking-tight text-white sm:text-3xl">
-                  {isSeasonCompleted ? "Season Complete" : "KSW Season Summary"}
+                  {summaryTitle}
                 </h2>
                 <p className="mt-1 text-sm font-semibold text-slate-300">
-                  {isSeasonCompleted
-                    ? "Thai Lawyers League • Season 6 has concluded."
-                    : "Current KSW league numbers from Thai Lawyers League Season 6."}
+                  {summarySubtitle}
                 </p>
               </div>
             </div>
-            <div className="rounded-xl border border-[#d8ad45]/35 bg-white/[0.08] p-4 text-left shadow-xl shadow-black/15 backdrop-blur lg:min-w-64">
-              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f4d58a]">
-                {isSeasonCompleted ? "Final Position" : "Current Position"}
-              </p>
-              <p className="mt-2 text-3xl font-black text-white">{finalPositionText}</p>
-              <p className="mt-1 text-sm font-bold text-slate-300">
-                {isSeasonCompleted ? "KSW L.C. final league standing" : "KSW L.C. league standing"}
-              </p>
-            </div>
+            {isLeagueCompetition && kswStanding ? (
+              <div className="rounded-xl border border-[#d8ad45]/35 bg-white/[0.08] p-4 text-left shadow-xl shadow-black/15 backdrop-blur lg:min-w-64">
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f4d58a]">
+                  {isCompetitionCompleted ? "Final Position" : "Current Position"}
+                </p>
+                <p className="mt-2 text-3xl font-black text-white">{finalPositionText}</p>
+                <p className="mt-1 text-sm font-bold text-slate-300">
+                  {isCompetitionCompleted ? "KSW L.C. final league standing" : "KSW L.C. league standing"}
+                </p>
+              </div>
+            ) : null}
           </div>
           <div className="grid gap-5 px-4 py-5 sm:px-6">
-            {kswStanding ? (
+            {competitionSummaryStats.length ? (
               <div className="rounded-xl border border-white/10 bg-white/[0.08] p-4 shadow-xl shadow-black/15 sm:p-5">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f4d58a]">
-                      {isSeasonCompleted ? "Final Numbers" : "Current Numbers"}
+                      {isCompetitionCompleted ? "Final Numbers" : "Current Numbers"}
                     </p>
                     <h3 className="mt-2 text-xl font-black text-white">
-                      {text(kswStanding, ["team_name", "name", "team"], "KSW L.C.")}
+                      {isLeagueCompetition && kswStanding
+                        ? text(kswStanding, ["team_name", "name", "team"], "KSW L.C.")
+                        : "KSW L.C."}
                     </h3>
                   </div>
-                  <Link
-                    className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/15 transition-transform hover:scale-[1.02]"
-                    href={seasonArchiveHref}
-                  >
-                    View Season Archive
-                  </Link>
+                  {hasCompetitionLink ? (
+                    <Link
+                      className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/15 transition-transform hover:scale-[1.02]"
+                      href={competitionHref}
+                    >
+                      View Competition
+                    </Link>
+                  ) : null}
                 </div>
                 <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
-                  {finalKswStats.map(([label, value]) => (
+                  {competitionSummaryStats.map(([label, value]) => (
                     <div
                       className="rounded-lg border border-white/10 bg-[#061426]/55 px-3 py-3 text-center"
                       key={label}
@@ -1215,13 +1331,13 @@ export default async function Home() {
                 </div>
               </div>
             ) : (
-              <p className="rounded-xl border border-white/10 bg-white/[0.08] px-4 py-8 text-slate-200 sm:px-5">
-                KSW standing details are currently unavailable.
+              <p className="rounded-xl border border-white/10 bg-white/[0.08] px-4 py-4 text-sm font-semibold text-slate-200 sm:px-5">
+                KSW summary details are currently unavailable for {competitionName}.
               </p>
             )}
             <div className="border-t border-[#d8ad45]/15 pt-4 text-right">
               <p className="text-xs font-semibold leading-5 text-slate-400">
-                ข้อมูลการแข่งขันอ้างอิงจากฝ่ายจัดการแข่งขัน Thai Lawyers League Season 6
+                ข้อมูลการแข่งขันอ้างอิงจาก {competitionName}
               </p>
             </div>
           </div>
@@ -1245,18 +1361,18 @@ export default async function Home() {
                   KSW Recent Results
                 </h2>
                 <p className="mt-1 text-sm font-semibold text-slate-600">
-                  {isSeasonCompleted
-                    ? "The latest KSW match results from the completed Season 6 campaign."
-                    : "The latest completed KSW league match results."}
+                  The latest completed KSW match results from {competitionName}.
                 </p>
               </div>
               </div>
-              <Link
-                className="inline-flex items-center justify-center rounded-md bg-[#061426] px-4 py-2.5 text-sm font-black text-[#f4d58a] shadow-lg shadow-slate-900/10 transition-colors hover:bg-[#0b2745]"
-                href={seasonResultsHref}
-              >
-                View All Season Results
-              </Link>
+              {hasCompetitionLink ? (
+                <Link
+                  className="inline-flex items-center justify-center rounded-md bg-[#061426] px-4 py-2.5 text-sm font-black text-[#f4d58a] shadow-lg shadow-slate-900/10 transition-colors hover:bg-[#0b2745]"
+                  href={competitionHref}
+                >
+                  {resultsCtaLabel}
+                </Link>
+              ) : null}
             </div>
           </div>
           <div className="grid gap-6 bg-slate-100 px-4 py-5 sm:px-6">
@@ -1290,23 +1406,10 @@ export default async function Home() {
                       const homeScore = number(match, ["home_score"]);
                       const awayScore = number(match, ["away_score"]);
                       const venue = text(match, ["venue"], "");
-                      const homeIsKsw =
-                        homeName.toLowerCase().includes("ksw") ||
-                        homeShortName.toLowerCase().includes("ksw");
-                      const awayIsKsw =
-                        awayName.toLowerCase().includes("ksw") ||
-                        awayShortName.toLowerCase().includes("ksw");
+                      const homeIsKsw = match.home_team_is_ksw === true;
+                      const awayIsKsw = match.away_team_is_ksw === true;
                       const isKswResult = homeIsKsw || awayIsKsw;
-                      const kswScore = homeIsKsw ? homeScore : awayScore;
-                      const opponentScore = homeIsKsw ? awayScore : homeScore;
-                      const outcome =
-                        !isKswResult
-                          ? ""
-                          : kswScore > opponentScore
-                            ? "WIN"
-                            : kswScore < opponentScore
-                              ? "LOSS"
-                              : "DRAW";
+                      const outcome = kswOutcome(match);
 
                       return (
                         <article
@@ -1401,14 +1504,14 @@ export default async function Home() {
                 </div>
               ))
             ) : (
-              <p className="rounded-xl bg-white px-4 py-8 text-slate-600 sm:px-5">
-                No KSW results available.
+              <p className="rounded-xl bg-white px-4 py-4 text-sm font-semibold text-slate-600 sm:px-5">
+                No completed KSW results in {competitionName}.
               </p>
             )}
           </div>
           <div className="border-t border-slate-200 px-4 py-3 text-right sm:px-6">
             <p className="text-xs font-semibold leading-5 text-slate-500">
-              ข้อมูลการแข่งขันอ้างอิงจากฝ่ายจัดการแข่งขัน Thai Lawyers League Season 6
+              ข้อมูลการแข่งขันอ้างอิงจาก {competitionName}
             </p>
           </div>
         </div>
