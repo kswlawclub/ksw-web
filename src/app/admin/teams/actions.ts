@@ -5,7 +5,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAdminSession } from "@/lib/admin-server-auth";
 
 type TeamPayload = {
-  league_id: string;
+  league_id: string | null;
   name: string;
   short_name: string;
   logo_url: string | null;
@@ -56,11 +56,98 @@ function validatePayload(payload: TeamPayload) {
     return "Short name is required.";
   }
 
-  if (!payload.league_id) {
-    return "Competition is required.";
+  return "";
+}
+
+async function validateCompetitionExists(
+  supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  competitionId: string | null | undefined,
+) {
+  if (!competitionId) {
+    return "";
+  }
+
+  const competition = await supabase
+    .from("leagues")
+    .select("id", { count: "exact", head: true })
+    .eq("id", competitionId);
+
+  if (competition.error) {
+    console.error("admin team competition validation failed", competition.error);
+    return "Could not verify the selected competition.";
+  }
+
+  if ((competition.count ?? 0) < 1) {
+    return "Selected competition does not exist.";
   }
 
   return "";
+}
+
+async function getExistingTeamLeague(
+  supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  id: string,
+) {
+  const team = await supabase
+    .from("teams")
+    .select("id, league_id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (team.error) {
+    console.error("admin team lookup failed", team.error);
+    return {
+      leagueId: null,
+      error: "Could not verify the selected team.",
+    };
+  }
+
+  if (!team.data) {
+    return {
+      leagueId: null,
+      error: "Team was not found.",
+    };
+  }
+
+  return {
+    leagueId: team.data.league_id as string | null,
+    error: "",
+  };
+}
+
+async function countTeamMatchReferences(
+  supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  teamId: string,
+  competitionId?: string,
+) {
+  const homeQuery = supabase
+    .from("matches")
+    .select("id", { count: "exact", head: true })
+    .eq("home_team_id", teamId);
+  const awayQuery = supabase
+    .from("matches")
+    .select("id", { count: "exact", head: true })
+    .eq("away_team_id", teamId);
+
+  if (competitionId) {
+    homeQuery.eq("league_id", competitionId);
+    awayQuery.eq("league_id", competitionId);
+  }
+
+  const [homeMatches, awayMatches] = await Promise.all([homeQuery, awayQuery]);
+
+  if (homeMatches.error || awayMatches.error) {
+    console.error("admin team match usage check failed", homeMatches.error ?? awayMatches.error);
+    return {
+      count: 0,
+      error: "Could not verify whether this team is used in matches.",
+    };
+  }
+
+  return {
+    count: (homeMatches.count ?? 0) + (awayMatches.count ?? 0),
+    error: "",
+  };
 }
 
 export async function createTeam(payload: TeamPayload): Promise<ActionResult> {
@@ -78,6 +165,12 @@ export async function createTeam(payload: TeamPayload): Promise<ActionResult> {
     return { ok: false, error };
   }
 
+  const competitionError = await validateCompetitionExists(supabase, payload.league_id);
+
+  if (competitionError) {
+    return { ok: false, error: competitionError };
+  }
+
   const result = await supabase.from("teams").insert(payload);
 
   if (result.error) {
@@ -88,8 +181,16 @@ export async function createTeam(payload: TeamPayload): Promise<ActionResult> {
   return { ok: true };
 }
 
-export async function updateTeam(id: string, payload: TeamPayload): Promise<ActionResult> {
+export async function updateTeam(
+  id: string,
+  payload: TeamPayload,
+  expectedCompetitionId?: string,
+): Promise<ActionResult> {
   await requireAdminSession();
+
+  if (!id) {
+    return { ok: false, error: "Team id is required." };
+  }
 
   const validationError = validatePayload(payload);
 
@@ -103,6 +204,29 @@ export async function updateTeam(id: string, payload: TeamPayload): Promise<Acti
     return { ok: false, error };
   }
 
+  const existingTeam = await getExistingTeamLeague(supabase, id);
+
+  if (existingTeam.error) {
+    return { ok: false, error: existingTeam.error };
+  }
+
+  if (
+    expectedCompetitionId &&
+    (existingTeam.leagueId !== expectedCompetitionId || payload.league_id !== expectedCompetitionId)
+  ) {
+    return { ok: false, error: "This team does not belong to the selected competition." };
+  }
+
+  if (existingTeam.leagueId !== payload.league_id) {
+    return { ok: false, error: "Team competition cannot be changed from the team editor." };
+  }
+
+  const competitionError = await validateCompetitionExists(supabase, payload.league_id);
+
+  if (competitionError) {
+    return { ok: false, error: competitionError };
+  }
+
   const result = await supabase.from("teams").update(payload).eq("id", id);
 
   if (result.error) {
@@ -113,8 +237,21 @@ export async function updateTeam(id: string, payload: TeamPayload): Promise<Acti
   return { ok: true };
 }
 
-export async function deleteTeamById(id: string): Promise<ActionResult> {
+export async function assignTeamsToCompetition(
+  teamIds: string[],
+  competitionId: string,
+): Promise<ActionResult & { count?: number }> {
   await requireAdminSession();
+
+  const uniqueTeamIds = Array.from(new Set(teamIds.map((id) => id.trim()).filter(Boolean)));
+
+  if (!competitionId) {
+    return { ok: false, error: "Competition is required." };
+  }
+
+  if (uniqueTeamIds.length === 0) {
+    return { ok: false, error: "Select at least one team to assign." };
+  }
 
   const { supabase, error } = getAdminClient();
 
@@ -122,26 +259,141 @@ export async function deleteTeamById(id: string): Promise<ActionResult> {
     return { ok: false, error };
   }
 
-  const homeMatches = await supabase
-    .from("matches")
-    .select("id", { count: "exact", head: true })
-    .eq("home_team_id", id);
-  const awayMatches = await supabase
-    .from("matches")
-    .select("id", { count: "exact", head: true })
-    .eq("away_team_id", id);
+  const competitionError = await validateCompetitionExists(supabase, competitionId);
 
-  if (homeMatches.error || awayMatches.error) {
-    console.error("admin team match usage check failed", homeMatches.error ?? awayMatches.error);
-    return { ok: false, error: "Could not verify whether this team is used in matches." };
+  if (competitionError) {
+    return { ok: false, error: competitionError };
   }
 
-  const usageCount = (homeMatches.count ?? 0) + (awayMatches.count ?? 0);
+  const teams = await supabase
+    .from("teams")
+    .select("id, league_id")
+    .in("id", uniqueTeamIds);
 
-  if (usageCount > 0) {
+  if (teams.error) {
+    console.error("admin team assign lookup failed", teams.error);
+    return { ok: false, error: "Could not verify selected teams." };
+  }
+
+  const teamRows = teams.data ?? [];
+
+  if (teamRows.length !== uniqueTeamIds.length) {
+    return { ok: false, error: "One or more selected teams could not be found." };
+  }
+
+  if (teamRows.some((team) => team.league_id !== null)) {
+    return { ok: false, error: "One or more selected teams already belong to another competition." };
+  }
+
+  const result = await supabase
+    .from("teams")
+    .update({ league_id: competitionId })
+    .in("id", uniqueTeamIds)
+    .is("league_id", null)
+    .select("id");
+
+  if (result.error) {
+    console.error("admin team assign failed", result.error);
+    return { ok: false, error: result.error.message };
+  }
+
+  if ((result.data ?? []).length !== uniqueTeamIds.length) {
+    return { ok: false, error: "One or more selected teams were already assigned. Please reload and try again." };
+  }
+
+  return { ok: true, count: uniqueTeamIds.length };
+}
+
+export async function removeTeamFromCompetition(
+  id: string,
+  expectedCompetitionId: string,
+): Promise<ActionResult> {
+  await requireAdminSession();
+
+  if (!id) {
+    return { ok: false, error: "Team id is required." };
+  }
+
+  if (!expectedCompetitionId) {
+    return { ok: false, error: "Competition is required." };
+  }
+
+  const { supabase, error } = getAdminClient();
+
+  if (!supabase) {
+    return { ok: false, error };
+  }
+
+  const existingTeam = await getExistingTeamLeague(supabase, id);
+
+  if (existingTeam.error) {
+    return { ok: false, error: existingTeam.error };
+  }
+
+  if (existingTeam.leagueId !== expectedCompetitionId) {
+    return { ok: false, error: "This team does not belong to the selected competition." };
+  }
+
+  const usage = await countTeamMatchReferences(supabase, id, expectedCompetitionId);
+
+  if (usage.error) {
+    return { ok: false, error: usage.error };
+  }
+
+  if (usage.count > 0) {
     return {
       ok: false,
-      error: `This team is used in ${usageCount} match${usageCount === 1 ? "" : "es"} and cannot be deleted.`,
+      error: "This team is used by one or more matches and cannot be removed from the competition.",
+    };
+  }
+
+  const result = await supabase
+    .from("teams")
+    .update({ league_id: null })
+    .eq("id", id)
+    .eq("league_id", expectedCompetitionId);
+
+  if (result.error) {
+    console.error("admin team remove from competition failed", result.error);
+    return { ok: false, error: result.error.message };
+  }
+
+  return { ok: true };
+}
+
+export async function deleteTeamById(id: string, expectedCompetitionId?: string): Promise<ActionResult> {
+  await requireAdminSession();
+
+  if (!id) {
+    return { ok: false, error: "Team id is required." };
+  }
+
+  const { supabase, error } = getAdminClient();
+
+  if (!supabase) {
+    return { ok: false, error };
+  }
+
+  const existingTeam = await getExistingTeamLeague(supabase, id);
+
+  if (existingTeam.error) {
+    return { ok: false, error: existingTeam.error };
+  }
+
+  if (expectedCompetitionId && existingTeam.leagueId !== expectedCompetitionId) {
+    return { ok: false, error: "This team does not belong to the selected competition." };
+  }
+
+  const usage = await countTeamMatchReferences(supabase, id);
+
+  if (usage.error) {
+    return { ok: false, error: usage.error };
+  }
+
+  if (usage.count > 0) {
+    return {
+      ok: false,
+      error: `This team is used in ${usage.count} match${usage.count === 1 ? "" : "es"} and cannot be deleted.`,
     };
   }
 

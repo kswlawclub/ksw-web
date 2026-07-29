@@ -347,10 +347,10 @@ export default async function AdminCompetitionWorkspacePage({
             <div>
               <h2 className="text-2xl font-black">Teams</h2>
               <p className="mt-1 text-sm font-semibold text-slate-600">
-                Team management remains in the master module in Phase 1.
+                Manage teams assigned to this competition.
               </p>
             </div>
-            <Link className="inline-flex rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] hover:bg-[#091f39]" href="/admin/teams">
+            <Link className="inline-flex rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] hover:bg-[#091f39]" href={`/admin/teams?competition=${encodeURIComponent(id)}`}>
               Manage Teams
             </Link>
           </div>
@@ -390,7 +390,7 @@ export default async function AdminCompetitionWorkspacePage({
             <div>
               <h2 className="text-2xl font-black">Matches</h2>
               <p className="mt-1 text-sm font-semibold text-slate-600">
-                Filtered match management will be added in Phase 2.
+                Manage matches for this competition.
               </p>
             </div>
             <Link className="inline-flex rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] hover:bg-[#091f39]" href={`/admin/matches?competition=${encodeURIComponent(id)}`}>
