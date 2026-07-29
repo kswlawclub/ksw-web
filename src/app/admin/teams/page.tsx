@@ -235,13 +235,20 @@ export default function AdminTeamsPage() {
     };
   }, [logoFile]);
 
-  async function loadData(competitionId: string, isCancelled = () => false) {
+  async function loadData(
+    competitionId: string,
+    isCancelled = () => false,
+    options: { preserveMessages?: boolean } = {},
+  ) {
     const supabase = getSupabase();
+    let refreshOk = true;
 
     setLoading(true);
-    setError("");
-    setMessage("");
-    setRelationshipWarning("");
+    if (!options.preserveMessages) {
+      setError("");
+      setMessage("");
+      setRelationshipWarning("");
+    }
     setSelectedAssignTeamIds([]);
     setLogoFile(null);
     setForm(formForCompetition(competitionId));
@@ -250,7 +257,7 @@ export default function AdminTeamsPage() {
       if (isCancelled()) return;
       setError("Supabase is not configured.");
       setLoading(false);
-      return;
+      return false;
     }
 
     const teamsQuery = competitionId
@@ -295,6 +302,7 @@ export default function AdminTeamsPage() {
     } else if (teamsResult.error) {
       console.error("admin teams query failed", teamsResult.error.message);
       setError("Could not load teams.");
+      refreshOk = false;
     } else {
       setTeams((teamsResult.data ?? []) as Team[]);
     }
@@ -302,6 +310,7 @@ export default function AdminTeamsPage() {
     if (competitionsResult.error) {
       console.error("admin team competitions query failed", competitionsResult.error.message);
       setError("Could not load competitions for the team form.");
+      refreshOk = false;
     } else {
       const activeCompetitions = (competitionsResult.data ?? []) as Competition[];
       setCompetitions(activeCompetitions);
@@ -325,6 +334,7 @@ export default function AdminTeamsPage() {
     if (availableTeamsResult?.error) {
       console.error("admin available teams query failed", availableTeamsResult.error.message);
       setError("Could not load available teams.");
+      refreshOk = false;
     } else {
       const assignedTeamIds = new Set(
         Array.isArray(teamsResult) ? teamsResult.map((team) => team.id) : [],
@@ -336,6 +346,7 @@ export default function AdminTeamsPage() {
     }
 
     setLoading(false);
+    return refreshOk;
   }
 
   function resetForm() {
@@ -492,7 +503,10 @@ export default function AdminTeamsPage() {
       setMessage(form.id ? "Team updated." : "Team added.");
       setForm(formForCompetition(contextCompetitionId ?? ""));
       setLogoFile(null);
-      await loadData(contextCompetitionId ?? "");
+      const refreshed = await loadData(contextCompetitionId ?? "", () => false, { preserveMessages: true });
+      if (!refreshed) {
+        setError("Team saved, but the list could not be refreshed. Please reload the page.");
+      }
     } catch (saveError) {
       console.error("admin team save failed", saveError);
       setError("Could not save team. Please check the logo upload and try again.");
@@ -516,7 +530,10 @@ export default function AdminTeamsPage() {
     }
 
     setMessage("Team deleted.");
-    await loadData(contextCompetitionId ?? "");
+    const refreshed = await loadData(contextCompetitionId ?? "", () => false, { preserveMessages: true });
+    if (!refreshed) {
+      setError("Team deleted, but the list could not be refreshed. Please reload the page.");
+    }
   }
 
   async function assignSelectedTeams() {
@@ -558,8 +575,15 @@ export default function AdminTeamsPage() {
       alreadyAssignedCount ? `${alreadyAssignedCount} already assigned` : "",
     ].filter(Boolean);
 
-    setMessage(summary.length ? summary.join(", ") + "." : "No participant changes were needed.");
-    await loadData(contextCompetitionId);
+    const successMessage = summary.length ? summary.join(", ") + "." : "No participant changes were needed.";
+    const refreshed = await loadData(contextCompetitionId, () => false, { preserveMessages: true });
+    if (refreshed) {
+      setMessage(successMessage);
+      setError("");
+    } else {
+      setMessage(successMessage);
+      setError("Team assignment succeeded, but the list could not be refreshed. Please reload the page.");
+    }
   }
 
   async function removeTeam(team: Team) {
@@ -583,7 +607,13 @@ export default function AdminTeamsPage() {
 
     setMessage("Team removed from competition.");
     setForm(formForCompetition(contextCompetitionId));
-    await loadData(contextCompetitionId);
+    const refreshed = await loadData(contextCompetitionId, () => false, { preserveMessages: true });
+    if (refreshed) {
+      setMessage("Team removed from competition.");
+      setError("");
+    } else {
+      setError("Team removal succeeded, but the list could not be refreshed. Please reload the page.");
+    }
   }
 
   function toggleAssignTeam(teamId: string) {

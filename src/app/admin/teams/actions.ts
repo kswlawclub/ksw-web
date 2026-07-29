@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import sharp from "sharp";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAdminSession } from "@/lib/admin-server-auth";
@@ -232,6 +233,8 @@ export async function createTeam(payload: TeamPayload): Promise<ActionResult> {
     return { ok: false, error: result.error.message };
   }
 
+  revalidatePath("/admin/teams");
+
   return { ok: true };
 }
 
@@ -291,6 +294,8 @@ export async function updateTeam(
     console.error("admin team update failed", result.error);
     return { ok: false, error: result.error.message };
   }
+
+  revalidatePath("/admin/teams");
 
   return { ok: true };
 }
@@ -420,6 +425,8 @@ export async function assignTeamsToCompetition(
     reactivatedCount = (reactivateResult.data ?? []).length;
   }
 
+  revalidatePath("/admin/teams");
+
   return {
     ok: true,
     assignedCount,
@@ -489,6 +496,8 @@ export async function removeTeamFromCompetition(
     console.error("admin team remove from competition failed", result.error);
     return { ok: false, error: result.error.message };
   }
+
+  revalidatePath("/admin/teams");
 
   return { ok: true };
 }
@@ -560,6 +569,8 @@ export async function deleteTeamById(id: string, expectedCompetitionId?: string)
     console.error("admin team delete failed", result.error);
     return { ok: false, error: result.error.message };
   }
+
+  revalidatePath("/admin/teams");
 
   return { ok: true };
 }
