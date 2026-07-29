@@ -344,7 +344,7 @@ export default async function AdminCompetitionWorkspacePage({
             <div>
               <h2 className="text-2xl font-black">Teams</h2>
               <p className="mt-1 text-sm font-semibold text-slate-600">
-                Manage teams assigned to this competition.
+                Manage teams participating in this competition.
               </p>
             </div>
             <Link className="inline-flex rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] hover:bg-[#091f39]" href={`/admin/teams?competition=${encodeURIComponent(id)}`}>

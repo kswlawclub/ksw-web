@@ -10,6 +10,7 @@ export type CompetitionParticipant = Row & {
   name: string;
   short_name: string | null;
   logo_url: string | null;
+  created_at: string | null;
   is_ksw: boolean;
   is_active: boolean;
   participant_is_active: boolean;
@@ -20,10 +21,11 @@ export type CompetitionParticipant = Row & {
 type SupabaseClient = NonNullable<ReturnType<typeof getSupabase>>;
 
 type LoadOptions = {
+  includeLegacyFallback?: boolean;
   includeInactiveParticipants?: boolean;
 };
 
-const teamSelect = "id, league_id, name, short_name, logo_url, is_ksw, is_active";
+const teamSelect = "id, league_id, name, short_name, logo_url, is_ksw, is_active, created_at";
 
 function text(row: Row | undefined, key: string) {
   const value = row?.[key];
@@ -77,6 +79,7 @@ function fromTeamRow(
     name,
     short_name: nullableText(team, "short_name"),
     logo_url: nullableText(team, "logo_url"),
+    created_at: nullableText(team, "created_at"),
     is_ksw: booleanValue(team, "is_ksw"),
     is_active: booleanValue(team, "is_active", true),
     participant_is_active: participant ? booleanValue(participant, "is_active", true) : true,
@@ -156,21 +159,23 @@ export async function loadCompetitionParticipants(
     console.warn("competition participants junction query failed", error);
   }
 
-  try {
-    const legacyResult = await supabase
-      .from("teams")
-      .select(teamSelect)
-      .eq("league_id", competitionId);
+  if (options.includeLegacyFallback !== false) {
+    try {
+      const legacyResult = await supabase
+        .from("teams")
+        .select(teamSelect)
+        .eq("league_id", competitionId);
 
-    if (legacyResult.error) {
-      console.warn("competition participants legacy query failed", legacyResult.error);
-    } else {
-      legacyParticipants = ((legacyResult.data ?? []) as Row[])
-        .map((team) => fromTeamRow(team, "legacy"))
-        .filter((participant): participant is CompetitionParticipant => Boolean(participant));
+      if (legacyResult.error) {
+        console.warn("competition participants legacy query failed", legacyResult.error);
+      } else {
+        legacyParticipants = ((legacyResult.data ?? []) as Row[])
+          .map((team) => fromTeamRow(team, "legacy"))
+          .filter((participant): participant is CompetitionParticipant => Boolean(participant));
+      }
+    } catch (error) {
+      console.warn("competition participants legacy query failed", error);
     }
-  } catch (error) {
-    console.warn("competition participants legacy query failed", error);
   }
 
   return mergeParticipants(junctionParticipants, legacyParticipants);

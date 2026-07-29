@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { loadCompetitionParticipants } from "@/lib/competition-participants";
 import { getSupabase } from "@/lib/supabase";
 import {
   assignTeamsToCompetition,
@@ -26,11 +27,14 @@ type Team = {
   id: string;
   league_id: string | null;
   name: string;
-  short_name: string;
+  short_name: string | null;
   logo_url: string | null;
   is_ksw: boolean;
   is_active: boolean;
-  created_at: string;
+  created_at: string | null;
+  display_order?: number;
+  participant_is_active?: boolean;
+  participant_source?: string;
 };
 
 type TeamForm = {
@@ -57,7 +61,11 @@ const maxLogoSize = 2 * 1024 * 1024;
 const allowedLogoTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/svg+xml"];
 const rasterLogoTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
 
-function formatDate(value: string) {
+function formatDate(value: string | null | undefined) {
+  if (!value) {
+    return "Not set";
+  }
+
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
@@ -97,7 +105,7 @@ function formForCompetition(competitionId: string) {
 }
 
 function teamInitials(team: Team) {
-  return (team.short_name || team.name).slice(0, 3).toUpperCase();
+  return (team.short_name || team.name || "FC").slice(0, 3).toUpperCase();
 }
 
 function loadImageFromFile(file: File) {
@@ -171,7 +179,10 @@ export default function AdminTeamsPage() {
   const contextCompetition = contextCompetitionId ? competitionsById.get(contextCompetitionId) : undefined;
   const contextIsInvalid = Boolean(contextCompetitionId && !contextCompetition && !loading);
   const kswTeamCount = teams.filter((team) => team.is_ksw).length;
-  const canSubmit = !contextIsInvalid && Boolean(form.name.trim() && form.shortName.trim());
+  const canSubmit =
+    !contextIsInvalid &&
+    (!isContextMode || Boolean(form.id)) &&
+    Boolean(form.name.trim() && form.shortName.trim());
 
   useEffect(() => {
     function syncCompetitionParam() {
@@ -243,11 +254,10 @@ export default function AdminTeamsPage() {
     }
 
     const teamsQuery = competitionId
-      ? supabase
-          .from("teams")
-          .select("id, league_id, name, short_name, logo_url, is_ksw, is_active, created_at")
-          .eq("league_id", competitionId)
-          .order("name")
+      ? loadCompetitionParticipants(supabase, competitionId, {
+          includeInactiveParticipants: false,
+          includeLegacyFallback: false,
+        })
       : supabase
           .from("teams")
           .select("id, league_id, name, short_name, logo_url, is_ksw, is_active, created_at")
@@ -264,24 +274,25 @@ export default function AdminTeamsPage() {
           .select("id, name, season, competition_type, season_status, slug, is_published")
           .eq("is_active", true)
           .order("created_at", { ascending: false });
-    const unassignedTeamsQuery = competitionId
+    const availableTeamsQuery = competitionId
       ? supabase
           .from("teams")
           .select("id, league_id, name, short_name, logo_url, is_ksw, is_active, created_at")
-          .is("league_id", null)
           .eq("is_active", true)
           .order("name")
       : null;
 
-    const [teamsResult, competitionsResult, unassignedTeamsResult] = await Promise.all([
+    const [teamsResult, competitionsResult, availableTeamsResult] = await Promise.all([
       teamsQuery,
       competitionsQuery,
-      unassignedTeamsQuery,
+      availableTeamsQuery,
     ]);
 
     if (isCancelled()) return;
 
-    if (teamsResult.error) {
+    if (Array.isArray(teamsResult)) {
+      setTeams(teamsResult as Team[]);
+    } else if (teamsResult.error) {
       console.error("admin teams query failed", teamsResult.error.message);
       setError("Could not load teams.");
     } else {
@@ -311,11 +322,17 @@ export default function AdminTeamsPage() {
       });
     }
 
-    if (unassignedTeamsResult?.error) {
-      console.error("admin unassigned teams query failed", unassignedTeamsResult.error.message);
-      setError("Could not load available unassigned teams.");
+    if (availableTeamsResult?.error) {
+      console.error("admin available teams query failed", availableTeamsResult.error.message);
+      setError("Could not load available teams.");
     } else {
-      setUnassignedTeams((unassignedTeamsResult?.data ?? []) as Team[]);
+      const assignedTeamIds = new Set(
+        Array.isArray(teamsResult) ? teamsResult.map((team) => team.id) : [],
+      );
+      const availableTeams = ((availableTeamsResult?.data ?? []) as Team[]).filter(
+        (team) => !assignedTeamIds.has(team.id),
+      );
+      setUnassignedTeams(availableTeams);
     }
 
     setLoading(false);
@@ -337,19 +354,11 @@ export default function AdminTeamsPage() {
   }
 
   function editTeam(team: Team) {
-    if (contextCompetitionId && team.league_id !== contextCompetitionId) {
-      setError("This team does not belong to the selected competition context.");
-      setMessage("");
-      setForm(formForCompetition(contextCompetitionId));
-      setLogoFile(null);
-      return;
-    }
-
     setForm({
       id: team.id,
-      leagueId: team.league_id ?? "",
+      leagueId: contextCompetitionId ?? team.league_id ?? "",
       name: team.name,
-      shortName: team.short_name,
+      shortName: team.short_name ?? "",
       logoUrl: team.logo_url ?? "",
       isKsw: team.is_ksw,
       isActive: team.is_active,
@@ -358,11 +367,45 @@ export default function AdminTeamsPage() {
     setMessage("");
     setError("");
     setRelationshipWarning(
-      team.league_id === null
-        ? "This team is not assigned to a competition. Use the assignment workflow to link it to a competition."
-        : "",
+      contextCompetitionId
+        ? "Editing updates canonical team details only. Competition participation is managed by Assign and Remove."
+        : "Competition participation is managed from each Competition Workspace.",
     );
     scrollToEditForm();
+  }
+
+  function prepareAddTeam() {
+    setForm(emptyForm);
+    setLogoFile(null);
+    setMessage("");
+    setError("");
+    setRelationshipWarning(
+      "Create the canonical team here, then open a Competition Workspace to assign it as a participant.",
+    );
+    scrollToEditForm();
+  }
+
+  function contextAddTeamMessage() {
+    setMessage("");
+    setError(
+      "Create new canonical teams in Team Center first, then assign them from Available Teams in this competition.",
+    );
+    setRelationshipWarning("");
+    setForm(formForCompetition(contextCompetitionId ?? ""));
+    setLogoFile(null);
+    scrollToEditForm();
+  }
+
+  function teamCompetitionDisplay(team: Team) {
+    if (contextCompetitionId) {
+      return team.participant_is_active === false
+        ? "Hidden participant"
+        : `Active participant${typeof team.display_order === "number" ? ` · Order ${team.display_order}` : ""}`;
+    }
+
+    return team.league_id
+      ? competitionLabel(competitionsById.get(team.league_id))
+      : "No legacy competition";
   }
 
   async function saveTeam(event: FormEvent<HTMLFormElement>) {
@@ -418,15 +461,17 @@ export default function AdminTeamsPage() {
         logoUrl = uploadResult.publicUrl;
       }
 
-      const payloadLeagueId = contextCompetitionId || form.leagueId || null;
-
       if (contextCompetitionId && contextIsInvalid) {
         setError("Competition context was not found. This team cannot be saved.");
         return;
       }
 
+      if (contextCompetitionId && !form.id) {
+        setError("Create the canonical team in Team Center first, then assign it to this competition.");
+        return;
+      }
+
       const payload = {
-        league_id: payloadLeagueId,
         name: form.name.trim(),
         short_name: form.shortName.trim(),
         logo_url: logoUrl,
@@ -457,11 +502,6 @@ export default function AdminTeamsPage() {
   }
 
   async function deleteTeam(team: Team) {
-    if (contextCompetitionId && team.league_id !== contextCompetitionId) {
-      setError("This team does not belong to the selected competition context.");
-      return;
-    }
-
     const confirmed = window.confirm(`Delete ${team.name}?`);
 
     if (!confirmed) {
@@ -509,18 +549,22 @@ export default function AdminTeamsPage() {
       return;
     }
 
-    setMessage(`${result.count ?? selectedAssignTeamIds.length} team(s) assigned.`);
+    const assignedCount = result.assignedCount ?? 0;
+    const reactivatedCount = result.reactivatedCount ?? 0;
+    const alreadyAssignedCount = result.alreadyAssignedCount ?? 0;
+    const summary = [
+      assignedCount ? `${assignedCount} assigned` : "",
+      reactivatedCount ? `${reactivatedCount} reactivated` : "",
+      alreadyAssignedCount ? `${alreadyAssignedCount} already assigned` : "",
+    ].filter(Boolean);
+
+    setMessage(summary.length ? summary.join(", ") + "." : "No participant changes were needed.");
     await loadData(contextCompetitionId);
   }
 
   async function removeTeam(team: Team) {
     if (!contextCompetitionId || contextIsInvalid) {
       setError("Competition context was not found. This team cannot be removed.");
-      return;
-    }
-
-    if (team.league_id !== contextCompetitionId) {
-      setError("This team does not belong to the selected competition context.");
       return;
     }
 
@@ -566,7 +610,7 @@ export default function AdminTeamsPage() {
             </p>
             <h1 className="mt-3 text-4xl font-black tracking-tight">Manage Teams</h1>
             <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300">
-              Manage teams available for match scheduling and competition records.
+              Manage canonical teams and competition participant relationships.
             </p>
             {contextCompetition ? (
               <div className="mt-5 rounded-lg border border-[#d8ad45]/35 bg-white/[0.08] p-4">
@@ -635,12 +679,25 @@ export default function AdminTeamsPage() {
             <div>
               <div className="mb-3 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
               <h2 className="text-2xl font-black">{form.id ? "Edit Team" : "Add Team"}</h2>
+              {isContextMode && !form.id ? (
+                <p className="mt-1 text-sm font-semibold text-slate-600">
+                  Create teams in Team Center first, then assign them to this competition.
+                </p>
+              ) : null}
             </div>
             {form.id ? (
               <button className="text-sm font-black text-[#9b1c1f]" onClick={resetForm} type="button">
                 Cancel
               </button>
-            ) : null}
+            ) : isContextMode ? (
+              <button className="text-sm font-black text-[#8a6418]" onClick={contextAddTeamMessage} type="button">
+                Add via Team Center
+              </button>
+            ) : (
+              <button className="text-sm font-black text-[#8a6418]" onClick={prepareAddTeam} type="button">
+                New Canonical Team
+              </button>
+            )}
           </div>
 
           <div className="grid gap-4">
@@ -725,34 +782,17 @@ export default function AdminTeamsPage() {
               </div>
             ) : null}
 
-            {isContextMode || form.id ? (
-              <div className="grid gap-2 text-sm font-black">
-                Competition
-                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700">
-                  {contextCompetition
-                    ? competitionLabel(contextCompetition)
-                    : form.leagueId
-                      ? competitionLabel(competitionsById.get(form.leagueId))
-                      : "No competition"}
-                </div>
+            <div className="grid gap-2 text-sm font-black">
+              Competition Assignment
+              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700">
+                {contextCompetition
+                  ? competitionLabel(contextCompetition)
+                  : "Managed from each Competition Workspace"}
               </div>
-            ) : (
-              <label className="grid gap-2 text-sm font-black">
-                Competition
-                <select
-                  className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
-                  onChange={(event) => setForm((current) => ({ ...current, leagueId: event.target.value }))}
-                  value={form.leagueId}
-                >
-                  <option value="">No competition</option>
-                  {competitions.map((competition) => (
-                    <option key={competition.id} value={competition.id}>
-                      {competitionLabel(competition)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
+              <span className="text-xs font-semibold text-slate-500">
+                Team details are canonical. Competition participation is stored separately.
+              </span>
+            </div>
 
             <label className="flex items-center gap-3 rounded-md border border-slate-200 px-3 py-3 text-sm font-black">
               <input
@@ -808,7 +848,7 @@ export default function AdminTeamsPage() {
               <h2 className="text-2xl font-black">Team List</h2>
             </div>
             <p className="text-sm font-bold text-slate-500">
-              {teams.length} {isContextMode ? "linked teams" : "teams"}
+              {teams.length} {isContextMode ? "active participants" : "teams"}
             </p>
           </div>
 
@@ -828,7 +868,7 @@ export default function AdminTeamsPage() {
                     <th className="px-4 py-3">Logo</th>
                     <th className="px-4 py-3">Name</th>
                     <th className="px-4 py-3">Short Name</th>
-                    <th className="px-4 py-3">Competition</th>
+                    <th className="px-4 py-3">{isContextMode ? "Participant" : "Legacy Competition"}</th>
                     <th className="px-4 py-3">KSW?</th>
                     <th className="px-4 py-3">Active?</th>
                     <th className="px-4 py-3">Created At</th>
@@ -836,12 +876,7 @@ export default function AdminTeamsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {teams.map((team) => {
-                    const competition = team.league_id
-                      ? competitionsById.get(team.league_id)
-                      : undefined;
-
-                    return (
+                  {teams.map((team) => (
                       <tr className="border-b border-slate-100 last:border-b-0 hover:bg-[#f8f3e7]" key={team.id}>
                         <td className="px-4 py-3">
                           <div className="flex size-11 items-center justify-center overflow-hidden rounded-full border border-[#d8ad45]/50 bg-[#061426] text-xs font-black text-[#f4d58a]">
@@ -854,9 +889,7 @@ export default function AdminTeamsPage() {
                         </td>
                         <td className="px-4 py-3 font-black">{team.name}</td>
                         <td className="px-4 py-3">{team.short_name}</td>
-                        <td className="px-4 py-3">
-                          {competition ? competitionLabel(competition) : "No competition"}
-                        </td>
+                        <td className="px-4 py-3">{teamCompetitionDisplay(team)}</td>
                         <td className="px-4 py-3">{team.is_ksw ? "Yes" : "No"}</td>
                         <td className="px-4 py-3">{team.is_active ? "Yes" : "No"}</td>
                         <td className="px-4 py-3">{formatDate(team.created_at)}</td>
@@ -888,8 +921,7 @@ export default function AdminTeamsPage() {
                           </div>
                         </td>
                       </tr>
-                    );
-                  })}
+                    ))}
                 </tbody>
               </table>
               {teams.length === 0 ? (
@@ -906,9 +938,9 @@ export default function AdminTeamsPage() {
               <div className="flex flex-col gap-2 border-b border-slate-200 p-5 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <div className="mb-3 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
-                  <h2 className="text-2xl font-black">Available Unassigned Teams</h2>
+                  <h2 className="text-2xl font-black">Available Teams</h2>
                   <p className="mt-1 text-sm font-semibold text-slate-600">
-                    Assign existing teams that are not linked to any competition.
+                    Assign active canonical teams that are not active participants in this competition.
                   </p>
                 </div>
                 <button
@@ -950,7 +982,7 @@ export default function AdminTeamsPage() {
                   ))
                 ) : (
                   <p className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
-                    No unassigned teams available.
+                    No available teams for this competition.
                   </p>
                 )}
               </div>

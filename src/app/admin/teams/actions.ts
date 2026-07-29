@@ -5,7 +5,6 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAdminSession } from "@/lib/admin-server-auth";
 
 type TeamPayload = {
-  league_id: string | null;
   name: string;
   short_name: string;
   logo_url: string | null;
@@ -16,6 +15,13 @@ type TeamPayload = {
 type ActionResult = {
   ok: boolean;
   error?: string;
+};
+
+type AssignTeamsResult = ActionResult & {
+  assignedCount?: number;
+  alreadyAssignedCount?: number;
+  count?: number;
+  reactivatedCount?: number;
 };
 
 type UploadResult = ActionResult & {
@@ -84,13 +90,13 @@ async function validateCompetitionExists(
   return "";
 }
 
-async function getExistingTeamLeague(
+async function getExistingTeam(
   supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
   id: string,
 ) {
   const team = await supabase
     .from("teams")
-    .select("id, league_id")
+    .select("id")
     .eq("id", id)
     .maybeSingle();
 
@@ -110,7 +116,33 @@ async function getExistingTeamLeague(
   }
 
   return {
-    leagueId: team.data.league_id as string | null,
+    id: team.data.id as string,
+    error: "",
+  };
+}
+
+async function getCompetitionParticipant(
+  supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  teamId: string,
+  competitionId: string,
+) {
+  const participant = await supabase
+    .from("competition_teams")
+    .select("id, is_active")
+    .eq("competition_id", competitionId)
+    .eq("team_id", teamId)
+    .maybeSingle();
+
+  if (participant.error) {
+    console.error("admin competition participant lookup failed", participant.error);
+    return {
+      data: null as { id: string; is_active: boolean } | null,
+      error: "Could not verify the team participant relationship.",
+    };
+  }
+
+  return {
+    data: participant.data as { id: string; is_active: boolean } | null,
     error: "",
   };
 }
@@ -165,13 +197,14 @@ export async function createTeam(payload: TeamPayload): Promise<ActionResult> {
     return { ok: false, error };
   }
 
-  const competitionError = await validateCompetitionExists(supabase, payload.league_id);
-
-  if (competitionError) {
-    return { ok: false, error: competitionError };
-  }
-
-  const result = await supabase.from("teams").insert(payload);
+  const result = await supabase.from("teams").insert({
+    name: payload.name,
+    short_name: payload.short_name,
+    logo_url: payload.logo_url,
+    is_ksw: payload.is_ksw,
+    is_active: payload.is_active,
+    league_id: null,
+  });
 
   if (result.error) {
     console.error("admin team insert failed", result.error);
@@ -204,30 +237,34 @@ export async function updateTeam(
     return { ok: false, error };
   }
 
-  const existingTeam = await getExistingTeamLeague(supabase, id);
+  const existingTeam = await getExistingTeam(supabase, id);
 
   if (existingTeam.error) {
     return { ok: false, error: existingTeam.error };
   }
 
-  if (
-    expectedCompetitionId &&
-    (existingTeam.leagueId !== expectedCompetitionId || payload.league_id !== expectedCompetitionId)
-  ) {
-    return { ok: false, error: "This team does not belong to the selected competition." };
+  if (expectedCompetitionId) {
+    const participant = await getCompetitionParticipant(supabase, id, expectedCompetitionId);
+
+    if (participant.error) {
+      return { ok: false, error: participant.error };
+    }
+
+    if (!participant.data?.is_active) {
+      return { ok: false, error: "This team is not an active participant in the selected competition." };
+    }
   }
 
-  if (existingTeam.leagueId !== payload.league_id) {
-    return { ok: false, error: "Team competition cannot be changed from the team editor." };
-  }
-
-  const competitionError = await validateCompetitionExists(supabase, payload.league_id);
-
-  if (competitionError) {
-    return { ok: false, error: competitionError };
-  }
-
-  const result = await supabase.from("teams").update(payload).eq("id", id);
+  const result = await supabase
+    .from("teams")
+    .update({
+      name: payload.name,
+      short_name: payload.short_name,
+      logo_url: payload.logo_url,
+      is_ksw: payload.is_ksw,
+      is_active: payload.is_active,
+    })
+    .eq("id", id);
 
   if (result.error) {
     console.error("admin team update failed", result.error);
@@ -240,7 +277,7 @@ export async function updateTeam(
 export async function assignTeamsToCompetition(
   teamIds: string[],
   competitionId: string,
-): Promise<ActionResult & { count?: number }> {
+): Promise<AssignTeamsResult> {
   await requireAdminSession();
 
   const uniqueTeamIds = Array.from(new Set(teamIds.map((id) => id.trim()).filter(Boolean)));
@@ -267,7 +304,7 @@ export async function assignTeamsToCompetition(
 
   const teams = await supabase
     .from("teams")
-    .select("id, league_id")
+    .select("id")
     .in("id", uniqueTeamIds);
 
   if (teams.error) {
@@ -281,27 +318,71 @@ export async function assignTeamsToCompetition(
     return { ok: false, error: "One or more selected teams could not be found." };
   }
 
-  if (teamRows.some((team) => team.league_id !== null)) {
-    return { ok: false, error: "One or more selected teams already belong to another competition." };
+  const existingParticipants = await supabase
+    .from("competition_teams")
+    .select("team_id, is_active")
+    .eq("competition_id", competitionId)
+    .in("team_id", uniqueTeamIds);
+
+  if (existingParticipants.error) {
+    console.error("admin team participant lookup failed", existingParticipants.error);
+    return { ok: false, error: "Could not verify existing competition participants." };
   }
 
-  const result = await supabase
-    .from("teams")
-    .update({ league_id: competitionId })
-    .in("id", uniqueTeamIds)
-    .is("league_id", null)
-    .select("id");
+  const existingRows = (existingParticipants.data ?? []) as Array<{ team_id: string; is_active: boolean }>;
+  const activeTeamIds = new Set(existingRows.filter((row) => row.is_active).map((row) => row.team_id));
+  const inactiveTeamIds = existingRows.filter((row) => !row.is_active).map((row) => row.team_id);
+  const existingTeamIds = new Set(existingRows.map((row) => row.team_id));
+  const missingTeamIds = uniqueTeamIds.filter((teamId) => !existingTeamIds.has(teamId));
 
-  if (result.error) {
-    console.error("admin team assign failed", result.error);
-    return { ok: false, error: result.error.message };
+  let assignedCount = 0;
+  let reactivatedCount = 0;
+
+  if (missingTeamIds.length > 0) {
+    const insertResult = await supabase
+      .from("competition_teams")
+      .insert(
+        missingTeamIds.map((teamId) => ({
+          competition_id: competitionId,
+          team_id: teamId,
+          is_active: true,
+          display_order: 0,
+        })),
+      )
+      .select("team_id");
+
+    if (insertResult.error) {
+      console.error("admin team participant insert failed", insertResult.error);
+      return { ok: false, error: insertResult.error.message };
+    }
+
+    assignedCount = (insertResult.data ?? []).length;
   }
 
-  if ((result.data ?? []).length !== uniqueTeamIds.length) {
-    return { ok: false, error: "One or more selected teams were already assigned. Please reload and try again." };
+  if (inactiveTeamIds.length > 0) {
+    const reactivateResult = await supabase
+      .from("competition_teams")
+      .update({ is_active: true })
+      .eq("competition_id", competitionId)
+      .in("team_id", inactiveTeamIds)
+      .eq("is_active", false)
+      .select("team_id");
+
+    if (reactivateResult.error) {
+      console.error("admin team participant reactivate failed", reactivateResult.error);
+      return { ok: false, error: reactivateResult.error.message };
+    }
+
+    reactivatedCount = (reactivateResult.data ?? []).length;
   }
 
-  return { ok: true, count: uniqueTeamIds.length };
+  return {
+    ok: true,
+    assignedCount,
+    alreadyAssignedCount: activeTeamIds.size,
+    count: assignedCount + reactivatedCount,
+    reactivatedCount,
+  };
 }
 
 export async function removeTeamFromCompetition(
@@ -324,13 +405,19 @@ export async function removeTeamFromCompetition(
     return { ok: false, error };
   }
 
-  const existingTeam = await getExistingTeamLeague(supabase, id);
+  const existingTeam = await getExistingTeam(supabase, id);
 
   if (existingTeam.error) {
     return { ok: false, error: existingTeam.error };
   }
 
-  if (existingTeam.leagueId !== expectedCompetitionId) {
+  const participant = await getCompetitionParticipant(supabase, id, expectedCompetitionId);
+
+  if (participant.error) {
+    return { ok: false, error: participant.error };
+  }
+
+  if (!participant.data) {
     return { ok: false, error: "This team does not belong to the selected competition." };
   }
 
@@ -348,10 +435,11 @@ export async function removeTeamFromCompetition(
   }
 
   const result = await supabase
-    .from("teams")
-    .update({ league_id: null })
-    .eq("id", id)
-    .eq("league_id", expectedCompetitionId);
+    .from("competition_teams")
+    .update({ is_active: false })
+    .eq("competition_id", expectedCompetitionId)
+    .eq("team_id", id)
+    .eq("is_active", true);
 
   if (result.error) {
     console.error("admin team remove from competition failed", result.error);
@@ -374,14 +462,22 @@ export async function deleteTeamById(id: string, expectedCompetitionId?: string)
     return { ok: false, error };
   }
 
-  const existingTeam = await getExistingTeamLeague(supabase, id);
+  const existingTeam = await getExistingTeam(supabase, id);
 
   if (existingTeam.error) {
     return { ok: false, error: existingTeam.error };
   }
 
-  if (expectedCompetitionId && existingTeam.leagueId !== expectedCompetitionId) {
-    return { ok: false, error: "This team does not belong to the selected competition." };
+  if (expectedCompetitionId) {
+    const participant = await getCompetitionParticipant(supabase, id, expectedCompetitionId);
+
+    if (participant.error) {
+      return { ok: false, error: participant.error };
+    }
+
+    if (!participant.data) {
+      return { ok: false, error: "This team does not belong to the selected competition." };
+    }
   }
 
   const usage = await countTeamMatchReferences(supabase, id);
@@ -394,6 +490,23 @@ export async function deleteTeamById(id: string, expectedCompetitionId?: string)
     return {
       ok: false,
       error: `This team is used in ${usage.count} match${usage.count === 1 ? "" : "es"} and cannot be deleted.`,
+    };
+  }
+
+  const participantUsage = await supabase
+    .from("competition_teams")
+    .select("id", { count: "exact", head: true })
+    .eq("team_id", id);
+
+  if (participantUsage.error) {
+    console.error("admin team competition usage check failed", participantUsage.error);
+    return { ok: false, error: "Could not verify whether this team is linked to competitions." };
+  }
+
+  if ((participantUsage.count ?? 0) > 0) {
+    return {
+      ok: false,
+      error: "This team is linked to one or more competitions and cannot be deleted.",
     };
   }
 
