@@ -24,7 +24,6 @@ type Competition = {
 
 type Team = {
   id: string;
-  league_id: string | null;
   name: string;
   short_name: string | null;
   logo_url: string | null;
@@ -38,7 +37,6 @@ type Team = {
 
 type TeamForm = {
   id: string;
-  leagueId: string;
   name: string;
   shortName: string;
   logoUrl: string;
@@ -48,7 +46,6 @@ type TeamForm = {
 
 const emptyForm: TeamForm = {
   id: "",
-  leagueId: "",
   name: "",
   shortName: "",
   logoUrl: "",
@@ -94,13 +91,6 @@ function readCompetitionParam() {
   }
 
   return new URLSearchParams(window.location.search).get("competition")?.trim() ?? "";
-}
-
-function formForCompetition(competitionId: string) {
-  return {
-    ...emptyForm,
-    leagueId: competitionId,
-  };
 }
 
 function teamInitials(team: Team) {
@@ -249,7 +239,7 @@ export default function AdminTeamsPage() {
     }
     setSelectedAssignTeamIds([]);
     setLogoFile(null);
-    setForm(formForCompetition(competitionId));
+    setForm(emptyForm);
 
     let result: Awaited<ReturnType<typeof loadAdminTeamsData>>;
 
@@ -281,7 +271,7 @@ export default function AdminTeamsPage() {
 
       setForm((current) => {
         if (competitionId) {
-          return validContext ? { ...current, leagueId: competitionId } : emptyForm;
+          return validContext ? current : emptyForm;
         }
 
         return current;
@@ -295,7 +285,7 @@ export default function AdminTeamsPage() {
   }
 
   function resetForm() {
-    setForm(formForCompetition(contextCompetitionId ?? ""));
+    setForm(emptyForm);
     setLogoFile(null);
     setMessage("");
     setError("");
@@ -312,7 +302,6 @@ export default function AdminTeamsPage() {
   function editTeam(team: Team) {
     setForm({
       id: team.id,
-      leagueId: contextCompetitionId ?? team.league_id ?? "",
       name: team.name,
       shortName: team.short_name ?? "",
       logoUrl: team.logo_url ?? "",
@@ -347,21 +336,19 @@ export default function AdminTeamsPage() {
       "Create new canonical teams in Team Center first, then assign them from Available Teams in this competition.",
     );
     setRelationshipWarning("");
-    setForm(formForCompetition(contextCompetitionId ?? ""));
+    setForm(emptyForm);
     setLogoFile(null);
     scrollToEditForm();
   }
 
-  function teamCompetitionDisplay(team: Team) {
+  function teamParticipantDisplay(team: Team) {
     if (contextCompetitionId) {
       return team.participant_is_active === false
         ? "Hidden participant"
         : `Active participant${typeof team.display_order === "number" ? ` · Order ${team.display_order}` : ""}`;
     }
 
-    return team.league_id
-      ? competitionLabel(competitionsById.get(team.league_id))
-      : "No legacy competition";
+    return "Canonical team";
   }
 
   async function saveTeam(event: FormEvent<HTMLFormElement>) {
@@ -446,7 +433,7 @@ export default function AdminTeamsPage() {
       }
 
       setMessage(form.id ? "Team updated." : "Team added.");
-      setForm(formForCompetition(contextCompetitionId ?? ""));
+      setForm(emptyForm);
       setLogoFile(null);
       const refreshed = await loadData(contextCompetitionId ?? "", () => false, { preserveMessages: true });
       if (!refreshed) {
@@ -551,7 +538,7 @@ export default function AdminTeamsPage() {
     }
 
     setMessage("Team removed from competition.");
-    setForm(formForCompetition(contextCompetitionId));
+    setForm(emptyForm);
     const refreshed = await loadData(contextCompetitionId, () => false, { preserveMessages: true });
     if (refreshed) {
       setMessage("Team removed from competition.");
@@ -843,7 +830,7 @@ export default function AdminTeamsPage() {
                     <th className="px-4 py-3">Logo</th>
                     <th className="px-4 py-3">Name</th>
                     <th className="px-4 py-3">Short Name</th>
-                    <th className="px-4 py-3">{isContextMode ? "Participant" : "Legacy Competition"}</th>
+                    <th className="px-4 py-3">{isContextMode ? "Participant" : "Registry"}</th>
                     <th className="px-4 py-3">KSW?</th>
                     <th className="px-4 py-3">Active?</th>
                     <th className="px-4 py-3">Created At</th>
@@ -864,7 +851,7 @@ export default function AdminTeamsPage() {
                         </td>
                         <td className="px-4 py-3 font-black">{team.name}</td>
                         <td className="px-4 py-3">{team.short_name}</td>
-                        <td className="px-4 py-3">{teamCompetitionDisplay(team)}</td>
+                        <td className="px-4 py-3">{teamParticipantDisplay(team)}</td>
                         <td className="px-4 py-3">{team.is_ksw ? "Yes" : "No"}</td>
                         <td className="px-4 py-3">{team.is_active ? "Yes" : "No"}</td>
                         <td className="px-4 py-3">{formatDate(team.created_at)}</td>

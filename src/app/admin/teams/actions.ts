@@ -43,7 +43,6 @@ type CompetitionRow = {
 
 type TeamRow = {
   id: string;
-  league_id: string | null;
   name: string;
   short_name: string | null;
   logo_url: string | null;
@@ -81,7 +80,7 @@ const allowedLogoTypes = new Map([
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const competitionColumns = "id, name, season, competition_type, season_status, slug, is_published";
-const teamColumns = "id, league_id, name, short_name, logo_url, is_ksw, is_active, created_at";
+const teamColumns = "id, name, short_name, logo_url, is_ksw, is_active, created_at";
 
 function getAdminClient() {
   const supabase = getSupabaseAdmin();
@@ -243,14 +242,12 @@ async function getExistingTeam(
   if (team.error) {
     console.error("admin team lookup failed", team.error);
     return {
-      leagueId: null,
       error: "Could not verify the selected team.",
     };
   }
 
   if (!team.data) {
     return {
-      leagueId: null,
       error: "Team was not found.",
     };
   }
@@ -343,7 +340,6 @@ export async function createTeam(payload: TeamPayload): Promise<ActionResult> {
     logo_url: payload.logo_url,
     is_ksw: payload.is_ksw,
     is_active: payload.is_active,
-    league_id: null,
   });
 
   if (result.error) {
