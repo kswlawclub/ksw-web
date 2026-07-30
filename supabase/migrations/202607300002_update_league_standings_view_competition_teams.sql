@@ -55,12 +55,12 @@ team_match_rows as (
   select
     vm.league_id,
     vm.home_team_id as team_id,
-    1 as played,
-    case when vm.home_score > vm.away_score then 1 else 0 end as won,
-    case when vm.home_score = vm.away_score then 1 else 0 end as drawn,
-    case when vm.home_score < vm.away_score then 1 else 0 end as lost,
-    vm.home_score as goals_for,
-    vm.away_score as goals_against
+    1::bigint as played,
+    case when vm.home_score > vm.away_score then 1::bigint else 0::bigint end as won,
+    case when vm.home_score = vm.away_score then 1::bigint else 0::bigint end as drawn,
+    case when vm.home_score < vm.away_score then 1::bigint else 0::bigint end as lost,
+    vm.home_score::bigint as goals_for,
+    vm.away_score::bigint as goals_against
   from valid_matches vm
 
   union all
@@ -68,12 +68,12 @@ team_match_rows as (
   select
     vm.league_id,
     vm.away_team_id as team_id,
-    1 as played,
-    case when vm.away_score > vm.home_score then 1 else 0 end as won,
-    case when vm.away_score = vm.home_score then 1 else 0 end as drawn,
-    case when vm.away_score < vm.home_score then 1 else 0 end as lost,
-    vm.away_score as goals_for,
-    vm.home_score as goals_against
+    1::bigint as played,
+    case when vm.away_score > vm.home_score then 1::bigint else 0::bigint end as won,
+    case when vm.away_score = vm.home_score then 1::bigint else 0::bigint end as drawn,
+    case when vm.away_score < vm.home_score then 1::bigint else 0::bigint end as lost,
+    vm.away_score::bigint as goals_for,
+    vm.home_score::bigint as goals_against
   from valid_matches vm
 ),
 aggregated as (
@@ -84,12 +84,12 @@ aggregated as (
     ps.short_name,
     ps.logo_url,
     ps.is_ksw,
-    coalesce(sum(tmr.played), 0)::integer as played,
-    coalesce(sum(tmr.won), 0)::integer as won,
-    coalesce(sum(tmr.drawn), 0)::integer as drawn,
-    coalesce(sum(tmr.lost), 0)::integer as lost,
-    coalesce(sum(tmr.goals_for), 0)::integer as goals_for,
-    coalesce(sum(tmr.goals_against), 0)::integer as goals_against
+    coalesce(sum(tmr.played), 0::bigint) as played,
+    coalesce(sum(tmr.won), 0::bigint) as won,
+    coalesce(sum(tmr.drawn), 0::bigint) as drawn,
+    coalesce(sum(tmr.lost), 0::bigint) as lost,
+    coalesce(sum(tmr.goals_for), 0::bigint) as goals_for,
+    coalesce(sum(tmr.goals_against), 0::bigint) as goals_against
   from participant_set ps
   left join team_match_rows tmr
     on tmr.league_id = ps.league_id
@@ -115,8 +115,8 @@ select
   lost,
   goals_for,
   goals_against,
-  (goals_for - goals_against)::integer as goal_difference,
-  ((won * 3) + drawn)::integer as points
+  (goals_for - goals_against) as goal_difference,
+  ((won * 3::bigint) + drawn) as points
 from aggregated;
 
 grant select on public.league_standings_view to anon, authenticated;
@@ -124,19 +124,19 @@ grant select on public.league_standings_view to anon, authenticated;
 -- Read-only verification after applying this migration:
 --
 -- 1) Status distribution:
--- select status, count(*)::integer as match_count
+-- select status, count(*) as match_count
 -- from public.matches
 -- group by status
 -- order by status;
 --
 -- 2) Active participants should be 4 for the production verification competition:
--- select count(*)::integer as active_participants
+-- select count(*) as active_participants
 -- from public.competition_teams
 -- where competition_id = '70bcecbb-e339-4e59-9fe3-0f16bcd0c3d3'
 --   and is_active = true;
 --
 -- 3) Standings rows should match eligible participant rows:
--- select count(*)::integer as standings_rows
+-- select count(*) as standings_rows
 -- from public.league_standings_view
 -- where league_id = '70bcecbb-e339-4e59-9fe3-0f16bcd0c3d3';
 --
@@ -147,13 +147,13 @@ grant select on public.league_standings_view to anon, authenticated;
 -- order by team_name;
 --
 -- 5) Scheduled match count for comparison:
--- select count(*)::integer as scheduled_matches
+-- select count(*) as scheduled_matches
 -- from public.matches
 -- where league_id = '70bcecbb-e339-4e59-9fe3-0f16bcd0c3d3'
 --   and status = 'scheduled';
 --
 -- 6) No duplicate standings rows:
--- select league_id, team_id, count(*)::integer as row_count
+-- select league_id, team_id, count(*) as row_count
 -- from public.league_standings_view
 -- group by league_id, team_id
 -- having count(*) > 1;
