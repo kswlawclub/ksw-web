@@ -581,7 +581,10 @@ async function loadHomeData() {
 
   const [allTeams, standings, finishedMatches, scheduledMatches, sponsors] = await Promise.all([
     currentCompetitionId
-      ? loadCompetitionParticipants(supabase, currentCompetitionId, { includeInactiveParticipants: false })
+      ? loadCompetitionParticipants(supabase, currentCompetitionId, {
+          includeInactiveParticipants: false,
+          includeLegacyFallback: false,
+        })
       : Promise.resolve([] as Row[]),
     currentCompetitionId
       ? runSupabaseQuery(
