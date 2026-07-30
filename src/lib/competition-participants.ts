@@ -12,7 +12,6 @@ export type CompetitionParticipant = Row & {
   is_active: boolean;
   participant_is_active: boolean;
   display_order: number;
-  participant_source: "junction";
 };
 
 type SupabaseClient = NonNullable<ReturnType<typeof getSupabase>>;
@@ -68,7 +67,6 @@ function fromTeamRow(team: Row, participant: Row): CompetitionParticipant | unde
     is_active: booleanValue(team, "is_active", true),
     participant_is_active: booleanValue(participant, "is_active", true),
     display_order: numberValue(participant, "display_order"),
-    participant_source: "junction",
   };
 }
 

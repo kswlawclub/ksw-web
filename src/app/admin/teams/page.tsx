@@ -32,7 +32,6 @@ type Team = {
   created_at: string | null;
   display_order?: number;
   participant_is_active?: boolean;
-  participant_source?: string;
 };
 
 type TeamForm = {
