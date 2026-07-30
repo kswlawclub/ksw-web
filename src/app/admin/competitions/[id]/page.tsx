@@ -52,20 +52,17 @@ function formatDate(value: unknown) {
   }).format(date);
 }
 
-function formatDateTime(value: unknown) {
-  if (typeof value !== "string" || !value) return "Not set";
+function formatTime(value: unknown) {
+  if (typeof value !== "string" || !value) return "Time not set";
 
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
+  if (Number.isNaN(date.getTime())) return "Time not set";
 
   return new Intl.DateTimeFormat("en", {
-    day: "2-digit",
     hour: "2-digit",
     hourCycle: "h23",
     minute: "2-digit",
-    month: "short",
     timeZone: "Asia/Bangkok",
-    year: "numeric",
   }).format(date);
 }
 
@@ -104,6 +101,48 @@ function scoreText(match: Row) {
   }
 
   return `${homeScore} - ${awayScore}`;
+}
+
+function matchScoreText(match: Row) {
+  const status = text(match, ["status"], "");
+
+  if (status !== "finished") {
+    return "VS";
+  }
+
+  return scoreText(match);
+}
+
+function matchStatusBadgeClass(status: string) {
+  if (status === "scheduled") {
+    return "border-[#d8ad45]/35 bg-[#d8ad45]/10 text-[#8a6418]";
+  }
+
+  if (status === "finished") {
+    return "border-emerald-700/20 bg-emerald-50 text-emerald-800";
+  }
+
+  return "border-slate-200 bg-slate-100 text-slate-600";
+}
+
+function matchSortGroup(match: Row) {
+  const status = text(match, ["status"], "");
+
+  if (status === "scheduled") return 0;
+  if (status === "finished") return 2;
+  return 1;
+}
+
+function sortWorkspaceMatches(matches: Row[]) {
+  return [...matches].sort((a, b) => {
+    const groupDiff = matchSortGroup(a) - matchSortGroup(b);
+    if (groupDiff) return groupDiff;
+
+    const status = text(a, ["status"], "");
+    const timeDiff = matchTime(a) - matchTime(b);
+
+    return status === "finished" ? -timeDiff : timeDiff;
+  });
 }
 
 async function runQuery<T>(
@@ -212,8 +251,7 @@ export default async function AdminCompetitionWorkspacePage({
   const scheduledMatches = matches.filter((match) => text(match, ["status"], "") === "scheduled");
   const finishedMatches = matches.filter((match) => text(match, ["status"], "") === "finished");
   const unknownStatusMatches = matches.length - scheduledMatches.length - finishedMatches.length;
-  const nextMatch = [...scheduledMatches].sort((a, b) => matchTime(a) - matchTime(b))[0];
-  const latestResult = [...finishedMatches].sort((a, b) => matchTime(b) - matchTime(a))[0];
+  const workspaceMatches = sortWorkspaceMatches(matches);
   const hasLinkedData = teams.length > 0 || matches.length > 0;
   const statusAndActiveMisaligned =
     (seasonStatus === "completed" && isActive) || (seasonStatus === "active" && !isActive);
@@ -404,32 +442,57 @@ export default async function AdminCompetitionWorkspacePage({
             <StatCard label="Other" value={unknownStatusMatches} />
           </div>
           <div className="mt-5 grid gap-3">
-            {nextMatch ? (
-              <div className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3">
-                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Next match</p>
-                <p className="mt-1 text-sm font-black text-[#061426]">
-                  {teamName(teamsById.get(text(nextMatch, ["home_team_id"], "")))} vs{" "}
-                  {teamName(teamsById.get(text(nextMatch, ["away_team_id"], "")))}
-                </p>
-                <p className="mt-1 text-xs font-bold text-slate-500">{formatDateTime(nextMatch.match_date)}</p>
-              </div>
-            ) : null}
-            {latestResult ? (
-              <div className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3">
-                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Latest result</p>
-                <p className="mt-1 text-sm font-black text-[#061426]">
-                  {teamName(teamsById.get(text(latestResult, ["home_team_id"], "")))}{" "}
-                  <span className="text-[#8a6418]">{scoreText(latestResult)}</span>{" "}
-                  {teamName(teamsById.get(text(latestResult, ["away_team_id"], "")))}
-                </p>
-                <p className="mt-1 text-xs font-bold text-slate-500">{formatDateTime(latestResult.match_date)}</p>
-              </div>
-            ) : null}
-            {!nextMatch && !latestResult ? (
+            {workspaceMatches.length ? (
+              workspaceMatches.map((match) => {
+                const homeTeam = teamsById.get(text(match, ["home_team_id"], ""));
+                const awayTeam = teamsById.get(text(match, ["away_team_id"], ""));
+                const status = text(match, ["status"], "other");
+                const venue = text(match, ["venue"], "");
+
+                return (
+                  <div className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3" key={text(match, ["id"])}>
+                    <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <TeamLogo
+                          className="!size-10 shrink-0 bg-[#061426]"
+                          initials={teamInitials(homeTeam ?? {})}
+                          logoUrl={text(homeTeam, ["logo_url"], "")}
+                          teamName={teamName(homeTeam)}
+                        />
+                        <p className="min-w-0 break-words text-sm font-black text-[#061426]">{teamName(homeTeam)}</p>
+                      </div>
+                      <div className="flex items-center justify-center">
+                        <span className="min-w-16 rounded-md border border-[#d8ad45]/35 bg-white px-3 py-2 text-center text-sm font-black text-[#8a6418] shadow-sm">
+                          {matchScoreText(match)}
+                        </span>
+                      </div>
+                      <div className="flex min-w-0 items-center gap-3 sm:justify-end">
+                        <TeamLogo
+                          className="!size-10 shrink-0 bg-[#061426]"
+                          initials={teamInitials(awayTeam ?? {})}
+                          logoUrl={text(awayTeam, ["logo_url"], "")}
+                          teamName={teamName(awayTeam)}
+                        />
+                        <p className="min-w-0 break-words text-sm font-black text-[#061426] sm:text-right">
+                          {teamName(awayTeam)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
+                      <span>{formatDate(match.match_date)} · {formatTime(match.match_date)}</span>
+                      <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${matchStatusBadgeClass(status)}`}>
+                        {statusLabel(status)}
+                      </span>
+                      {venue ? <span>Venue: {venue}</span> : null}
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
               <p className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
                 No matches linked to this competition.
               </p>
-            ) : null}
+            )}
           </div>
         </article>
       </section>
