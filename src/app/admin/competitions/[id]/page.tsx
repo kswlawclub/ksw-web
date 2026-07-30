@@ -187,7 +187,10 @@ async function loadWorkspaceData(id: string) {
   }
 
   const [teams, matches] = await Promise.all([
-    loadCompetitionParticipants(supabase, id, { includeInactiveParticipants: false }),
+    loadCompetitionParticipants(supabase, id, {
+      includeInactiveParticipants: false,
+      includeLegacyFallback: false,
+    }),
     runQuery(
       "workspace_matches",
       supabase.from("matches").select(matchColumns).eq("league_id", id).order("match_date", { ascending: true }),
