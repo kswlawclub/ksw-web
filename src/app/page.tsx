@@ -213,6 +213,13 @@ function competitionStatusLabel(status: string) {
   return "Active";
 }
 
+function startsInLabel(days: number | undefined) {
+  if (typeof days !== "number") return "Date TBC";
+  if (days <= 0) return "Starts today";
+  if (days === 1) return "Starts in 1 day";
+  return `Starts in ${days} days`;
+}
+
 function teamInitials(row: Row) {
   const shortName = text(row, ["short_name"], "");
   if (shortName) {
@@ -335,8 +342,13 @@ export default async function Home() {
     configured,
     currentCompetition,
     errors: homeDataErrors,
+    isNextCompetitionComingSoon,
+    isPrimaryCompetitionComingSoon,
     kswParticipants: teams,
+    nextCompetition,
+    nextCompetitionStartsInDays,
     nextKswFixture,
+    primaryCompetitionStartsInDays,
     sponsors,
     standings,
     summary: competitionSummary,
@@ -375,6 +387,10 @@ export default async function Home() {
   const competitionHref = competitionSlug ? `/competitions/${competitionSlug}` : "/competitions";
   const competitionAnchorHref = competitionSlug ? competitionHref : "/competitions";
   const hasCompetitionLink = Boolean(competitionSlug);
+  const nextCompetitionName = text(nextCompetition, ["name"], "");
+  const nextCompetitionSlug = text(nextCompetition, ["slug"], "");
+  const nextCompetitionHref = nextCompetitionSlug ? `/competitions/${nextCompetitionSlug}` : "/competitions";
+  const shouldShowNextCompetitionCard = isNextCompetitionComingSoon && Boolean(nextCompetition);
   const isCompetitionCompleted = competitionStatus === "completed";
   const isLeagueCompetition = competitionType === "league";
   const isTournamentCompetition = competitionType === "cup" || competitionType === "tournament";
@@ -508,7 +524,13 @@ export default async function Home() {
             </p>
             <div className="mt-5 inline-flex max-w-full items-center rounded-full border border-[#d8ad45]/35 bg-[#d8ad45]/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-[#f4d58a] shadow-lg shadow-[#d8ad45]/10 sm:text-xs">
               {competitionTypeLabel(competitionType)} • {competitionStatusLabel(competitionStatus)}
+              {isPrimaryCompetitionComingSoon ? " • COMING SOON" : ""}
             </div>
+            {isPrimaryCompetitionComingSoon ? (
+              <p className="mt-2 text-xs font-black uppercase tracking-[0.16em] text-slate-300">
+                {startsInLabel(primaryCompetitionStartsInDays)}
+              </p>
+            ) : null}
             <div className="mt-3 flex flex-wrap items-center gap-3 text-sm font-bold text-slate-300">
               <span className="min-w-0">{competitionName}</span>
               {hasCompetitionLink ? (
@@ -692,7 +714,7 @@ export default async function Home() {
                       Next Fixtures
                     </h2>
                       <p className="mt-1 text-sm font-semibold text-slate-300">
-                      Upcoming KSW match schedule in {competitionName}.
+                      Upcoming match schedule from {competitionName}.
                     </p>
                   </div>
                 </div>
@@ -1007,6 +1029,37 @@ export default async function Home() {
         </div>
         </div>
       </section>
+
+      {shouldShowNextCompetitionCard ? (
+        <section className="bg-slate-100">
+          <div className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
+            <div className="grid gap-4 rounded-2xl border border-[#d8ad45]/30 bg-white p-5 shadow-xl shadow-slate-900/10 sm:p-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-[#d8ad45]/45 bg-[#fff4dc] px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#061426]">
+                    NEXT COMPETITION
+                  </span>
+                  <span className="rounded-full bg-[#061426] px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#f4d58a]">
+                    COMING SOON
+                  </span>
+                </div>
+                <h2 className="mt-3 break-words text-2xl font-black text-[#061426] sm:text-3xl">
+                  {nextCompetitionName || "Upcoming competition"}
+                </h2>
+                <p className="mt-2 text-sm font-bold text-slate-600">
+                  {formatMatchDateLong(nextCompetition?.start_date)} • {startsInLabel(nextCompetitionStartsInDays)}
+                </p>
+              </div>
+              <Link
+                className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/15 transition-transform hover:scale-[1.02]"
+                href={nextCompetitionHref}
+              >
+                View Competition
+              </Link>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <section className="bg-slate-100">
         <div className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">

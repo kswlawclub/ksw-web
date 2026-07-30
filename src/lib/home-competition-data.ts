@@ -33,6 +33,23 @@ export type HomeMappedMatch = HomeRow & {
   isKswFixture: boolean;
 };
 
+export type HomeCompetitionSelectionReason =
+  | "active_featured"
+  | "active_priority"
+  | "latest_completed"
+  | "nearest_upcoming"
+  | "none";
+
+export type HomeCompetitionSelection = {
+  isNextCompetitionComingSoon: boolean;
+  isPrimaryCompetitionComingSoon: boolean;
+  nextCompetition: HomeRow | undefined;
+  nextCompetitionStartsInDays: number | undefined;
+  primaryCompetition: HomeRow | undefined;
+  primaryCompetitionStartsInDays: number | undefined;
+  primarySelectionReason: HomeCompetitionSelectionReason;
+};
+
 export type HomeCompetitionData = {
   allFinishedMatches: HomeMappedMatch[];
   allMappedMatches: HomeMappedMatch[];
@@ -45,6 +62,12 @@ export type HomeCompetitionData = {
   finishedKswMatches: HomeMappedMatch[];
   kswParticipants: HomeRow[];
   nextKswFixture: HomeMappedMatch | undefined;
+  nextCompetition: HomeRow | undefined;
+  nextCompetitionStartsInDays: number | undefined;
+  primaryCompetitionStartsInDays: number | undefined;
+  primarySelectionReason: HomeCompetitionSelectionReason;
+  isNextCompetitionComingSoon: boolean;
+  isPrimaryCompetitionComingSoon: boolean;
   rawJunctionRows: HomeRow[];
   rawMatches: HomeRow[];
   rawPublishedCompetitions: HomeRow[];
@@ -75,6 +98,8 @@ const matchColumns =
   "id, league_id, match_date, home_team_id, away_team_id, home_score, away_score, venue, status, match_type";
 const junctionColumns = "id, competition_id, team_id, is_active, display_order, created_at";
 const sponsorColumns = "id, name, logo_url, website_url, tier, sort_order, is_active";
+const DAY_MS = 24 * 60 * 60 * 1000;
+const COMING_SOON_DAYS = 30;
 
 export function homeText(row: HomeRow | undefined, keys: string[], fallback = "") {
   if (!row) return fallback;
@@ -97,49 +122,141 @@ function numberValue(row: HomeRow, key: string) {
   return 0;
 }
 
-function competitionStatusPriority(status: string) {
-  if (status === "active") return 0;
-  if (status === "upcoming") return 1;
-  if (status === "completed") return 2;
-  return 3;
-}
-
-function dateSortValue(row: HomeRow) {
-  const value = homeText(row, ["start_date", "end_date", "created_at"], "");
-  const time = value ? new Date(value).getTime() : Number.NaN;
-  return Number.isNaN(time) ? 0 : time;
-}
-
 function displayOrderValue(row: HomeRow) {
   return numberValue(row, "display_order");
 }
 
-function createdAtValue(row: HomeRow) {
-  const value = homeText(row, ["created_at"], "");
+function dateTimeValue(row: HomeRow, key: string) {
+  const value = homeText(row, [key], "");
   const time = value ? new Date(value).getTime() : Number.NaN;
   return Number.isNaN(time) ? 0 : time;
 }
 
+function createdAtValue(row: HomeRow) {
+  return dateTimeValue(row, "created_at");
+}
+
+function startDateValue(row: HomeRow) {
+  return dateTimeValue(row, "start_date");
+}
+
+function endDateValue(row: HomeRow) {
+  return dateTimeValue(row, "end_date");
+}
+
+function utcDayValue(time: number) {
+  const date = new Date(time);
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+}
+
+function daysUntilStart(row: HomeRow, now: number) {
+  const startTime = startDateValue(row);
+  if (!startTime) return undefined;
+
+  return Math.floor((utcDayValue(startTime) - utcDayValue(now)) / DAY_MS);
+}
+
+function isComingSoon(row: HomeRow | undefined, now: number) {
+  if (!row) return false;
+
+  const days = daysUntilStart(row, now);
+  return typeof days === "number" && days >= 0 && days <= COMING_SOON_DAYS;
+}
+
+function activeCompetitionSort(a: HomeRow, b: HomeRow) {
+  const featuredDiff = Number(b.is_featured === true) - Number(a.is_featured === true);
+  if (featuredDiff) return featuredDiff;
+
+  const displayOrderDiff = displayOrderValue(a) - displayOrderValue(b);
+  if (displayOrderDiff) return displayOrderDiff;
+
+  const startDateDiff = startDateValue(b) - startDateValue(a);
+  if (startDateDiff) return startDateDiff;
+
+  const endDateDiff = endDateValue(b) - endDateValue(a);
+  if (endDateDiff) return endDateDiff;
+
+  return createdAtValue(b) - createdAtValue(a);
+}
+
+function upcomingCompetitionSort(now: number) {
+  return (a: HomeRow, b: HomeRow) => {
+    const aDays = daysUntilStart(a, now);
+    const bDays = daysUntilStart(b, now);
+    const aHasFutureDate = typeof aDays === "number" && aDays >= 0;
+    const bHasFutureDate = typeof bDays === "number" && bDays >= 0;
+
+    if (aHasFutureDate !== bHasFutureDate) return aHasFutureDate ? -1 : 1;
+    if (aHasFutureDate && bHasFutureDate && aDays !== bDays) return aDays - bDays;
+
+    const aStart = startDateValue(a);
+    const bStart = startDateValue(b);
+    if (aStart !== bStart) {
+      if (!aStart) return 1;
+      if (!bStart) return -1;
+      return aStart - bStart;
+    }
+
+    const featuredDiff = Number(b.is_featured === true) - Number(a.is_featured === true);
+    if (featuredDiff) return featuredDiff;
+
+    const displayOrderDiff = displayOrderValue(a) - displayOrderValue(b);
+    if (displayOrderDiff) return displayOrderDiff;
+
+    return createdAtValue(b) - createdAtValue(a);
+  };
+}
+
+function completedCompetitionSort(a: HomeRow, b: HomeRow) {
+  const endDateDiff = endDateValue(b) - endDateValue(a);
+  if (endDateDiff) return endDateDiff;
+
+  const startDateDiff = startDateValue(b) - startDateValue(a);
+  if (startDateDiff) return startDateDiff;
+
+  return createdAtValue(b) - createdAtValue(a);
+}
+
+export function selectHomeCompetition(rows: HomeRow[], now = new Date().getTime()): HomeCompetitionSelection {
+  const publishedRows = rows.filter((row) => row.is_published === true);
+  const activeRows = publishedRows.filter((row) => homeText(row, ["season_status"], "active").toLowerCase() === "active");
+  const upcomingRows = publishedRows.filter((row) => homeText(row, ["season_status"], "").toLowerCase() === "upcoming");
+  const completedRows = publishedRows.filter((row) => homeText(row, ["season_status"], "").toLowerCase() === "completed");
+  const primaryActive = [...activeRows].sort(activeCompetitionSort)[0];
+  const primaryUpcoming = [...upcomingRows].sort(upcomingCompetitionSort(now))[0];
+  const primaryCompleted = [...completedRows].sort(completedCompetitionSort)[0];
+  const primaryCompetition = primaryActive ?? primaryUpcoming ?? primaryCompleted;
+  const primarySelectionReason: HomeCompetitionSelectionReason = primaryActive
+    ? primaryActive.is_featured === true
+      ? "active_featured"
+      : "active_priority"
+    : primaryUpcoming
+      ? "nearest_upcoming"
+      : primaryCompleted
+        ? "latest_completed"
+        : "none";
+  const nextCompetition =
+    primaryActive
+      ? [...upcomingRows]
+          .filter((row) => isComingSoon(row, now))
+          .sort(upcomingCompetitionSort(now))[0]
+      : undefined;
+  const nextCompetitionStartsInDays = daysUntilStart(nextCompetition ?? {}, now);
+  const primaryCompetitionStartsInDays = daysUntilStart(primaryCompetition ?? {}, now);
+
+  return {
+    isNextCompetitionComingSoon: isComingSoon(nextCompetition, now),
+    isPrimaryCompetitionComingSoon: primarySelectionReason === "nearest_upcoming" && isComingSoon(primaryCompetition, now),
+    nextCompetition,
+    nextCompetitionStartsInDays,
+    primaryCompetition,
+    primaryCompetitionStartsInDays,
+    primarySelectionReason,
+  };
+}
+
 export function selectCurrentHomeCompetition(rows: HomeRow[]) {
-  return [...rows]
-    .filter((row) => row.is_published === true)
-    .sort((a, b) => {
-      const statusDiff =
-        competitionStatusPriority(homeText(a, ["season_status"], "active").toLowerCase()) -
-        competitionStatusPriority(homeText(b, ["season_status"], "active").toLowerCase());
-      if (statusDiff) return statusDiff;
-
-      const featuredDiff = Number(b.is_featured === true) - Number(a.is_featured === true);
-      if (featuredDiff) return featuredDiff;
-
-      const displayOrderDiff = displayOrderValue(a) - displayOrderValue(b);
-      if (displayOrderDiff) return displayOrderDiff;
-
-      const dateDiff = dateSortValue(b) - dateSortValue(a);
-      if (dateDiff) return dateDiff;
-
-      return createdAtValue(b) - createdAtValue(a);
-    })[0];
+  return selectHomeCompetition(rows).primaryCompetition;
 }
 
 export function homeFixtureTimeValue(match: HomeRow) {
@@ -309,7 +426,13 @@ export async function loadHomeCompetitionData(): Promise<HomeCompetitionData> {
       ],
       finishedKswMatches: [],
       kswParticipants: [],
+      isNextCompetitionComingSoon: false,
+      isPrimaryCompetitionComingSoon: false,
+      nextCompetition: undefined,
+      nextCompetitionStartsInDays: undefined,
       nextKswFixture: undefined,
+      primaryCompetitionStartsInDays: undefined,
+      primarySelectionReason: "none",
       rawJunctionRows: [],
       rawMatches: [],
       rawPublishedCompetitions: [],
@@ -325,7 +448,8 @@ export async function loadHomeCompetitionData(): Promise<HomeCompetitionData> {
     "current_competitions",
     supabase.from("leagues").select(leagueColumns).eq("is_published", true).order("created_at", { ascending: false }),
   );
-  const currentCompetition = selectCurrentHomeCompetition(competitionsResult.data);
+  const selection = selectHomeCompetition(competitionsResult.data);
+  const currentCompetition = selection.primaryCompetition;
   const currentCompetitionId = homeText(currentCompetition, ["id"], "");
 
   if (!currentCompetitionId) {
@@ -346,7 +470,13 @@ export async function loadHomeCompetitionData(): Promise<HomeCompetitionData> {
       errors,
       finishedKswMatches: [],
       kswParticipants: [],
+      isNextCompetitionComingSoon: selection.isNextCompetitionComingSoon,
+      isPrimaryCompetitionComingSoon: selection.isPrimaryCompetitionComingSoon,
+      nextCompetition: selection.nextCompetition,
+      nextCompetitionStartsInDays: selection.nextCompetitionStartsInDays,
       nextKswFixture: undefined,
+      primaryCompetitionStartsInDays: selection.primaryCompetitionStartsInDays,
+      primarySelectionReason: selection.primarySelectionReason,
       rawJunctionRows: [],
       rawMatches: [],
       rawPublishedCompetitions: competitionsResult.data,
@@ -438,8 +568,14 @@ export async function loadHomeCompetitionData(): Promise<HomeCompetitionData> {
     currentCompetition,
     errors,
     finishedKswMatches,
+    isNextCompetitionComingSoon: selection.isNextCompetitionComingSoon,
+    isPrimaryCompetitionComingSoon: selection.isPrimaryCompetitionComingSoon,
     kswParticipants,
+    nextCompetition: selection.nextCompetition,
+    nextCompetitionStartsInDays: selection.nextCompetitionStartsInDays,
     nextKswFixture,
+    primaryCompetitionStartsInDays: selection.primaryCompetitionStartsInDays,
+    primarySelectionReason: selection.primarySelectionReason,
     rawJunctionRows: junctionResult.data,
     rawMatches: matchesResult.data,
     rawPublishedCompetitions: competitionsResult.data,
