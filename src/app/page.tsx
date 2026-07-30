@@ -1,23 +1,16 @@
 import Link from "next/link";
 import { LiveCountdown } from "@/components/live-countdown";
 import { TeamLogo } from "@/components/team-logo";
-import { loadCompetitionParticipants } from "@/lib/competition-participants";
-import { getSupabase, getSupabaseConfig } from "@/lib/supabase";
+import {
+  homeKswOutcome,
+  loadHomeCompetitionData,
+  type HomeRow,
+} from "@/lib/home-competition-data";
 
 export const dynamic = "force-dynamic";
-export const fetchCache = "force-no-store";
 export const revalidate = 0;
 
-type Row = Record<string, unknown>;
-
-const standingsColumns =
-  "team_id, league_id, team_name, short_name, logo_url, is_ksw, played, won, drawn, lost, goals_for, goals_against, goal_difference, points";
-const matchColumns =
-  "id, league_id, match_date, home_team_id, away_team_id, home_score, away_score, venue, status, match_type";
-const leagueColumns =
-  "id, name, season, slug, competition_type, season_status, is_active, is_published, is_featured, display_order, start_date, end_date, created_at";
-const sponsorColumns =
-  "id, name, logo_url, website_url, tier, sort_order, is_active";
+type Row = HomeRow;
 
 function text(row: Row | undefined, keys: string[], fallback = "") {
   if (!row) {
@@ -155,22 +148,11 @@ function fixtureDateValue(match: Row) {
   return match.match_date ?? match.date ?? match.kickoff_at;
 }
 
-function isKswFixture(match: Row) {
-  return match.home_team_is_ksw === true || match.away_team_is_ksw === true;
-}
-
 function opponentForKsw(match: Row) {
   const homeName = text(match, ["home_team_name"], "Home team unavailable");
   const awayName = text(match, ["away_team_name"], "Away team unavailable");
 
   return match.home_team_is_ksw === true ? awayName : homeName;
-}
-
-function venueNumber(match: Row) {
-  const venue = text(match, ["venue"], "");
-  const matchValue = venue.match(/v\s*(\d+)/i);
-
-  return matchValue ? Number(matchValue[1]) : Number.MAX_SAFE_INTEGER;
 }
 
 function formatVenue(value: string) {
@@ -214,25 +196,6 @@ function FixtureMetaBadgePair({ matchTime, venue }: { matchTime: string; venue: 
   );
 }
 
-function fixtureTimeValue(match: Row) {
-  const dateValue = fixtureDateValue(match);
-  const date = typeof dateValue === "string" ? new Date(dateValue) : null;
-
-  return date && !Number.isNaN(date.getTime()) ? date.getTime() : Number.MAX_SAFE_INTEGER;
-}
-
-function sortUpcomingFixtures(fixtures: Row[]) {
-  return [...fixtures].sort((a, b) => {
-    const timeDiff = fixtureTimeValue(a) - fixtureTimeValue(b);
-    if (timeDiff) return timeDiff;
-
-    const venueDiff = venueNumber(a) - venueNumber(b);
-    if (venueDiff) return venueDiff;
-
-    return text(a, ["home_team_name"], "").localeCompare(text(b, ["home_team_name"], ""));
-  });
-}
-
 function isString(value: unknown) {
   return typeof value === "string" && value.trim().length > 0;
 }
@@ -248,68 +211,6 @@ function competitionStatusLabel(status: string) {
   if (status === "completed") return "Completed";
   if (status === "upcoming") return "Upcoming";
   return "Active";
-}
-
-function competitionStatusPriority(status: string) {
-  if (status === "active") return 0;
-  if (status === "upcoming") return 1;
-  if (status === "completed") return 2;
-  return 3;
-}
-
-function dateSortValue(row: Row) {
-  const value = text(row, ["start_date", "end_date", "created_at"], "");
-  const time = value ? new Date(value).getTime() : Number.NaN;
-  return Number.isNaN(time) ? 0 : time;
-}
-
-function displayOrderValue(row: Row) {
-  const value = row.display_order;
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim() && !Number.isNaN(Number(value))) return Number(value);
-  return 0;
-}
-
-function createdAtValue(row: Row) {
-  const value = text(row, ["created_at"], "");
-  const time = value ? new Date(value).getTime() : Number.NaN;
-  return Number.isNaN(time) ? 0 : time;
-}
-
-function selectCurrentCompetition(rows: Row[]) {
-  return [...rows]
-    .filter((row) => row.is_published === true)
-    .sort((a, b) => {
-      const statusDiff =
-        competitionStatusPriority(text(a, ["season_status"], "active").toLowerCase()) -
-        competitionStatusPriority(text(b, ["season_status"], "active").toLowerCase());
-      if (statusDiff) return statusDiff;
-
-      const featuredDiff = Number(b.is_featured === true) - Number(a.is_featured === true);
-      if (featuredDiff) return featuredDiff;
-
-      const displayOrderDiff = displayOrderValue(a) - displayOrderValue(b);
-      if (displayOrderDiff) return displayOrderDiff;
-
-      const dateDiff = dateSortValue(b) - dateSortValue(a);
-      if (dateDiff) return dateDiff;
-
-      return createdAtValue(b) - createdAtValue(a);
-    })[0];
-}
-
-function kswOutcome(match: Row) {
-  const homeScore = match.home_score;
-  const awayScore = match.away_score;
-  const hasScore = typeof homeScore === "number" && typeof awayScore === "number";
-  const homeIsKsw = match.home_team_is_ksw === true;
-  const awayIsKsw = match.away_team_is_ksw === true;
-
-  if (!hasScore || (!homeIsKsw && !awayIsKsw)) return "";
-  if (homeScore === awayScore) return "DRAW";
-
-  const kswWon = homeIsKsw ? homeScore > awayScore : awayScore > homeScore;
-  return kswWon ? "WIN" : "LOSS";
 }
 
 function teamInitials(row: Row) {
@@ -426,248 +327,20 @@ function sponsorSlots(sponsors: Row[], minimumSlots: number) {
   return slots;
 }
 
-function teamById(teams: Row[]) {
-  return new Map(
-    teams.map((team) => [
-      text(team, ["id"], ""),
-      {
-        name: text(team, ["name", "short_name"], "Team unavailable"),
-        shortName: text(team, ["short_name"], ""),
-        logoUrl: text(team, ["logo_url"], ""),
-        isKsw: team.is_ksw === true,
-      },
-    ]),
-  );
-}
-
-function withMatchTeams(matches: Row[], teams: Row[]): Row[] {
-  const teamsById = teamById(teams);
-
-  return matches.map((match) => {
-    const homeTeamId = text(match, ["home_team_id"], "");
-    const awayTeamId = text(match, ["away_team_id"], "");
-    const homeTeam = teamsById.get(homeTeamId);
-    const awayTeam = teamsById.get(awayTeamId);
-    const homeScore = match.home_score;
-    const awayScore = match.away_score;
-    const hasScore = typeof homeScore === "number" && typeof awayScore === "number";
-
-    return {
-      ...match,
-      home_team_name: homeTeam?.name ?? "Home team unavailable",
-      home_team_short_name: homeTeam?.shortName ?? "",
-      home_team_logo_url: homeTeam?.logoUrl ?? "",
-      home_team_is_ksw: homeTeam?.isKsw === true,
-      away_team_name: awayTeam?.name ?? "Away team unavailable",
-      away_team_short_name: awayTeam?.shortName ?? "",
-      away_team_logo_url: awayTeam?.logoUrl ?? "",
-      away_team_is_ksw: awayTeam?.isKsw === true,
-      score: hasScore ? `${homeScore} - ${awayScore}` : "VS",
-    } satisfies Row;
-  });
-}
-
-function supabaseEnvDiagnostics() {
-  return getSupabaseConfig().diagnostics;
-}
-
-function errorName(error: unknown) {
-  if (error instanceof Error) {
-    return error.name;
-  }
-
-  if (error && typeof error === "object" && "name" in error) {
-    const name = error.name;
-    if (typeof name === "string") {
-      return name;
-    }
-  }
-
-  return "SupabaseError";
-}
-
-function errorMessage(error: unknown) {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  if (error && typeof error === "object" && "message" in error) {
-    const message = error.message;
-    if (typeof message === "string") {
-      return message;
-    }
-  }
-
-  return String(error);
-}
-
-function errorCauseMessage(error: unknown) {
-  if (!error || typeof error !== "object" || !("cause" in error)) {
-    return undefined;
-  }
-
-  const cause = error.cause;
-  if (cause instanceof Error) {
-    return cause.message;
-  }
-  if (cause && typeof cause === "object" && "message" in cause) {
-    const message = cause.message;
-    return typeof message === "string" ? message : undefined;
-  }
-  if (typeof cause === "string") {
-    return cause;
-  }
-
-  return undefined;
-}
-
-function logSupabaseError(source: string, error: unknown) {
-  if (!error) {
-    return;
-  }
-
-  console.error("Supabase homepage query failed", {
-    source,
-    errorName: errorName(error),
-    errorMessage: errorMessage(error),
-    errorCauseMessage: errorCauseMessage(error),
-    ...supabaseEnvDiagnostics(),
-  });
-}
-
-async function runSupabaseQuery<T>(
-  source: string,
-  query: PromiseLike<{ data: T[] | null; error: unknown }>,
-) {
-  try {
-    const result = await query;
-    logSupabaseError(source, result.error);
-    return result.data ?? [];
-  } catch (error) {
-    logSupabaseError(source, error);
-    return [];
-  }
-}
-
-async function loadHomeData() {
-  const supabase = getSupabase();
-
-  if (!supabase) {
-    console.error("Supabase homepage client unavailable", {
-      source: "supabase_client",
-      ...supabaseEnvDiagnostics(),
-    });
-
-    return {
-      configured: false,
-      teams: [] as Row[],
-      standings: [] as Row[],
-      matches: [] as Row[],
-      scheduledMatches: [] as Row[],
-      scheduledKswMatches: [] as Row[],
-      finishedKswMatches: [] as Row[],
-      recentKswResults: [] as Row[],
-      sponsors: [] as Row[],
-      currentCompetition: undefined as Row | undefined,
-    };
-  }
-
-  const competitionRows = await runSupabaseQuery(
-    "current_competitions",
-    supabase
-      .from("leagues")
-      .select(leagueColumns)
-      .eq("is_published", true)
-      .order("created_at", { ascending: false }),
-  );
-  const currentCompetition = selectCurrentCompetition(competitionRows);
-  const currentCompetitionId = text(currentCompetition, ["id"], "");
-
-  const [allTeams, standings, finishedMatches, scheduledMatches, sponsors] = await Promise.all([
-    currentCompetitionId
-      ? loadCompetitionParticipants(supabase, currentCompetitionId, {
-          includeInactiveParticipants: false,
-          includeLegacyFallback: false,
-        })
-      : Promise.resolve([] as Row[]),
-    currentCompetitionId
-      ? runSupabaseQuery(
-          "league_standings_view",
-          supabase
-            .from("league_standings_view")
-            .select(standingsColumns)
-            .eq("league_id", currentCompetitionId),
-        )
-      : Promise.resolve([] as Row[]),
-    currentCompetitionId
-      ? runSupabaseQuery(
-          "finished_matches",
-          supabase
-            .from("matches")
-            .select(matchColumns)
-            .eq("league_id", currentCompetitionId)
-            .eq("status", "finished")
-            .order("match_date", { ascending: false })
-        )
-      : Promise.resolve([] as Row[]),
-    currentCompetitionId
-      ? runSupabaseQuery(
-          "scheduled_matches",
-          supabase
-            .from("matches")
-            .select(matchColumns)
-            .eq("league_id", currentCompetitionId)
-            .eq("status", "scheduled")
-            .order("match_date", { ascending: true })
-            .limit(16),
-        )
-      : Promise.resolve([] as Row[]),
-    runSupabaseQuery(
-	      "sponsors",
-	      supabase
-        .from("sponsors")
-        .select(sponsorColumns)
-        .order("sort_order", { ascending: true, nullsFirst: false }),
-    ),
-  ]);
-
-  const teams = allTeams.filter((team) => team.is_ksw === true);
-  const mappedFinishedMatches = withMatchTeams(finishedMatches, allTeams);
-  const mappedScheduledMatches = withMatchTeams(scheduledMatches, allTeams);
-  const scheduledKswMatches = sortUpcomingFixtures(mappedScheduledMatches.filter(isKswFixture));
-  const finishedKswMatches = mappedFinishedMatches.filter(
-    (match) =>
-      isKswFixture(match) &&
-      typeof match.home_score === "number" &&
-      typeof match.away_score === "number",
-  );
-  const recentKswResults = finishedKswMatches.slice(0, 5);
-
-  return {
-    configured: true,
-    teams,
-    standings,
-    matches: mappedFinishedMatches,
-    scheduledMatches: mappedScheduledMatches,
-    scheduledKswMatches,
-    finishedKswMatches,
-    recentKswResults,
-    sponsors,
-    currentCompetition,
-  };
-}
-
 export default async function Home() {
+  const homeCompetitionData = await loadHomeCompetitionData();
   const {
     configured,
-    teams,
-    standings,
-    scheduledKswMatches,
-    finishedKswMatches,
-    recentKswResults,
-    sponsors,
     currentCompetition,
-  } = await loadHomeData();
+    errors: homeDataErrors,
+    kswParticipants: teams,
+    nextKswFixture,
+    recentKswResults,
+    scheduledKswMatches,
+    sponsors,
+    standings,
+    summary: competitionSummary,
+  } = homeCompetitionData;
   const club = teams[0];
   const logoUrl = isString(club?.logo_url) ? String(club?.logo_url) : "/team-logos/ksw-lc.png";
   const sponsorGroups = groupSponsorsByTier(sponsors);
@@ -706,16 +379,7 @@ export default async function Home() {
   const isLeagueCompetition = competitionType === "league";
   const isTournamentCompetition = competitionType === "cup" || competitionType === "tournament";
   const sortedScheduledMatches = scheduledKswMatches;
-  const upcomingKswMatches = sortedScheduledMatches.filter((match) => {
-    const matchTime = fixtureTimeValue(match);
-    return matchTime >= now.getTime();
-  });
-  const nextKswDateKey = upcomingKswMatches[0]
-    ? bangkokDateKey(fixtureDateValue(upcomingKswMatches[0]))
-    : "";
-  const nextKswKickoffMatches = upcomingKswMatches.filter(
-    (match) => bangkokDateKey(fixtureDateValue(match)) === nextKswDateKey,
-  );
+  const nextKswKickoffMatches = nextKswFixture ? [nextKswFixture] : [];
   const fixtureGroups = sortedScheduledMatches.reduce<Array<{ key: string; date: unknown; matches: Row[] }>>(
     (groups, match) => {
       const matchDate = fixtureDateValue(match);
@@ -758,25 +422,15 @@ export default async function Home() {
         ["Points", number(kswStanding, ["points", "pts"])],
       ]
     : [];
-  const tournamentRecord = finishedKswMatches.reduce<{ wins: number; draws: number; losses: number }>(
-    (record, match) => {
-      const outcome = kswOutcome(match);
-      if (outcome === "WIN") record.wins += 1;
-      if (outcome === "DRAW") record.draws += 1;
-      if (outcome === "LOSS") record.losses += 1;
-      return record;
-    },
-    { wins: 0, draws: 0, losses: 0 },
-  );
   const competitionSummaryStats = isLeagueCompetition
     ? finalKswStats
     : [
-        ["KSW Matches", finishedKswMatches.length + sortedScheduledMatches.length],
-        ["Finished", finishedKswMatches.length],
-        ["Upcoming", sortedScheduledMatches.length],
-        ["Won", tournamentRecord.wins],
-        ["Drawn", tournamentRecord.draws],
-        ["Lost", tournamentRecord.losses],
+        ["KSW Matches", competitionSummary.totalKswMatches],
+        ["Finished", competitionSummary.finishedCount],
+        ["Upcoming", competitionSummary.upcomingCount],
+        ["Won", competitionSummary.wonCount],
+        ["Drawn", competitionSummary.drawnCount],
+        ["Lost", competitionSummary.lostCount],
       ];
   const summaryTitle = isLeagueCompetition
     ? "KSW Season Summary"
@@ -793,8 +447,8 @@ export default async function Home() {
     : isTournamentCompetition
       ? "View Tournament Results"
       : "View Match Archive";
-  const heroPrimaryHref = !isCompetitionCompleted && upcomingKswMatches.length ? "/#next-fixtures" : competitionAnchorHref;
-  const heroPrimaryLabel = !isCompetitionCompleted && upcomingKswMatches.length
+  const heroPrimaryHref = !isCompetitionCompleted && nextKswFixture ? "/#next-fixtures" : competitionAnchorHref;
+  const heroPrimaryLabel = !isCompetitionCompleted && nextKswFixture
     ? "View Next Fixtures"
     : hasCompetitionLink
       ? "View Competition"
@@ -879,8 +533,11 @@ export default async function Home() {
             </div>
             {!configured ? (
               <p className="mt-6 inline-flex max-w-full rounded-md border border-[#d8ad45]/50 bg-[#d8ad45]/10 px-4 py-3 text-sm text-[#f4d58a] sm:mt-8">
-                Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY
-                to load live club data.
+                Live competition data could not be fully loaded
+                {homeDataErrors.length
+                  ? ` (${homeDataErrors.map((error) => error.source).join(", ")})`
+                  : ""}
+                .
               </p>
             ) : null}
           </div>
@@ -1112,7 +769,7 @@ export default async function Home() {
                             teamInitials({ team_name: awayName }),
                           );
                           const venue = text(fixture, ["venue"], "");
-                          const isKswMatch = isKswFixture(fixture);
+                          const isKswMatch = fixture.isKswFixture;
                           const statusLabel = fixtureStatusLabel(fixture, matchDate, now);
                           const startsIn = countdownText(matchDate, now);
                           const fixtureKey = text(fixture, ["id", "match_id"], `${group.key}-${index}`);
@@ -1415,7 +1072,7 @@ export default async function Home() {
                       const homeIsKsw = match.home_team_is_ksw === true;
                       const awayIsKsw = match.away_team_is_ksw === true;
                       const isKswResult = homeIsKsw || awayIsKsw;
-                      const outcome = kswOutcome(match);
+                      const outcome = homeKswOutcome(match);
 
                       return (
                         <article
