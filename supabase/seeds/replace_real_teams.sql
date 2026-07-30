@@ -1,5 +1,11 @@
--- Replace demo teams with the 13 real KSW league teams.
--- Safe to run repeatedly.
+-- DESTRUCTIVE DEV/TEST SEED - DO NOT RUN IN PRODUCTION.
+-- This script deletes gallery rows, matches, team_members, competition assignments,
+-- and teams for the target competition before recreating the 13 KSW league teams.
+-- Intended only for deliberate replacement/reset in development or test databases.
+-- Review the target competition selected below before execution and take a backup first.
+-- Supabase SQL Editor has no reliable environment guard here; operator confirmation is required.
+-- The script runs in a transaction. During manual testing, inspect effects before COMMIT
+-- by changing the final COMMIT to ROLLBACK.
 
 begin;
 

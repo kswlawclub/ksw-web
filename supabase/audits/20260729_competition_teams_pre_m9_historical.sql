@@ -1,3 +1,8 @@
+-- HISTORICAL PRE-M9 AUDIT ONLY.
+-- This file references the legacy public.teams.league_id column.
+-- Current post-M9 databases no longer contain that column.
+-- Do not run this file against post-M9 databases; use the post-M9 health audit instead.
+
 -- READ-ONLY AUDIT - SAFE FOR SUPABASE SQL EDITOR
 -- This file does not modify schema or data.
 -- Run Section 1 first. If public.competition_teams is missing, apply Phase M1 before running later sections.
