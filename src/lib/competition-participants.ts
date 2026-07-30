@@ -6,7 +6,6 @@ type Row = Record<string, unknown>;
 
 export type CompetitionParticipant = Row & {
   id: string;
-  league_id: string | null;
   name: string;
   short_name: string | null;
   logo_url: string | null;
@@ -32,7 +31,7 @@ type SupabaseReadError = {
   message?: string;
 };
 
-const teamSelect = "id, league_id, name, short_name, logo_url, is_ksw, is_active, created_at";
+const teamSelect = "id, name, short_name, logo_url, is_ksw, is_active, created_at";
 
 function text(row: Row | undefined, key: string) {
   const value = row?.[key];
@@ -68,7 +67,6 @@ function fromTeamRow(
 
   return {
     id,
-    league_id: nullableText(team, "league_id"),
     name,
     short_name: nullableText(team, "short_name"),
     logo_url: nullableText(team, "logo_url"),
