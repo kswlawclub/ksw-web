@@ -101,7 +101,6 @@ async function loadMatchTeamsForCompetition(
 ) {
   const participants = await loadCompetitionParticipants(supabase, competitionId, {
     includeInactiveParticipants: false,
-    includeLegacyFallback: false,
   });
   const activeTeams = participants
     .filter((team) => team.is_active !== false)

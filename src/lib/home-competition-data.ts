@@ -516,7 +516,6 @@ export async function loadHomeCompetitionData(): Promise<HomeCompetitionData> {
   ]);
   const allParticipants = await loadCompetitionParticipants(supabase, currentCompetitionId, {
     includeInactiveParticipants: false,
-    includeLegacyFallback: false,
   });
   const participantRows = allParticipants as HomeRow[];
   const kswParticipants = participantRows.filter((participant) => participant.is_ksw === true);

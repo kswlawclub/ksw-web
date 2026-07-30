@@ -1,7 +1,5 @@
 import { getSupabase } from "@/lib/supabase";
 
-export type ParticipantSource = "junction" | "legacy" | "junction+legacy";
-
 type Row = Record<string, unknown>;
 
 export type CompetitionParticipant = Row & {
@@ -14,13 +12,12 @@ export type CompetitionParticipant = Row & {
   is_active: boolean;
   participant_is_active: boolean;
   display_order: number;
-  participant_source: ParticipantSource;
+  participant_source: "junction";
 };
 
 type SupabaseClient = NonNullable<ReturnType<typeof getSupabase>>;
 
 type LoadOptions = {
-  includeLegacyFallback?: boolean;
   includeInactiveParticipants?: boolean;
 };
 
@@ -53,11 +50,7 @@ function numberValue(row: Row | undefined, key: string, fallback = 0) {
   return typeof value === "number" ? value : fallback;
 }
 
-function fromTeamRow(
-  team: Row,
-  source: ParticipantSource,
-  participant?: Row,
-): CompetitionParticipant | undefined {
+function fromTeamRow(team: Row, participant: Row): CompetitionParticipant | undefined {
   const id = text(team, "id");
   const name = text(team, "name");
 
@@ -73,9 +66,9 @@ function fromTeamRow(
     created_at: nullableText(team, "created_at"),
     is_ksw: booleanValue(team, "is_ksw"),
     is_active: booleanValue(team, "is_active", true),
-    participant_is_active: participant ? booleanValue(participant, "is_active", true) : true,
-    display_order: participant ? numberValue(participant, "display_order") : 0,
-    participant_source: source,
+    participant_is_active: booleanValue(participant, "is_active", true),
+    display_order: numberValue(participant, "display_order"),
+    participant_source: "junction",
   };
 }
 
@@ -84,37 +77,6 @@ function byDisplayOrderAndName(a: CompetitionParticipant, b: CompetitionParticip
   if (orderDiff) return orderDiff;
 
   return a.name.localeCompare(b.name);
-}
-
-function mergeParticipants(
-  junctionParticipants: CompetitionParticipant[],
-  legacyParticipants: CompetitionParticipant[],
-  junctionTeamIds = new Set<string>(),
-) {
-  const byId = new Map<string, CompetitionParticipant>();
-
-  for (const participant of junctionParticipants) {
-    byId.set(participant.id, participant);
-  }
-
-  for (const participant of legacyParticipants) {
-    if (junctionTeamIds.has(participant.id) && !byId.has(participant.id)) {
-      continue;
-    }
-
-    const existing = byId.get(participant.id);
-
-    if (existing) {
-      byId.set(participant.id, {
-        ...existing,
-        participant_source: "junction+legacy",
-      });
-    } else {
-      byId.set(participant.id, participant);
-    }
-  }
-
-  return Array.from(byId.values()).sort(byDisplayOrderAndName);
 }
 
 function logSupabaseReadError(source: string, error: unknown, context?: Record<string, unknown>) {
@@ -138,9 +100,7 @@ export async function loadCompetitionParticipants(
     return [] as CompetitionParticipant[];
   }
 
-  let junctionParticipants: CompetitionParticipant[] = [];
-  let legacyParticipants: CompetitionParticipant[] = [];
-  let junctionTeamIds = new Set<string>();
+  let participants: CompetitionParticipant[] = [];
 
   try {
     const junctionResult = await supabase
@@ -154,9 +114,6 @@ export async function loadCompetitionParticipants(
       });
     } else {
       const junctionRows = (junctionResult.data ?? []) as Row[];
-      junctionTeamIds = new Set(
-        junctionRows.map((row) => text(row, "team_id")).filter(Boolean),
-      );
       const activeJunctionRows = options.includeInactiveParticipants
         ? junctionRows
         : junctionRows.filter((row) => booleanValue(row, "is_active", true));
@@ -178,7 +135,7 @@ export async function loadCompetitionParticipants(
             ((teamsResult.data ?? []) as Row[]).map((team) => [text(team, "id"), team]),
           );
 
-          junctionParticipants = activeJunctionRows
+          participants = activeJunctionRows
             .map((row) => {
               const team = teamsById.get(text(row, "team_id"));
 
@@ -190,7 +147,7 @@ export async function loadCompetitionParticipants(
                 return undefined;
               }
 
-              return fromTeamRow(team, "junction", row);
+              return fromTeamRow(team, row);
             })
             .filter((participant): participant is CompetitionParticipant => Boolean(participant));
         }
@@ -202,28 +159,5 @@ export async function loadCompetitionParticipants(
     });
   }
 
-  if (options.includeLegacyFallback !== false) {
-    try {
-      const legacyResult = await supabase
-        .from("teams")
-        .select(teamSelect)
-        .eq("league_id", competitionId);
-
-      if (legacyResult.error) {
-        logSupabaseReadError("loadCompetitionParticipants legacy query failed", legacyResult.error, {
-          competitionId,
-        });
-      } else {
-        legacyParticipants = ((legacyResult.data ?? []) as Row[])
-          .map((team) => fromTeamRow(team, "legacy"))
-          .filter((participant): participant is CompetitionParticipant => Boolean(participant));
-      }
-    } catch (error) {
-      logSupabaseReadError("loadCompetitionParticipants legacy query failed", error, {
-        competitionId,
-      });
-    }
-  }
-
-  return mergeParticipants(junctionParticipants, legacyParticipants, junctionTeamIds);
+  return participants.sort(byDisplayOrderAndName);
 }

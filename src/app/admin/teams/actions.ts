@@ -162,7 +162,6 @@ export async function loadAdminTeamsData(competitionId = ""): Promise<AdminTeams
   const teamsQuery = normalizedCompetitionId
     ? loadCompetitionParticipants(supabase, normalizedCompetitionId, {
         includeInactiveParticipants: false,
-        includeLegacyFallback: false,
       })
     : supabase.from("teams").select(teamColumns).order("name");
   const competitionsQuery = normalizedCompetitionId

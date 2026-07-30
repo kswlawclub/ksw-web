@@ -208,7 +208,6 @@ export async function loadCompetitionDetailData(competition: Row) {
     ),
     loadCompetitionParticipants(supabase, leagueId, {
       includeInactiveParticipants: false,
-      includeLegacyFallback: false,
     }),
     runSupabaseQuery(
       "competition_sponsors",
