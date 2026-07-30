@@ -330,13 +330,13 @@ function sponsorSlots(sponsors: Row[], minimumSlots: number) {
 export default async function Home() {
   const homeCompetitionData = await loadHomeCompetitionData();
   const {
+    allRecentResults,
+    allScheduledMatches,
     configured,
     currentCompetition,
     errors: homeDataErrors,
     kswParticipants: teams,
     nextKswFixture,
-    recentKswResults,
-    scheduledKswMatches,
     sponsors,
     standings,
     summary: competitionSummary,
@@ -378,7 +378,7 @@ export default async function Home() {
   const isCompetitionCompleted = competitionStatus === "completed";
   const isLeagueCompetition = competitionType === "league";
   const isTournamentCompetition = competitionType === "cup" || competitionType === "tournament";
-  const sortedScheduledMatches = scheduledKswMatches;
+  const sortedScheduledMatches = allScheduledMatches;
   const nextKswKickoffMatches = nextKswFixture ? [nextKswFixture] : [];
   const fixtureGroups = sortedScheduledMatches.reduce<Array<{ key: string; date: unknown; matches: Row[] }>>(
     (groups, match) => {
@@ -453,7 +453,7 @@ export default async function Home() {
     : hasCompetitionLink
       ? "View Competition"
       : "Open KSW Chronicle";
-  const resultGroups = recentKswResults.reduce<Array<{ key: string; date: unknown; matches: Row[] }>>(
+  const resultGroups = allRecentResults.reduce<Array<{ key: string; date: unknown; matches: Row[] }>>(
     (groups, match) => {
       const matchDate = match.match_date ?? match.date ?? match.kickoff_at;
       const key = bangkokDateKey(matchDate);
@@ -801,7 +801,7 @@ export default async function Home() {
                                 {isKswMatch ? (
                                   <div className="mt-3">
                                     <span className="rounded-full border border-[#d8ad45]/45 bg-[#fff4dc] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#061426]">
-                                      Featured Match
+                                      KSW MATCH
                                     </span>
                                   </div>
                                 ) : null}
@@ -890,7 +890,7 @@ export default async function Home() {
                                 <div className="mt-4 grid justify-items-center gap-2 lg:mt-0 lg:justify-items-end lg:text-right">
                                   {isKswMatch ? (
                                     <span className="hidden rounded-full border border-[#d8ad45]/45 bg-[#fff4dc] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#061426] lg:inline-flex">
-                                      Featured Match
+                                      KSW MATCH
                                     </span>
                                   ) : null}
                                   <span className="rounded-full border border-[#d8ad45]/45 bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-[#061426]">
@@ -909,7 +909,7 @@ export default async function Home() {
                   ))
                 ) : (
                   <p className="rounded-xl border border-white/10 bg-white/[0.08] px-4 py-4 text-sm font-semibold text-slate-200 sm:px-5">
-                    No upcoming KSW fixtures in {competitionName}.
+                    No upcoming fixtures in {competitionName}.
                   </p>
                 )}
               </div>
@@ -1021,10 +1021,10 @@ export default async function Home() {
               </span>
               <div>
                 <h2 className="text-2xl font-black tracking-tight text-[#061426] sm:text-3xl">
-                  KSW Recent Results
+                  Recent Results
                 </h2>
                 <p className="mt-1 text-sm font-semibold text-slate-600">
-                  The latest completed KSW match results from {competitionName}.
+                  The latest completed matches from {competitionName}.
                 </p>
               </div>
               </div>
@@ -1066,8 +1066,9 @@ export default async function Home() {
                         ["away_team_short_name"],
                         teamInitials({ team_name: awayName }),
                       );
-                      const homeScore = number(match, ["home_score"]);
-                      const awayScore = number(match, ["away_score"]);
+                      const homeScore = match.home_score;
+                      const awayScore = match.away_score;
+                      const hasScore = typeof homeScore === "number" && typeof awayScore === "number";
                       const venue = text(match, ["venue"], "");
                       const homeIsKsw = match.home_team_is_ksw === true;
                       const awayIsKsw = match.away_team_is_ksw === true;
@@ -1086,7 +1087,7 @@ export default async function Home() {
                           <div className="mb-4 flex flex-wrap items-center justify-center gap-2 lg:hidden">
                             {isKswResult ? (
                               <span className="rounded-full border border-[#d8ad45]/45 bg-[#fff4dc] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#061426]">
-                                KSW Result
+                                KSW MATCH
                               </span>
                             ) : null}
                             <span className="rounded-full border border-emerald-700/20 bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-800">
@@ -1114,9 +1115,15 @@ export default async function Home() {
 
                           <div className="my-4 grid justify-items-center gap-2 lg:my-0">
                             <div className="rounded-2xl border border-[#d8ad45]/45 bg-[#061426] px-5 py-3 text-3xl font-black tracking-tight text-white shadow-xl shadow-[#061426]/20 sm:text-4xl">
-                              <span>{homeScore}</span>
-                              <span className="px-2 text-[#f4d58a]">-</span>
-                              <span>{awayScore}</span>
+                              {hasScore ? (
+                                <>
+                                  <span>{homeScore}</span>
+                                  <span className="px-2 text-[#f4d58a]">-</span>
+                                  <span>{awayScore}</span>
+                                </>
+                              ) : (
+                                <span className="text-xl text-[#f4d58a] sm:text-2xl">Score TBC</span>
+                              )}
                             </div>
                             <div className="flex flex-wrap justify-center gap-2 text-xs font-black text-[#061426]">
                               {matchTime ? (
@@ -1148,7 +1155,7 @@ export default async function Home() {
                           <div className="mt-4 hidden flex-wrap items-center justify-center gap-2 lg:col-span-3 lg:flex">
                             {isKswResult ? (
                               <span className="rounded-full border border-[#d8ad45]/45 bg-[#fff4dc] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#061426]">
-                                KSW Result
+                                KSW MATCH
                               </span>
                             ) : null}
                             <span className="rounded-full border border-emerald-700/20 bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-800">
@@ -1168,7 +1175,7 @@ export default async function Home() {
               ))
             ) : (
               <p className="rounded-xl bg-white px-4 py-4 text-sm font-semibold text-slate-600 sm:px-5">
-                No completed KSW results in {competitionName}.
+                No completed results in {competitionName}.
               </p>
             )}
           </div>

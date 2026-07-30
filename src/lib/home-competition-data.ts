@@ -37,6 +37,7 @@ export type HomeCompetitionData = {
   allFinishedMatches: HomeMappedMatch[];
   allMappedMatches: HomeMappedMatch[];
   allParticipants: HomeRow[];
+  allRecentResults: HomeMappedMatch[];
   allScheduledMatches: HomeMappedMatch[];
   configured: boolean;
   currentCompetition: HomeRow | undefined;
@@ -296,6 +297,7 @@ export async function loadHomeCompetitionData(): Promise<HomeCompetitionData> {
       allFinishedMatches: [],
       allMappedMatches: [],
       allParticipants: [],
+      allRecentResults: [],
       allScheduledMatches: [],
       configured: false,
       currentCompetition: undefined,
@@ -337,6 +339,7 @@ export async function loadHomeCompetitionData(): Promise<HomeCompetitionData> {
       allFinishedMatches: [],
       allMappedMatches: [],
       allParticipants: [],
+      allRecentResults: [],
       allScheduledMatches: [],
       configured: errors.length === 0,
       currentCompetition,
@@ -388,17 +391,21 @@ export async function loadHomeCompetitionData(): Promise<HomeCompetitionData> {
   const participantRows = allParticipants as HomeRow[];
   const kswParticipants = participantRows.filter((participant) => participant.is_ksw === true);
   const mappedMatches = matchesResult.data.map((match) => mapHomeMatch(match, participantRows));
-  const allScheduledMatches = mappedMatches.filter((match) => homeText(match, ["status"], "") === "scheduled");
-  const allFinishedMatches = mappedMatches.filter((match) => homeText(match, ["status"], "") === "finished");
-  const scheduledKswMatches = sortUpcomingFixtures(allScheduledMatches.filter((match) => match.isKswFixture));
+  const allScheduledMatches = sortUpcomingFixtures(
+    mappedMatches.filter((match) => homeText(match, ["status"], "") === "scheduled"),
+  );
+  const allFinishedMatches = mappedMatches
+    .filter((match) => homeText(match, ["status"], "") === "finished")
+    .sort((a, b) => homeFixtureTimeValue(b) - homeFixtureTimeValue(a));
+  const scheduledKswMatches = allScheduledMatches.filter((match) => match.isKswFixture);
   const finishedKswMatches = allFinishedMatches
     .filter(
       (match) =>
         match.isKswFixture &&
         typeof match.home_score === "number" &&
         typeof match.away_score === "number",
-    )
-    .sort((a, b) => homeFixtureTimeValue(b) - homeFixtureTimeValue(a));
+    );
+  const allRecentResults = allFinishedMatches.slice(0, 5);
   const recentKswResults = finishedKswMatches.slice(0, 5);
   const now = new Date().getTime();
   const nextKswFixture = scheduledKswMatches.find((match) => homeFixtureTimeValue(match) >= now);
@@ -425,6 +432,7 @@ export async function loadHomeCompetitionData(): Promise<HomeCompetitionData> {
     allFinishedMatches,
     allMappedMatches: mappedMatches,
     allParticipants: participantRows,
+    allRecentResults,
     allScheduledMatches,
     configured: errors.length === 0,
     currentCompetition,
