@@ -206,7 +206,10 @@ export async function loadCompetitionDetailData(competition: Row) {
         .order("created_at", { ascending: false })
         .limit(100),
     ),
-    loadCompetitionParticipants(supabase, leagueId, { includeInactiveParticipants: false }),
+    loadCompetitionParticipants(supabase, leagueId, {
+      includeInactiveParticipants: false,
+      includeLegacyFallback: false,
+    }),
     runSupabaseQuery(
       "competition_sponsors",
       supabase.from("sponsors").select(sponsorColumns).order("sort_order", { ascending: true, nullsFirst: false }),
