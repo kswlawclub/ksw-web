@@ -563,6 +563,9 @@ async function loadHomeData() {
       standings: [] as Row[],
       matches: [] as Row[],
       scheduledMatches: [] as Row[],
+      scheduledKswMatches: [] as Row[],
+      finishedKswMatches: [] as Row[],
+      recentKswResults: [] as Row[],
       sponsors: [] as Row[],
       currentCompetition: undefined as Row | undefined,
     };
@@ -628,20 +631,42 @@ async function loadHomeData() {
   ]);
 
   const teams = allTeams.filter((team) => team.is_ksw === true);
+  const mappedFinishedMatches = withMatchTeams(finishedMatches, allTeams);
+  const mappedScheduledMatches = withMatchTeams(scheduledMatches, allTeams);
+  const scheduledKswMatches = sortUpcomingFixtures(mappedScheduledMatches.filter(isKswFixture));
+  const finishedKswMatches = mappedFinishedMatches.filter(
+    (match) =>
+      isKswFixture(match) &&
+      typeof match.home_score === "number" &&
+      typeof match.away_score === "number",
+  );
+  const recentKswResults = finishedKswMatches.slice(0, 5);
 
   return {
     configured: true,
     teams,
     standings,
-    matches: withMatchTeams(finishedMatches, allTeams),
-    scheduledMatches: withMatchTeams(scheduledMatches, allTeams),
+    matches: mappedFinishedMatches,
+    scheduledMatches: mappedScheduledMatches,
+    scheduledKswMatches,
+    finishedKswMatches,
+    recentKswResults,
     sponsors,
     currentCompetition,
   };
 }
 
 export default async function Home() {
-  const { configured, teams, standings, matches, scheduledMatches, sponsors, currentCompetition } = await loadHomeData();
+  const {
+    configured,
+    teams,
+    standings,
+    scheduledKswMatches,
+    finishedKswMatches,
+    recentKswResults,
+    sponsors,
+    currentCompetition,
+  } = await loadHomeData();
   const club = teams[0];
   const logoUrl = isString(club?.logo_url) ? String(club?.logo_url) : "/team-logos/ksw-lc.png";
   const sponsorGroups = groupSponsorsByTier(sponsors);
@@ -679,7 +704,7 @@ export default async function Home() {
   const isCompetitionCompleted = competitionStatus === "completed";
   const isLeagueCompetition = competitionType === "league";
   const isTournamentCompetition = competitionType === "cup" || competitionType === "tournament";
-  const sortedScheduledMatches = sortUpcomingFixtures(scheduledMatches.filter(isKswFixture));
+  const sortedScheduledMatches = scheduledKswMatches;
   const upcomingKswMatches = sortedScheduledMatches.filter((match) => {
     const matchTime = fixtureTimeValue(match);
     return matchTime >= now.getTime();
@@ -732,20 +757,6 @@ export default async function Home() {
         ["Points", number(kswStanding, ["points", "pts"])],
       ]
     : [];
-  const recentKswResults = matches
-    .filter(
-      (match) =>
-        isKswFixture(match) &&
-        typeof match.home_score === "number" &&
-        typeof match.away_score === "number",
-    )
-    .slice(0, 5);
-  const finishedKswMatches = matches.filter(
-    (match) =>
-      isKswFixture(match) &&
-      typeof match.home_score === "number" &&
-      typeof match.away_score === "number",
-  );
   const tournamentRecord = finishedKswMatches.reduce<{ wins: number; draws: number; losses: number }>(
     (record, match) => {
       const outcome = kswOutcome(match);
