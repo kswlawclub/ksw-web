@@ -84,12 +84,12 @@ aggregated as (
     ps.short_name,
     ps.logo_url,
     ps.is_ksw,
-    coalesce(sum(tmr.played), 0::bigint) as played,
-    coalesce(sum(tmr.won), 0::bigint) as won,
-    coalesce(sum(tmr.drawn), 0::bigint) as drawn,
-    coalesce(sum(tmr.lost), 0::bigint) as lost,
-    coalesce(sum(tmr.goals_for), 0::bigint) as goals_for,
-    coalesce(sum(tmr.goals_against), 0::bigint) as goals_against
+    coalesce(sum(tmr.played), 0)::bigint as played,
+    coalesce(sum(tmr.won), 0)::bigint as won,
+    coalesce(sum(tmr.drawn), 0)::bigint as drawn,
+    coalesce(sum(tmr.lost), 0)::bigint as lost,
+    coalesce(sum(tmr.goals_for), 0)::bigint as goals_for,
+    coalesce(sum(tmr.goals_against), 0)::bigint as goals_against
   from participant_set ps
   left join team_match_rows tmr
     on tmr.league_id = ps.league_id
@@ -115,8 +115,8 @@ select
   lost,
   goals_for,
   goals_against,
-  (goals_for - goals_against) as goal_difference,
-  ((won * 3::bigint) + drawn) as points
+  (goals_for - goals_against)::bigint as goal_difference,
+  ((won * 3::bigint) + drawn)::bigint as points
 from aggregated;
 
 grant select on public.league_standings_view to anon, authenticated;
