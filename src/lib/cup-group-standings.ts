@@ -31,6 +31,17 @@ export type CupGroupStanding = {
   total_required_matches: number;
 };
 
+type HeadToHeadStats = {
+  goals_against: number;
+  goals_for: number;
+  points: number;
+};
+
+type RankedRows = {
+  rows: CupGroupStandingRow[];
+  unresolvedTeamIds: Set<string>;
+};
+
 function text(row: CupGroupRow | undefined, key: string, fallback = "") {
   const value = row?.[key];
   if (typeof value === "string" && value.trim()) return value;
@@ -57,11 +68,8 @@ function sortGroupRows(groups: CupGroupRow[]) {
   });
 }
 
-function sortStandingRows(rows: CupGroupStandingRow[]) {
+function sortByOverallWithoutPoints(rows: CupGroupStandingRow[]) {
   return [...rows].sort((a, b) => {
-    const pointsDiff = b.points - a.points;
-    if (pointsDiff) return pointsDiff;
-
     const goalDiff = b.goal_difference - a.goal_difference;
     if (goalDiff) return goalDiff;
 
@@ -75,8 +83,27 @@ function sortStandingRows(rows: CupGroupStandingRow[]) {
   });
 }
 
-function standingTieKey(row: CupGroupStandingRow) {
-  return [row.points, row.goal_difference, row.goals_for, row.won].join(":");
+function overallTieKey(row: CupGroupStandingRow) {
+  return [row.goal_difference, row.goals_for, row.won].join(":");
+}
+
+function headToHeadTieKey(stats: HeadToHeadStats) {
+  return [stats.points, stats.goals_for - stats.goals_against, stats.goals_for].join(":");
+}
+
+function groupByKey<T>(items: T[], keyForItem: (item: T) => string) {
+  const groups: T[][] = [];
+  const groupByKeyValue = new Map<string, T[]>();
+
+  items.forEach((item) => {
+    const key = keyForItem(item);
+    const group = groupByKeyValue.get(key) ?? [];
+    group.push(item);
+    groupByKeyValue.set(key, group);
+  });
+
+  groupByKeyValue.forEach((group) => groups.push(group));
+  return groups;
 }
 
 function isFinishedGroupMatch(match: CupGroupRow, groupId: string) {
@@ -87,6 +114,120 @@ function isFinishedGroupMatch(match: CupGroupRow, groupId: string) {
     typeof match.home_score === "number" &&
     typeof match.away_score === "number"
   );
+}
+
+function buildHeadToHeadStats(rows: CupGroupStandingRow[], matches: CupGroupRow[]) {
+  const teamIds = new Set(rows.map((row) => row.team_id));
+  const stats = new Map<string, HeadToHeadStats>();
+
+  rows.forEach((row) => {
+    stats.set(row.team_id, {
+      goals_against: 0,
+      goals_for: 0,
+      points: 0,
+    });
+  });
+
+  matches.forEach((match) => {
+    const homeTeamId = text(match, "home_team_id");
+    const awayTeamId = text(match, "away_team_id");
+    const homeScore = match.home_score as number;
+    const awayScore = match.away_score as number;
+
+    if (!teamIds.has(homeTeamId) || !teamIds.has(awayTeamId)) return;
+
+    const home = stats.get(homeTeamId);
+    const away = stats.get(awayTeamId);
+    if (!home || !away) return;
+
+    home.goals_for += homeScore;
+    home.goals_against += awayScore;
+    away.goals_for += awayScore;
+    away.goals_against += homeScore;
+
+    if (homeScore > awayScore) {
+      home.points += 3;
+    } else if (homeScore < awayScore) {
+      away.points += 3;
+    } else {
+      home.points += 1;
+      away.points += 1;
+    }
+  });
+
+  return stats;
+}
+
+function resolveTiedRows(rows: CupGroupStandingRow[], matches: CupGroupRow[]): RankedRows {
+  if (rows.length <= 1) {
+    return { rows, unresolvedTeamIds: new Set<string>() };
+  }
+
+  const headToHeadStats = buildHeadToHeadStats(rows, matches);
+  const sortedByHeadToHead = [...rows].sort((a, b) => {
+    const aStats = headToHeadStats.get(a.team_id) ?? { goals_against: 0, goals_for: 0, points: 0 };
+    const bStats = headToHeadStats.get(b.team_id) ?? { goals_against: 0, goals_for: 0, points: 0 };
+    const pointsDiff = bStats.points - aStats.points;
+    if (pointsDiff) return pointsDiff;
+
+    const goalDiff = (bStats.goals_for - bStats.goals_against) - (aStats.goals_for - aStats.goals_against);
+    if (goalDiff) return goalDiff;
+
+    const goalsForDiff = bStats.goals_for - aStats.goals_for;
+    if (goalsForDiff) return goalsForDiff;
+
+    return a.team_name.localeCompare(b.team_name);
+  });
+  const headToHeadGroups = groupByKey(sortedByHeadToHead, (row) =>
+    headToHeadTieKey(headToHeadStats.get(row.team_id) ?? { goals_against: 0, goals_for: 0, points: 0 }),
+  );
+
+  if (headToHeadGroups.length > 1) {
+    const rankedRows: CupGroupStandingRow[] = [];
+    const unresolvedTeamIds = new Set<string>();
+
+    headToHeadGroups.forEach((group) => {
+      const result = resolveTiedRows(group, matches);
+      rankedRows.push(...result.rows);
+      result.unresolvedTeamIds.forEach((teamId) => unresolvedTeamIds.add(teamId));
+    });
+
+    return { rows: rankedRows, unresolvedTeamIds };
+  }
+
+  const sortedByOverall = sortByOverallWithoutPoints(rows);
+  const unresolvedTeamIds = new Set<string>();
+
+  groupByKey(sortedByOverall, overallTieKey).forEach((group) => {
+    if (group.length > 1) {
+      group.forEach((row) => unresolvedTeamIds.add(row.team_id));
+    }
+  });
+
+  return { rows: sortedByOverall, unresolvedTeamIds };
+}
+
+function rankStandingRows(rows: CupGroupStandingRow[], matches: CupGroupRow[]) {
+  const sortedByPoints = [...rows].sort((a, b) => {
+    const pointsDiff = b.points - a.points;
+    if (pointsDiff) return pointsDiff;
+    return a.team_name.localeCompare(b.team_name);
+  });
+  const rankedRows: CupGroupStandingRow[] = [];
+  const unresolvedTeamIds = new Set<string>();
+
+  groupByKey(sortedByPoints, (row) => String(row.points)).forEach((group) => {
+    if (group.length === 1) {
+      rankedRows.push(group[0]);
+      return;
+    }
+
+    const result = resolveTiedRows(group, matches);
+    rankedRows.push(...result.rows);
+    result.unresolvedTeamIds.forEach((teamId) => unresolvedTeamIds.add(teamId));
+  });
+
+  return { rankedRows, unresolvedTeamIds };
 }
 
 export function calculateCupGroupStandings({
@@ -180,16 +321,12 @@ export function calculateCupGroupStandings({
       away.goal_difference = away.goals_for - away.goals_against;
     });
 
-    const sortedRows = sortStandingRows(Array.from(rowsByTeamId.values())).map((row, index) => ({
+    const ranking = rankStandingRows(Array.from(rowsByTeamId.values()), finishedMatches);
+    const sortedRows = ranking.rankedRows.map((row, index) => ({
       ...row,
       position: index + 1,
       qualifies: index < number(group, "qualifiers_count", 2),
     }));
-    const tieCounts = new Map<string, number>();
-    sortedRows.forEach((row) => {
-      const key = standingTieKey(row);
-      tieCounts.set(key, (tieCounts.get(key) ?? 0) + 1);
-    });
 
     return {
       finished_matches: finishedMatches.length,
@@ -200,7 +337,7 @@ export function calculateCupGroupStandings({
       qualifiers_count: number(group, "qualifiers_count", 2),
       rows: sortedRows.map((row) => ({
         ...row,
-        tie_unresolved: (tieCounts.get(standingTieKey(row)) ?? 0) > 1,
+        tie_unresolved: ranking.unresolvedTeamIds.has(row.team_id),
       })),
       sort_order: number(group, "sort_order"),
       team_count: groupTeams.length,
