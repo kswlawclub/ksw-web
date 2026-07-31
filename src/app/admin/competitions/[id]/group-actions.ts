@@ -38,6 +38,12 @@ type AssignPayload = {
   groupId: string | null;
 };
 
+type QualifiersPayload = {
+  competitionId: string;
+  groupId: string;
+  qualifiersCount: number | string;
+};
+
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function normalizeName(value: string) {
@@ -364,6 +370,56 @@ export async function updateCompetitionGroup(
 
   if (result.error) {
     console.error("competition group update failed", result.error);
+    return { ok: false, error: friendlyGroupError(result.error.message) };
+  }
+
+  revalidatePath(`/admin/competitions/${competitionId}`);
+  return { ok: true };
+}
+
+export async function updateCompetitionGroupQualifiers(payload: QualifiersPayload): Promise<ActionResult> {
+  const { supabase, error } = await getAdminClient();
+  if (!supabase) return { ok: false, error };
+
+  const { competitionId, groupId } = payload;
+  const qualifiersCount = Number(payload.qualifiersCount);
+
+  if (!uuidPattern.test(competitionId) || !uuidPattern.test(groupId)) {
+    return { ok: false, error: "Competition or group id is invalid." };
+  }
+
+  if (!Number.isInteger(qualifiersCount) || qualifiersCount < 0) {
+    return { ok: false, error: "Teams qualifying must be zero or a whole number." };
+  }
+
+  const groupCheck = await getCupGroup(supabase, competitionId, groupId);
+  if (groupCheck.error) return { ok: false, error: groupCheck.error };
+
+  const participants = await supabase
+    .from("competition_teams")
+    .select("id", { count: "exact", head: true })
+    .eq("competition_id", competitionId)
+    .eq("group_id", groupId)
+    .eq("is_active", true);
+
+  if (participants.error) {
+    console.error("competition group qualifiers participant count failed", participants.error);
+    return { ok: false, error: "Could not verify teams in this group." };
+  }
+
+  const teamCount = participants.count ?? 0;
+  if (qualifiersCount > teamCount) {
+    return { ok: false, error: "Teams qualifying cannot exceed the teams currently in this group." };
+  }
+
+  const result = await supabase
+    .from("competition_groups")
+    .update({ qualifiers_count: qualifiersCount, updated_at: new Date().toISOString() })
+    .eq("id", groupId)
+    .eq("competition_id", competitionId);
+
+  if (result.error) {
+    console.error("competition group qualifiers update failed", result.error);
     return { ok: false, error: friendlyGroupError(result.error.message) };
   }
 

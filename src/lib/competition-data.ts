@@ -9,7 +9,11 @@ export const competitionColumns =
 export const standingsColumns =
   "team_id, league_id, team_name, short_name, logo_url, is_ksw, played, won, drawn, lost, goals_for, goals_against, goal_difference, points";
 export const matchColumns =
-  "id, league_id, match_date, home_team_id, away_team_id, home_score, away_score, venue, status, match_type";
+  "id, league_id, group_id, competition_stage, fixture_source, match_date, home_team_id, away_team_id, home_score, away_score, venue, status, match_type";
+export const groupColumns =
+  "id, competition_id, name, label, sort_order, qualifiers_count";
+export const competitionTeamGroupColumns =
+  "id, competition_id, team_id, group_id, is_active, display_order";
 export const snapshotColumns =
   "snapshot_id, league_id, team_id, position, played, won, drawn, lost, goals_for, goals_against, goal_difference, points, matchday, created_at";
 export const sponsorColumns = "id, name, logo_url, website_url, tier, sort_order, is_active";
@@ -113,6 +117,27 @@ function matchTeamIds(matches: Row[]) {
   );
 }
 
+function withGroupTeamData(groupRows: Row[], teams: Row[]) {
+  const teamsById = new Map(teams.map((team) => [text(team, ["id"], ""), team]));
+
+  const rows: Row[] = [];
+
+  groupRows.forEach((row) => {
+    const team = teamsById.get(text(row, ["team_id"], ""));
+    if (!team) return;
+
+    rows.push({
+        ...row,
+        is_ksw: team.is_ksw === true,
+        logo_url: text(team, ["logo_url"], "") || null,
+        name: text(team, ["name", "short_name"], "Team unavailable"),
+        short_name: text(team, ["short_name"], "") || null,
+    });
+  });
+
+  return rows;
+}
+
 async function runSupabaseQuery<T>(source: string, query: PromiseLike<{ data: T[] | null; error: unknown }>) {
   try {
     const result = await query;
@@ -197,6 +222,8 @@ export async function loadCompetitionDetailData(competition: Row) {
       competition,
       matches: [] as Row[],
       scheduledMatches: [] as Row[],
+      cupGroups: [] as Row[],
+      cupGroupTeams: [] as Row[],
       snapshots: [] as Row[],
       sponsors: [] as Row[],
       standings: [] as Row[],
@@ -204,7 +231,8 @@ export async function loadCompetitionDetailData(competition: Row) {
     };
   }
 
-  const [standings, finishedMatches, scheduledMatches, snapshots, teams, sponsors] = await Promise.all([
+  const isCup = competitionType === "cup";
+  const [standings, finishedMatches, scheduledMatches, snapshots, teams, sponsors, cupGroups, cupGroupRows] = await Promise.all([
     loadStandings
       ? runSupabaseQuery(
           "competition_standings",
@@ -247,11 +275,30 @@ export async function loadCompetitionDetailData(competition: Row) {
       "competition_sponsors",
       supabase.from("sponsors").select(sponsorColumns).order("sort_order", { ascending: true, nullsFirst: false }),
     ),
+    isCup
+      ? runSupabaseQuery(
+          "competition_groups",
+          supabase.from("competition_groups").select(groupColumns).eq("competition_id", leagueId).order("sort_order", { ascending: true }),
+        )
+      : Promise.resolve([] as Row[]),
+    isCup
+      ? runSupabaseQuery(
+          "competition_group_teams",
+          supabase
+            .from("competition_teams")
+            .select(competitionTeamGroupColumns)
+            .eq("competition_id", leagueId)
+            .eq("is_active", true)
+            .order("display_order", { ascending: true }),
+        )
+      : Promise.resolve([] as Row[]),
   ]);
   const matchTeamLookup = await loadMatchTeamLookup(supabase, [...finishedMatches, ...scheduledMatches]);
 
   return {
     competition,
+    cupGroups,
+    cupGroupTeams: withGroupTeamData(cupGroupRows, teams),
     matches: withMatchTeams(finishedMatches, matchTeamLookup),
     scheduledMatches: withMatchTeams(scheduledMatches, matchTeamLookup),
     snapshots,

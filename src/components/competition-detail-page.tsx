@@ -4,6 +4,10 @@ import { CompetitionResultsTable } from "@/components/competition-results-table"
 import { LeagueTable } from "@/components/league-table";
 import { TeamLogo } from "@/components/team-logo";
 import {
+  calculateCupGroupStandings,
+  type CupGroupStanding,
+} from "@/lib/cup-group-standings";
+import {
   matchTime,
   number,
   Row,
@@ -23,6 +27,8 @@ import {
 
 type CompetitionDetailData = {
   competition: Row;
+  cupGroups?: Row[];
+  cupGroupTeams?: Row[];
   matches: Row[];
   scheduledMatches: Row[];
   snapshots: Row[];
@@ -541,6 +547,106 @@ function TournamentTeams({ teams }: { teams: Row[] }) {
   );
 }
 
+function PublicCupGroupStandings({ standings }: { standings: CupGroupStanding[] }) {
+  const visibleStandings = standings.filter((group) => group.team_count > 0);
+
+  if (!visibleStandings.length) {
+    return (
+      <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="group-standings">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10 sm:p-6">
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">Group Standings</p>
+          <h2 className="mt-2 text-2xl font-black">Group Standings</h2>
+          <p className="mt-4 rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+            ยังไม่มีทีมในรอบแบ่งกลุ่ม
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="group-standings">
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
+        <div className="border-b border-slate-200 px-4 py-5 sm:px-6">
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">Group Standings</p>
+          <h2 className="mt-2 text-2xl font-black">Group Standings</h2>
+          <p className="mt-1 text-sm font-semibold text-slate-600">
+            Tables are calculated from finished group-stage matches only.
+          </p>
+        </div>
+        <div className="grid gap-3 bg-slate-100 px-4 py-5 sm:px-6">
+          {visibleStandings.map((group, index) => (
+            <details
+              className="overflow-hidden rounded-xl border border-slate-200 bg-white"
+              key={group.group_id}
+              open={index === 0 || !group.is_complete}
+            >
+              <summary className="cursor-pointer list-none px-4 py-4 hover:bg-[#fffaf0]">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <h3 className="break-words text-lg font-black text-[#061426]">{group.group_label}</h3>
+                    <p className="mt-1 text-xs font-bold text-slate-500">
+                      {group.is_complete ? "แข่งครบแล้ว" : "สถานะชั่วคราว"} · {group.finished_matches}/{group.total_required_matches} results
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <span className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                      <span className="block text-[9px] font-black uppercase tracking-[0.1em] text-slate-500">Teams</span>
+                      <span className="font-black">{group.team_count}</span>
+                    </span>
+                    <span className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                      <span className="block text-[9px] font-black uppercase tracking-[0.1em] text-slate-500">Qualify</span>
+                      <span className="font-black">{group.qualifiers_count}</span>
+                    </span>
+                    <span className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                      <span className="block text-[9px] font-black uppercase tracking-[0.1em] text-slate-500">Played</span>
+                      <span className="font-black">{group.finished_matches}</span>
+                    </span>
+                  </div>
+                </div>
+              </summary>
+              <div className="overflow-x-auto border-t border-slate-100">
+                <table className="w-full min-w-[660px] border-separate border-spacing-0 text-left text-xs">
+                  <thead className="bg-[#061426] text-white">
+                    <tr>
+                      {["#", "Team", "P", "W", "D", "L", "GF", "GA", "GD", "Pts", "Status"].map((label) => (
+                        <th className="px-3 py-2 font-black" key={label}>{label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {group.rows.map((row) => (
+                      <tr className={row.qualifies ? "bg-[#fff7e6]" : "bg-white"} key={row.team_id}>
+                        <td className="border-b border-slate-100 px-3 py-2 font-black">{row.position}</td>
+                        <td className="min-w-48 border-b border-slate-100 px-3 py-2 font-black">
+                          <span className="break-words">{row.team_name}</span>
+                          {row.tie_unresolved ? (
+                            <span className="mt-1 block text-[10px] font-bold text-[#8a6418]">อันดับยังเสมอกัน</span>
+                          ) : null}
+                        </td>
+                        {[row.played, row.won, row.drawn, row.lost, row.goals_for, row.goals_against, row.goal_difference, row.points].map((value, valueIndex) => (
+                          <td className="border-b border-slate-100 px-3 py-2 font-bold" key={valueIndex}>{value}</td>
+                        ))}
+                        <td className="border-b border-slate-100 px-3 py-2">
+                          {row.qualifies ? (
+                            <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">
+                              ผ่านเข้ารอบ
+                            </span>
+                          ) : null}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function TournamentLegacy({ competition }: { competition: Row }) {
   const copy =
     text(competition, ["short_description"], "") ||
@@ -559,7 +665,7 @@ function TournamentLegacy({ competition }: { competition: Row }) {
 }
 
 export function CompetitionDetailPage({ data }: { data: CompetitionDetailData }) {
-  const { competition, matches, scheduledMatches, snapshots, sponsors, standings, teams } = data;
+  const { competition, cupGroups = [], cupGroupTeams = [], matches, scheduledMatches, snapshots, sponsors, standings, teams } = data;
   const competitionType = normalizeCompetitionType(text(competition, ["competition_type"], ""));
   const seasonStatus = text(competition, ["season_status"], "active").toLowerCase();
   const isLeague = isLeagueCompetition(competitionType);
@@ -575,6 +681,13 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
   const kswMatchesOldest = [...kswMatchesNewest].reverse();
   const allFixtures = [...scheduledMatches, ...matches].sort((a, b) => matchTime(a) - matchTime(b));
   const kswTournamentJourney = allFixtures.filter(isKswMatchByFlag).sort((a, b) => matchTime(a) - matchTime(b));
+  const cupGroupStandings = isCup
+    ? calculateCupGroupStandings({
+        groups: cupGroups,
+        matches: [...matches, ...scheduledMatches],
+        teams: cupGroupTeams,
+      })
+    : [];
   const summaryStats = kswStanding
     ? [
         [seasonStatus === "completed" ? "Final Position" : "Current Position", `${kswIndex + 1} / ${sortedStandings.length}`],
@@ -603,6 +716,7 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
       ["Overview", "#overview", true],
       ["Fixtures", "#fixtures", scheduledMatches.length > 0],
       ["KSW Journey", "#ksw-journey", kswTournamentJourney.length > 0],
+      ["Group Standings", "#group-standings", isCup && cupGroupStandings.length > 0],
       [isCup ? "Cup Results" : "Tournament Results", "#tournament-results", matches.length > 0],
       ["Participating Teams", "#participating-teams", teams.length > 0],
       ["Partners", "#partners", sponsors.some((sponsor) => sponsor.is_active !== false)],
@@ -665,6 +779,7 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
         />
         <UpcomingFixtures matches={scheduledMatches} />
         <TournamentJourney matches={kswTournamentJourney} />
+        {isCup ? <PublicCupGroupStandings standings={cupGroupStandings} /> : null}
         {matches.length ? (
           <CompetitionResultsTable
             isLeague={false}

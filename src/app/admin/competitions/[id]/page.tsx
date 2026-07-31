@@ -24,7 +24,7 @@ const competitionColumns =
 const matchColumns =
   "id, group_id, competition_stage, fixture_source, match_date, home_team_id, away_team_id, home_score, away_score, venue, status";
 const teamColumns = "id, name, short_name, logo_url, is_ksw";
-const groupColumns = "id, competition_id, name, label, sort_order, created_at, updated_at";
+const groupColumns = "id, competition_id, name, label, sort_order, qualifiers_count, created_at, updated_at";
 const competitionTeamGroupColumns = "id, competition_id, team_id, group_id, is_active, display_order";
 
 function text(row: Row | undefined, keys: string[], fallback = "") {
@@ -171,6 +171,7 @@ function asCompetitionGroup(row: Row): AdminCompetitionGroup {
     id: text(row, ["id"], ""),
     label: text(row, ["label"], "") || (name ? `Group ${name}` : "Group"),
     name,
+    qualifiers_count: number(row, ["qualifiers_count"]) || 2,
     sort_order: number(row, ["sort_order"]),
   };
 }
@@ -657,6 +658,7 @@ export default async function AdminCompetitionWorkspacePage({
         <AdminCompetitionGroupsManager
           competitionId={id}
           groups={groups}
+          matches={workspaceMatches}
           schemaReady={groupDataReady}
           teams={groupTeams}
         />

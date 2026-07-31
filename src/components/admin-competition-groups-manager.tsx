@@ -10,13 +10,20 @@ import {
   generateCupGroupFixtures,
   previewCupGroupFixtures,
   updateCompetitionGroup,
+  updateCompetitionGroupQualifiers,
   type CupGroupFixturePreviewPair,
 } from "@/app/admin/competitions/[id]/group-actions";
+import {
+  calculateCupGroupStandings,
+  type CupGroupRow,
+  type CupGroupStanding,
+} from "@/lib/cup-group-standings";
 
 export type AdminCompetitionGroup = {
   id: string;
   label: string;
   name: string;
+  qualifiers_count: number;
   sort_order: number;
 };
 
@@ -89,11 +96,13 @@ function WorkflowStep({
 export function AdminCompetitionGroupsManager({
   competitionId,
   groups,
+  matches,
   schemaReady,
   teams,
 }: {
   competitionId: string;
   groups: AdminCompetitionGroup[];
+  matches: CupGroupRow[];
   schemaReady: boolean;
   teams: AdminCompetitionGroupTeam[];
 }) {
@@ -105,7 +114,16 @@ export function AdminCompetitionGroupsManager({
   const [assigningId, setAssigningId] = useState("");
   const [fixtureActionGroupId, setFixtureActionGroupId] = useState("");
   const [fixturePreviewByGroup, setFixturePreviewByGroup] = useState<Record<string, CupGroupFixturePreviewPair[]>>({});
+  const [qualifierActionGroupId, setQualifierActionGroupId] = useState("");
   const sortedGroups = useMemo(() => unassignedFirst(groups), [groups]);
+  const groupStandings = useMemo(
+    () => calculateCupGroupStandings({ groups, matches, teams }),
+    [groups, matches, teams],
+  );
+  const standingsByGroup = useMemo(
+    () => new Map(groupStandings.map((standing) => [standing.group_id, standing])),
+    [groupStandings],
+  );
   const teamsByGroup = useMemo(() => {
     const grouped = new Map<string, AdminCompetitionGroupTeam[]>();
     teams.forEach((team) => {
@@ -246,6 +264,101 @@ export function AdminCompetitionGroupsManager({
       `${groupDisplayName(group)} fixtures generated: ${result.createdCount ?? 0} created, ${result.skippedCount ?? 0} skipped.`,
     );
     router.refresh();
+  }
+
+  async function updateQualifiers(group: AdminCompetitionGroup, value: string, teamCount: number) {
+    const qualifiersCount = Number(value);
+
+    setMessage("");
+    setError("");
+
+    if (!Number.isInteger(qualifiersCount) || qualifiersCount < 0) {
+      setError("Teams qualifying must be zero or a whole number.");
+      return;
+    }
+
+    if (qualifiersCount > teamCount) {
+      setError("Teams qualifying cannot exceed the teams currently in this group.");
+      return;
+    }
+
+    setQualifierActionGroupId(group.id);
+    const result = await updateCompetitionGroupQualifiers({
+      competitionId,
+      groupId: group.id,
+      qualifiersCount,
+    });
+    setQualifierActionGroupId("");
+
+    if (!result.ok) {
+      setError(result.error ?? "Could not update teams qualifying.");
+      return;
+    }
+
+    setMessage(`${groupDisplayName(group)} qualification setting updated.`);
+    router.refresh();
+  }
+
+  function GroupStandingsTable({ standings }: { standings: CupGroupStanding }) {
+    if (!standings.team_count) {
+      return (
+        <p className="mt-4 rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600">
+          ยังไม่มีทีมในกลุ่มนี้
+        </p>
+      );
+    }
+
+    return (
+      <div className="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <div className="flex flex-col gap-2 border-b border-slate-100 bg-slate-50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a6418]">Group Standings</p>
+            <p className="mt-1 text-xs font-bold text-slate-500">
+              {standings.is_complete ? "แข่งครบแล้ว" : "สถานะชั่วคราว"} · {standings.finished_matches}/{standings.total_required_matches} results
+            </p>
+          </div>
+          {!standings.finished_matches ? (
+            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
+              No results yet
+            </span>
+          ) : null}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[620px] border-separate border-spacing-0 text-left text-xs">
+            <thead className="bg-[#061426] text-white">
+              <tr>
+                {["#", "Team", "P", "W", "D", "L", "GF", "GA", "GD", "Pts", "Status"].map((label) => (
+                  <th className="px-3 py-2 font-black" key={label}>{label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {standings.rows.map((row) => (
+                <tr className={row.qualifies ? "bg-[#fff7e6]" : "bg-white"} key={row.team_id}>
+                  <td className="border-b border-slate-100 px-3 py-2 font-black">{row.position}</td>
+                  <td className="min-w-44 border-b border-slate-100 px-3 py-2 font-black text-[#061426]">
+                    <span className="break-words">{row.team_name}</span>
+                    {row.tie_unresolved ? (
+                      <span className="mt-1 block text-[10px] font-bold text-[#8a6418]">อันดับยังเสมอกัน</span>
+                    ) : null}
+                  </td>
+                  {[row.played, row.won, row.drawn, row.lost, row.goals_for, row.goals_against, row.goal_difference, row.points].map((value, index) => (
+                    <td className="border-b border-slate-100 px-3 py-2 font-bold" key={index}>{value}</td>
+                  ))}
+                  <td className="border-b border-slate-100 px-3 py-2">
+                    {row.qualifies ? (
+                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">
+                        ผ่านเข้ารอบ
+                      </span>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
   }
 
   function TeamAssignmentRow({ team }: { team: AdminCompetitionGroupTeam }) {
@@ -398,6 +511,7 @@ export function AdminCompetitionGroupsManager({
               const groupTeams = teamsByGroup.get(group.id) ?? [];
               const previewPairs = fixturePreviewByGroup[group.id] ?? [];
               const missingPreviewCount = previewPairs.filter((pair) => !pair.exists).length;
+              const standings = standingsByGroup.get(group.id);
               return (
                 <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm" key={group.id}>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -435,6 +549,25 @@ export function AdminCompetitionGroupsManager({
                       </button>
                     </div>
                   </div>
+                  <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50 p-3">
+                    <label className="grid min-w-0 gap-2 text-xs font-black text-slate-600">
+                      Teams qualifying
+                      <input
+                        className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-[#061426] outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={!schemaReady || qualifierActionGroupId === group.id}
+                        max={groupTeams.length}
+                        min="0"
+                        onBlur={(event) => void updateQualifiers(group, event.target.value, groupTeams.length)}
+                        step="1"
+                        type="number"
+                        defaultValue={group.qualifiers_count}
+                      />
+                    </label>
+                    <p className="mt-2 text-xs font-bold text-slate-500">
+                      Maximum {groupTeams.length} team{groupTeams.length === 1 ? "" : "s"} in this group.
+                    </p>
+                  </div>
+                  {standings ? <GroupStandingsTable standings={standings} /> : null}
                   <div className="mt-4 grid gap-2">
                     {groupTeams.length ? (
                       groupTeams.map((team) => <TeamAssignmentRow key={team.competition_team_id} team={team} />)
