@@ -61,7 +61,18 @@ type CompetitionSummary = {
   type?: string;
 };
 
+type MatchSection = {
+  finished: number;
+  key: string;
+  matches: AdminCompetitionMatch[];
+  title: string;
+  total: number;
+  unscheduled: number;
+  upcoming: number;
+};
+
 const standardVenues = ["V1", "V2", "V3"];
+const otherMatchesSectionKey = "__other_matches__";
 
 const emptyForm: MatchForm = {
   id: "",
@@ -199,6 +210,14 @@ function groupDisplayName(group: AdminCompetitionGroup | undefined) {
   return group ? group.label || `Group ${group.name}` : "";
 }
 
+function sortedCompetitionGroups(groups: AdminCompetitionGroup[]) {
+  return [...groups].sort((a, b) => {
+    const orderDiff = a.sort_order - b.sort_order;
+    if (orderDiff) return orderDiff;
+    return (a.name || a.label).localeCompare(b.name || b.label);
+  });
+}
+
 function statusBadgeClass(status: string) {
   if (status === "scheduled") return "border-[#d8ad45]/35 bg-[#d8ad45]/10 text-[#8a6418]";
   if (status === "finished") return "border-emerald-700/20 bg-emerald-50 text-emerald-800";
@@ -225,6 +244,22 @@ function matchDateTimeLabel(match: AdminCompetitionMatch) {
 function matchStatusGroup(status: string): MatchStatusFilter {
   if (status === "scheduled" || status === "finished") return status;
   return "other";
+}
+
+function isUnscheduledMatch(match: AdminCompetitionMatch) {
+  return match.status === "scheduled" && !match.match_date;
+}
+
+function sectionFromMatches(key: string, title: string, sectionMatches: AdminCompetitionMatch[]): MatchSection {
+  return {
+    finished: sectionMatches.filter((match) => match.status === "finished").length,
+    key,
+    matches: sectionMatches,
+    title,
+    total: sectionMatches.length,
+    unscheduled: sectionMatches.filter(isUnscheduledMatch).length,
+    upcoming: sectionMatches.filter((match) => match.status === "scheduled" && Boolean(match.match_date)).length,
+  };
 }
 
 function sortGroup(match: AdminCompetitionMatch) {
@@ -311,11 +346,13 @@ export function AdminCompetitionMatchManager({
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<MatchStatusFilter>("all");
   const [groupFilter, setGroupFilter] = useState("all");
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const matches = initialMatches;
   const teams = initialTeams;
 
   const teamsById = useMemo(() => new Map(teams.map((team) => [team.id, team])), [teams]);
-  const groupsById = useMemo(() => new Map(groups.map((group) => [group.id, group])), [groups]);
+  const sortedGroups = useMemo(() => sortedCompetitionGroups(groups), [groups]);
+  const groupsById = useMemo(() => new Map(sortedGroups.map((group) => [group.id, group])), [sortedGroups]);
   const teamIdsByGroup = useMemo(() => {
     const grouped = new Map<string, Set<string>>();
 
@@ -368,10 +405,45 @@ export function AdminCompetitionMatchManager({
       return matchesSearch && matchesStatus && matchesGroup;
     });
   }, [groupFilter, matches, searchTerm, statusFilter, teamsById]);
+  const isCup = competition.type === "cup";
+  const matchSections = useMemo(() => {
+    if (groupFilter !== "all") {
+      const group = groupsById.get(groupFilter);
+      return visibleMatches.length
+        ? [sectionFromMatches(groupFilter, groupDisplayName(group) || "Group Matches", visibleMatches)]
+        : [];
+    }
+
+    const sections: MatchSection[] = [];
+
+    sortedGroups.forEach((group) => {
+      const sectionMatches = visibleMatches.filter((match) => match.group_id === group.id);
+      if (sectionMatches.length) {
+        sections.push(sectionFromMatches(group.id, groupDisplayName(group), sectionMatches));
+      }
+    });
+
+    const otherMatches = visibleMatches.filter((match) => !match.group_id || !groupsById.has(match.group_id));
+    if (otherMatches.length) {
+      sections.push(sectionFromMatches(otherMatchesSectionKey, "Other Matches", otherMatches));
+    }
+
+    return sections;
+  }, [groupFilter, groupsById, sortedGroups, visibleMatches]);
+  const defaultExpandedSectionKeys = useMemo(() => {
+    if (!isCup || !matchSections.length) return new Set<string>();
+    if (groupFilter !== "all") return new Set(matchSections.map((section) => section.key));
+
+    const sectionsWithUnscheduled = matchSections.filter((section) => section.unscheduled > 0);
+    return new Set(
+      (sectionsWithUnscheduled.length ? sectionsWithUnscheduled : matchSections.slice(0, 1)).map(
+        (section) => section.key,
+      ),
+    );
+  }, [groupFilter, isCup, matchSections]);
   const preservingLegacyStatus = form.id && isLegacyStatus(form.originalStatus) && !form.status;
   const effectiveStatus = form.status || form.originalStatus;
   const filtersActive = searchTerm.trim() || statusFilter !== "all" || groupFilter !== "all";
-  const isCup = competition.type === "cup";
   const matchCreationBlocked = isCup && cupGroupsReady && cupGroupCount === 0;
   const matchCreationUnavailable = isCup && !cupGroupsReady;
   const canSubmit =
@@ -498,6 +570,75 @@ export function AdminCompetitionMatchManager({
     setMessage("Match deleted.");
     setForm(emptyForm);
     await refreshWorkspace();
+  }
+
+  function setAllSectionsExpanded(expanded: boolean) {
+    setExpandedSections(Object.fromEntries(matchSections.map((section) => [section.key, expanded])));
+  }
+
+  function renderMatchCard(match: AdminCompetitionMatch) {
+    const homeTeam = teamsById.get(match.home_team_id);
+    const awayTeam = teamsById.get(match.away_team_id);
+
+    return (
+      <div className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3" key={match.id}>
+        <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
+          <div className="flex min-w-0 items-center gap-3">
+            <TeamLogo
+              className="!size-10 shrink-0 bg-[#061426]"
+              initials={teamInitials(homeTeam)}
+              logoUrl={homeTeam?.logo_url ?? ""}
+              teamName={teamName(homeTeam)}
+            />
+            <p className="min-w-0 break-words text-sm font-black text-[#061426]">{teamName(homeTeam)}</p>
+          </div>
+          <div className="flex items-center justify-center">
+            <span className="min-w-16 rounded-md border border-[#d8ad45]/35 bg-white px-3 py-2 text-center text-sm font-black text-[#8a6418] shadow-sm">
+              {matchScore(match)}
+            </span>
+          </div>
+          <div className="flex min-w-0 items-center gap-3 sm:justify-end">
+            <TeamLogo
+              className="!size-10 shrink-0 bg-[#061426]"
+              initials={teamInitials(awayTeam)}
+              logoUrl={awayTeam?.logo_url ?? ""}
+              teamName={teamName(awayTeam)}
+            />
+            <p className="min-w-0 break-words text-sm font-black text-[#061426] sm:text-right">
+              {teamName(awayTeam)}
+            </p>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
+          {match.group_id ? (
+            <span className="rounded-full border border-[#d8ad45]/35 bg-[#fff7e6] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#8a6418]">
+              {groupDisplayName(groupsById.get(match.group_id))}
+            </span>
+          ) : null}
+          <span>{matchDateTimeLabel(match)}</span>
+          <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${statusBadgeClass(match.status)}`}>
+            {match.status || "other"}
+          </span>
+          {match.venue ? <span>Venue: {match.venue}</span> : null}
+        </div>
+        <div className="mt-3 flex flex-wrap justify-end gap-2">
+          <button
+            className="rounded-md border border-slate-200 px-3 py-2 text-xs font-black text-[#061426] hover:border-[#d8ad45]"
+            onClick={() => editMatch(match)}
+            type="button"
+          >
+            Edit
+          </button>
+          <button
+            className="rounded-md border border-[#9b1c1f]/30 px-3 py-2 text-xs font-black text-[#9b1c1f] hover:bg-[#9b1c1f]/10"
+            onClick={() => void deleteMatch(match)}
+            type="button"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -839,70 +980,84 @@ export function AdminCompetitionMatchManager({
 
             <div className="grid gap-3 p-4">
               {visibleMatches.length ? (
-                visibleMatches.map((match) => {
-                  const homeTeam = teamsById.get(match.home_team_id);
-                  const awayTeam = teamsById.get(match.away_team_id);
+                isCup ? (
+                  <div className="grid gap-3">
+                    {matchSections.length > 1 ? (
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button
+                          className="min-h-11 rounded-md border border-slate-200 px-3 py-2 text-xs font-black text-[#061426] hover:border-[#d8ad45]"
+                          onClick={() => setAllSectionsExpanded(true)}
+                          type="button"
+                        >
+                          Expand all
+                        </button>
+                        <button
+                          className="min-h-11 rounded-md border border-slate-200 px-3 py-2 text-xs font-black text-[#061426] hover:border-[#d8ad45]"
+                          onClick={() => setAllSectionsExpanded(false)}
+                          type="button"
+                        >
+                          Collapse all
+                        </button>
+                      </div>
+                    ) : null}
+                    {matchSections.map((section) => {
+                      const expanded = expandedSections[section.key] ?? defaultExpandedSectionKeys.has(section.key);
 
-                  return (
-                    <div className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3" key={match.id}>
-                      <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
-                        <div className="flex min-w-0 items-center gap-3">
-                          <TeamLogo
-                            className="!size-10 shrink-0 bg-[#061426]"
-                            initials={teamInitials(homeTeam)}
-                            logoUrl={homeTeam?.logo_url ?? ""}
-                            teamName={teamName(homeTeam)}
-                          />
-                          <p className="min-w-0 break-words text-sm font-black text-[#061426]">{teamName(homeTeam)}</p>
-                        </div>
-                        <div className="flex items-center justify-center">
-                          <span className="min-w-16 rounded-md border border-[#d8ad45]/35 bg-white px-3 py-2 text-center text-sm font-black text-[#8a6418] shadow-sm">
-                            {matchScore(match)}
-                          </span>
-                        </div>
-                        <div className="flex min-w-0 items-center gap-3 sm:justify-end">
-                          <TeamLogo
-                            className="!size-10 shrink-0 bg-[#061426]"
-                            initials={teamInitials(awayTeam)}
-                            logoUrl={awayTeam?.logo_url ?? ""}
-                            teamName={teamName(awayTeam)}
-                          />
-                          <p className="min-w-0 break-words text-sm font-black text-[#061426] sm:text-right">
-                            {teamName(awayTeam)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
-                        {match.group_id ? (
-                          <span className="rounded-full border border-[#d8ad45]/35 bg-[#fff7e6] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#8a6418]">
-                            {groupDisplayName(groupsById.get(match.group_id))}
-                          </span>
-                        ) : null}
-                        <span>{matchDateTimeLabel(match)}</span>
-                        <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${statusBadgeClass(match.status)}`}>
-                          {match.status || "other"}
-                        </span>
-                        {match.venue ? <span>Venue: {match.venue}</span> : null}
-                      </div>
-                      <div className="mt-3 flex flex-wrap justify-end gap-2">
-                        <button
-                          className="rounded-md border border-slate-200 px-3 py-2 text-xs font-black text-[#061426] hover:border-[#d8ad45]"
-                          onClick={() => editMatch(match)}
-                          type="button"
+                      return (
+                        <section
+                          className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white"
+                          key={section.key}
                         >
-                          Edit
-                        </button>
-                        <button
-                          className="rounded-md border border-[#9b1c1f]/30 px-3 py-2 text-xs font-black text-[#9b1c1f] hover:bg-[#9b1c1f]/10"
-                          onClick={() => void deleteMatch(match)}
-                          type="button"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
+                          <button
+                            aria-expanded={expanded}
+                            className="flex w-full min-w-0 flex-col gap-3 bg-slate-50 px-4 py-3 text-left hover:bg-[#fffaf0] sm:flex-row sm:items-center sm:justify-between"
+                            onClick={() =>
+                              setExpandedSections((current) => ({
+                                ...current,
+                                [section.key]: !expanded,
+                              }))
+                            }
+                            type="button"
+                          >
+                            <span className="min-w-0">
+                              <span className="block break-words text-sm font-black text-[#061426]">
+                                {section.title}
+                              </span>
+                              <span className="mt-1 block text-xs font-bold text-slate-500">
+                                {expanded ? "Hide matches" : "Show matches"}
+                              </span>
+                            </span>
+                            <span className="grid w-full min-w-0 grid-cols-2 gap-2 text-center sm:w-auto sm:grid-cols-4">
+                              {[
+                                ["Total", section.total],
+                                ["Unscheduled", section.unscheduled],
+                                ["Upcoming", section.upcoming],
+                                ["Finished", section.finished],
+                              ].map(([label, value]) => (
+                                <span
+                                  className="rounded-md border border-slate-200 bg-white px-2 py-1.5"
+                                  key={label}
+                                >
+                                  <span className="block text-[9px] font-black uppercase tracking-[0.08em] text-slate-500">
+                                    {label}
+                                  </span>
+                                  <span className="block text-sm font-black text-[#061426]">{value}</span>
+                                </span>
+                              ))}
+                            </span>
+                          </button>
+                          {expanded ? (
+                            <div className="grid gap-3 border-t border-slate-100 p-3">
+                              {section.matches.map((match) => renderMatchCard(match))}
+                            </div>
+                          ) : null}
+                        </section>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  visibleMatches.map((match) => renderMatchCard(match))
+                )
               ) : (
                 <p className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
                   {matches.length
