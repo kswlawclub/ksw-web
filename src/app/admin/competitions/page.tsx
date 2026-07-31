@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { AdminCompetitionLayoutDebug } from "@/components/admin-competition-layout-debug";
 import { getSupabase } from "@/lib/supabase";
 import {
   createCompetition,
@@ -843,6 +844,7 @@ export default function AdminCompetitionsPage() {
           )}
         </div>
       </section>
+      <AdminCompetitionLayoutDebug />
     </main>
   );
 }
