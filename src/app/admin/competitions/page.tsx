@@ -403,9 +403,9 @@ export default function AdminCompetitionsPage() {
   const displayedCoverUrl = coverPreviewUrl || (!removeCoverImage ? form.coverImageUrl : "");
 
   return (
-    <main className="min-h-screen overflow-x-auto bg-[#f6f2ea] text-[#061426]">
+    <main className="min-h-screen bg-[#f6f2ea] text-[#061426]">
       <section className="bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.16),transparent_34%),linear-gradient(135deg,#061426,#091f39)] px-4 py-12 text-white sm:px-6 lg:px-10">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
+        <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-5">
           <Link className="text-sm font-bold text-[#f4d58a] hover:text-white" href="/admin">
             Back to Admin
           </Link>
@@ -423,14 +423,14 @@ export default function AdminCompetitionsPage() {
         </div>
       </section>
 
-      <section className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-10 sm:px-6 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] lg:px-10">
+      <section className="mx-auto grid w-full max-w-7xl min-w-0 gap-6 px-4 py-10 sm:px-6 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] lg:px-10">
         <form
-          className="min-w-0 rounded-lg border border-[#d8ad45]/30 bg-white p-5 shadow-xl shadow-slate-900/10"
+          className="w-full min-w-0 max-w-full rounded-lg border border-[#d8ad45]/30 bg-white p-4 shadow-xl shadow-slate-900/10 sm:p-5"
           onSubmit={saveCompetition}
           ref={formRef}
         >
-          <div className="mb-5 flex items-start justify-between gap-4">
-            <div>
+          <div className="mb-5 flex min-w-0 items-start justify-between gap-4">
+            <div className="min-w-0">
               <div className="mb-3 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
               <h2 className="text-2xl font-black">
                 {form.id ? "Edit Competition" : "Add Competition"}
@@ -444,10 +444,10 @@ export default function AdminCompetitionsPage() {
           </div>
 
           <div className="grid gap-4">
-            <label className="grid gap-2 text-sm font-black">
+            <label className="grid min-w-0 gap-2 text-sm font-black">
               Name
               <input
-                className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                className="w-full min-w-0 max-w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                 onChange={(event) => updateName(event.target.value)}
                 ref={firstFieldRef}
                 required
@@ -455,48 +455,48 @@ export default function AdminCompetitionsPage() {
               />
             </label>
 
-            <label className="grid gap-2 text-sm font-black">
+            <label className="grid min-w-0 gap-2 text-sm font-black">
               Season
               <input
-                className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                className="w-full min-w-0 max-w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                 onChange={(event) => setForm((current) => ({ ...current, season: event.target.value }))}
                 value={form.season}
               />
             </label>
 
-            <label className="grid gap-2 text-sm font-black">
+            <label className="grid min-w-0 gap-2 text-sm font-black">
               Slug
-              <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
                 <input
-                  className="min-w-0 flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                  className="w-full min-w-0 max-w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                   onChange={(event) => updateSlug(event.target.value)}
                   pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
                   placeholder="thai-lawyers-league-season-6"
                   value={form.slug}
                 />
                 <button
-                  className="rounded-md border border-[#d8ad45]/45 px-3 py-2 text-xs font-black text-[#061426] hover:bg-[#fff4dc]"
+                  className="min-h-11 w-full max-w-full rounded-md border border-[#d8ad45]/45 px-3 py-2 text-center text-xs font-black leading-tight text-[#061426] hover:bg-[#fff4dc] sm:w-auto"
                   onClick={generateSlugFromCurrentName}
                   type="button"
                 >
                   Regenerate from name
                 </button>
               </div>
-              <span className="text-xs font-semibold text-slate-500">
+              <span className="break-words text-xs font-semibold text-slate-500">
                 Lowercase English letters, numbers, and hyphens only.
               </span>
-              <span className="text-xs font-semibold text-slate-500">
+              <span className="break-words text-xs font-semibold text-slate-500">
                 Slug is used in the public URL. Changing it may break existing links.
               </span>
-              <span className="break-all rounded-md bg-slate-50 px-3 py-2 font-mono text-xs font-bold text-slate-600">
+              <span className="block max-w-full break-all rounded-md bg-slate-50 px-3 py-2 font-mono text-xs font-bold text-slate-600">
                 {form.slug ? `/competitions/${form.slug}` : "/competitions/[slug]"}
               </span>
             </label>
 
-            <label className="grid gap-2 text-sm font-black">
+            <label className="grid min-w-0 gap-2 text-sm font-black">
               Short Description
               <input
-                className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                className="w-full min-w-0 max-w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                 onChange={(event) =>
                   setForm((current) => ({ ...current, shortDescription: event.target.value }))
                 }
@@ -504,16 +504,16 @@ export default function AdminCompetitionsPage() {
               />
             </label>
 
-            <label className="grid gap-2 text-sm font-black">
+            <label className="grid min-w-0 gap-2 text-sm font-black">
               Description
               <textarea
-                className="min-h-28 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                className="min-h-28 w-full min-w-0 max-w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                 onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
                 value={form.description}
               />
             </label>
 
-            <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="grid min-w-0 gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
               <div>
                 <p className="text-sm font-black">Cover Image</p>
                 <p className="mt-1 text-xs font-semibold text-slate-500">
@@ -524,18 +524,18 @@ export default function AdminCompetitionsPage() {
               {displayedCoverUrl ? (
                 <div
                   aria-label="Competition cover preview"
-                  className="aspect-video w-full overflow-hidden rounded-md border border-[#d8ad45]/30 bg-white bg-cover bg-center"
+                  className="aspect-video w-full min-w-0 max-w-full overflow-hidden rounded-md border border-[#d8ad45]/30 bg-white bg-cover bg-center"
                   role="img"
                   style={{ backgroundImage: `url("${displayedCoverUrl}")` }}
                 />
               ) : (
-                <div className="flex aspect-video items-center justify-center rounded-md border border-dashed border-slate-300 bg-white text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                <div className="flex aspect-video w-full min-w-0 max-w-full items-center justify-center rounded-md border border-dashed border-slate-300 bg-white text-center text-xs font-black uppercase tracking-[0.18em] text-slate-400">
                   No Cover Image
                 </div>
               )}
 
               {coverFile ? (
-                <p className="text-xs font-bold text-emerald-700">
+                <p className="break-words text-xs font-bold text-emerald-700">
                   New file selected: {coverFile.name}
                 </p>
               ) : null}
@@ -546,20 +546,20 @@ export default function AdminCompetitionsPage() {
                 </p>
               ) : null}
 
-              <label className="grid gap-2 text-sm font-black">
+              <label className="grid min-w-0 gap-2 text-sm font-black">
                 Upload Cover Image
                 <input
                   accept="image/jpeg,image/png,image/webp"
-                  className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-[#061426] file:px-3 file:py-2 file:text-xs file:font-black file:text-white file:hover:bg-[#0d2745]"
+                  className="w-full min-w-0 max-w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm file:mr-2 file:rounded-md file:border-0 file:bg-[#061426] file:px-3 file:py-2 file:text-xs file:font-black file:text-white file:hover:bg-[#0d2745]"
                   onChange={(event) => selectCoverFile(event.target.files?.[0] ?? null)}
                   type="file"
                 />
               </label>
 
-              <label className="grid gap-2 text-sm font-black">
+              <label className="grid min-w-0 gap-2 text-sm font-black">
                 Cover Image URL <span className="text-xs font-semibold text-slate-500">Advanced / optional fallback</span>
                 <input
-                  className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                  className="w-full min-w-0 max-w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                   onChange={(event) => {
                     setRemoveCoverImage(false);
                     setForm((current) => ({ ...current, coverImageUrl: event.target.value }));
@@ -584,7 +584,7 @@ export default function AdminCompetitionsPage() {
             <label className="grid min-w-0 gap-2 text-sm font-black">
               Edition Number
               <input
-                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                className="w-full min-w-0 max-w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                 min="1"
                 onChange={(event) =>
                   setForm((current) => ({ ...current, editionNumber: event.target.value }))
@@ -594,7 +594,7 @@ export default function AdminCompetitionsPage() {
               />
             </label>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="grid min-w-0 gap-2 text-sm font-black">
                 Start Date
                 <input
@@ -616,19 +616,19 @@ export default function AdminCompetitionsPage() {
               </label>
             </div>
 
-            <label className="grid gap-2 text-sm font-black">
+            <label className="grid min-w-0 gap-2 text-sm font-black">
               Location
               <input
-                className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                className="w-full min-w-0 max-w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                 onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))}
                 value={form.location}
               />
             </label>
 
-            <label className="grid gap-2 text-sm font-black">
+            <label className="grid min-w-0 gap-2 text-sm font-black">
               Display Order
               <input
-                className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                className="w-full min-w-0 max-w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                 onChange={(event) =>
                   setForm((current) => ({ ...current, displayOrder: event.target.value }))
                 }
@@ -636,15 +636,15 @@ export default function AdminCompetitionsPage() {
                 type="number"
                 value={form.displayOrder}
               />
-              <span className="text-xs font-semibold text-slate-500">
+              <span className="break-words text-xs font-semibold text-slate-500">
                 Lower numbers appear first within the same section.
               </span>
             </label>
 
-            <label className="grid gap-2 text-sm font-black">
+            <label className="grid min-w-0 gap-2 text-sm font-black">
               Type
               <select
-                className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                className="w-full min-w-0 max-w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
@@ -660,10 +660,10 @@ export default function AdminCompetitionsPage() {
               </select>
             </label>
 
-            <label className="grid gap-2 text-sm font-black">
+            <label className="grid min-w-0 gap-2 text-sm font-black">
               Season Status
               <select
-                className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                className="w-full min-w-0 max-w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
@@ -678,7 +678,7 @@ export default function AdminCompetitionsPage() {
               </select>
             </label>
 
-            <label className="flex items-center gap-3 rounded-md border border-slate-200 px-3 py-3 text-sm font-black">
+            <label className="flex min-w-0 items-center gap-3 rounded-md border border-slate-200 px-3 py-3 text-sm font-black">
               <input
                 checked={form.isActive}
                 className="size-4 accent-[#d8ad45]"
@@ -690,7 +690,7 @@ export default function AdminCompetitionsPage() {
               Active
             </label>
 
-            <label className="flex items-center gap-3 rounded-md border border-slate-200 px-3 py-3 text-sm font-black">
+            <label className="flex min-w-0 items-center gap-3 rounded-md border border-slate-200 px-3 py-3 text-sm font-black">
               <input
                 checked={form.isFeatured}
                 className="size-4 accent-[#d8ad45]"
@@ -702,7 +702,7 @@ export default function AdminCompetitionsPage() {
               Featured
             </label>
 
-            <label className="flex items-center gap-3 rounded-md border border-slate-200 px-3 py-3 text-sm font-black">
+            <label className="flex min-w-0 items-center gap-3 rounded-md border border-slate-200 px-3 py-3 text-sm font-black">
               <input
                 checked={form.isPublished}
                 className="size-4 accent-[#d8ad45]"
@@ -715,18 +715,18 @@ export default function AdminCompetitionsPage() {
             </label>
 
             {error ? (
-              <p className="rounded-md border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-3 py-2 text-sm font-bold text-[#9b1c1f]">
+              <p className="break-words rounded-md border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-3 py-2 text-sm font-bold text-[#9b1c1f]">
                 {error}
               </p>
             ) : null}
             {message ? (
-              <p className="rounded-md border border-emerald-700/20 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">
+              <p className="break-words rounded-md border border-emerald-700/20 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">
                 {message}
               </p>
             ) : null}
 
             <button
-              className="rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/20 transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-h-11 w-full rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/20 transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60"
               disabled={saving}
               type="submit"
             >
@@ -736,12 +736,12 @@ export default function AdminCompetitionsPage() {
         </form>
 
         <div className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
-          <div className="flex flex-col gap-2 border-b border-slate-200 p-5 sm:flex-row sm:items-end sm:justify-between">
-            <div>
+          <div className="flex min-w-0 flex-col gap-2 border-b border-slate-200 p-5 sm:flex-row sm:items-end sm:justify-between">
+            <div className="min-w-0">
               <div className="mb-3 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
               <h2 className="text-2xl font-black">Competition List</h2>
             </div>
-            <p className="text-sm font-bold text-slate-500">
+            <p className="break-words text-sm font-bold text-slate-500">
               {competitions.length} competitions
             </p>
           </div>
@@ -801,7 +801,7 @@ export default function AdminCompetitionsPage() {
                       <td className="px-4 py-3">{competition.is_published ? "Yes" : "No"}</td>
                       <td className="px-4 py-3">{formatDate(competition.created_at)}</td>
                       <td className="px-4 py-3 text-right">
-                        <div className="flex justify-end gap-2">
+                        <div className="flex flex-wrap justify-end gap-2">
                           <Link
                             className="rounded-md border border-[#d8ad45]/45 px-3 py-2 text-xs font-black text-[#061426] hover:bg-[#fff4dc]"
                             href={`/admin/competitions/${competition.id}`}
