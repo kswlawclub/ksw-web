@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { AdminCompetitionLayoutDebug } from "@/components/admin-competition-layout-debug";
 import { getSupabase } from "@/lib/supabase";
 import {
   createCompetition,
@@ -604,6 +603,7 @@ export default function AdminCompetitionsPage() {
                   className="block h-12 w-full min-w-0 max-w-full box-border rounded-md border border-slate-200 px-4 text-base leading-normal outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20 sm:text-sm"
                   id="competition-start-date"
                   onChange={(event) => setForm((current) => ({ ...current, startDate: event.target.value }))}
+                  style={{ boxSizing: "border-box" }}
                   type="date"
                   value={form.startDate}
                 />
@@ -617,6 +617,7 @@ export default function AdminCompetitionsPage() {
                   className="block h-12 w-full min-w-0 max-w-full box-border rounded-md border border-slate-200 px-4 text-base leading-normal outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20 sm:text-sm"
                   id="competition-end-date"
                   onChange={(event) => setForm((current) => ({ ...current, endDate: event.target.value }))}
+                  style={{ boxSizing: "border-box" }}
                   type="date"
                   value={form.endDate}
                 />
@@ -844,7 +845,6 @@ export default function AdminCompetitionsPage() {
           )}
         </div>
       </section>
-      <AdminCompetitionLayoutDebug />
     </main>
   );
 }
