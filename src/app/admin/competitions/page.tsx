@@ -594,21 +594,21 @@ export default function AdminCompetitionsPage() {
               />
             </label>
 
-            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="grid min-w-0 gap-2 text-sm font-black">
+            <div className="grid w-full min-w-0 max-w-full grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="grid w-full min-w-0 max-w-full gap-2 text-sm font-black">
                 Start Date
                 <input
-                  className="w-full min-w-0 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                  className="block w-full min-w-0 max-w-full box-border rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                   onChange={(event) => setForm((current) => ({ ...current, startDate: event.target.value }))}
                   type="date"
                   value={form.startDate}
                 />
               </label>
 
-              <label className="grid min-w-0 gap-2 text-sm font-black">
+              <label className="grid w-full min-w-0 max-w-full gap-2 text-sm font-black">
                 End Date
                 <input
-                  className="w-full min-w-0 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                  className="block w-full min-w-0 max-w-full box-border rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                   onChange={(event) => setForm((current) => ({ ...current, endDate: event.target.value }))}
                   type="date"
                   value={form.endDate}
