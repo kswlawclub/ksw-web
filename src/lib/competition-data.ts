@@ -174,7 +174,7 @@ export async function loadCompetitionDetailData(competition: Row) {
     };
   }
 
-  const [standings, finishedMatches, scheduledMatches, snapshots, teams, sponsors] = await Promise.all([
+  const [standings, finishedMatches, scheduledMatches, snapshots, teams, matchTeamLookup, sponsors] = await Promise.all([
     runSupabaseQuery(
       "competition_standings",
       supabase.from("league_standings_view").select(standingsColumns).eq("league_id", leagueId),
@@ -209,6 +209,9 @@ export async function loadCompetitionDetailData(competition: Row) {
     loadCompetitionParticipants(supabase, leagueId, {
       includeInactiveParticipants: false,
     }),
+    loadCompetitionParticipants(supabase, leagueId, {
+      includeInactiveParticipants: true,
+    }),
     runSupabaseQuery(
       "competition_sponsors",
       supabase.from("sponsors").select(sponsorColumns).order("sort_order", { ascending: true, nullsFirst: false }),
@@ -217,8 +220,8 @@ export async function loadCompetitionDetailData(competition: Row) {
 
   return {
     competition,
-    matches: withMatchTeams(finishedMatches, teams),
-    scheduledMatches: withMatchTeams(scheduledMatches, teams),
+    matches: withMatchTeams(finishedMatches, matchTeamLookup),
+    scheduledMatches: withMatchTeams(scheduledMatches, matchTeamLookup),
     snapshots,
     sponsors,
     standings,

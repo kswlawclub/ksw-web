@@ -706,12 +706,12 @@ export function LeagueTable({
                         </span>
                       </div>
                     </td>
-                    <td className="px-0.5 py-2 text-right sm:px-2 sm:py-3">{number(row, ["played", "p"])}</td>
-                    <td className="px-0.5 py-2 text-right sm:px-2 sm:py-3">{number(row, ["won", "w"])}</td>
-                    <td className="px-0.5 py-2 text-right sm:px-2 sm:py-3">{number(row, ["drawn", "draws", "d"])}</td>
-                    <td className="px-0.5 py-2 text-right sm:px-2 sm:py-3">{number(row, ["lost", "l"])}</td>
-                    <td className="hidden px-2 py-3 text-right md:table-cell">{number(row, ["goals_for", "gf"])}</td>
-                    <td className="hidden px-2 py-3 text-right md:table-cell">{number(row, ["goals_against", "ga"])}</td>
+                    <td className="px-0.5 py-2 text-right text-slate-100 sm:px-2 sm:py-3">{number(row, ["played", "p"])}</td>
+                    <td className="px-0.5 py-2 text-right text-slate-100 sm:px-2 sm:py-3">{number(row, ["won", "w"])}</td>
+                    <td className="px-0.5 py-2 text-right text-slate-100 sm:px-2 sm:py-3">{number(row, ["drawn", "draws", "d"])}</td>
+                    <td className="px-0.5 py-2 text-right text-slate-100 sm:px-2 sm:py-3">{number(row, ["lost", "l"])}</td>
+                    <td className="hidden px-2 py-3 text-right text-slate-100 md:table-cell">{number(row, ["goals_for", "gf"])}</td>
+                    <td className="hidden px-2 py-3 text-right text-slate-100 md:table-cell">{number(row, ["goals_against", "ga"])}</td>
                     <td className={`px-0.5 py-2 text-right font-black sm:px-2 sm:py-3 ${goalDifferenceClass(goalDifference)}`}>
                       {goalDifferenceText(goalDifference)}
                     </td>
