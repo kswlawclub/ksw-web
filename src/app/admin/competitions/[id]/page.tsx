@@ -739,6 +739,7 @@ export default async function AdminCompetitionWorkspacePage({
           competitionId={id}
           groups={groups}
           initialMatches={knockoutMatches}
+          matches={workspaceMatches}
           schemaReady={knockoutDataReady}
           teams={groupTeams}
         />

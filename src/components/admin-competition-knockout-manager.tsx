@@ -14,6 +14,13 @@ import type {
   AdminCompetitionGroup,
   AdminCompetitionGroupTeam,
 } from "@/components/admin-competition-groups-manager";
+import type { AdminCompetitionMatch } from "@/components/admin-competition-match-manager";
+import { TeamLogo } from "@/components/team-logo";
+import {
+  calculateCupGroupStandings,
+  type CupGroupRow,
+  type CupGroupStandingRow,
+} from "@/lib/cup-group-standings";
 
 type Warning = {
   key: string;
@@ -52,10 +59,17 @@ function sourceLabel(
     return teamsById.get(source.teamId ?? "")?.name ?? "Manual team";
   }
   if (source.type === "match_winner") {
-    return `Winner R${source.sourceRoundIndex || "?"} M${source.sourceMatchOrder || "?"}`;
+    return `Winner of Match ${source.sourceMatchOrder || "?"}`;
   }
   if (source.type === "bye") return "Bye";
   return "Unassigned";
+}
+
+function teamInitials(team: Pick<AdminCompetitionGroupTeam, "name" | "short_name"> | CupGroupStandingRow | undefined) {
+  if (!team) return "FC";
+  const shortName = "short_name" in team ? team.short_name : null;
+  const name = "name" in team ? team.name : team.team_name;
+  return (shortName || name || "FC").slice(0, 3).toUpperCase();
 }
 
 function normalizeSourceType(type: KnockoutSourceType): KnockoutSlotSource {
@@ -140,12 +154,14 @@ export function AdminCompetitionKnockoutManager({
   competitionId,
   groups,
   initialMatches,
+  matches: groupMatches,
   schemaReady,
   teams,
 }: {
   competitionId: string;
   groups: AdminCompetitionGroup[];
   initialMatches: KnockoutMatchSlot[];
+  matches: AdminCompetitionMatch[];
   schemaReady: boolean;
   teams: AdminCompetitionGroupTeam[];
 }) {
@@ -161,6 +177,19 @@ export function AdminCompetitionKnockoutManager({
   const teamsById = useMemo(() => new Map(teams.map((team) => [team.team_id, team])), [teams]);
   const groupsForSelect = useMemo(() => sortedGroups(groups), [groups]);
   const teamsForSelect = useMemo(() => sortedTeams(teams), [teams]);
+  const groupStandings = useMemo(
+    () =>
+      calculateCupGroupStandings({
+        groups: groups as unknown as CupGroupRow[],
+        matches: groupMatches as unknown as CupGroupRow[],
+        teams: teams as unknown as CupGroupRow[],
+      }),
+    [groupMatches, groups, teams],
+  );
+  const standingsByGroupId = useMemo(
+    () => new Map(groupStandings.map((standing) => [standing.group_id, standing])),
+    [groupStandings],
+  );
   const groupedMatches = useMemo(() => {
     const map = new Map<string, KnockoutMatchSlot[]>();
     matches.forEach((match) => {
@@ -234,6 +263,66 @@ export function AdminCompetitionKnockoutManager({
     setMatches((current) => updateMatchSlot(current, match, side, source));
   }
 
+  function resolvedGroupRankTeam(source: KnockoutSlotSource) {
+    if (source.type !== "group_rank" || !source.groupId || !source.rank) return undefined;
+    const row = standingsByGroupId.get(source.groupId)?.rows.find((standingRow) => standingRow.position === source.rank);
+    if (!row) return undefined;
+
+    return {
+      logo_url: teamsById.get(row.team_id)?.logo_url ?? null,
+      name: row.team_name,
+      short_name: row.short_name,
+      team_id: row.team_id,
+    };
+  }
+
+  function SlotTeamPreview({ source }: { source: KnockoutSlotSource }) {
+    const groupRankTeam = resolvedGroupRankTeam(source);
+    const manualTeam = source.type === "manual_team" ? teamsById.get(source.teamId ?? "") : undefined;
+    const resolvedTeam = source.type === "group_rank" ? groupRankTeam : manualTeam;
+
+    if (resolvedTeam) {
+      return (
+        <div className="flex min-w-0 items-center gap-3 rounded-md border border-white bg-white px-3 py-2">
+          <TeamLogo
+            className="!size-9 shrink-0 bg-[#061426]"
+            initials={teamInitials(resolvedTeam)}
+            logoUrl={resolvedTeam.logo_url ?? ""}
+            teamName={resolvedTeam.name}
+          />
+          <div className="min-w-0">
+            <p className="break-words text-sm font-black text-[#061426]">{resolvedTeam.name}</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#8a6418]">
+              {source.type === "group_rank" ? "Current team" : "Manual team"}
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (source.type === "group_rank") {
+      return (
+        <p className="rounded-md border border-[#d8ad45]/30 bg-[#fff7e6] px-3 py-2 text-xs font-bold text-[#8a6418]">
+          Waiting for group standings
+        </p>
+      );
+    }
+
+    if (source.type === "manual_team") {
+      return (
+        <p className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500">
+          Select a manual team
+        </p>
+      );
+    }
+
+    return (
+      <p className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500">
+        {sourceLabel(source, groupsById, teamsById)}
+      </p>
+    );
+  }
+
   function SlotEditor({
     match,
     side,
@@ -256,6 +345,7 @@ export function AdminCompetitionKnockoutManager({
             {sourceLabel(source, groupsById, teamsById)}
           </span>
         </div>
+        <SlotTeamPreview source={source} />
         <label className="grid min-w-0 gap-1 text-xs font-black text-slate-600">
           Source
           <select
