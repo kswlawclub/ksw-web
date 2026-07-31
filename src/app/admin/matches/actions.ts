@@ -15,7 +15,7 @@ type MatchPayload = {
   home_score: number | null;
   away_score: number | null;
   venue: string | null;
-  status: MatchStatus;
+  status: string;
 };
 
 type ActionResult = {
@@ -70,6 +70,8 @@ const uuidPattern =
 const leagueColumns = "id, name, season, competition_type, season_status, slug, is_published";
 const matchColumns = "id, league_id, match_date, home_team_id, away_team_id, home_score, away_score, venue, status";
 const teamColumns = "id, name, short_name, logo_url, is_ksw";
+const supportedStatuses = new Set(["scheduled", "finished"]);
+const maxScore = 999;
 
 function getAdminClient() {
   const supabase = getSupabaseAdmin();
@@ -262,13 +264,106 @@ export async function loadAdminMatchesData(competitionId = ""): Promise<AdminMat
   };
 }
 
-function validatePayload(payload: MatchPayload): string {
+function isSupportedStatus(status: string): status is MatchStatus {
+  return supportedStatuses.has(status);
+}
+
+function validateScore(value: number | null, label: string) {
+  if (value === null) {
+    return "";
+  }
+
+  if (!Number.isFinite(value)) {
+    return `${label} must be a valid number.`;
+  }
+
+  if (!Number.isInteger(value)) {
+    return `${label} must be a whole number.`;
+  }
+
+  if (value < 0) {
+    return `${label} cannot be negative.`;
+  }
+
+  if (value > maxScore) {
+    return `${label} must be ${maxScore} or lower.`;
+  }
+
+  return "";
+}
+
+function validateMatchDate(value: string) {
+  if (!value || !value.trim()) {
+    return "Match date and time are required.";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Match date and time is invalid.";
+  }
+
+  return "";
+}
+
+function validateStatus(payloadStatus: string, existingStatus?: string) {
+  if (isSupportedStatus(payloadStatus)) {
+    return "";
+  }
+
+  if (existingStatus && payloadStatus === existingStatus && !isSupportedStatus(existingStatus)) {
+    return "";
+  }
+
+  if (existingStatus && !isSupportedStatus(existingStatus)) {
+    return "This match uses a legacy status. Keep it unchanged or choose scheduled/finished.";
+  }
+
+  return "Match status must be scheduled or finished.";
+}
+
+function normalizePayload(payload: MatchPayload): MatchPayload {
+  if (payload.status === "scheduled") {
+    return {
+      ...payload,
+      away_score: null,
+      home_score: null,
+    };
+  }
+
+  return payload;
+}
+
+function validatePayload(payload: MatchPayload, existingStatus?: string): string {
   if (!payload.league_id) {
     return "Competition is required.";
   }
 
+  if (!payload.home_team_id || !payload.away_team_id) {
+    return "Home team and away team are required.";
+  }
+
+  const statusError = validateStatus(payload.status, existingStatus);
+  if (statusError) {
+    return statusError;
+  }
+
+  const dateError = validateMatchDate(payload.match_date);
+  if (dateError) {
+    return dateError;
+  }
+
   if (payload.home_team_id === payload.away_team_id) {
     return "Home team and away team must be different.";
+  }
+
+  const homeScoreError = validateScore(payload.home_score, "Home score");
+  if (homeScoreError) {
+    return homeScoreError;
+  }
+
+  const awayScoreError = validateScore(payload.away_score, "Away score");
+  if (awayScoreError) {
+    return awayScoreError;
   }
 
   if (
@@ -362,7 +457,7 @@ async function getExistingMatch(
 ) {
   const match = await supabase
     .from("matches")
-    .select("id, league_id, home_team_id, away_team_id")
+    .select("id, league_id, home_team_id, away_team_id, status")
     .eq("id", id)
     .maybeSingle();
 
@@ -389,14 +484,24 @@ async function getExistingMatch(
     awayTeamId: match.data.away_team_id as string,
     homeTeamId: match.data.home_team_id as string,
     leagueId: match.data.league_id as string,
+    status: match.data.status as string,
     error: "",
   };
 }
 
-export async function createMatch(payload: MatchPayload): Promise<ActionResult> {
+export async function createMatch(payload: MatchPayload, expectedLeagueId: string): Promise<ActionResult> {
   await requireAdminSession();
 
-  const validationError = validatePayload(payload);
+  if (!expectedLeagueId || !uuidPattern.test(expectedLeagueId)) {
+    return { ok: false, error: "Competition is required." };
+  }
+
+  if (payload.league_id !== expectedLeagueId) {
+    return { ok: false, error: "This match does not belong to the selected competition." };
+  }
+
+  const normalizedPayload = normalizePayload(payload);
+  const validationError = validatePayload(normalizedPayload);
 
   if (validationError) {
     return { ok: false, error: validationError };
@@ -408,29 +513,29 @@ export async function createMatch(payload: MatchPayload): Promise<ActionResult> 
     return { ok: false, error };
   }
 
-  const relationshipError = await validateCompetitionTeamRelationship(supabase, payload);
+  const relationshipError = await validateCompetitionTeamRelationship(supabase, normalizedPayload);
 
   if (relationshipError) {
     return { ok: false, error: relationshipError };
   }
 
   const result = await supabase.rpc("admin_create_match_with_standings_snapshot", {
-    p_away_score: payload.away_score,
-    p_away_team_id: payload.away_team_id,
-    p_home_score: payload.home_score,
-    p_home_team_id: payload.home_team_id,
-    p_league_id: payload.league_id,
-    p_match_date: payload.match_date,
-    p_status: payload.status,
-    p_venue: payload.venue,
+    p_away_score: normalizedPayload.away_score,
+    p_away_team_id: normalizedPayload.away_team_id,
+    p_home_score: normalizedPayload.home_score,
+    p_home_team_id: normalizedPayload.home_team_id,
+    p_league_id: normalizedPayload.league_id,
+    p_match_date: normalizedPayload.match_date,
+    p_status: normalizedPayload.status,
+    p_venue: normalizedPayload.venue,
   });
 
   if (result.error) {
     console.error("admin match insert failed", result.error);
-    return { ok: false, error: result.error.message };
+    return { ok: false, error: "Could not create match." };
   }
 
-  await revalidateMatchPaths(supabase, payload.league_id);
+  await revalidateMatchPaths(supabase, normalizedPayload.league_id);
 
   return { ok: true };
 }
@@ -446,12 +551,6 @@ export async function updateMatch(
     return { ok: false, error: "Match id is required." };
   }
 
-  const validationError = validatePayload(payload);
-
-  if (validationError) {
-    return { ok: false, error: validationError };
-  }
-
   const { supabase, error } = getAdminClient();
 
   if (!supabase) {
@@ -464,15 +563,22 @@ export async function updateMatch(
     return { ok: false, error: existingMatch.error };
   }
 
+  const normalizedPayload = normalizePayload(payload);
+  const validationError = validatePayload(normalizedPayload, existingMatch.status);
+
+  if (validationError) {
+    return { ok: false, error: validationError };
+  }
+
   if (expectedLeagueId && (existingMatch.leagueId !== expectedLeagueId || payload.league_id !== expectedLeagueId)) {
     return { ok: false, error: "This match does not belong to the selected competition." };
   }
 
-  if (existingMatch.leagueId !== payload.league_id) {
+  if (existingMatch.leagueId !== normalizedPayload.league_id) {
     return { ok: false, error: "Match competition cannot be changed from the match editor." };
   }
 
-  const relationshipError = await validateCompetitionTeamRelationship(supabase, payload, {
+  const relationshipError = await validateCompetitionTeamRelationship(supabase, normalizedPayload, {
     away_team_id: existingMatch.awayTeamId,
     home_team_id: existingMatch.homeTeamId,
   });
@@ -482,23 +588,23 @@ export async function updateMatch(
   }
 
   const result = await supabase.rpc("admin_update_match_with_standings_snapshot", {
-    p_away_score: payload.away_score,
-    p_away_team_id: payload.away_team_id,
-    p_home_score: payload.home_score,
-    p_home_team_id: payload.home_team_id,
-    p_league_id: payload.league_id,
-    p_match_date: payload.match_date,
+    p_away_score: normalizedPayload.away_score,
+    p_away_team_id: normalizedPayload.away_team_id,
+    p_home_score: normalizedPayload.home_score,
+    p_home_team_id: normalizedPayload.home_team_id,
+    p_league_id: normalizedPayload.league_id,
+    p_match_date: normalizedPayload.match_date,
     p_match_id: id,
-    p_status: payload.status,
-    p_venue: payload.venue,
+    p_status: normalizedPayload.status,
+    p_venue: normalizedPayload.venue,
   });
 
   if (result.error) {
     console.error("admin match update failed", result.error);
-    return { ok: false, error: result.error.message };
+    return { ok: false, error: "Could not update match." };
   }
 
-  await revalidateMatchPaths(supabase, payload.league_id);
+  await revalidateMatchPaths(supabase, normalizedPayload.league_id);
 
   return { ok: true };
 }
@@ -532,7 +638,7 @@ export async function deleteMatchById(id: string, expectedLeagueId?: string): Pr
 
   if (result.error) {
     console.error("admin match delete failed", result.error);
-    return { ok: false, error: result.error.message };
+    return { ok: false, error: "Could not delete match." };
   }
 
   await revalidateMatchPaths(supabase, existingMatch.leagueId);

@@ -40,7 +40,8 @@ type MatchForm = {
   awayScore: string;
   venueOption: string;
   customVenue: string;
-  status: MatchStatus;
+  originalStatus: string;
+  status: MatchStatus | "";
 };
 
 type CompetitionSummary = {
@@ -61,6 +62,7 @@ const emptyForm: MatchForm = {
   awayScore: "",
   venueOption: "",
   customVenue: "",
+  originalStatus: "",
   status: "scheduled",
 };
 
@@ -130,6 +132,14 @@ function isMatchStatus(value: string): value is MatchStatus {
 
 function toMatchStatus(value: string): MatchStatus {
   return isMatchStatus(value) ? value : "scheduled";
+}
+
+function editableStatus(value: string): MatchStatus | "" {
+  return isMatchStatus(value) ? value : "";
+}
+
+function isLegacyStatus(value: string) {
+  return Boolean(value) && !isMatchStatus(value);
 }
 
 function venueFields(value: string | null) {
@@ -216,7 +226,8 @@ function formFromMatch(match: AdminCompetitionMatch): MatchForm {
     awayTeamId: match.away_team_id,
     homeScore: match.home_score === null ? "" : String(match.home_score),
     awayScore: match.away_score === null ? "" : String(match.away_score),
-    status: toMatchStatus(match.status),
+    originalStatus: match.status,
+    status: editableStatus(match.status),
     ...venue,
   };
 }
@@ -258,11 +269,14 @@ export function AdminCompetitionMatchManager({
   const scheduledCount = matches.filter((match) => match.status === "scheduled").length;
   const finishedCount = matches.filter((match) => match.status === "finished").length;
   const otherCount = matches.length - scheduledCount - finishedCount;
+  const preservingLegacyStatus = form.id && isLegacyStatus(form.originalStatus) && !form.status;
+  const effectiveStatus = form.status || form.originalStatus;
   const canSubmit =
     form.homeTeamId &&
     form.awayTeamId &&
     form.homeTeamId !== form.awayTeamId &&
     form.matchDate &&
+    effectiveStatus &&
     (form.id ? teamsById.has(form.homeTeamId) && teamsById.has(form.awayTeamId) : activeTeams.length >= 2);
 
   function resetForm() {
@@ -312,19 +326,25 @@ export function AdminCompetitionMatchManager({
       return;
     }
 
+    if (!effectiveStatus) {
+      setError("Match status is required.");
+      setSaving(false);
+      return;
+    }
+
     const payload = {
-      away_score: awayScore,
+      away_score: effectiveStatus === "scheduled" ? null : awayScore,
       away_team_id: form.awayTeamId,
-      home_score: homeScore,
+      home_score: effectiveStatus === "scheduled" ? null : homeScore,
       home_team_id: form.homeTeamId,
       league_id: competition.id,
       match_date: bangkokDateInputToIso(form.matchDate),
-      status: form.status,
+      status: effectiveStatus,
       venue: venueValue(form),
     };
     const result = form.id
       ? await updateMatch(form.id, payload, competition.id)
-      : await createMatch(payload);
+      : await createMatch(payload, competition.id);
 
     setSaving(false);
 
@@ -476,9 +496,11 @@ export function AdminCompetitionMatchManager({
                   Home Score
                   <input
                     className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                    disabled={form.status === "scheduled"}
                     min="0"
                     onChange={(event) => setForm((current) => ({ ...current, homeScore: event.target.value }))}
                     required={form.status === "finished"}
+                    step="1"
                     type="number"
                     value={form.homeScore}
                   />
@@ -487,9 +509,11 @@ export function AdminCompetitionMatchManager({
                   Away Score
                   <input
                     className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                    disabled={form.status === "scheduled"}
                     min="0"
                     onChange={(event) => setForm((current) => ({ ...current, awayScore: event.target.value }))}
                     required={form.status === "finished"}
+                    step="1"
                     type="number"
                     value={form.awayScore}
                   />
@@ -535,13 +559,31 @@ export function AdminCompetitionMatchManager({
                 Status
                 <select
                   className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
-                  onChange={(event) => setForm((current) => ({ ...current, status: toMatchStatus(event.target.value) }))}
+                  onChange={(event) => {
+                    const status = event.target.value === "" ? "" : toMatchStatus(event.target.value);
+                    setForm((current) => ({
+                      ...current,
+                      awayScore: status === "scheduled" ? "" : current.awayScore,
+                      homeScore: status === "scheduled" ? "" : current.homeScore,
+                      status,
+                    }));
+                  }}
                   value={form.status}
                 >
+                  {form.id && isLegacyStatus(form.originalStatus) ? (
+                    <option value="">Keep current status: {form.originalStatus}</option>
+                  ) : null}
                   <option value="scheduled">scheduled</option>
                   <option value="finished">finished</option>
                 </select>
               </label>
+
+              {preservingLegacyStatus ? (
+                <p className="rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] px-3 py-2 text-sm font-bold text-[#8a6418]">
+                  This match uses legacy status &quot;{form.originalStatus}&quot;. Saving now will keep that status unless you
+                  choose scheduled or finished.
+                </p>
+              ) : null}
 
               {error ? (
                 <p className="rounded-md border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-3 py-2 text-sm font-bold text-[#9b1c1f]">
