@@ -12,6 +12,7 @@ export const matchColumns =
 export const snapshotColumns =
   "snapshot_id, league_id, team_id, position, played, won, drawn, lost, goals_for, goals_against, goal_difference, points, matchday, created_at";
 export const sponsorColumns = "id, name, logo_url, website_url, tier, sort_order, is_active";
+const teamColumns = "id, name, short_name, logo_url, is_ksw";
 
 export const legacySeasonSlug = "thai-lawyers-league-season-6";
 
@@ -101,6 +102,16 @@ export function withMatchTeams(matches: Row[], teams: Row[]): Row[] {
   });
 }
 
+function matchTeamIds(matches: Row[]) {
+  return Array.from(
+    new Set(
+      matches
+        .flatMap((match) => [text(match, ["home_team_id"], ""), text(match, ["away_team_id"], "")])
+        .filter(Boolean),
+    ),
+  );
+}
+
 async function runSupabaseQuery<T>(source: string, query: PromiseLike<{ data: T[] | null; error: unknown }>) {
   try {
     const result = await query;
@@ -110,6 +121,22 @@ async function runSupabaseQuery<T>(source: string, query: PromiseLike<{ data: T[
     console.error("Supabase competition query failed", source, error, getSupabaseConfig().diagnostics);
     return [];
   }
+}
+
+async function loadMatchTeamLookup(
+  supabase: NonNullable<ReturnType<typeof getSupabase>>,
+  matches: Row[],
+) {
+  const teamIds = matchTeamIds(matches);
+
+  if (teamIds.length === 0) {
+    return [] as Row[];
+  }
+
+  return runSupabaseQuery(
+    "competition_match_team_lookup",
+    supabase.from("teams").select(teamColumns).in("id", teamIds),
+  );
 }
 
 export async function loadCompetitionBySlug(slug: string, publishedOnly = true) {
@@ -174,7 +201,7 @@ export async function loadCompetitionDetailData(competition: Row) {
     };
   }
 
-  const [standings, finishedMatches, scheduledMatches, snapshots, teams, matchTeamLookup, sponsors] = await Promise.all([
+  const [standings, finishedMatches, scheduledMatches, snapshots, teams, sponsors] = await Promise.all([
     runSupabaseQuery(
       "competition_standings",
       supabase.from("league_standings_view").select(standingsColumns).eq("league_id", leagueId),
@@ -209,14 +236,12 @@ export async function loadCompetitionDetailData(competition: Row) {
     loadCompetitionParticipants(supabase, leagueId, {
       includeInactiveParticipants: false,
     }),
-    loadCompetitionParticipants(supabase, leagueId, {
-      includeInactiveParticipants: true,
-    }),
     runSupabaseQuery(
       "competition_sponsors",
       supabase.from("sponsors").select(sponsorColumns).order("sort_order", { ascending: true, nullsFirst: false }),
     ),
   ]);
+  const matchTeamLookup = await loadMatchTeamLookup(supabase, [...finishedMatches, ...scheduledMatches]);
 
   return {
     competition,
