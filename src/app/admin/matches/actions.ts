@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { loadCompetitionParticipants } from "@/lib/competition-participants";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAdminSession } from "@/lib/admin-server-auth";
@@ -81,6 +82,31 @@ function getAdminClient() {
   }
 
   return { supabase, error: "" };
+}
+
+async function revalidateMatchPaths(
+  supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  leagueId: string,
+) {
+  revalidatePath("/admin/matches");
+  revalidatePath(`/admin/competitions/${leagueId}`);
+  revalidatePath("/");
+
+  const competition = await supabase
+    .from("leagues")
+    .select("slug")
+    .eq("id", leagueId)
+    .maybeSingle();
+
+  if (competition.error) {
+    console.error("admin match competition revalidation lookup failed", competition.error);
+    return;
+  }
+
+  const slug = competition.data?.slug;
+  if (typeof slug === "string" && slug) {
+    revalidatePath(`/competitions/${slug}`);
+  }
 }
 
 function matchTeamRow(team: Record<string, unknown>, participantIsActive = true): MatchTeamRow {
@@ -404,6 +430,8 @@ export async function createMatch(payload: MatchPayload): Promise<ActionResult> 
     return { ok: false, error: result.error.message };
   }
 
+  await revalidateMatchPaths(supabase, payload.league_id);
+
   return { ok: true };
 }
 
@@ -470,6 +498,8 @@ export async function updateMatch(
     return { ok: false, error: result.error.message };
   }
 
+  await revalidateMatchPaths(supabase, payload.league_id);
+
   return { ok: true };
 }
 
@@ -504,6 +534,8 @@ export async function deleteMatchById(id: string, expectedLeagueId?: string): Pr
     console.error("admin match delete failed", result.error);
     return { ok: false, error: result.error.message };
   }
+
+  await revalidateMatchPaths(supabase, existingMatch.leagueId);
 
   return { ok: true };
 }

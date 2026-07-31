@@ -1,5 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import {
+  AdminCompetitionMatchManager,
+  type AdminCompetitionMatch,
+  type AdminCompetitionMatchTeam,
+} from "@/components/admin-competition-match-manager";
 import { TeamLogo } from "@/components/team-logo";
 import { loadCompetitionParticipants } from "@/lib/competition-participants";
 import { requireAdminSession } from "@/lib/admin-server-auth";
@@ -11,6 +16,7 @@ const competitionColumns =
   "id, name, season, slug, short_description, description, cover_image_url, edition_number, start_date, end_date, location, display_order, competition_type, season_status, is_active, is_featured, is_published, created_at";
 const matchColumns =
   "id, match_date, home_team_id, away_team_id, home_score, away_score, venue, status";
+const teamColumns = "id, name, short_name, logo_url, is_ksw";
 
 function text(row: Row | undefined, keys: string[], fallback = "") {
   if (!row) return fallback;
@@ -52,26 +58,6 @@ function formatDate(value: unknown) {
   }).format(date);
 }
 
-function formatTime(value: unknown) {
-  if (typeof value !== "string" || !value) return "Time not set";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Time not set";
-
-  return new Intl.DateTimeFormat("en", {
-    hour: "2-digit",
-    hourCycle: "h23",
-    minute: "2-digit",
-    timeZone: "Asia/Bangkok",
-  }).format(date);
-}
-
-function matchTime(match: Row) {
-  const value = text(match, ["match_date"], "");
-  const time = value ? new Date(value).getTime() : Number.NaN;
-  return Number.isNaN(time) ? 0 : time;
-}
-
 function statusLabel(value: string) {
   return value ? value : "Not set";
 }
@@ -84,65 +70,8 @@ function teamInitials(team: Row) {
   return text(team, ["short_name", "name"], "FC").slice(0, 3).toUpperCase();
 }
 
-function teamById(teams: Row[]) {
-  return new Map(teams.map((team) => [text(team, ["id"], ""), team]));
-}
-
 function teamName(team: Row | undefined) {
   return text(team, ["name", "short_name"], "Unknown team");
-}
-
-function scoreText(match: Row) {
-  const homeScore = match.home_score;
-  const awayScore = match.away_score;
-
-  if (typeof homeScore !== "number" || typeof awayScore !== "number") {
-    return "Score not set";
-  }
-
-  return `${homeScore} - ${awayScore}`;
-}
-
-function matchScoreText(match: Row) {
-  const status = text(match, ["status"], "");
-
-  if (status !== "finished") {
-    return "VS";
-  }
-
-  return scoreText(match);
-}
-
-function matchStatusBadgeClass(status: string) {
-  if (status === "scheduled") {
-    return "border-[#d8ad45]/35 bg-[#d8ad45]/10 text-[#8a6418]";
-  }
-
-  if (status === "finished") {
-    return "border-emerald-700/20 bg-emerald-50 text-emerald-800";
-  }
-
-  return "border-slate-200 bg-slate-100 text-slate-600";
-}
-
-function matchSortGroup(match: Row) {
-  const status = text(match, ["status"], "");
-
-  if (status === "scheduled") return 0;
-  if (status === "finished") return 2;
-  return 1;
-}
-
-function sortWorkspaceMatches(matches: Row[]) {
-  return [...matches].sort((a, b) => {
-    const groupDiff = matchSortGroup(a) - matchSortGroup(b);
-    if (groupDiff) return groupDiff;
-
-    const status = text(a, ["status"], "");
-    const timeDiff = matchTime(a) - matchTime(b);
-
-    return status === "finished" ? -timeDiff : timeDiff;
-  });
 }
 
 async function runQuery<T>(
@@ -159,6 +88,60 @@ async function runQuery<T>(
   }
 }
 
+function matchTeamIds(matches: Row[]) {
+  return Array.from(
+    new Set(
+      matches
+        .flatMap((match) => [text(match, ["home_team_id"], ""), text(match, ["away_team_id"], "")])
+        .filter(Boolean),
+    ),
+  );
+}
+
+function asMatch(row: Row): AdminCompetitionMatch {
+  return {
+    away_score: typeof row.away_score === "number" ? row.away_score : null,
+    away_team_id: text(row, ["away_team_id"], ""),
+    home_score: typeof row.home_score === "number" ? row.home_score : null,
+    home_team_id: text(row, ["home_team_id"], ""),
+    id: text(row, ["id"], ""),
+    match_date: text(row, ["match_date"], ""),
+    status: text(row, ["status"], ""),
+    venue: text(row, ["venue"], "") || null,
+  };
+}
+
+function asMatchTeam(row: Row, participantIsActive = false): AdminCompetitionMatchTeam {
+  return {
+    id: text(row, ["id"], ""),
+    is_ksw: row.is_ksw === true,
+    logo_url: text(row, ["logo_url"], "") || null,
+    name: text(row, ["name", "short_name"], "Unknown team"),
+    participant_is_active: participantIsActive,
+    short_name: text(row, ["short_name"], "") || null,
+  };
+}
+
+function mergeMatchTeams(activeTeams: Row[], matchTeams: Row[]) {
+  const merged = new Map<string, AdminCompetitionMatchTeam>();
+
+  matchTeams.forEach((team) => {
+    const id = text(team, ["id"], "");
+    if (id) merged.set(id, asMatchTeam(team, false));
+  });
+  activeTeams.forEach((team) => {
+    const id = text(team, ["id"], "");
+    if (id) merged.set(id, asMatchTeam(team, true));
+  });
+
+  return Array.from(merged.values()).sort((a, b) => {
+    if (a.participant_is_active !== b.participant_is_active) {
+      return a.participant_is_active === false ? 1 : -1;
+    }
+    return a.name.localeCompare(b.name);
+  });
+}
+
 async function loadWorkspaceData(id: string) {
   await requireAdminSession();
 
@@ -167,6 +150,7 @@ async function loadWorkspaceData(id: string) {
   if (!supabase) {
     return {
       competition: undefined,
+      matchTeams: [] as Row[],
       matches: [] as Row[],
       teams: [] as Row[],
     };
@@ -181,6 +165,7 @@ async function loadWorkspaceData(id: string) {
   if (!competition) {
     return {
       competition: undefined,
+      matchTeams: [] as Row[],
       matches: [] as Row[],
       teams: [] as Row[],
     };
@@ -195,8 +180,15 @@ async function loadWorkspaceData(id: string) {
       supabase.from("matches").select(matchColumns).eq("league_id", id).order("match_date", { ascending: true }),
     ),
   ]);
+  const teamIds = matchTeamIds(matches);
+  const matchTeams = teamIds.length
+    ? await runQuery(
+        "workspace_match_teams",
+        supabase.from("teams").select(teamColumns).in("id", teamIds),
+      )
+    : [];
 
-  return { competition, matches, teams };
+  return { competition, matchTeams, matches, teams };
 }
 
 function DetailCard({ items, title }: { items: Array<[string, string]>; title: string }) {
@@ -231,7 +223,7 @@ export default async function AdminCompetitionWorkspacePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { competition, matches, teams } = await loadWorkspaceData(id);
+  const { competition, matchTeams, matches, teams } = await loadWorkspaceData(id);
 
   if (!competition) {
     notFound();
@@ -248,13 +240,10 @@ export default async function AdminCompetitionWorkspacePage({
   const isFeatured = competition.is_featured === true;
   const isActive = competition.is_active === true;
   const displayOrder = number(competition, ["display_order"]);
-  const teamsById = teamById(teams);
   const kswTeamCount = teams.filter((team) => team.is_ksw === true).length;
-  const scheduledMatches = matches.filter((match) => text(match, ["status"], "") === "scheduled");
-  const finishedMatches = matches.filter((match) => text(match, ["status"], "") === "finished");
-  const unknownStatusMatches = matches.length - scheduledMatches.length - finishedMatches.length;
-  const workspaceMatches = sortWorkspaceMatches(matches);
   const hasLinkedData = teams.length > 0 || matches.length > 0;
+  const workspaceMatches = matches.map(asMatch);
+  const workspaceMatchTeams = mergeMatchTeams(teams, matchTeams);
   const statusAndActiveMisaligned =
     (seasonStatus === "completed" && isActive) || (seasonStatus === "active" && !isActive);
 
@@ -350,9 +339,9 @@ export default async function AdminCompetitionWorkspacePage({
           <a className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm font-black text-[#061426] shadow-lg shadow-slate-900/5 hover:border-[#d8ad45]" href="#teams-summary">
             Teams
           </a>
-          <Link className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm font-black text-[#061426] shadow-lg shadow-slate-900/5 hover:border-[#d8ad45]" href={`/admin/matches?competition=${encodeURIComponent(id)}`}>
+          <a className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm font-black text-[#061426] shadow-lg shadow-slate-900/5 hover:border-[#d8ad45]" href="#matches-summary">
             Matches
-          </Link>
+          </a>
           <a className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm font-black text-[#061426] shadow-lg shadow-slate-900/5 hover:border-[#d8ad45]" href="#settings-summary">
             Settings
           </a>
@@ -380,7 +369,7 @@ export default async function AdminCompetitionWorkspacePage({
         </section>
       ) : null}
 
-      <section className="mx-auto grid w-full max-w-7xl gap-6 px-4 pb-10 sm:px-6 lg:grid-cols-2 lg:px-10">
+      <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
         <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10" id="teams-summary">
           <div className="mb-4 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -423,81 +412,18 @@ export default async function AdminCompetitionWorkspacePage({
             )}
           </div>
         </article>
-
-        <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10" id="matches-summary">
-          <div className="mb-4 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h2 className="text-2xl font-black">Matches</h2>
-              <p className="mt-1 text-sm font-semibold text-slate-600">
-                Manage matches for this competition.
-              </p>
-            </div>
-            <Link className="inline-flex rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] hover:bg-[#091f39]" href={`/admin/matches?competition=${encodeURIComponent(id)}`}>
-              Manage Matches
-            </Link>
-          </div>
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatCard label="Total" value={matches.length} />
-            <StatCard label="Scheduled" value={scheduledMatches.length} />
-            <StatCard label="Finished" value={finishedMatches.length} />
-            <StatCard label="Other" value={unknownStatusMatches} />
-          </div>
-          <div className="mt-5 grid gap-3">
-            {workspaceMatches.length ? (
-              workspaceMatches.map((match) => {
-                const homeTeam = teamsById.get(text(match, ["home_team_id"], ""));
-                const awayTeam = teamsById.get(text(match, ["away_team_id"], ""));
-                const status = text(match, ["status"], "other");
-                const venue = text(match, ["venue"], "");
-
-                return (
-                  <div className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3" key={text(match, ["id"])}>
-                    <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <TeamLogo
-                          className="!size-10 shrink-0 bg-[#061426]"
-                          initials={teamInitials(homeTeam ?? {})}
-                          logoUrl={text(homeTeam, ["logo_url"], "")}
-                          teamName={teamName(homeTeam)}
-                        />
-                        <p className="min-w-0 break-words text-sm font-black text-[#061426]">{teamName(homeTeam)}</p>
-                      </div>
-                      <div className="flex items-center justify-center">
-                        <span className="min-w-16 rounded-md border border-[#d8ad45]/35 bg-white px-3 py-2 text-center text-sm font-black text-[#8a6418] shadow-sm">
-                          {matchScoreText(match)}
-                        </span>
-                      </div>
-                      <div className="flex min-w-0 items-center gap-3 sm:justify-end">
-                        <TeamLogo
-                          className="!size-10 shrink-0 bg-[#061426]"
-                          initials={teamInitials(awayTeam ?? {})}
-                          logoUrl={text(awayTeam, ["logo_url"], "")}
-                          teamName={teamName(awayTeam)}
-                        />
-                        <p className="min-w-0 break-words text-sm font-black text-[#061426] sm:text-right">
-                          {teamName(awayTeam)}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
-                      <span>{formatDate(match.match_date)} · {formatTime(match.match_date)}</span>
-                      <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${matchStatusBadgeClass(status)}`}>
-                        {statusLabel(status)}
-                      </span>
-                      {venue ? <span>Venue: {venue}</span> : null}
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <p className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
-                No matches linked to this competition.
-              </p>
-            )}
-          </div>
-        </article>
       </section>
+
+      <AdminCompetitionMatchManager
+        competition={{
+          id,
+          name: competitionName,
+          season,
+          status: seasonStatus,
+        }}
+        initialMatches={workspaceMatches}
+        initialTeams={workspaceMatchTeams}
+      />
 
       <section className="mx-auto w-full max-w-7xl px-4 pb-12 sm:px-6 lg:px-10" id="settings-summary">
         <article className="rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10">
