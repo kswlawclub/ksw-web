@@ -241,6 +241,7 @@ export function AdminCompetitionKnockoutManager({
   const [savingResultId, setSavingResultId] = useState("");
   const [expandedRounds, setExpandedRounds] = useState<Record<string, boolean>>({});
   const [advancedDecisions, setAdvancedDecisions] = useState<Record<string, boolean>>({});
+  const [specialDecisions, setSpecialDecisions] = useState<Record<string, boolean>>({});
   const [overwriteManualEdits, setOverwriteManualEdits] = useState(false);
   const knockoutMatches = useMemo(
     () => groupMatches.filter((match) => match.competition_stage === "knockout"),
@@ -633,6 +634,7 @@ export function AdminCompetitionKnockoutManager({
       form.awayScore.trim() !== "" &&
       Number(form.homeScore) === Number(form.awayScore);
     const advancedDecisionOpen = realMatch ? advancedDecisions[realMatch.id] === true : false;
+    const specialDecisionOpen = realMatch ? specialDecisions[realMatch.id] === true || Boolean(form?.manualWinnerTeamId) : false;
 
     if (!realMatch) {
       return (
@@ -802,23 +804,45 @@ export function AdminCompetitionKnockoutManager({
                 }
                 type="button"
               >
-                {advancedDecisionOpen ? "Hide advanced decision" : "Advanced decision"}
+                {advancedDecisionOpen ? "Hide penalty shootout / special decision" : "Penalty shootout / Special decision"}
               </button>
               {advancedDecisionOpen ? (
-                <label className="grid min-w-0 gap-1 text-xs font-black text-slate-600">
-                  Manual Winner
-                  <select
-                    className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3 py-2 text-sm font-bold"
-                    onChange={(event) =>
-                      setResultForms((current) => ({ ...current, [realMatch.id]: { ...form, manualWinnerTeamId: event.target.value } }))
-                    }
-                    value={form.manualWinnerTeamId}
-                  >
-                    <option value="">Auto from score or penalties</option>
-                    <option value={realMatch.home_team_id}>{homeTeam?.name ?? "Home"}</option>
-                    <option value={realMatch.away_team_id}>{awayTeam?.name ?? "Away"}</option>
-                  </select>
-                </label>
+                <div className="grid min-w-0 gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+                  <p className="min-w-0 break-words text-xs font-bold text-slate-600">
+                    Use penalties for a drawn knockout score. Use a special winner override only for exceptional decisions.
+                  </p>
+                  <label className="flex min-w-0 items-start gap-2 text-xs font-black text-slate-600">
+                    <input
+                      checked={specialDecisionOpen}
+                      className="mt-1 size-4 shrink-0"
+                      onChange={(event) => {
+                        const checked = event.target.checked;
+                        setSpecialDecisions((current) => ({ ...current, [realMatch.id]: checked }));
+                        if (!checked) {
+                          setResultForms((current) => ({ ...current, [realMatch.id]: { ...form, manualWinnerTeamId: "" } }));
+                        }
+                      }}
+                      type="checkbox"
+                    />
+                    Special winner override
+                  </label>
+                  {specialDecisionOpen ? (
+                    <label className="grid min-w-0 gap-1 text-xs font-black text-slate-600">
+                      Manual Winner
+                      <select
+                        className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold"
+                        onChange={(event) =>
+                          setResultForms((current) => ({ ...current, [realMatch.id]: { ...form, manualWinnerTeamId: event.target.value } }))
+                        }
+                        value={form.manualWinnerTeamId}
+                      >
+                        <option value="">Select special winner</option>
+                        <option value={realMatch.home_team_id}>{homeTeam?.name ?? "Home"}</option>
+                        <option value={realMatch.away_team_id}>{awayTeam?.name ?? "Away"}</option>
+                      </select>
+                    </label>
+                  ) : null}
+                </div>
               ) : null}
             </div>
             <div className="flex justify-end">

@@ -326,11 +326,12 @@ function blankBracket(bracketSize: number): KnockoutMatchSlot[] {
 
   bracketRounds(bracketSize).forEach((round) => {
     for (let index = 1; index <= round.matchCount; index += 1) {
-      const priorMatchOrder = Math.ceil(index / 2);
+      const homeSourceMatchOrder = index * 2 - 1;
+      const awaySourceMatchOrder = index * 2;
       slots.push({
-        away: round.roundIndex === 1 ? emptySource() : matchWinnerSource(round.roundIndex - 1, priorMatchOrder * 2),
+        away: round.roundIndex === 1 ? emptySource() : matchWinnerSource(round.roundIndex - 1, awaySourceMatchOrder),
         bracketSize,
-        home: round.roundIndex === 1 ? emptySource() : matchWinnerSource(round.roundIndex - 1, priorMatchOrder * 2 - 1),
+        home: round.roundIndex === 1 ? emptySource() : matchWinnerSource(round.roundIndex - 1, homeSourceMatchOrder),
         matchOrder: index,
         roundIndex: round.roundIndex,
         roundKey: round.roundKey,
