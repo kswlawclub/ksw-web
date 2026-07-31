@@ -26,8 +26,12 @@ export type AdminCompetitionMatch = {
   away_team_id: string;
   home_score: number | null;
   away_score: number | null;
+  manual_winner_team_id?: string | null;
+  penalty_away_score?: number | null;
+  penalty_home_score?: number | null;
   venue: string | null;
   status: string;
+  winner_team_id?: string | null;
 };
 
 export type AdminCompetitionMatchTeam = {

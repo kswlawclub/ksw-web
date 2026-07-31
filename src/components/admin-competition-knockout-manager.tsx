@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  createKnockoutMatches,
   previewBlankKnockout,
   previewSuggestedKnockout,
   saveKnockoutSetup,
+  updateKnockoutMatchResult,
   type KnockoutMatchSlot,
   type KnockoutSlotSource,
   type KnockoutSourceType,
@@ -25,6 +27,17 @@ import {
 type Warning = {
   key: string;
   message: string;
+};
+
+type KnockoutResultForm = {
+  awayScore: string;
+  homeScore: string;
+  manualWinnerTeamId: string;
+  matchDate: string;
+  penaltyAwayScore: string;
+  penaltyHomeScore: string;
+  status: "scheduled" | "finished";
+  venue: string;
 };
 
 const bracketSizes = [4, 8, 16, 32, 64];
@@ -70,6 +83,48 @@ function teamInitials(team: Pick<AdminCompetitionGroupTeam, "name" | "short_name
   const shortName = "short_name" in team ? team.short_name : null;
   const name = "name" in team ? team.name : team.team_name;
   return (shortName || name || "FC").slice(0, 3).toUpperCase();
+}
+
+function toBangkokDateInput(value: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const parts = new Intl.DateTimeFormat("en", {
+    day: "2-digit",
+    hour: "2-digit",
+    hour12: false,
+    hourCycle: "h23",
+    minute: "2-digit",
+    month: "2-digit",
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+  }).formatToParts(date);
+  const valueByType = new Map(parts.map((part) => [part.type, part.value]));
+
+  return `${valueByType.get("year")}-${valueByType.get("month")}-${valueByType.get("day")}T${valueByType.get("hour")}:${valueByType.get("minute")}`;
+}
+
+function bangkokDateInputToIso(value: string) {
+  if (!value.trim()) return null;
+  return new Date(`${value}:00+07:00`).toISOString();
+}
+
+function scoreValue(value: string) {
+  return value.trim() === "" ? null : Number(value);
+}
+
+function knockoutFormFromMatch(match: AdminCompetitionMatch): KnockoutResultForm {
+  return {
+    awayScore: match.away_score === null ? "" : String(match.away_score),
+    homeScore: match.home_score === null ? "" : String(match.home_score),
+    manualWinnerTeamId: match.manual_winner_team_id ?? "",
+    matchDate: toBangkokDateInput(match.match_date),
+    penaltyAwayScore: match.penalty_away_score === null || match.penalty_away_score === undefined ? "" : String(match.penalty_away_score),
+    penaltyHomeScore: match.penalty_home_score === null || match.penalty_home_score === undefined ? "" : String(match.penalty_home_score),
+    status: match.status === "finished" ? "finished" : "scheduled",
+    venue: match.venue ?? "",
+  };
 }
 
 function normalizeSourceType(type: KnockoutSourceType): KnockoutSlotSource {
@@ -172,7 +227,20 @@ export function AdminCompetitionKnockoutManager({
   const [error, setError] = useState("");
   const [serverWarnings, setServerWarnings] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [creatingMatches, setCreatingMatches] = useState(false);
+  const [savingResultId, setSavingResultId] = useState("");
   const [overwriteManualEdits, setOverwriteManualEdits] = useState(false);
+  const knockoutMatches = useMemo(
+    () => groupMatches.filter((match) => match.competition_stage === "knockout"),
+    [groupMatches],
+  );
+  const knockoutMatchesById = useMemo(
+    () => new Map(knockoutMatches.map((match) => [match.id, match])),
+    [knockoutMatches],
+  );
+  const [resultForms, setResultForms] = useState<Record<string, KnockoutResultForm>>(() =>
+    Object.fromEntries(knockoutMatches.map((match) => [match.id, knockoutFormFromMatch(match)])),
+  );
   const groupsById = useMemo(() => new Map(groups.map((group) => [group.id, group])), [groups]);
   const teamsById = useMemo(() => new Map(teams.map((team) => [team.team_id, team])), [teams]);
   const groupsForSelect = useMemo(() => sortedGroups(groups), [groups]);
@@ -259,6 +327,54 @@ export function AdminCompetitionKnockoutManager({
     router.refresh();
   }
 
+  async function createMatchesFromSetup() {
+    setCreatingMatches(true);
+    setMessage("");
+    setError("");
+
+    const result = await createKnockoutMatches(competitionId);
+    setCreatingMatches(false);
+
+    if (!result.ok) {
+      setError(result.error ?? "Could not create knockout matches.");
+      return;
+    }
+
+    setMessage(`Knockout matches ready: ${result.createdCount ?? 0} created, ${result.advancedByes ?? 0} bye advances.`);
+    router.refresh();
+  }
+
+  async function saveResult(event: FormEvent<HTMLFormElement>, match: AdminCompetitionMatch) {
+    event.preventDefault();
+    const form = resultForms[match.id];
+    if (!form) return;
+
+    setSavingResultId(match.id);
+    setMessage("");
+    setError("");
+
+    const result = await updateKnockoutMatchResult(competitionId, {
+      awayScore: form.status === "scheduled" ? null : scoreValue(form.awayScore),
+      homeScore: form.status === "scheduled" ? null : scoreValue(form.homeScore),
+      manualWinnerTeamId: form.status === "scheduled" ? null : form.manualWinnerTeamId || null,
+      matchDate: bangkokDateInputToIso(form.matchDate),
+      matchId: match.id,
+      penaltyAwayScore: form.status === "scheduled" ? null : scoreValue(form.penaltyAwayScore),
+      penaltyHomeScore: form.status === "scheduled" ? null : scoreValue(form.penaltyHomeScore),
+      status: form.status,
+      venue: form.venue,
+    });
+    setSavingResultId("");
+
+    if (!result.ok) {
+      setError(result.error ?? "Could not update knockout result.");
+      return;
+    }
+
+    setMessage("Knockout result updated.");
+    router.refresh();
+  }
+
   function updateSlot(match: KnockoutMatchSlot, side: "away" | "home", source: KnockoutSlotSource) {
     setMatches((current) => updateMatchSlot(current, match, side, source));
   }
@@ -274,6 +390,10 @@ export function AdminCompetitionKnockoutManager({
       short_name: row.short_name,
       team_id: row.team_id,
     };
+  }
+
+  function winnerTeam(match: AdminCompetitionMatch | undefined) {
+    return match?.winner_team_id ? teamsById.get(match.winner_team_id) : undefined;
   }
 
   function SlotTeamPreview({ source }: { source: KnockoutSlotSource }) {
@@ -432,6 +552,173 @@ export function AdminCompetitionKnockoutManager({
     );
   }
 
+  function KnockoutMatchCard({ setup }: { setup: KnockoutMatchSlot }) {
+    const realMatch = setup.matchId ? knockoutMatchesById.get(setup.matchId) : undefined;
+    const form = realMatch ? resultForms[realMatch.id] ?? knockoutFormFromMatch(realMatch) : undefined;
+    const homeTeam = realMatch ? teamsById.get(realMatch.home_team_id) : undefined;
+    const awayTeam = realMatch ? teamsById.get(realMatch.away_team_id) : undefined;
+    const winner = winnerTeam(realMatch);
+    const nextRound = matches.find((match) =>
+      [match.home, match.away].some(
+        (source) =>
+          source.type === "match_winner" &&
+          source.sourceRoundIndex === setup.roundIndex &&
+          source.sourceMatchOrder === setup.matchOrder,
+      ),
+    );
+
+    if (!realMatch) {
+      return (
+        <article className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a6418]">
+            Match {setup.matchOrder}
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <SlotTeamPreview source={setup.home} />
+            <SlotTeamPreview source={setup.away} />
+          </div>
+          <p className="mt-3 rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] px-3 py-2 text-xs font-bold text-[#8a6418]">
+            Waiting for resolved teams or bye advancement.
+          </p>
+        </article>
+      );
+    }
+
+    return (
+      <article className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a6418]">
+              Match {setup.matchOrder}
+            </p>
+            <p className="mt-1 text-xs font-bold text-slate-500">
+              {nextRound ? `Winner advances to ${nextRound.roundLabel} Match ${nextRound.matchOrder}` : "Winner completes bracket"}
+            </p>
+          </div>
+          {winner ? (
+            <span className="rounded-full border border-emerald-700/20 bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-800">
+              Winner: {winner.name}
+            </span>
+          ) : null}
+        </div>
+
+        <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
+          <div className="flex min-w-0 items-center gap-3">
+            <TeamLogo className="!size-10 shrink-0 bg-[#061426]" initials={teamInitials(homeTeam)} logoUrl={homeTeam?.logo_url ?? ""} teamName={homeTeam?.name ?? "Home team"} />
+            <p className="min-w-0 break-words text-sm font-black text-[#061426]">{homeTeam?.name ?? "Home team"}</p>
+          </div>
+          <span className="rounded-md border border-[#d8ad45]/35 bg-white px-3 py-2 text-center text-sm font-black text-[#8a6418]">
+            {realMatch.status === "finished" && realMatch.home_score !== null && realMatch.away_score !== null
+              ? `${realMatch.home_score} - ${realMatch.away_score}`
+              : "VS"}
+          </span>
+          <div className="flex min-w-0 items-center gap-3 sm:justify-end">
+            <TeamLogo className="!size-10 shrink-0 bg-[#061426]" initials={teamInitials(awayTeam)} logoUrl={awayTeam?.logo_url ?? ""} teamName={awayTeam?.name ?? "Away team"} />
+            <p className="min-w-0 break-words text-sm font-black text-[#061426] sm:text-right">{awayTeam?.name ?? "Away team"}</p>
+          </div>
+        </div>
+
+        {form ? (
+          <form className="mt-4 grid min-w-0 gap-3 rounded-lg border border-white bg-white p-3" onSubmit={(event) => void saveResult(event, realMatch)}>
+            <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <label className="grid min-w-0 gap-1 text-xs font-black text-slate-600">
+                Date & Time
+                <input
+                  className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3 py-2 text-sm font-bold"
+                  onChange={(event) =>
+                    setResultForms((current) => ({ ...current, [realMatch.id]: { ...form, matchDate: event.target.value } }))
+                  }
+                  type="datetime-local"
+                  value={form.matchDate}
+                />
+              </label>
+              <label className="grid min-w-0 gap-1 text-xs font-black text-slate-600">
+                Venue
+                <input
+                  className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3 py-2 text-sm font-bold"
+                  onChange={(event) =>
+                    setResultForms((current) => ({ ...current, [realMatch.id]: { ...form, venue: event.target.value } }))
+                  }
+                  value={form.venue}
+                />
+              </label>
+              <label className="grid min-w-0 gap-1 text-xs font-black text-slate-600">
+                Status
+                <select
+                  className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3 py-2 text-sm font-bold"
+                  onChange={(event) =>
+                    setResultForms((current) => ({
+                      ...current,
+                      [realMatch.id]: {
+                        ...form,
+                        awayScore: event.target.value === "scheduled" ? "" : form.awayScore,
+                        homeScore: event.target.value === "scheduled" ? "" : form.homeScore,
+                        manualWinnerTeamId: event.target.value === "scheduled" ? "" : form.manualWinnerTeamId,
+                        penaltyAwayScore: event.target.value === "scheduled" ? "" : form.penaltyAwayScore,
+                        penaltyHomeScore: event.target.value === "scheduled" ? "" : form.penaltyHomeScore,
+                        status: event.target.value as "scheduled" | "finished",
+                      },
+                    }))
+                  }
+                  value={form.status}
+                >
+                  <option value="scheduled">scheduled</option>
+                  <option value="finished">finished</option>
+                </select>
+              </label>
+              <label className="grid min-w-0 gap-1 text-xs font-black text-slate-600">
+                Manual Winner
+                <select
+                  className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3 py-2 text-sm font-bold"
+                  onChange={(event) =>
+                    setResultForms((current) => ({ ...current, [realMatch.id]: { ...form, manualWinnerTeamId: event.target.value } }))
+                  }
+                  value={form.manualWinnerTeamId}
+                >
+                  <option value="">Auto</option>
+                  <option value={realMatch.home_team_id}>{homeTeam?.name ?? "Home"}</option>
+                  <option value={realMatch.away_team_id}>{awayTeam?.name ?? "Away"}</option>
+                </select>
+              </label>
+            </div>
+            <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                ["Home Score", "homeScore"],
+                ["Away Score", "awayScore"],
+                ["Home Penalties", "penaltyHomeScore"],
+                ["Away Penalties", "penaltyAwayScore"],
+              ].map(([label, key]) => (
+                <label className="grid min-w-0 gap-1 text-xs font-black text-slate-600" key={key}>
+                  {label}
+                  <input
+                    className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3 py-2 text-sm font-bold"
+                    max="999"
+                    min="0"
+                    onChange={(event) =>
+                      setResultForms((current) => ({ ...current, [realMatch.id]: { ...form, [key]: event.target.value, status: event.target.value.trim() ? "finished" : form.status } }))
+                    }
+                    step="1"
+                    type="number"
+                    value={form[key as keyof KnockoutResultForm]}
+                  />
+                </label>
+              ))}
+            </div>
+            <div className="flex justify-end">
+              <button
+                className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={savingResultId === realMatch.id}
+                type="submit"
+              >
+                {savingResultId === realMatch.id ? "Saving..." : "Save Result"}
+              </button>
+            </div>
+          </form>
+        ) : null}
+      </article>
+    );
+  }
+
   return (
     <section className="mx-auto w-full max-w-7xl scroll-mt-28 px-4 pb-10 sm:px-6 lg:px-10" id="knockout-summary">
       <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10">
@@ -470,6 +757,14 @@ export function AdminCompetitionKnockoutManager({
               type="button"
             >
               Custom Blank
+            </button>
+            <button
+              className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] hover:bg-[#091f39] disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!schemaReady || creatingMatches || !matches.length}
+              onClick={() => void createMatchesFromSetup()}
+              type="button"
+            >
+              {creatingMatches ? "Creating..." : "Create Knockout Matches"}
             </button>
           </div>
         </div>
@@ -543,6 +838,28 @@ export function AdminCompetitionKnockoutManager({
             </div>
           </div>
         )}
+
+        {matches.length ? (
+          <div className="mt-8 grid gap-5">
+            <div className="border-t border-slate-200 pt-5">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a6418]">Knockout Matches</p>
+              <h3 className="mt-2 text-xl font-black text-[#061426]">Results & Progression</h3>
+              <p className="mt-1 text-sm font-semibold text-slate-600">
+                Enter knockout results here. Winners advance into the next round automatically.
+              </p>
+            </div>
+            {groupedMatches.map(([roundLabel, roundMatches]) => (
+              <section className="min-w-0 rounded-lg border border-slate-200 bg-white p-4" key={`real-${roundLabel}`}>
+                <h4 className="text-lg font-black text-[#061426]">{roundLabel}</h4>
+                <div className="mt-4 grid gap-3">
+                  {roundMatches.map((setup) => (
+                    <KnockoutMatchCard key={`real-${setup.roundIndex}-${setup.matchOrder}`} setup={setup} />
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        ) : null}
       </article>
     </section>
   );

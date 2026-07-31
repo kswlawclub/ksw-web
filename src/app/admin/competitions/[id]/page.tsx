@@ -28,12 +28,12 @@ type Row = Record<string, unknown>;
 const competitionColumns =
   "id, name, season, slug, short_description, description, cover_image_url, edition_number, start_date, end_date, location, display_order, competition_type, season_status, is_active, is_featured, is_published, created_at";
 const matchColumns =
-  "id, group_id, competition_stage, fixture_source, match_date, home_team_id, away_team_id, home_score, away_score, venue, status";
+  "id, group_id, competition_stage, fixture_source, match_date, home_team_id, away_team_id, home_score, away_score, penalty_home_score, penalty_away_score, manual_winner_team_id, winner_team_id, venue, status";
 const teamColumns = "id, name, short_name, logo_url, is_ksw";
 const groupColumns = "id, competition_id, name, label, sort_order, qualifiers_count, created_at, updated_at";
 const competitionTeamGroupColumns = "id, competition_id, team_id, group_id, is_active, display_order";
 const knockoutColumns =
-  "id, competition_id, bracket_size, round_index, round_key, round_label, match_order, home_source_type, home_group_id, home_group_rank, home_team_id, home_source_round_index, home_source_match_order, away_source_type, away_group_id, away_group_rank, away_team_id, away_source_round_index, away_source_match_order, is_manual_edited, created_at, updated_at";
+  "id, competition_id, bracket_size, round_index, round_key, round_label, match_order, match_id, home_source_type, home_group_id, home_group_rank, home_team_id, home_source_round_index, home_source_match_order, away_source_type, away_group_id, away_group_rank, away_team_id, away_source_round_index, away_source_match_order, is_manual_edited, created_at, updated_at";
 
 function text(row: Row | undefined, keys: string[], fallback = "") {
   if (!row) return fallback;
@@ -156,9 +156,13 @@ function asMatch(row: Row): AdminCompetitionMatch {
     home_score: typeof row.home_score === "number" ? row.home_score : null,
     home_team_id: text(row, ["home_team_id"], ""),
     id: text(row, ["id"], ""),
+    manual_winner_team_id: text(row, ["manual_winner_team_id"], "") || null,
     match_date: text(row, ["match_date"], "") || null,
+    penalty_away_score: typeof row.penalty_away_score === "number" ? row.penalty_away_score : null,
+    penalty_home_score: typeof row.penalty_home_score === "number" ? row.penalty_home_score : null,
     status: text(row, ["status"], ""),
     venue: text(row, ["venue"], "") || null,
+    winner_team_id: text(row, ["winner_team_id"], "") || null,
   };
 }
 
@@ -235,6 +239,7 @@ function asKnockoutMatch(row: Row): KnockoutMatchSlot {
     home: asKnockoutSource(row, "home"),
     id: text(row, ["id"], ""),
     isManualEdited: row.is_manual_edited === true,
+    matchId: text(row, ["match_id"], "") || undefined,
     matchOrder: number(row, ["match_order"]),
     roundIndex: number(row, ["round_index"]),
     roundKey: text(row, ["round_key"], ""),
@@ -739,6 +744,7 @@ export default async function AdminCompetitionWorkspacePage({
           competitionId={id}
           groups={groups}
           initialMatches={knockoutMatches}
+          key={`${knockoutMatches.map((match) => match.matchId ?? "").join(":")}:${workspaceMatches.length}`}
           matches={workspaceMatches}
           schemaReady={knockoutDataReady}
           teams={groupTeams}
