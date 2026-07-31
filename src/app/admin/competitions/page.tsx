@@ -594,26 +594,32 @@ export default function AdminCompetitionsPage() {
               />
             </label>
 
-            <div className="grid w-full min-w-0 max-w-full grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="grid w-full min-w-0 max-w-full gap-2 text-sm font-black">
-                Start Date
+            <div className="w-full min-w-0 max-w-full space-y-5">
+              <div className="w-full min-w-0 max-w-full">
+                <label className="mb-2 block text-sm font-black" htmlFor="competition-start-date">
+                  Start Date
+                </label>
                 <input
-                  className="block w-full min-w-0 max-w-full box-border rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                  className="block h-12 w-full min-w-0 max-w-full box-border rounded-md border border-slate-200 px-4 text-base leading-normal outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20 sm:text-sm"
+                  id="competition-start-date"
                   onChange={(event) => setForm((current) => ({ ...current, startDate: event.target.value }))}
                   type="date"
                   value={form.startDate}
                 />
-              </label>
+              </div>
 
-              <label className="grid w-full min-w-0 max-w-full gap-2 text-sm font-black">
-                End Date
+              <div className="w-full min-w-0 max-w-full">
+                <label className="mb-2 block text-sm font-black" htmlFor="competition-end-date">
+                  End Date
+                </label>
                 <input
-                  className="block w-full min-w-0 max-w-full box-border rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                  className="block h-12 w-full min-w-0 max-w-full box-border rounded-md border border-slate-200 px-4 text-base leading-normal outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20 sm:text-sm"
+                  id="competition-end-date"
                   onChange={(event) => setForm((current) => ({ ...current, endDate: event.target.value }))}
                   type="date"
                   value={form.endDate}
                 />
-              </label>
+              </div>
             </div>
 
             <label className="grid min-w-0 gap-2 text-sm font-black">
