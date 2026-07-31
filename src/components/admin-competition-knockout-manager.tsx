@@ -205,6 +205,14 @@ function updateMatchSlot(
   });
 }
 
+function groupMatchesByRound(matches: KnockoutMatchSlot[]) {
+  const map = new Map<string, KnockoutMatchSlot[]>();
+  matches.forEach((match) => {
+    map.set(match.roundLabel, [...(map.get(match.roundLabel) ?? []), match]);
+  });
+  return Array.from(map.entries());
+}
+
 export function AdminCompetitionKnockoutManager({
   competitionId,
   groups,
@@ -221,14 +229,18 @@ export function AdminCompetitionKnockoutManager({
   teams: AdminCompetitionGroupTeam[];
 }) {
   const router = useRouter();
+  const hasSavedSetup = initialMatches.length > 0;
   const [bracketSize, setBracketSize] = useState(initialMatches[0]?.bracketSize || 8);
-  const [matches, setMatches] = useState<KnockoutMatchSlot[]>(initialMatches);
+  const [pairingMode, setPairingMode] = useState<"edit" | "summary">(hasSavedSetup ? "summary" : "edit");
+  const [draftMatches, setDraftMatches] = useState<KnockoutMatchSlot[]>(initialMatches);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [serverWarnings, setServerWarnings] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [creatingMatches, setCreatingMatches] = useState(false);
   const [savingResultId, setSavingResultId] = useState("");
+  const [expandedRounds, setExpandedRounds] = useState<Record<string, boolean>>({});
+  const [advancedDecisions, setAdvancedDecisions] = useState<Record<string, boolean>>({});
   const [overwriteManualEdits, setOverwriteManualEdits] = useState(false);
   const knockoutMatches = useMemo(
     () => groupMatches.filter((match) => match.competition_stage === "knockout"),
@@ -258,15 +270,16 @@ export function AdminCompetitionKnockoutManager({
     () => new Map(groupStandings.map((standing) => [standing.group_id, standing])),
     [groupStandings],
   );
-  const groupedMatches = useMemo(() => {
-    const map = new Map<string, KnockoutMatchSlot[]>();
-    matches.forEach((match) => {
-      map.set(match.roundLabel, [...(map.get(match.roundLabel) ?? []), match]);
-    });
-    return Array.from(map.entries());
-  }, [matches]);
-  const clientWarnings = useMemo(() => warningsForMatches(matches), [matches]);
+  const groupedDraftMatches = useMemo(() => groupMatchesByRound(draftMatches), [draftMatches]);
+  const groupedSavedMatches = useMemo(() => groupMatchesByRound(initialMatches), [initialMatches]);
+  const clientWarnings = useMemo(() => (pairingMode === "edit" ? warningsForMatches(draftMatches) : []), [draftMatches, pairingMode]);
   const hasManualEdits = initialMatches.some((match) => match.isManualEdited);
+  const hasAnyUnfinishedRound = groupedSavedMatches.some(([, roundMatches]) =>
+    roundMatches.some((match) => {
+      const realMatch = match.matchId ? knockoutMatchesById.get(match.matchId) : undefined;
+      return !realMatch || realMatch.status !== "finished";
+    }),
+  );
 
   async function loadSuggested() {
     setMessage("");
@@ -280,7 +293,8 @@ export function AdminCompetitionKnockoutManager({
       return;
     }
 
-    setMatches(result.matches);
+    setDraftMatches(result.matches);
+    setPairingMode("edit");
     setServerWarnings(result.warnings ?? []);
     setMessage("Suggested pairing preview is ready. Review and save when correct.");
   }
@@ -296,7 +310,8 @@ export function AdminCompetitionKnockoutManager({
       return;
     }
 
-    setMatches(result.matches);
+    setDraftMatches(result.matches);
+    setPairingMode("edit");
     setMessage("Custom bracket is ready for editing.");
   }
 
@@ -309,7 +324,7 @@ export function AdminCompetitionKnockoutManager({
     const result = await saveKnockoutSetup({
       bracketSize,
       competitionId,
-      matches,
+      matches: draftMatches,
       overwriteManualEdits,
     });
     setSaving(false);
@@ -320,7 +335,8 @@ export function AdminCompetitionKnockoutManager({
       return;
     }
 
-    setMatches(result.matches ?? matches);
+    setDraftMatches(result.matches ?? draftMatches);
+    setPairingMode("summary");
     setOverwriteManualEdits(false);
     setServerWarnings(result.warnings ?? []);
     setMessage("Knockout setup saved.");
@@ -376,7 +392,33 @@ export function AdminCompetitionKnockoutManager({
   }
 
   function updateSlot(match: KnockoutMatchSlot, side: "away" | "home", source: KnockoutSlotSource) {
-    setMatches((current) => updateMatchSlot(current, match, side, source));
+    setDraftMatches((current) => updateMatchSlot(current, match, side, source));
+  }
+
+  function startPairingEdit() {
+    setDraftMatches(initialMatches);
+    setBracketSize(initialMatches[0]?.bracketSize || bracketSize);
+    setPairingMode("edit");
+    setMessage("");
+    setError("");
+    setServerWarnings([]);
+  }
+
+  function cancelPairingEdit() {
+    setDraftMatches(initialMatches);
+    setPairingMode("summary");
+    setMessage("");
+    setError("");
+    setServerWarnings([]);
+  }
+
+  function roundIsExpanded(roundLabel: string, roundMatches: KnockoutMatchSlot[], index: number) {
+    if (expandedRounds[roundLabel] !== undefined) return expandedRounds[roundLabel];
+    const hasUnfinished = roundMatches.some((match) => {
+      const realMatch = match.matchId ? knockoutMatchesById.get(match.matchId) : undefined;
+      return !realMatch || realMatch.status !== "finished";
+    });
+    return hasUnfinished || (!hasAnyUnfinishedRound && index === 0);
   }
 
   function resolvedGroupRankTeam(source: KnockoutSlotSource) {
@@ -440,6 +482,17 @@ export function AdminCompetitionKnockoutManager({
       <p className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500">
         {sourceLabel(source, groupsById, teamsById)}
       </p>
+    );
+  }
+
+  function SlotSummary({ source }: { source: KnockoutSlotSource }) {
+    return (
+      <div className="grid min-w-0 gap-2 rounded-md border border-slate-100 bg-white px-3 py-2">
+        <p className="min-w-0 break-words text-xs font-black uppercase tracking-[0.12em] text-[#8a6418]">
+          {sourceLabel(source, groupsById, teamsById)}
+        </p>
+        <SlotTeamPreview source={source} />
+      </div>
     );
   }
 
@@ -558,7 +611,7 @@ export function AdminCompetitionKnockoutManager({
     const homeTeam = realMatch ? teamsById.get(realMatch.home_team_id) : undefined;
     const awayTeam = realMatch ? teamsById.get(realMatch.away_team_id) : undefined;
     const winner = winnerTeam(realMatch);
-    const nextRound = matches.find((match) =>
+    const nextRound = initialMatches.find((match) =>
       [match.home, match.away].some(
         (source) =>
           source.type === "match_winner" &&
@@ -566,6 +619,12 @@ export function AdminCompetitionKnockoutManager({
           source.sourceMatchOrder === setup.matchOrder,
       ),
     );
+    const normalScoresAreDrawn =
+      form?.status === "finished" &&
+      form.homeScore.trim() !== "" &&
+      form.awayScore.trim() !== "" &&
+      Number(form.homeScore) === Number(form.awayScore);
+    const advancedDecisionOpen = realMatch ? advancedDecisions[realMatch.id] === true : false;
 
     if (!realMatch) {
       return (
@@ -620,7 +679,7 @@ export function AdminCompetitionKnockoutManager({
 
         {form ? (
           <form className="mt-4 grid min-w-0 gap-3 rounded-lg border border-white bg-white p-3" onSubmit={(event) => void saveResult(event, realMatch)}>
-            <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <label className="grid min-w-0 gap-1 text-xs font-black text-slate-600">
                 Date & Time
                 <input
@@ -666,27 +725,11 @@ export function AdminCompetitionKnockoutManager({
                   <option value="finished">finished</option>
                 </select>
               </label>
-              <label className="grid min-w-0 gap-1 text-xs font-black text-slate-600">
-                Manual Winner
-                <select
-                  className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3 py-2 text-sm font-bold"
-                  onChange={(event) =>
-                    setResultForms((current) => ({ ...current, [realMatch.id]: { ...form, manualWinnerTeamId: event.target.value } }))
-                  }
-                  value={form.manualWinnerTeamId}
-                >
-                  <option value="">Auto</option>
-                  <option value={realMatch.home_team_id}>{homeTeam?.name ?? "Home"}</option>
-                  <option value={realMatch.away_team_id}>{awayTeam?.name ?? "Away"}</option>
-                </select>
-              </label>
             </div>
-            <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid min-w-0 gap-3 sm:grid-cols-2">
               {[
                 ["Home Score", "homeScore"],
                 ["Away Score", "awayScore"],
-                ["Home Penalties", "penaltyHomeScore"],
-                ["Away Penalties", "penaltyAwayScore"],
               ].map(([label, key]) => (
                 <label className="grid min-w-0 gap-1 text-xs font-black text-slate-600" key={key}>
                   {label}
@@ -703,6 +746,59 @@ export function AdminCompetitionKnockoutManager({
                   />
                 </label>
               ))}
+            </div>
+            {normalScoresAreDrawn ? (
+              <div className="grid min-w-0 gap-3 rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] p-3 sm:grid-cols-2">
+                <p className="min-w-0 break-words text-xs font-bold text-[#8a6418] sm:col-span-2">
+                  Drawn knockout matches require penalty scores or an advanced manual decision.
+                </p>
+                {[
+                  ["Home Penalties", "penaltyHomeScore"],
+                  ["Away Penalties", "penaltyAwayScore"],
+                ].map(([label, key]) => (
+                  <label className="grid min-w-0 gap-1 text-xs font-black text-slate-600" key={key}>
+                    {label}
+                    <input
+                      className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold"
+                      max="999"
+                      min="0"
+                      onChange={(event) =>
+                        setResultForms((current) => ({ ...current, [realMatch.id]: { ...form, [key]: event.target.value } }))
+                      }
+                      step="1"
+                      type="number"
+                      value={form[key as keyof KnockoutResultForm]}
+                    />
+                  </label>
+                ))}
+              </div>
+            ) : null}
+            <div className="grid min-w-0 gap-3">
+              <button
+                className="min-h-11 justify-self-start rounded-md border border-slate-200 px-4 py-2 text-sm font-black text-[#061426] hover:border-[#d8ad45]"
+                onClick={() =>
+                  setAdvancedDecisions((current) => ({ ...current, [realMatch.id]: !advancedDecisionOpen }))
+                }
+                type="button"
+              >
+                {advancedDecisionOpen ? "Hide advanced decision" : "Advanced decision"}
+              </button>
+              {advancedDecisionOpen ? (
+                <label className="grid min-w-0 gap-1 text-xs font-black text-slate-600">
+                  Manual Winner
+                  <select
+                    className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3 py-2 text-sm font-bold"
+                    onChange={(event) =>
+                      setResultForms((current) => ({ ...current, [realMatch.id]: { ...form, manualWinnerTeamId: event.target.value } }))
+                    }
+                    value={form.manualWinnerTeamId}
+                  >
+                    <option value="">Auto from score or penalties</option>
+                    <option value={realMatch.home_team_id}>{homeTeam?.name ?? "Home"}</option>
+                    <option value={realMatch.away_team_id}>{awayTeam?.name ?? "Away"}</option>
+                  </select>
+                </label>
+              ) : null}
             </div>
             <div className="flex justify-end">
               <button
@@ -731,41 +827,62 @@ export function AdminCompetitionKnockoutManager({
               Define knockout slot sources. Match progression and public bracket rendering come later.
             </p>
           </div>
-          <div className="grid min-w-0 gap-2 sm:grid-cols-[140px_auto_auto]">
-            <label className="grid min-w-0 gap-1 text-xs font-black text-slate-600">
-              Bracket size
-              <select
-                className="min-h-11 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-black text-[#061426]"
-                onChange={(event) => setBracketSize(Number(event.target.value))}
-                value={bracketSize}
-              >
-                {bracketSizes.map((size) => <option key={size} value={size}>{size}</option>)}
-              </select>
-            </label>
-            <button
-              className="min-h-11 rounded-md border border-[#d8ad45]/45 px-4 py-2 text-sm font-black text-[#061426] hover:bg-[#fff7e6] disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={!schemaReady || !groups.length || !teams.length}
-              onClick={() => void loadSuggested()}
-              type="button"
-            >
-              Suggested Pairing
-            </button>
-            <button
-              className="min-h-11 rounded-md border border-slate-200 px-4 py-2 text-sm font-black hover:border-[#d8ad45] disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={!schemaReady}
-              onClick={() => void loadBlank()}
-              type="button"
-            >
-              Custom Blank
-            </button>
-            <button
-              className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] hover:bg-[#091f39] disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={!schemaReady || creatingMatches || !matches.length}
-              onClick={() => void createMatchesFromSetup()}
-              type="button"
-            >
-              {creatingMatches ? "Creating..." : "Create Knockout Matches"}
-            </button>
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+            {pairingMode === "summary" && hasSavedSetup ? (
+              <>
+                <button
+                  className="min-h-11 rounded-md border border-[#d8ad45]/45 px-4 py-2 text-sm font-black text-[#061426] hover:bg-[#fff7e6]"
+                  onClick={startPairingEdit}
+                  type="button"
+                >
+                  Edit Pairing
+                </button>
+                <button
+                  className="min-h-11 rounded-md border border-slate-200 px-4 py-2 text-sm font-black hover:border-[#d8ad45]"
+                  onClick={startPairingEdit}
+                  type="button"
+                >
+                  Rebuild Bracket
+                </button>
+                <button
+                  className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] hover:bg-[#091f39] disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={!schemaReady || creatingMatches || !initialMatches.length}
+                  onClick={() => void createMatchesFromSetup()}
+                  type="button"
+                >
+                  {creatingMatches ? "Creating..." : "Create Knockout Matches"}
+                </button>
+              </>
+            ) : (
+              <>
+                <label className="grid min-w-0 gap-1 text-xs font-black text-slate-600 sm:w-36">
+                  Bracket size
+                  <select
+                    className="min-h-11 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-black text-[#061426]"
+                    onChange={(event) => setBracketSize(Number(event.target.value))}
+                    value={bracketSize}
+                  >
+                    {bracketSizes.map((size) => <option key={size} value={size}>{size}</option>)}
+                  </select>
+                </label>
+                <button
+                  className="min-h-11 rounded-md border border-[#d8ad45]/45 px-4 py-2 text-sm font-black text-[#061426] hover:bg-[#fff7e6] disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={!schemaReady || !groups.length || !teams.length}
+                  onClick={() => void loadSuggested()}
+                  type="button"
+                >
+                  Suggested Pairing
+                </button>
+                <button
+                  className="min-h-11 rounded-md border border-slate-200 px-4 py-2 text-sm font-black hover:border-[#d8ad45] disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={!schemaReady}
+                  onClick={() => void loadBlank()}
+                  type="button"
+                >
+                  Custom Blank
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -797,13 +914,65 @@ export function AdminCompetitionKnockoutManager({
           </div>
         ) : null}
 
-        {!matches.length ? (
+        {!initialMatches.length && pairingMode === "summary" ? (
           <p className="mt-5 rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
             No knockout setup yet. Generate a suggested pairing or start a custom blank bracket.
           </p>
-        ) : (
+        ) : null}
+
+        {pairingMode === "summary" && initialMatches.length ? (
           <div className="mt-6 grid gap-5">
-            {groupedMatches.map(([roundLabel, roundMatches]) => (
+            <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 sm:grid-cols-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">Bracket size</p>
+                <p className="mt-1 text-xl font-black text-[#061426]">{initialMatches[0]?.bracketSize ?? bracketSize}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">Rounds</p>
+                <p className="mt-1 text-xl font-black text-[#061426]">{groupedSavedMatches.length}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">Pairs</p>
+                <p className="mt-1 text-xl font-black text-[#061426]">{initialMatches.length}</p>
+              </div>
+            </div>
+            {groupedSavedMatches.map(([roundLabel, roundMatches]) => (
+              <section className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4" key={roundLabel}>
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <h3 className="text-lg font-black text-[#061426]">{roundLabel}</h3>
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                    {roundMatches.length} match{roundMatches.length === 1 ? "" : "es"}
+                  </p>
+                </div>
+                <div className="mt-4 grid gap-3">
+                  {roundMatches.map((match) => (
+                    <article className="min-w-0 rounded-lg border border-white bg-white p-3 shadow-sm" key={`${match.roundIndex}-${match.matchOrder}`}>
+                      <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a6418]">
+                        Match {match.matchOrder}
+                      </p>
+                      <div className="mt-3 grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
+                        <SlotSummary source={match.home} />
+                        <span className="rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] px-3 py-2 text-center text-xs font-black uppercase tracking-[0.12em] text-[#8a6418]">
+                          vs
+                        </span>
+                        <SlotSummary source={match.away} />
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        ) : null}
+
+        {pairingMode === "edit" ? (
+          <div className="mt-6 grid gap-5">
+            {!draftMatches.length ? (
+              <p className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+                No knockout setup yet. Generate a suggested pairing or start a custom blank bracket.
+              </p>
+            ) : null}
+            {groupedDraftMatches.map(([roundLabel, roundMatches]) => (
               <section className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4" key={roundLabel}>
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <h3 className="text-lg font-black text-[#061426]">{roundLabel}</h3>
@@ -827,9 +996,18 @@ export function AdminCompetitionKnockoutManager({
               </section>
             ))}
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+              {hasSavedSetup ? (
+                <button
+                  className="min-h-11 rounded-md border border-slate-200 px-5 py-3 text-sm font-black hover:border-[#d8ad45]"
+                  onClick={cancelPairingEdit}
+                  type="button"
+                >
+                  Cancel
+                </button>
+              ) : null}
               <button
                 className="min-h-11 rounded-md bg-[#061426] px-5 py-3 text-sm font-black text-[#f4d58a] hover:bg-[#091f39] disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={!schemaReady || saving}
+                disabled={!schemaReady || saving || !draftMatches.length}
                 onClick={() => void saveSetup()}
                 type="button"
               >
@@ -837,9 +1015,9 @@ export function AdminCompetitionKnockoutManager({
               </button>
             </div>
           </div>
-        )}
+        ) : null}
 
-        {matches.length ? (
+        {initialMatches.length ? (
           <div className="mt-8 grid gap-5">
             <div className="border-t border-slate-200 pt-5">
               <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a6418]">Knockout Matches</p>
@@ -848,16 +1026,36 @@ export function AdminCompetitionKnockoutManager({
                 Enter knockout results here. Winners advance into the next round automatically.
               </p>
             </div>
-            {groupedMatches.map(([roundLabel, roundMatches]) => (
-              <section className="min-w-0 rounded-lg border border-slate-200 bg-white p-4" key={`real-${roundLabel}`}>
-                <h4 className="text-lg font-black text-[#061426]">{roundLabel}</h4>
-                <div className="mt-4 grid gap-3">
-                  {roundMatches.map((setup) => (
-                    <KnockoutMatchCard key={`real-${setup.roundIndex}-${setup.matchOrder}`} setup={setup} />
-                  ))}
-                </div>
-              </section>
-            ))}
+            {groupedSavedMatches.map(([roundLabel, roundMatches], index) => {
+              const isOpen = roundIsExpanded(roundLabel, roundMatches, index);
+              const unfinishedCount = roundMatches.filter((match) => {
+                const realMatch = match.matchId ? knockoutMatchesById.get(match.matchId) : undefined;
+                return !realMatch || realMatch.status !== "finished";
+              }).length;
+
+              return (
+                <section className="min-w-0 rounded-lg border border-slate-200 bg-white p-4" key={`real-${roundLabel}`}>
+                  <button
+                    aria-expanded={isOpen}
+                    className="flex min-h-11 w-full min-w-0 flex-col gap-2 text-left sm:flex-row sm:items-center sm:justify-between"
+                    onClick={() => setExpandedRounds((current) => ({ ...current, [roundLabel]: !isOpen }))}
+                    type="button"
+                  >
+                    <span className="text-lg font-black text-[#061426]">{roundLabel}</span>
+                    <span className="rounded-full border border-slate-200 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-slate-600">
+                      {roundMatches.length} total / {unfinishedCount} unfinished
+                    </span>
+                  </button>
+                  {isOpen ? (
+                    <div className="mt-4 grid gap-3">
+                      {roundMatches.map((setup) => (
+                        <KnockoutMatchCard key={`real-${setup.id ?? `${setup.roundIndex}-${setup.matchOrder}`}`} setup={setup} />
+                      ))}
+                    </div>
+                  ) : null}
+                </section>
+              );
+            })}
           </div>
         ) : null}
       </article>

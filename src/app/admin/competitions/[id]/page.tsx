@@ -744,7 +744,6 @@ export default async function AdminCompetitionWorkspacePage({
           competitionId={id}
           groups={groups}
           initialMatches={knockoutMatches}
-          key={`${knockoutMatches.map((match) => match.matchId ?? "").join(":")}:${workspaceMatches.length}`}
           matches={workspaceMatches}
           schemaReady={knockoutDataReady}
           teams={groupTeams}
