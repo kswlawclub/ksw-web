@@ -478,6 +478,14 @@ export function AdminCompetitionKnockoutManager({
       );
     }
 
+    if (source.type === "match_winner") {
+      return (
+        <p className="rounded-md border border-[#d8ad45]/30 bg-[#fff7e6] px-3 py-2 text-xs font-bold text-[#8a6418]">
+          Waiting for {sourceLabel(source, groupsById, teamsById)}
+        </p>
+      );
+    }
+
     return (
       <p className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500">
         {sourceLabel(source, groupsById, teamsById)}
@@ -632,9 +640,12 @@ export function AdminCompetitionKnockoutManager({
           <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a6418]">
             Match {setup.matchOrder}
           </p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            <SlotTeamPreview source={setup.home} />
-            <SlotTeamPreview source={setup.away} />
+          <div className="mt-3 grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
+            <SlotSummary source={setup.home} />
+            <span className="rounded-md border border-[#d8ad45]/35 bg-white px-3 py-2 text-center text-xs font-black uppercase tracking-[0.12em] text-[#8a6418]">
+              vs
+            </span>
+            <SlotSummary source={setup.away} />
           </div>
           <p className="mt-3 rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] px-3 py-2 text-xs font-bold text-[#8a6418]">
             Waiting for resolved teams or bye advancement.
@@ -662,18 +673,28 @@ export function AdminCompetitionKnockoutManager({
         </div>
 
         <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
-          <div className="flex min-w-0 items-center gap-3">
-            <TeamLogo className="!size-10 shrink-0 bg-[#061426]" initials={teamInitials(homeTeam)} logoUrl={homeTeam?.logo_url ?? ""} teamName={homeTeam?.name ?? "Home team"} />
-            <p className="min-w-0 break-words text-sm font-black text-[#061426]">{homeTeam?.name ?? "Home team"}</p>
+          <div className="grid min-w-0 gap-2">
+            <p className="min-w-0 break-words text-[10px] font-black uppercase tracking-[0.12em] text-[#8a6418]">
+              {sourceLabel(setup.home, groupsById, teamsById)}
+            </p>
+            <div className="flex min-w-0 items-center gap-3">
+              <TeamLogo className="!size-10 shrink-0 bg-[#061426]" initials={teamInitials(homeTeam)} logoUrl={homeTeam?.logo_url ?? ""} teamName={homeTeam?.name ?? "Home team"} />
+              <p className="min-w-0 break-words text-sm font-black text-[#061426]">{homeTeam?.name ?? "Home team"}</p>
+            </div>
           </div>
           <span className="rounded-md border border-[#d8ad45]/35 bg-white px-3 py-2 text-center text-sm font-black text-[#8a6418]">
             {realMatch.status === "finished" && realMatch.home_score !== null && realMatch.away_score !== null
               ? `${realMatch.home_score} - ${realMatch.away_score}`
               : "VS"}
           </span>
-          <div className="flex min-w-0 items-center gap-3 sm:justify-end">
-            <TeamLogo className="!size-10 shrink-0 bg-[#061426]" initials={teamInitials(awayTeam)} logoUrl={awayTeam?.logo_url ?? ""} teamName={awayTeam?.name ?? "Away team"} />
-            <p className="min-w-0 break-words text-sm font-black text-[#061426] sm:text-right">{awayTeam?.name ?? "Away team"}</p>
+          <div className="grid min-w-0 gap-2 sm:justify-items-end">
+            <p className="min-w-0 break-words text-[10px] font-black uppercase tracking-[0.12em] text-[#8a6418] sm:text-right">
+              {sourceLabel(setup.away, groupsById, teamsById)}
+            </p>
+            <div className="flex min-w-0 items-center gap-3 sm:justify-end">
+              <TeamLogo className="!size-10 shrink-0 bg-[#061426]" initials={teamInitials(awayTeam)} logoUrl={awayTeam?.logo_url ?? ""} teamName={awayTeam?.name ?? "Away team"} />
+              <p className="min-w-0 break-words text-sm font-black text-[#061426] sm:text-right">{awayTeam?.name ?? "Away team"}</p>
+            </div>
           </div>
         </div>
 
@@ -806,7 +827,7 @@ export function AdminCompetitionKnockoutManager({
                 disabled={savingResultId === realMatch.id}
                 type="submit"
               >
-                {savingResultId === realMatch.id ? "Saving..." : "Save Result"}
+                {savingResultId === realMatch.id ? "Saving..." : "Save Match"}
               </button>
             </div>
           </form>
@@ -822,9 +843,9 @@ export function AdminCompetitionKnockoutManager({
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a6418]">Cup Workspace</p>
-            <h2 className="mt-2 text-2xl font-black">Knockout Setup</h2>
+            <h2 className="mt-2 text-2xl font-black">Knockout Bracket Management</h2>
             <p className="mt-1 text-sm font-semibold text-slate-600">
-              Define knockout slot sources. Match progression and public bracket rendering come later.
+              Manage pairing, match details, results, and winner progression in one workspace.
             </p>
           </div>
           <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
@@ -936,32 +957,36 @@ export function AdminCompetitionKnockoutManager({
                 <p className="mt-1 text-xl font-black text-[#061426]">{initialMatches.length}</p>
               </div>
             </div>
-            {groupedSavedMatches.map(([roundLabel, roundMatches]) => (
-              <section className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4" key={roundLabel}>
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                  <h3 className="text-lg font-black text-[#061426]">{roundLabel}</h3>
-                  <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
-                    {roundMatches.length} match{roundMatches.length === 1 ? "" : "es"}
-                  </p>
-                </div>
-                <div className="mt-4 grid gap-3">
-                  {roundMatches.map((match) => (
-                    <article className="min-w-0 rounded-lg border border-white bg-white p-3 shadow-sm" key={`${match.roundIndex}-${match.matchOrder}`}>
-                      <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a6418]">
-                        Match {match.matchOrder}
-                      </p>
-                      <div className="mt-3 grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
-                        <SlotSummary source={match.home} />
-                        <span className="rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] px-3 py-2 text-center text-xs font-black uppercase tracking-[0.12em] text-[#8a6418]">
-                          vs
-                        </span>
-                        <SlotSummary source={match.away} />
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </section>
-            ))}
+            {groupedSavedMatches.map(([roundLabel, roundMatches], index) => {
+              const isOpen = roundIsExpanded(roundLabel, roundMatches, index);
+              const unfinishedCount = roundMatches.filter((match) => {
+                const realMatch = match.matchId ? knockoutMatchesById.get(match.matchId) : undefined;
+                return !realMatch || realMatch.status !== "finished";
+              }).length;
+
+              return (
+                <section className="min-w-0 rounded-lg border border-slate-200 bg-white p-4" key={roundLabel}>
+                  <button
+                    aria-expanded={isOpen}
+                    className="flex min-h-11 w-full min-w-0 flex-col gap-2 text-left sm:flex-row sm:items-center sm:justify-between"
+                    onClick={() => setExpandedRounds((current) => ({ ...current, [roundLabel]: !isOpen }))}
+                    type="button"
+                  >
+                    <span className="text-lg font-black text-[#061426]">{roundLabel}</span>
+                    <span className="rounded-full border border-slate-200 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-slate-600">
+                      {roundMatches.length} total / {unfinishedCount} unfinished
+                    </span>
+                  </button>
+                  {isOpen ? (
+                    <div className="mt-4 grid gap-3">
+                      {roundMatches.map((setup) => (
+                        <KnockoutMatchCard key={`real-${setup.id ?? `${setup.roundIndex}-${setup.matchOrder}`}`} setup={setup} />
+                      ))}
+                    </div>
+                  ) : null}
+                </section>
+              );
+            })}
           </div>
         ) : null}
 
@@ -1014,48 +1039,6 @@ export function AdminCompetitionKnockoutManager({
                 {saving ? "Saving..." : "Save Knockout Setup"}
               </button>
             </div>
-          </div>
-        ) : null}
-
-        {initialMatches.length ? (
-          <div className="mt-8 grid gap-5">
-            <div className="border-t border-slate-200 pt-5">
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a6418]">Knockout Matches</p>
-              <h3 className="mt-2 text-xl font-black text-[#061426]">Results & Progression</h3>
-              <p className="mt-1 text-sm font-semibold text-slate-600">
-                Enter knockout results here. Winners advance into the next round automatically.
-              </p>
-            </div>
-            {groupedSavedMatches.map(([roundLabel, roundMatches], index) => {
-              const isOpen = roundIsExpanded(roundLabel, roundMatches, index);
-              const unfinishedCount = roundMatches.filter((match) => {
-                const realMatch = match.matchId ? knockoutMatchesById.get(match.matchId) : undefined;
-                return !realMatch || realMatch.status !== "finished";
-              }).length;
-
-              return (
-                <section className="min-w-0 rounded-lg border border-slate-200 bg-white p-4" key={`real-${roundLabel}`}>
-                  <button
-                    aria-expanded={isOpen}
-                    className="flex min-h-11 w-full min-w-0 flex-col gap-2 text-left sm:flex-row sm:items-center sm:justify-between"
-                    onClick={() => setExpandedRounds((current) => ({ ...current, [roundLabel]: !isOpen }))}
-                    type="button"
-                  >
-                    <span className="text-lg font-black text-[#061426]">{roundLabel}</span>
-                    <span className="rounded-full border border-slate-200 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-slate-600">
-                      {roundMatches.length} total / {unfinishedCount} unfinished
-                    </span>
-                  </button>
-                  {isOpen ? (
-                    <div className="mt-4 grid gap-3">
-                      {roundMatches.map((setup) => (
-                        <KnockoutMatchCard key={`real-${setup.id ?? `${setup.roundIndex}-${setup.matchOrder}`}`} setup={setup} />
-                      ))}
-                    </div>
-                  ) : null}
-                </section>
-              );
-            })}
           </div>
         ) : null}
       </article>

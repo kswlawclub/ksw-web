@@ -384,13 +384,18 @@ export function AdminCompetitionMatchManager({
         team.id === form.awayTeamId,
     );
   }, [form.awayTeamId, form.groupId, form.homeTeamId, teamIdsByGroup, teams]);
-  const scheduledCount = matches.filter((match) => match.status === "scheduled").length;
-  const finishedCount = matches.filter((match) => match.status === "finished").length;
-  const otherCount = matches.length - scheduledCount - finishedCount;
+  const standardMatches = useMemo(
+    () => matches.filter((match) => match.competition_stage !== "knockout"),
+    [matches],
+  );
+  const knockoutMatchCount = matches.length - standardMatches.length;
+  const scheduledCount = standardMatches.filter((match) => match.status === "scheduled").length;
+  const finishedCount = standardMatches.filter((match) => match.status === "finished").length;
+  const otherCount = standardMatches.length - scheduledCount - finishedCount;
   const visibleMatches = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
-    return sortMatches(matches).filter((match) => {
+    return sortMatches(standardMatches).filter((match) => {
       const homeTeam = teamsById.get(match.home_team_id);
       const awayTeam = teamsById.get(match.away_team_id);
       const searchableTeams = [
@@ -408,7 +413,7 @@ export function AdminCompetitionMatchManager({
 
       return matchesSearch && matchesStatus && matchesGroup;
     });
-  }, [groupFilter, matches, searchTerm, statusFilter, teamsById]);
+  }, [groupFilter, searchTerm, standardMatches, statusFilter, teamsById]);
   const isCup = competition.type === "cup";
   const matchSections = useMemo(() => {
     if (groupFilter !== "all") {
@@ -902,7 +907,8 @@ export function AdminCompetitionMatchManager({
               <div>
                 <h3 className="text-xl font-black">Match List</h3>
                 <p className="mt-1 text-sm font-semibold text-slate-600">
-                  Showing {visibleMatches.length} of {matches.length} linked matches
+                  Showing {visibleMatches.length} of {standardMatches.length} standard matches
+                  {knockoutMatchCount ? ` (${knockoutMatchCount} knockout managed in Knockout)` : ""}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -1064,8 +1070,10 @@ export function AdminCompetitionMatchManager({
                 )
               ) : (
                 <p className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
-                  {matches.length
+                  {standardMatches.length
                     ? "No matches match your search or filter."
+                    : knockoutMatchCount
+                      ? "Knockout matches are managed in Knockout Bracket Management."
                     : "No matches yet. Use Add Match to create the first fixture."}
                 </p>
               )}
