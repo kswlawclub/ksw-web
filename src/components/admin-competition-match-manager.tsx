@@ -285,6 +285,14 @@ export function AdminCompetitionMatchManager({
     setError("");
   }
 
+  function updateScore(field: "awayScore" | "homeScore", value: string) {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+      status: value.trim() ? "finished" : current.status,
+    }));
+  }
+
   function editMatch(match: AdminCompetitionMatch) {
     setForm(formFromMatch(match));
     setMessage("");
@@ -496,9 +504,9 @@ export function AdminCompetitionMatchManager({
                   Home Score
                   <input
                     className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
-                    disabled={form.status === "scheduled"}
+                    max="999"
                     min="0"
-                    onChange={(event) => setForm((current) => ({ ...current, homeScore: event.target.value }))}
+                    onChange={(event) => updateScore("homeScore", event.target.value)}
                     required={form.status === "finished"}
                     step="1"
                     type="number"
@@ -509,9 +517,9 @@ export function AdminCompetitionMatchManager({
                   Away Score
                   <input
                     className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
-                    disabled={form.status === "scheduled"}
+                    max="999"
                     min="0"
-                    onChange={(event) => setForm((current) => ({ ...current, awayScore: event.target.value }))}
+                    onChange={(event) => updateScore("awayScore", event.target.value)}
                     required={form.status === "finished"}
                     step="1"
                     type="number"
@@ -519,6 +527,9 @@ export function AdminCompetitionMatchManager({
                   />
                 </label>
               </div>
+              <p className="-mt-2 text-xs font-bold text-slate-500">
+                Entering a score will mark this match as finished.
+              </p>
 
               <label className="grid gap-2 text-sm font-black">
                 Venue
