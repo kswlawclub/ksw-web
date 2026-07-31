@@ -2,6 +2,15 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { loadPublishedCompetitions, Row, text } from "@/lib/competition-data";
+import {
+  getCompetitionTypeEnglishLabel,
+  isCupCompetition,
+  isFriendlyCompetition,
+  isLeagueCompetition,
+  isSmallTournamentCompetition,
+  normalizeCompetitionType,
+  type CompetitionType,
+} from "@/lib/competition-format";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -18,11 +27,8 @@ const statusPriority: Record<string, number> = {
   completed: 2,
 };
 
-function typeLabel(type: string) {
-  if (type === "cup") return "Cup";
-  if (type === "tournament") return "Tournament";
-  if (type === "friendly") return "Special Match";
-  return "League";
+function typeLabel(type: CompetitionType) {
+  return getCompetitionTypeEnglishLabel(type);
 }
 
 function dateLabel(competition: Row) {
@@ -82,7 +88,7 @@ function sortCompetitions(rows: Row[]) {
 function CompetitionCard({ competition }: { competition: Row }) {
   const slug = text(competition, ["slug"], "");
   const coverImageUrl = text(competition, ["cover_image_url"], "");
-  const competitionType = text(competition, ["competition_type"], "league");
+  const competitionType = normalizeCompetitionType(text(competition, ["competition_type"], ""));
   const description = text(
     competition,
     ["short_description"],
@@ -184,12 +190,17 @@ export default async function CompetitionsPage() {
   );
   const featuredIds = new Set(currentOrFeatured.map((competition) => text(competition, ["id"], "")).filter(Boolean));
   const categoryCompetitions = competitions.filter((competition) => !featuredIds.has(text(competition, ["id"], "")));
-  const leagues = categoryCompetitions.filter((competition) => text(competition, ["competition_type"], "league") === "league");
-  const cupsAndTournaments = categoryCompetitions.filter((competition) =>
-    ["cup", "tournament"].includes(text(competition, ["competition_type"], "league")),
+  const leagues = categoryCompetitions.filter((competition) =>
+    isLeagueCompetition(normalizeCompetitionType(text(competition, ["competition_type"], ""))),
+  );
+  const cups = categoryCompetitions.filter((competition) =>
+    isCupCompetition(normalizeCompetitionType(text(competition, ["competition_type"], ""))),
+  );
+  const smallTournaments = categoryCompetitions.filter((competition) =>
+    isSmallTournamentCompetition(normalizeCompetitionType(text(competition, ["competition_type"], ""))),
   );
   const specialMatches = categoryCompetitions.filter(
-    (competition) => text(competition, ["competition_type"], "league") === "friendly",
+    (competition) => isFriendlyCompetition(normalizeCompetitionType(text(competition, ["competition_type"], ""))),
   );
 
   return (
@@ -210,7 +221,8 @@ export default async function CompetitionsPage() {
         <>
           <CompetitionSection items={currentOrFeatured} showAccent={false} title="Current / Featured" />
           <CompetitionSection items={leagues} title="League Seasons" />
-          <CompetitionSection items={cupsAndTournaments} title="Cups & Tournaments" />
+          <CompetitionSection items={cups} title="Cups" />
+          <CompetitionSection items={smallTournaments} title="Small Tournaments" />
           <CompetitionSection items={specialMatches} title="Special Matches" />
         </>
       ) : (

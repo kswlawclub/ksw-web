@@ -1,6 +1,7 @@
 import "server-only";
 
 import { loadCompetitionParticipants } from "@/lib/competition-participants";
+import { normalizeCompetitionType, supportsLeagueStandings } from "@/lib/competition-format";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export type HomeRow = Record<string, unknown>;
@@ -451,6 +452,8 @@ export async function loadHomeCompetitionData(): Promise<HomeCompetitionData> {
   const selection = selectHomeCompetition(competitionsResult.data);
   const currentCompetition = selection.primaryCompetition;
   const currentCompetitionId = homeText(currentCompetition, ["id"], "");
+  const currentCompetitionType = normalizeCompetitionType(currentCompetition?.competition_type);
+  const loadStandings = supportsLeagueStandings(currentCompetitionType);
 
   if (!currentCompetitionId) {
     const sponsorsResult = await runQuery<HomeRow>(
@@ -489,10 +492,12 @@ export async function loadHomeCompetitionData(): Promise<HomeCompetitionData> {
   }
 
   const [standingsResult, matchesResult, junctionResult, sponsorsResult] = await Promise.all([
-    runQuery<HomeRow>(
-      "league_standings_view",
-      supabase.from("league_standings_view").select(standingsColumns).eq("league_id", currentCompetitionId),
-    ),
+    loadStandings
+      ? runQuery<HomeRow>(
+          "league_standings_view",
+          supabase.from("league_standings_view").select(standingsColumns).eq("league_id", currentCompetitionId),
+        )
+      : Promise.resolve({ data: [] as HomeRow[], error: null }),
     runQuery<HomeRow>(
       "matches",
       supabase

@@ -9,7 +9,10 @@ type LeagueTableProps = {
   standings: Row[];
   finishedMatches: Row[];
   previousSnapshot: Row[];
+  competitionName?: string;
   seasonCompleted?: boolean;
+  seasonName?: string;
+  sourceLabel?: string;
 };
 
 type FormItem = {
@@ -497,7 +500,10 @@ export function LeagueTable({
   standings,
   finishedMatches,
   previousSnapshot,
+  competitionName = "League",
   seasonCompleted = false,
+  seasonName = "",
+  sourceLabel,
 }: LeagueTableProps) {
   const [activeFormPopover, setActiveFormPopover] = useState<ActiveFormPopover | null>(null);
   const [animateRows, setAnimateRows] = useState(false);
@@ -538,6 +544,8 @@ export function LeagueTable({
   const battleText = kswBattleText(sortedStandings);
   const kswRow = sortedStandings.find(isKswRow);
   const kswPlayed = kswRow ? number(kswRow, ["played", "p"]) : 0;
+  const subtitle = [competitionName, seasonName].filter(Boolean).join(" • ");
+  const attribution = sourceLabel || competitionName || "this competition";
 
   useEffect(() => {
     if (animationStarted.current) {
@@ -595,7 +603,7 @@ export function LeagueTable({
             {seasonCompleted ? "Final League Table" : "League Table"}
           </h2>
           <p className="mt-1 text-sm font-semibold text-slate-300">
-            Thai Lawyers League • Season 6
+            {subtitle || "Competition standings"}
           </p>
           <div className="mt-3 space-y-1 text-xs font-bold leading-5 text-slate-400">
             <p>
@@ -666,7 +674,7 @@ export function LeagueTable({
           </thead>
           <tbody className="divide-y divide-white/10">
             {movements.length ? (
-              movements.map(({ row, currentPosition, previousPosition, movement }, index) => {
+              movements.map(({ row, currentPosition, movement }, index) => {
                 const teamName = text(row, ["team_name", "name", "team"]);
                 const teamId = text(row, ["team_id", "id"], "");
                 const form = latestForm(teamId, finishedMatches);
@@ -758,7 +766,7 @@ export function LeagueTable({
       {activeFormPopover ? <FormPopover active={activeFormPopover} /> : null}
       <div className="border-t border-[#d8ad45]/15 px-4 py-3 text-right sm:px-6">
         <p className="text-xs font-semibold leading-5 text-slate-400">
-          ข้อมูลการแข่งขันอ้างอิงจากฝ่ายจัดการแข่งขัน Thai Lawyers League Season 6
+          ข้อมูลการแข่งขันอ้างอิงจากฝ่ายจัดการแข่งขัน {attribution}
         </p>
       </div>
       <style jsx>{`

@@ -10,6 +10,16 @@ import {
   sortStandings,
   text,
 } from "@/lib/competition-data";
+import {
+  getCompetitionTypeEnglishLabel,
+  isCupCompetition,
+  isFriendlyCompetition,
+  isLeagueCompetition,
+  isSmallTournamentCompetition,
+  normalizeCompetitionType,
+  supportsLeagueStandings,
+  type CompetitionType,
+} from "@/lib/competition-format";
 
 type CompetitionDetailData = {
   competition: Row;
@@ -51,14 +61,11 @@ function formatDateTime(value: unknown) {
   }).format(date);
 }
 
-function typeLabel(type: string) {
-  if (type === "cup") return "Cup";
-  if (type === "tournament") return "Tournament";
-  if (type === "friendly") return "Special Match";
-  return "League";
+function typeLabel(type: CompetitionType) {
+  return getCompetitionTypeEnglishLabel(type);
 }
 
-function statusLabel(status: string, type: string) {
+function statusLabel(status: string, type: CompetitionType) {
   if (status === "completed") return type === "league" ? "SEASON COMPLETE" : "COMPLETED";
   if (status === "upcoming") return "UPCOMING";
   return type === "league" ? "ACTIVE SEASON" : "ACTIVE";
@@ -366,11 +373,13 @@ function HeroCover({ competition }: { competition: Row }) {
 
 function TournamentOverview({
   competition,
+  competitionType,
   matches,
   scheduledMatches,
   teams,
 }: {
   competition: Row;
+  competitionType: CompetitionType;
   matches: Row[];
   scheduledMatches: Row[];
   teams: Row[];
@@ -382,14 +391,14 @@ function TournamentOverview({
     ["Location", text(competition, ["location"], "")],
     ["Teams", teams.length ? String(teams.length) : ""],
     ["Matches", String(matches.length + scheduledMatches.length)],
-    ["Status", statusLabel(text(competition, ["season_status"], "active"), text(competition, ["competition_type"], "cup"))],
+    ["Status", statusLabel(text(competition, ["season_status"], "active"), competitionType)],
   ].filter(([, value]) => value);
 
   return (
     <section className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10" id="overview">
       <div className="rounded-2xl border border-[#d8ad45]/30 bg-white p-5 shadow-xl shadow-slate-900/10 sm:p-6">
-        <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">Tournament Overview</p>
-        <h2 className="mt-3 text-2xl font-black text-[#061426]">About the Tournament</h2>
+        <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">Competition Overview</p>
+        <h2 className="mt-3 text-2xl font-black text-[#061426]">About the Competition</h2>
         {description ? (
           <p className="mt-4 max-w-4xl whitespace-pre-line text-sm leading-7 text-slate-700 sm:text-base">
             {description}
@@ -464,13 +473,33 @@ function TournamentJourney({ matches }: { matches: Row[] }) {
     <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="ksw-journey">
       <div className="rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
         <div className="border-b border-slate-200 px-4 py-5 sm:px-6">
-          <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">KSW Tournament Journey</p>
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">KSW Match Journey</p>
           <h2 className="mt-2 text-2xl font-black">KSW Match Journey</h2>
         </div>
         <div className="grid gap-3 bg-slate-100 px-4 py-5 sm:px-6">
           {matches.map((match) => (
             <TournamentJourneyCard key={text(match, ["id"])} match={match} />
           ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function UpcomingFixtures({ matches, title = "Upcoming Fixtures" }: { matches: Row[]; title?: string }) {
+  if (!matches.length) return null;
+
+  return (
+    <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="fixtures">
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
+        <div className="border-b border-slate-200 px-4 py-5 sm:px-6">
+          <h2 className="text-2xl font-black">{title}</h2>
+          <p className="mt-1 text-sm font-semibold text-slate-600">
+            Scheduled matches for this competition.
+          </p>
+        </div>
+        <div className="grid gap-3 bg-slate-100 px-4 py-5 sm:px-6">
+          {matches.map((match) => <ResultCard key={text(match, ["id"])} match={match} />)}
         </div>
       </div>
     </section>
@@ -484,7 +513,7 @@ function TournamentTeams({ teams }: { teams: Row[] }) {
     <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="participating-teams">
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10 sm:p-6">
         <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">Participating Teams</p>
-        <h2 className="mt-2 text-2xl font-black">Clubs in This Tournament</h2>
+        <h2 className="mt-2 text-2xl font-black">Teams in This Competition</h2>
         <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {teams.map((team) => {
             const teamName = text(team, ["name"], "Team unavailable");
@@ -516,12 +545,12 @@ function TournamentLegacy({ competition }: { competition: Row }) {
   const copy =
     text(competition, ["short_description"], "") ||
     text(competition, ["description"], "") ||
-    "This tournament is preserved as part of the KSW Chronicle.";
+    "This competition is preserved as part of the KSW Chronicle.";
 
   return (
     <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
       <div className="rounded-2xl border border-[#d8ad45]/25 bg-[#061426] p-5 text-white shadow-xl shadow-slate-900/20 sm:p-6">
-        <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]">Tournament Legacy</p>
+        <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]">Competition Legacy</p>
         <h2 className="mt-2 text-2xl font-black">A Chapter in KSW History</h2>
         <p className="mt-4 max-w-3xl whitespace-pre-line text-sm leading-7 text-slate-300">{copy}</p>
       </div>
@@ -531,11 +560,14 @@ function TournamentLegacy({ competition }: { competition: Row }) {
 
 export function CompetitionDetailPage({ data }: { data: CompetitionDetailData }) {
   const { competition, matches, scheduledMatches, snapshots, sponsors, standings, teams } = data;
-  const competitionType = text(competition, ["competition_type"], "league").toLowerCase();
+  const competitionType = normalizeCompetitionType(text(competition, ["competition_type"], ""));
   const seasonStatus = text(competition, ["season_status"], "active").toLowerCase();
-  const isLeague = competitionType === "league";
-  const isFriendly = competitionType === "friendly";
-  const isTournamentArchive = competitionType === "cup" || competitionType === "tournament";
+  const isLeague = isLeagueCompetition(competitionType);
+  const isFriendly = isFriendlyCompetition(competitionType);
+  const isCup = isCupCompetition(competitionType);
+  const isSmallTournament = isSmallTournamentCompetition(competitionType);
+  const isTournamentArchive = isCup || isSmallTournament;
+  const showLeagueStandings = supportsLeagueStandings(competitionType);
   const sortedStandings = sortStandings(standings);
   const kswIndex = sortedStandings.findIndex(isKswRow);
   const kswStanding = kswIndex >= 0 ? sortedStandings[kswIndex] : undefined;
@@ -569,8 +601,9 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
     ].filter(Boolean);
     const tournamentCtas = [
       ["Overview", "#overview", true],
+      ["Fixtures", "#fixtures", scheduledMatches.length > 0],
       ["KSW Journey", "#ksw-journey", kswTournamentJourney.length > 0],
-      ["Tournament Results", "#tournament-results", matches.length > 0],
+      [isCup ? "Cup Results" : "Tournament Results", "#tournament-results", matches.length > 0],
       ["Participating Teams", "#participating-teams", teams.length > 0],
       ["Partners", "#partners", sponsors.some((sponsor) => sponsor.is_active !== false)],
     ] as const;
@@ -625,18 +658,20 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
 
         <TournamentOverview
           competition={competition}
+          competitionType={competitionType}
           matches={matches}
           scheduledMatches={scheduledMatches}
           teams={teams}
         />
+        <UpcomingFixtures matches={scheduledMatches} />
         <TournamentJourney matches={kswTournamentJourney} />
         {matches.length ? (
           <CompetitionResultsTable
             isLeague={false}
             matches={matches}
             sectionId="tournament-results"
-            subtitle="Complete results from every match in this tournament."
-            title="Tournament Results"
+            subtitle="Complete results from every match in this competition."
+            title={isCup ? "Cup Results" : "Tournament Results"}
           />
         ) : null}
         <TournamentTeams teams={teams} />
@@ -678,12 +713,12 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
               </p>
             ) : null}
             <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-              {isLeague && kswStanding ? (
+              {showLeagueStandings && kswStanding ? (
                 <Link className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/15 transition-transform hover:scale-[1.02]" href="#season-summary">
                   Season Summary
                 </Link>
               ) : null}
-              {isLeague && sortedStandings.length ? (
+              {showLeagueStandings && sortedStandings.length ? (
                 <Link className="inline-flex items-center justify-center rounded-md border border-[#d8ad45]/50 bg-white/[0.03] px-5 py-3 text-sm font-black text-[#f4d58a] backdrop-blur transition-colors hover:bg-[#d8ad45]/10" href="#table">
                   League Table
                 </Link>
@@ -699,7 +734,7 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
         </div>
       </section>
 
-      {isLeague && kswStanding ? (
+      {showLeagueStandings && kswStanding ? (
         <section className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10" id="season-summary">
           <div className="rounded-2xl border border-[#d8ad45]/30 bg-white p-5 shadow-xl shadow-slate-900/10 sm:p-6">
             <h2 className="text-2xl font-black">KSW Season Summary</h2>
@@ -716,7 +751,7 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
       ) : null}
 
       {kswMatchesNewest.length ? (
-        <section className={`mx-auto w-full max-w-7xl px-4 ${isLeague && kswStanding ? "pb-10" : "py-10"} sm:px-6 lg:px-10`} id="ksw-results">
+        <section className={`mx-auto w-full max-w-7xl px-4 ${showLeagueStandings && kswStanding ? "pb-10" : "py-10"} sm:px-6 lg:px-10`} id="ksw-results">
           <div className="rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
             <div className="border-b border-slate-200 px-4 py-5 sm:px-6">
               <h2 className="text-2xl font-black">KSW Match Results</h2>
@@ -729,12 +764,15 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
         </section>
       ) : null}
 
-      {isLeague && sortedStandings.length ? (
+      {showLeagueStandings && sortedStandings.length ? (
         <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="table">
           <LeagueTable
+            competitionName={text(competition, ["name"], "Competition")}
             finishedMatches={matches}
             previousSnapshot={latestStandingSnapshotRows(snapshots)}
             seasonCompleted={seasonStatus === "completed"}
+            seasonName={text(competition, ["season"], "")}
+            sourceLabel={text(competition, ["name"], "this competition")}
             standings={standings}
           />
         </section>
@@ -747,7 +785,7 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
               <h2 className="text-2xl font-black">Match</h2>
             </div>
             <div className="grid gap-3 bg-slate-100 px-4 py-5 sm:px-6">
-              {allFixtures.slice(0, 3).map((match) => <ResultCard key={text(match, ["id"])} match={match} />)}
+              {allFixtures.map((match) => <ResultCard key={text(match, ["id"])} match={match} />)}
             </div>
           </div>
         </section>

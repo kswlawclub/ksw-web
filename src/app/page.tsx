@@ -6,6 +6,13 @@ import {
   loadHomeCompetitionData,
   type HomeRow,
 } from "@/lib/home-competition-data";
+import {
+  getCompetitionTypeEnglishLabel,
+  isCupCompetition,
+  isLeagueCompetition as isLeagueCompetitionType,
+  normalizeCompetitionType,
+  type CompetitionType,
+} from "@/lib/competition-format";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -200,11 +207,8 @@ function isString(value: unknown) {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function competitionTypeLabel(type: string) {
-  if (type === "cup") return "Cup";
-  if (type === "tournament") return "Tournament";
-  if (type === "friendly") return "Friendly";
-  return "League";
+function competitionTypeLabel(type: CompetitionType) {
+  return getCompetitionTypeEnglishLabel(type);
 }
 
 function competitionStatusLabel(status: string) {
@@ -356,7 +360,7 @@ export default async function Home() {
   const club = teams[0];
   const logoUrl = isString(club?.logo_url) ? String(club?.logo_url) : "/team-logos/ksw-lc.png";
   const sponsorGroups = groupSponsorsByTier(sponsors);
-	  const sponsorSections = [
+  const sponsorSections = [
     {
       key: "main",
       label: "Main Partner",
@@ -377,11 +381,11 @@ export default async function Home() {
       items: sponsorSlots(sponsorGroups.supporter, 9),
       logoSlotSize: "h-14 w-full max-w-28 sm:h-16 sm:max-w-32 lg:h-[72px] lg:max-w-36",
       wrapperClass: "mx-auto grid w-full grid-cols-2 place-items-center gap-x-5 gap-y-4 lg:grid-cols-3",
-	    },
-	  ];
+    },
+  ];
   const now = new Date();
   const competitionStatus = text(currentCompetition, ["season_status"], "active").toLowerCase();
-  const competitionType = text(currentCompetition, ["competition_type"], "league").toLowerCase();
+  const competitionType = normalizeCompetitionType(text(currentCompetition, ["competition_type"], ""));
   const competitionName = text(currentCompetition, ["name"], "KSW Chronicle");
   const competitionSlug = text(currentCompetition, ["slug"], "");
   const competitionHref = competitionSlug ? `/competitions/${competitionSlug}` : "/competitions";
@@ -392,8 +396,8 @@ export default async function Home() {
   const nextCompetitionHref = nextCompetitionSlug ? `/competitions/${nextCompetitionSlug}` : "/competitions";
   const shouldShowNextCompetitionCard = isNextCompetitionComingSoon && Boolean(nextCompetition);
   const isCompetitionCompleted = competitionStatus === "completed";
-  const isLeagueCompetition = competitionType === "league";
-  const isTournamentCompetition = competitionType === "cup" || competitionType === "tournament";
+  const isLeagueCompetition = isLeagueCompetitionType(competitionType);
+  const isCupCompetitionSummary = isCupCompetition(competitionType);
   const sortedScheduledMatches = allScheduledMatches;
   const nextKswKickoffMatches = nextKswFixture ? [nextKswFixture] : [];
   const fixtureGroups = sortedScheduledMatches.reduce<Array<{ key: string; date: unknown; matches: Row[] }>>(
@@ -427,8 +431,8 @@ export default async function Home() {
     );
   });
   const kswStandingIndex = sortedStandings.findIndex((row) => row.is_ksw === true);
-	  const kswStanding = kswStandingIndex >= 0 ? sortedStandings[kswStandingIndex] : undefined;
-	  const finalPositionText = kswStanding ? `${kswStandingIndex + 1} / ${sortedStandings.length}` : "";
+  const kswStanding = kswStandingIndex >= 0 ? sortedStandings[kswStandingIndex] : undefined;
+  const finalPositionText = kswStanding ? `${kswStandingIndex + 1} / ${sortedStandings.length}` : "";
   const finalKswStats = kswStanding
     ? [
         ["Played", number(kswStanding, ["played", "p"])],
@@ -450,8 +454,8 @@ export default async function Home() {
       ];
   const summaryTitle = isLeagueCompetition
     ? "KSW Season Summary"
-    : isTournamentCompetition
-      ? "KSW Tournament Summary"
+    : isCupCompetitionSummary
+      ? "KSW Cup Summary"
       : "KSW Match Summary";
   const summarySubtitle = isLeagueCompetition
     ? kswStanding
@@ -460,8 +464,8 @@ export default async function Home() {
     : `KSW match numbers from ${competitionName}.`;
   const resultsCtaLabel = isLeagueCompetition
     ? "View All Season Results"
-    : isTournamentCompetition
-      ? "View Tournament Results"
+    : isCupCompetitionSummary
+      ? "View Cup Results"
       : "View Match Archive";
   const heroPrimaryHref = !isCompetitionCompleted && nextKswFixture ? "/#next-fixtures" : competitionAnchorHref;
   const heroPrimaryLabel = !isCompetitionCompleted && nextKswFixture

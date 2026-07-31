@@ -1,5 +1,6 @@
 import { getSupabase, getSupabaseConfig } from "@/lib/supabase";
 import { loadCompetitionParticipants } from "@/lib/competition-participants";
+import { normalizeCompetitionType, supportsLeagueStandings } from "@/lib/competition-format";
 
 export type Row = Record<string, unknown>;
 
@@ -188,6 +189,8 @@ export async function loadLegacySeasonCompetition() {
 export async function loadCompetitionDetailData(competition: Row) {
   const supabase = getSupabase();
   const leagueId = text(competition, ["id"], "");
+  const competitionType = normalizeCompetitionType(competition.competition_type);
+  const loadStandings = supportsLeagueStandings(competitionType);
 
   if (!supabase || !leagueId) {
     return {
@@ -202,10 +205,12 @@ export async function loadCompetitionDetailData(competition: Row) {
   }
 
   const [standings, finishedMatches, scheduledMatches, snapshots, teams, sponsors] = await Promise.all([
-    runSupabaseQuery(
-      "competition_standings",
-      supabase.from("league_standings_view").select(standingsColumns).eq("league_id", leagueId),
-    ),
+    loadStandings
+      ? runSupabaseQuery(
+          "competition_standings",
+          supabase.from("league_standings_view").select(standingsColumns).eq("league_id", leagueId),
+        )
+      : Promise.resolve([] as Row[]),
     runSupabaseQuery(
       "competition_finished_matches",
       supabase
@@ -224,15 +229,17 @@ export async function loadCompetitionDetailData(competition: Row) {
         .eq("status", "scheduled")
         .order("match_date", { ascending: true }),
     ),
-    runSupabaseQuery(
-      "competition_snapshots",
-      supabase
-        .from("league_standings_snapshots")
-        .select(snapshotColumns)
-        .eq("league_id", leagueId)
-        .order("created_at", { ascending: false })
-        .limit(100),
-    ),
+    loadStandings
+      ? runSupabaseQuery(
+          "competition_snapshots",
+          supabase
+            .from("league_standings_snapshots")
+            .select(snapshotColumns)
+            .eq("league_id", leagueId)
+            .order("created_at", { ascending: false })
+            .limit(100),
+        )
+      : Promise.resolve([] as Row[]),
     loadCompetitionParticipants(supabase, leagueId, {
       includeInactiveParticipants: false,
     }),

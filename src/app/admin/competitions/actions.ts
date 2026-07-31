@@ -5,10 +5,10 @@ import {
   safeImageSlug,
   uploadProcessedImageVariants,
 } from "@/lib/admin-storage-images";
+import { isCompetitionType, type CompetitionType } from "@/lib/competition-format";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAdminSession } from "@/lib/admin-server-auth";
 
-type CompetitionType = "league" | "cup" | "friendly" | "tournament";
 type SeasonStatus = "upcoming" | "active" | "completed";
 
 type CompetitionPayload = {
@@ -68,6 +68,10 @@ function validatePayload(payload: CompetitionPayload) {
 
   if (!Number.isInteger(payload.display_order)) {
     return "Display order must be a whole number.";
+  }
+
+  if (!isCompetitionType(payload.competition_type)) {
+    return "Competition type must be league, cup, friendly, or tournament.";
   }
 
   return "";

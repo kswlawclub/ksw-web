@@ -8,8 +8,13 @@ import {
   deleteCompetitionById,
   updateCompetition,
 } from "./actions";
+import {
+  COMPETITION_TYPES,
+  getCompetitionTypeLabel,
+  normalizeCompetitionType,
+  type CompetitionType,
+} from "@/lib/competition-format";
 
-type CompetitionType = "league" | "cup" | "friendly" | "tournament";
 type SeasonStatus = "upcoming" | "active" | "completed";
 
 type Competition = {
@@ -219,12 +224,8 @@ function buddhistYearOptions() {
   return Array.from({ length: 16 }, (_, index) => String(currentBuddhistYear - 5 + index));
 }
 
-function isCompetitionType(value: string): value is CompetitionType {
-  return ["league", "cup", "friendly", "tournament"].includes(value);
-}
-
 function toCompetitionType(value: string | null): CompetitionType {
-  return value && isCompetitionType(value) ? value : "league";
+  return normalizeCompetitionType(value);
 }
 
 function isSeasonStatus(value: string): value is SeasonStatus {
@@ -946,10 +947,11 @@ export default function AdminCompetitionsPage() {
                 }
                 value={form.competitionType}
               >
-                <option value="league">league</option>
-                <option value="cup">cup</option>
-                <option value="friendly">friendly</option>
-                <option value="tournament">tournament</option>
+                {COMPETITION_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {getCompetitionTypeLabel(type)} ({type})
+                  </option>
+                ))}
               </select>
             </label>
 
@@ -1082,7 +1084,7 @@ export default function AdminCompetitionsPage() {
                       <td className="px-4 py-3 text-center font-black">{competition.display_order ?? 0}</td>
                       <td className="px-4 py-3">
                         <span className="rounded-full border border-[#d8ad45]/40 bg-[#d8ad45]/10 px-3 py-1 text-xs font-black text-[#061426]">
-                          {competition.competition_type}
+                          {getCompetitionTypeLabel(competition.competition_type)}
                         </span>
                       </td>
                       <td className="px-4 py-3">
