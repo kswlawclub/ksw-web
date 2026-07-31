@@ -53,6 +53,12 @@ type CompetitionForm = {
   isPublished: boolean;
 };
 
+type ThaiDateParts = {
+  buddhistYear: string;
+  day: string;
+  month: string;
+};
+
 const emptyForm: CompetitionForm = {
   id: "",
   name: "",
@@ -75,6 +81,143 @@ const emptyForm: CompetitionForm = {
 
 const maxCoverImageSize = 6 * 1024 * 1024;
 const coverImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+const thaiMonths = [
+  { label: "มกราคม", value: "1" },
+  { label: "กุมภาพันธ์", value: "2" },
+  { label: "มีนาคม", value: "3" },
+  { label: "เมษายน", value: "4" },
+  { label: "พฤษภาคม", value: "5" },
+  { label: "มิถุนายน", value: "6" },
+  { label: "กรกฎาคม", value: "7" },
+  { label: "สิงหาคม", value: "8" },
+  { label: "กันยายน", value: "9" },
+  { label: "ตุลาคม", value: "10" },
+  { label: "พฤศจิกายน", value: "11" },
+  { label: "ธันวาคม", value: "12" },
+];
+
+function emptyThaiDateParts(): ThaiDateParts {
+  return {
+    buddhistYear: "",
+    day: "",
+    month: "",
+  };
+}
+
+function padDatePart(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function isLeapYear(gregorianYear: number) {
+  return (gregorianYear % 4 === 0 && gregorianYear % 100 !== 0) || gregorianYear % 400 === 0;
+}
+
+function daysInMonth(month: string, buddhistYear: string) {
+  const monthNumber = Number(month);
+  const buddhistYearNumber = Number(buddhistYear);
+
+  if (!monthNumber || !buddhistYearNumber) {
+    return 31;
+  }
+
+  if ([4, 6, 9, 11].includes(monthNumber)) {
+    return 30;
+  }
+
+  if (monthNumber === 2) {
+    return isLeapYear(buddhistYearNumber - 543) ? 29 : 28;
+  }
+
+  return 31;
+}
+
+function coerceThaiDateParts(parts: ThaiDateParts): ThaiDateParts {
+  if (!parts.day) {
+    return parts;
+  }
+
+  const maxDay = daysInMonth(parts.month, parts.buddhistYear);
+  const dayNumber = Number(parts.day);
+
+  if (!dayNumber || dayNumber <= maxDay) {
+    return parts;
+  }
+
+  return {
+    ...parts,
+    day: String(maxDay),
+  };
+}
+
+function parseIsoDateToThaiParts(value: string): ThaiDateParts {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+
+  if (!match) {
+    return emptyThaiDateParts();
+  }
+
+  return {
+    buddhistYear: String(Number(match[1]) + 543),
+    day: String(Number(match[3])),
+    month: String(Number(match[2])),
+  };
+}
+
+function hasAnyThaiDatePart(parts: ThaiDateParts) {
+  return Boolean(parts.day || parts.month || parts.buddhistYear);
+}
+
+function hasCompleteThaiDateParts(parts: ThaiDateParts) {
+  return Boolean(parts.day && parts.month && parts.buddhistYear);
+}
+
+function thaiPartsToIsoDate(parts: ThaiDateParts) {
+  if (!hasAnyThaiDatePart(parts)) {
+    return "";
+  }
+
+  if (!hasCompleteThaiDateParts(parts)) {
+    return null;
+  }
+
+  const dayNumber = Number(parts.day);
+  const monthNumber = Number(parts.month);
+  const buddhistYearNumber = Number(parts.buddhistYear);
+
+  if (!dayNumber || !monthNumber || !buddhistYearNumber) {
+    return null;
+  }
+
+  const maxDay = daysInMonth(parts.month, parts.buddhistYear);
+
+  if (dayNumber > maxDay) {
+    return null;
+  }
+
+  return `${buddhistYearNumber - 543}-${padDatePart(monthNumber)}-${padDatePart(dayNumber)}`;
+}
+
+function validateThaiDateParts(label: string, parts: ThaiDateParts) {
+  const isoDate = thaiPartsToIsoDate(parts);
+
+  if (isoDate === null) {
+    return {
+      error: `กรุณาเลือกวัน เดือน และปีของ${label}ให้ครบถ้วน`,
+      isoDate: "",
+    };
+  }
+
+  return {
+    error: "",
+    isoDate,
+  };
+}
+
+function buddhistYearOptions() {
+  const currentBuddhistYear = new Date().getFullYear() + 543;
+
+  return Array.from({ length: 16 }, (_, index) => String(currentBuddhistYear - 5 + index));
+}
 
 function isCompetitionType(value: string): value is CompetitionType {
   return ["league", "cup", "friendly", "tournament"].includes(value);
@@ -135,6 +278,8 @@ export default function AdminCompetitionsPage() {
   const [saving, setSaving] = useState(false);
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [form, setForm] = useState<CompetitionForm>(emptyForm);
+  const [startDateParts, setStartDateParts] = useState<ThaiDateParts>(emptyThaiDateParts);
+  const [endDateParts, setEndDateParts] = useState<ThaiDateParts>(emptyThaiDateParts);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreviewUrl, setCoverPreviewUrl] = useState("");
   const [removeCoverImage, setRemoveCoverImage] = useState(false);
@@ -196,6 +341,8 @@ export default function AdminCompetitionsPage() {
 
   function resetForm() {
     setForm(emptyForm);
+    setStartDateParts(emptyThaiDateParts());
+    setEndDateParts(emptyThaiDateParts());
     setCoverFile(null);
     if (coverObjectUrlRef.current) {
       URL.revokeObjectURL(coverObjectUrlRef.current);
@@ -216,6 +363,9 @@ export default function AdminCompetitionsPage() {
   }
 
   function editCompetition(competition: Competition) {
+    const startDateValue = competition.start_date ?? "";
+    const endDateValue = competition.end_date ?? "";
+
     setForm({
       id: competition.id,
       name: competition.name,
@@ -225,8 +375,8 @@ export default function AdminCompetitionsPage() {
       description: competition.description ?? "",
       coverImageUrl: competition.cover_image_url ?? "",
       editionNumber: competition.edition_number === null ? "" : String(competition.edition_number),
-      startDate: competition.start_date ?? "",
-      endDate: competition.end_date ?? "",
+      startDate: startDateValue,
+      endDate: endDateValue,
       location: competition.location ?? "",
       displayOrder: competition.display_order === null ? "0" : String(competition.display_order),
       competitionType: competition.competition_type,
@@ -235,6 +385,8 @@ export default function AdminCompetitionsPage() {
       isFeatured: competition.is_featured,
       isPublished: competition.is_published,
     });
+    setStartDateParts(parseIsoDateToThaiParts(startDateValue));
+    setEndDateParts(parseIsoDateToThaiParts(endDateValue));
     setCoverFile(null);
     if (coverObjectUrlRef.current) {
       URL.revokeObjectURL(coverObjectUrlRef.current);
@@ -251,6 +403,23 @@ export default function AdminCompetitionsPage() {
   async function saveCompetition(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    const startDateValidation = validateThaiDateParts("วันเริ่มการแข่งขัน", startDateParts);
+    const endDateValidation = validateThaiDateParts("วันสิ้นสุดการแข่งขัน", endDateParts);
+
+    if (startDateValidation.error || endDateValidation.error) {
+      setError(startDateValidation.error || endDateValidation.error);
+      return;
+    }
+
+    if (
+      startDateValidation.isoDate &&
+      endDateValidation.isoDate &&
+      endDateValidation.isoDate < startDateValidation.isoDate
+    ) {
+      setError("วันสิ้นสุดการแข่งขันต้องไม่ก่อนวันเริ่มการแข่งขัน");
+      return;
+    }
+
     const payload = {
       name: form.name.trim(),
       season: form.season.trim() || null,
@@ -259,8 +428,8 @@ export default function AdminCompetitionsPage() {
       description: nullableText(form.description),
       cover_image_url: removeCoverImage ? null : nullableText(form.coverImageUrl),
       edition_number: nullableNumber(form.editionNumber),
-      start_date: nullableText(form.startDate),
-      end_date: nullableText(form.endDate),
+      start_date: nullableText(startDateValidation.isoDate),
+      end_date: nullableText(endDateValidation.isoDate),
       location: nullableText(form.location),
       display_order: nullableNumber(form.displayOrder) ?? 0,
       competition_type: form.competitionType,
@@ -293,6 +462,8 @@ export default function AdminCompetitionsPage() {
 
     setMessage(form.id ? "Competition updated." : "Competition added.");
     setForm(emptyForm);
+    setStartDateParts(emptyThaiDateParts());
+    setEndDateParts(emptyThaiDateParts());
     setCoverFile(null);
     if (coverObjectUrlRef.current) {
       URL.revokeObjectURL(coverObjectUrlRef.current);
@@ -382,6 +553,31 @@ export default function AdminCompetitionsPage() {
     setForm((current) => ({ ...current, slug: slugFromName(current.name) }));
   }
 
+  function updateThaiDatePart(
+    field: "startDate" | "endDate",
+    part: keyof ThaiDateParts,
+    value: string,
+  ) {
+    const currentParts = field === "startDate" ? startDateParts : endDateParts;
+    const nextParts = coerceThaiDateParts({
+      ...currentParts,
+      [part]: value,
+    });
+    const isoDate = thaiPartsToIsoDate(nextParts);
+
+    if (field === "startDate") {
+      setStartDateParts(nextParts);
+    } else {
+      setEndDateParts(nextParts);
+    }
+
+    setForm((current) => ({
+      ...current,
+      [field]: isoDate ?? "",
+    }));
+    setError("");
+  }
+
   async function deleteCompetition(competition: Competition) {
     const confirmed = window.confirm(`Delete ${competition.name}?`);
 
@@ -401,6 +597,15 @@ export default function AdminCompetitionsPage() {
   }
 
   const displayedCoverUrl = coverPreviewUrl || (!removeCoverImage ? form.coverImageUrl : "");
+  const yearOptions = buddhistYearOptions();
+  const startDayOptions = Array.from(
+    { length: daysInMonth(startDateParts.month, startDateParts.buddhistYear) },
+    (_, index) => String(index + 1),
+  );
+  const endDayOptions = Array.from(
+    { length: daysInMonth(endDateParts.month, endDateParts.buddhistYear) },
+    (_, index) => String(index + 1),
+  );
 
   return (
     <main className="min-h-screen bg-[#f6f2ea] text-[#061426]">
@@ -596,31 +801,111 @@ export default function AdminCompetitionsPage() {
 
             <div className="w-full min-w-0 max-w-full space-y-5">
               <div className="w-full min-w-0 max-w-full">
-                <label className="mb-2 block text-sm font-black" htmlFor="competition-start-date">
-                  Start Date
-                </label>
-                <input
-                  className="block h-12 w-full min-w-0 max-w-full box-border rounded-md border border-slate-200 px-4 text-base leading-normal outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20 sm:text-sm"
-                  id="competition-start-date"
-                  onChange={(event) => setForm((current) => ({ ...current, startDate: event.target.value }))}
-                  style={{ boxSizing: "border-box" }}
-                  type="date"
-                  value={form.startDate}
-                />
+                <p className="mb-2 text-sm font-black">Start Date</p>
+                <div className="grid w-full min-w-0 max-w-full grid-cols-2 gap-2">
+                  <label className="grid min-w-0 gap-1 text-xs font-black text-slate-600">
+                    วัน
+                    <select
+                      aria-label="วันเริ่มการแข่งขัน"
+                      className="h-12 w-full min-w-0 rounded-md border border-slate-200 bg-white px-3 text-base outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20 sm:text-sm"
+                      onChange={(event) => updateThaiDatePart("startDate", "day", event.target.value)}
+                      value={startDateParts.day}
+                    >
+                      <option value="">วัน</option>
+                      {startDayOptions.map((day) => (
+                        <option key={day} value={day}>
+                          {day}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid min-w-0 gap-1 text-xs font-black text-slate-600">
+                    เดือน
+                    <select
+                      aria-label="เดือนเริ่มการแข่งขัน"
+                      className="h-12 w-full min-w-0 rounded-md border border-slate-200 bg-white px-3 text-base outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20 sm:text-sm"
+                      onChange={(event) => updateThaiDatePart("startDate", "month", event.target.value)}
+                      value={startDateParts.month}
+                    >
+                      <option value="">เดือน</option>
+                      {thaiMonths.map((month) => (
+                        <option key={month.value} value={month.value}>
+                          {month.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="col-span-2 grid min-w-0 gap-1 text-xs font-black text-slate-600 sm:col-span-1">
+                    ปี พ.ศ.
+                    <select
+                      aria-label="ปีเริ่มการแข่งขัน"
+                      className="h-12 w-full min-w-0 rounded-md border border-slate-200 bg-white px-3 text-base outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20 sm:text-sm"
+                      onChange={(event) => updateThaiDatePart("startDate", "buddhistYear", event.target.value)}
+                      value={startDateParts.buddhistYear}
+                    >
+                      <option value="">ปี พ.ศ.</option>
+                      {yearOptions.map((year) => (
+                        <option key={year} value={year}>
+                          {year}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
               </div>
 
               <div className="w-full min-w-0 max-w-full">
-                <label className="mb-2 block text-sm font-black" htmlFor="competition-end-date">
-                  End Date
-                </label>
-                <input
-                  className="block h-12 w-full min-w-0 max-w-full box-border rounded-md border border-slate-200 px-4 text-base leading-normal outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20 sm:text-sm"
-                  id="competition-end-date"
-                  onChange={(event) => setForm((current) => ({ ...current, endDate: event.target.value }))}
-                  style={{ boxSizing: "border-box" }}
-                  type="date"
-                  value={form.endDate}
-                />
+                <p className="mb-2 text-sm font-black">End Date</p>
+                <div className="grid w-full min-w-0 max-w-full grid-cols-2 gap-2">
+                  <label className="grid min-w-0 gap-1 text-xs font-black text-slate-600">
+                    วัน
+                    <select
+                      aria-label="วันสิ้นสุดการแข่งขัน"
+                      className="h-12 w-full min-w-0 rounded-md border border-slate-200 bg-white px-3 text-base outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20 sm:text-sm"
+                      onChange={(event) => updateThaiDatePart("endDate", "day", event.target.value)}
+                      value={endDateParts.day}
+                    >
+                      <option value="">วัน</option>
+                      {endDayOptions.map((day) => (
+                        <option key={day} value={day}>
+                          {day}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid min-w-0 gap-1 text-xs font-black text-slate-600">
+                    เดือน
+                    <select
+                      aria-label="เดือนสิ้นสุดการแข่งขัน"
+                      className="h-12 w-full min-w-0 rounded-md border border-slate-200 bg-white px-3 text-base outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20 sm:text-sm"
+                      onChange={(event) => updateThaiDatePart("endDate", "month", event.target.value)}
+                      value={endDateParts.month}
+                    >
+                      <option value="">เดือน</option>
+                      {thaiMonths.map((month) => (
+                        <option key={month.value} value={month.value}>
+                          {month.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="col-span-2 grid min-w-0 gap-1 text-xs font-black text-slate-600 sm:col-span-1">
+                    ปี พ.ศ.
+                    <select
+                      aria-label="ปีสิ้นสุดการแข่งขัน"
+                      className="h-12 w-full min-w-0 rounded-md border border-slate-200 bg-white px-3 text-base outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20 sm:text-sm"
+                      onChange={(event) => updateThaiDatePart("endDate", "buddhistYear", event.target.value)}
+                      value={endDateParts.buddhistYear}
+                    >
+                      <option value="">ปี พ.ศ.</option>
+                      {yearOptions.map((year) => (
+                        <option key={year} value={year}>
+                          {year}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
               </div>
             </div>
 
