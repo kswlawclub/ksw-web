@@ -10,6 +10,21 @@ type ActionResult = {
   error?: string;
 };
 
+export type CupGroupFixturePreviewPair = {
+  awayTeamId: string;
+  awayTeamName: string;
+  exists: boolean;
+  homeTeamId: string;
+  homeTeamName: string;
+};
+
+export type CupGroupFixtureResult = ActionResult & {
+  createdCount?: number;
+  pairs?: CupGroupFixturePreviewPair[];
+  skippedCount?: number;
+  totalPairs?: number;
+};
+
 type GroupPayload = {
   competitionId: string;
   label?: string | null;
@@ -47,6 +62,9 @@ function friendlyGroupError(message: string) {
   const normalized = message.toLowerCase();
   if (normalized.includes("duplicate") || normalized.includes("competition_groups_competition_name_unique_idx")) {
     return "A group with this name already exists in this competition.";
+  }
+  if (normalized.includes("matches_group_id_fkey") || normalized.includes("violates foreign key constraint")) {
+    return "Cannot delete this group because it already has matches. Keep the group or move/delete its matches first.";
   }
   if (normalized.includes("foreign key")) {
     return "The selected group or competition could not be verified.";
@@ -94,6 +112,130 @@ async function getAdminClient() {
   }
 
   return { error: "", supabase };
+}
+
+function pairKey(homeTeamId: string, awayTeamId: string) {
+  return [homeTeamId, awayTeamId].sort().join(":");
+}
+
+async function getCupGroup(
+  supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  competitionId: string,
+  groupId: string,
+) {
+  if (!uuidPattern.test(competitionId) || !uuidPattern.test(groupId)) {
+    return { error: "Competition or group id is invalid." };
+  }
+
+  const competitionCheck = await getCupCompetition(supabase, competitionId);
+  if (competitionCheck.error) return { error: competitionCheck.error };
+
+  const group = await supabase
+    .from("competition_groups")
+    .select("id, competition_id, name, label")
+    .eq("id", groupId)
+    .eq("competition_id", competitionId)
+    .limit(1)
+    .maybeSingle();
+
+  if (group.error) {
+    console.error("cup group fixture group lookup failed", group.error);
+    return { error: "Could not verify selected group." };
+  }
+
+  if (!group.data) {
+    return { error: "Selected group does not belong to this competition." };
+  }
+
+  return { group: group.data };
+}
+
+async function buildCupGroupFixturePlan(
+  supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  competitionId: string,
+  groupId: string,
+) {
+  const groupCheck = await getCupGroup(supabase, competitionId, groupId);
+  if (groupCheck.error) return { error: groupCheck.error };
+
+  const participants = await supabase
+    .from("competition_teams")
+    .select("team_id, display_order")
+    .eq("competition_id", competitionId)
+    .eq("group_id", groupId)
+    .eq("is_active", true)
+    .order("display_order", { ascending: true });
+
+  if (participants.error) {
+    console.error("cup group fixture participant lookup failed", participants.error);
+    return { error: "Could not load active teams in this group." };
+  }
+
+  const participantRows = participants.data ?? [];
+  const teamIds = Array.from(new Set(participantRows.map((row) => row.team_id as string).filter(Boolean)));
+
+  if (teamIds.length < 2) {
+    return { error: "ต้องมีอย่างน้อย 2 ทีมในกลุ่มก่อนสร้างคู่แข่งขัน" };
+  }
+
+  const teams = await supabase
+    .from("teams")
+    .select("id, name, short_name, is_active")
+    .in("id", teamIds);
+
+  if (teams.error) {
+    console.error("cup group fixture team lookup failed", teams.error);
+    return { error: "Could not verify teams in this group." };
+  }
+
+  const orderByTeamId = new Map(participantRows.map((row) => [row.team_id as string, Number(row.display_order ?? 0)]));
+  const sortedTeams = (teams.data ?? [])
+    .filter((team) => team.is_active !== false)
+    .sort((a, b) => {
+      const orderDiff = (orderByTeamId.get(a.id) ?? 0) - (orderByTeamId.get(b.id) ?? 0);
+      if (orderDiff) return orderDiff;
+      return String(a.name ?? "").localeCompare(String(b.name ?? ""));
+    });
+
+  if (sortedTeams.length < 2) {
+    return { error: "ต้องมีอย่างน้อย 2 ทีมที่ active ในกลุ่มก่อนสร้างคู่แข่งขัน" };
+  }
+
+  const existingMatches = await supabase
+    .from("matches")
+    .select("home_team_id, away_team_id")
+    .eq("league_id", competitionId)
+    .eq("group_id", groupId)
+    .eq("competition_stage", "group");
+
+  if (existingMatches.error) {
+    console.error("cup group fixture existing match lookup failed", existingMatches.error);
+    return { error: "Could not verify existing group fixtures." };
+  }
+
+  const existingPairKeys = new Set(
+    (existingMatches.data ?? []).map((match) =>
+      pairKey(match.home_team_id as string, match.away_team_id as string),
+    ),
+  );
+  const pairs: CupGroupFixturePreviewPair[] = [];
+
+  for (let homeIndex = 0; homeIndex < sortedTeams.length; homeIndex += 1) {
+    for (let awayIndex = homeIndex + 1; awayIndex < sortedTeams.length; awayIndex += 1) {
+      const homeTeam = sortedTeams[homeIndex];
+      const awayTeam = sortedTeams[awayIndex];
+      const key = pairKey(homeTeam.id, awayTeam.id);
+      pairs.push({
+        awayTeamId: awayTeam.id,
+        awayTeamName: String(awayTeam.name ?? awayTeam.short_name ?? "Away team"),
+        exists: existingPairKeys.has(key),
+        homeTeamId: homeTeam.id,
+        homeTeamName: String(homeTeam.name ?? homeTeam.short_name ?? "Home team"),
+      });
+    }
+  }
+
+  return { pairs };
 }
 
 async function groupNameExists(
@@ -339,4 +481,91 @@ export async function assignCompetitionTeamToGroup(payload: AssignPayload): Prom
 
   revalidatePath(`/admin/competitions/${competitionId}`);
   return { ok: true };
+}
+
+export async function previewCupGroupFixtures(
+  competitionId: string,
+  groupId: string,
+): Promise<CupGroupFixtureResult> {
+  const { supabase, error } = await getAdminClient();
+  if (!supabase) return { ok: false, error };
+
+  const plan = await buildCupGroupFixturePlan(supabase, competitionId, groupId);
+  if (plan.error) return { ok: false, error: plan.error };
+
+  const pairs = plan.pairs ?? [];
+  return {
+    createdCount: 0,
+    ok: true,
+    pairs,
+    skippedCount: pairs.filter((pair) => pair.exists).length,
+    totalPairs: pairs.length,
+  };
+}
+
+export async function generateCupGroupFixtures(
+  competitionId: string,
+  groupId: string,
+): Promise<CupGroupFixtureResult> {
+  const { supabase, error } = await getAdminClient();
+  if (!supabase) return { ok: false, error };
+
+  const plan = await buildCupGroupFixturePlan(supabase, competitionId, groupId);
+  if (plan.error) return { ok: false, error: plan.error };
+
+  const pairs = plan.pairs ?? [];
+  const missingPairs = pairs.filter((pair) => !pair.exists);
+
+  if (missingPairs.length === 0) {
+    revalidatePath(`/admin/competitions/${competitionId}`);
+    return {
+      createdCount: 0,
+      ok: true,
+      pairs,
+      skippedCount: pairs.length,
+      totalPairs: pairs.length,
+    };
+  }
+
+  const result = await supabase.from("matches").insert(
+    missingPairs.map((pair) => ({
+      away_score: null,
+      away_team_id: pair.awayTeamId,
+      competition_stage: "group",
+      fixture_source: "generated",
+      group_id: groupId,
+      home_score: null,
+      home_team_id: pair.homeTeamId,
+      league_id: competitionId,
+      match_date: null,
+      match_type: "cup",
+      status: "scheduled",
+      venue: null,
+    })),
+  );
+
+  if (result.error) {
+    if (result.error.code === "23505") {
+      revalidatePath(`/admin/competitions/${competitionId}`);
+      return {
+        createdCount: 0,
+        ok: true,
+        pairs,
+        skippedCount: pairs.length,
+        totalPairs: pairs.length,
+      };
+    }
+
+    console.error("cup group fixture insert failed", result.error);
+    return { ok: false, error: "Could not generate group fixtures." };
+  }
+
+  revalidatePath(`/admin/competitions/${competitionId}`);
+  return {
+    createdCount: missingPairs.length,
+    ok: true,
+    pairs: pairs.map((pair) => ({ ...pair, exists: true })),
+    skippedCount: pairs.length - missingPairs.length,
+    totalPairs: pairs.length,
+  };
 }

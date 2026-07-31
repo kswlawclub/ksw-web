@@ -22,7 +22,7 @@ type Row = Record<string, unknown>;
 const competitionColumns =
   "id, name, season, slug, short_description, description, cover_image_url, edition_number, start_date, end_date, location, display_order, competition_type, season_status, is_active, is_featured, is_published, created_at";
 const matchColumns =
-  "id, match_date, home_team_id, away_team_id, home_score, away_score, venue, status";
+  "id, group_id, competition_stage, fixture_source, match_date, home_team_id, away_team_id, home_score, away_score, venue, status";
 const teamColumns = "id, name, short_name, logo_url, is_ksw";
 const groupColumns = "id, competition_id, name, label, sort_order, created_at, updated_at";
 const competitionTeamGroupColumns = "id, competition_id, team_id, group_id, is_active, display_order";
@@ -67,7 +67,7 @@ function formatDate(value: unknown) {
   }).format(date);
 }
 
-function formatCompactDate(value: string) {
+function formatCompactDate(value: string | null) {
   if (!value) return "—";
 
   const date = new Date(value);
@@ -142,10 +142,13 @@ function asMatch(row: Row): AdminCompetitionMatch {
   return {
     away_score: typeof row.away_score === "number" ? row.away_score : null,
     away_team_id: text(row, ["away_team_id"], ""),
+    competition_stage: text(row, ["competition_stage"], "") || null,
+    fixture_source: text(row, ["fixture_source"], "") || null,
+    group_id: text(row, ["group_id"], "") || null,
     home_score: typeof row.home_score === "number" ? row.home_score : null,
     home_team_id: text(row, ["home_team_id"], ""),
     id: text(row, ["id"], ""),
-    match_date: text(row, ["match_date"], ""),
+    match_date: text(row, ["match_date"], "") || null,
     status: text(row, ["status"], ""),
     venue: text(row, ["venue"], "") || null,
   };
@@ -670,6 +673,8 @@ export default async function AdminCompetitionWorkspacePage({
         cupGroupCount={groups.length}
         cupGroupsReady={groupDataReady}
         cupUnassignedTeamCount={unassignedGroupTeamCount}
+        groups={groups}
+        groupTeams={groupTeams}
         initialMatches={workspaceMatches}
         initialTeams={workspaceMatchTeams}
       />

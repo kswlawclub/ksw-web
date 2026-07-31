@@ -9,7 +9,7 @@ type MatchStatus = "scheduled" | "finished";
 
 type MatchPayload = {
   league_id: string;
-  match_date: string;
+  match_date: string | null;
   home_team_id: string;
   away_team_id: string;
   home_score: number | null;
@@ -36,7 +36,10 @@ type LeagueRow = {
 type MatchRow = {
   id: string;
   league_id: string;
-  match_date: string;
+  group_id?: string | null;
+  competition_stage?: string | null;
+  fixture_source?: string | null;
+  match_date: string | null;
   home_team_id: string;
   away_team_id: string;
   home_score: number | null;
@@ -68,7 +71,8 @@ type MatchTeamsResult = ActionResult & {
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const leagueColumns = "id, name, season, competition_type, season_status, slug, is_published";
-const matchColumns = "id, league_id, match_date, home_team_id, away_team_id, home_score, away_score, venue, status";
+const matchColumns =
+  "id, league_id, group_id, competition_stage, fixture_source, match_date, home_team_id, away_team_id, home_score, away_score, venue, status";
 const teamColumns = "id, name, short_name, logo_url, is_ksw";
 const supportedStatuses = new Set(["scheduled", "finished"]);
 const maxScore = 999;
@@ -292,9 +296,9 @@ function validateScore(value: number | null, label: string) {
   return "";
 }
 
-function validateMatchDate(value: string) {
+function validateMatchDate(value: string | null) {
   if (!value || !value.trim()) {
-    return "Match date and time are required.";
+    return "";
   }
 
   const date = new Date(value);
@@ -327,10 +331,14 @@ function normalizePayload(payload: MatchPayload): MatchPayload {
       ...payload,
       away_score: null,
       home_score: null,
+      match_date: payload.match_date?.trim() || null,
     };
   }
 
-  return payload;
+  return {
+    ...payload,
+    match_date: payload.match_date?.trim() || null,
+  };
 }
 
 function validatePayload(payload: MatchPayload, existingStatus?: string): string {
@@ -379,7 +387,7 @@ function validatePayload(payload: MatchPayload, existingStatus?: string): string
 async function validateCompetitionTeamRelationship(
   supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
   payload: MatchPayload,
-  currentMatch?: { away_team_id: string; home_team_id: string },
+  currentMatch?: { away_team_id: string; group_id?: string | null; home_team_id: string },
 ) {
   const competition = await supabase
     .from("leagues")
@@ -448,6 +456,29 @@ async function validateCompetitionTeamRelationship(
     return "ทีมที่เลือกไม่ได้อยู่ในรายการแข่งขันนี้ กรุณาเลือกทีมใหม่";
   }
 
+  if (currentMatch?.group_id) {
+    const groupParticipants = await supabase
+      .from("competition_teams")
+      .select("team_id")
+      .eq("competition_id", payload.league_id)
+      .eq("group_id", currentMatch.group_id)
+      .eq("is_active", true)
+      .in("team_id", selectedTeamIds);
+
+    if (groupParticipants.error) {
+      console.error("admin match group participant validation failed", groupParticipants.error);
+      return "Could not verify selected teams for this group.";
+    }
+
+    const groupTeamIds = new Set((groupParticipants.data ?? []).map((participant) => participant.team_id as string));
+    const homeGroupAllowed = groupTeamIds.has(payload.home_team_id) || homeIsCurrentLegacy;
+    const awayGroupAllowed = groupTeamIds.has(payload.away_team_id) || awayIsCurrentLegacy;
+
+    if (!homeGroupAllowed || !awayGroupAllowed) {
+      return "ทีมที่เลือกไม่ได้อยู่ในกลุ่มนี้ กรุณาเลือกทีมในกลุ่มเดียวกัน";
+    }
+  }
+
   return "";
 }
 
@@ -457,7 +488,7 @@ async function getExistingMatch(
 ) {
   const match = await supabase
     .from("matches")
-    .select("id, league_id, home_team_id, away_team_id, status")
+    .select("id, league_id, group_id, home_team_id, away_team_id, status")
     .eq("id", id)
     .maybeSingle();
 
@@ -482,6 +513,7 @@ async function getExistingMatch(
 
   return {
     awayTeamId: match.data.away_team_id as string,
+    groupId: (match.data.group_id as string | null) ?? null,
     homeTeamId: match.data.home_team_id as string,
     leagueId: match.data.league_id as string,
     status: match.data.status as string,
@@ -580,6 +612,7 @@ export async function updateMatch(
 
   const relationshipError = await validateCompetitionTeamRelationship(supabase, normalizedPayload, {
     away_team_id: existingMatch.awayTeamId,
+    group_id: existingMatch.groupId,
     home_team_id: existingMatch.homeTeamId,
   });
 

@@ -8,13 +8,20 @@ import {
   deleteMatchById,
   updateMatch,
 } from "@/app/admin/matches/actions";
+import type {
+  AdminCompetitionGroup,
+  AdminCompetitionGroupTeam,
+} from "@/components/admin-competition-groups-manager";
 
 type MatchStatus = "scheduled" | "finished";
 type MatchStatusFilter = "all" | "scheduled" | "finished" | "other";
 
 export type AdminCompetitionMatch = {
   id: string;
-  match_date: string;
+  group_id?: string | null;
+  competition_stage?: string | null;
+  fixture_source?: string | null;
+  match_date: string | null;
   home_team_id: string;
   away_team_id: string;
   home_score: number | null;
@@ -34,6 +41,7 @@ export type AdminCompetitionMatchTeam = {
 
 type MatchForm = {
   id: string;
+  groupId: string | null;
   matchDate: string;
   homeTeamId: string;
   awayTeamId: string;
@@ -57,6 +65,7 @@ const standardVenues = ["V1", "V2", "V3"];
 
 const emptyForm: MatchForm = {
   id: "",
+  groupId: null,
   matchDate: "",
   homeTeamId: "",
   awayTeamId: "",
@@ -68,7 +77,9 @@ const emptyForm: MatchForm = {
   status: "scheduled",
 };
 
-function toBangkokDateInput(value: string) {
+function toBangkokDateInput(value: string | null) {
+  if (!value) return "";
+
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
@@ -91,14 +102,18 @@ function toBangkokDateInput(value: string) {
 }
 
 function bangkokDateInputToIso(value: string) {
+  if (!value.trim()) return null;
+
   return new Date(`${value}:00+07:00`).toISOString();
 }
 
-function formatDate(value: string) {
+function formatDate(value: string | null) {
+  if (!value) return "ยังไม่กำหนดวันเวลา";
+
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
-    return value || "Date not set";
+    return value || "ยังไม่กำหนดวันเวลา";
   }
 
   return new Intl.DateTimeFormat("en", {
@@ -109,11 +124,13 @@ function formatDate(value: string) {
   }).format(date);
 }
 
-function formatTime(value: string) {
+function formatTime(value: string | null) {
+  if (!value) return "ยังไม่กำหนดเวลา";
+
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
-    return "Time not set";
+    return "ยังไม่กำหนดเวลา";
   }
 
   return new Intl.DateTimeFormat("en", {
@@ -178,6 +195,10 @@ function teamOptionLabel(team: AdminCompetitionMatchTeam) {
     : team.name;
 }
 
+function groupDisplayName(group: AdminCompetitionGroup | undefined) {
+  return group ? group.label || `Group ${group.name}` : "";
+}
+
 function statusBadgeClass(status: string) {
   if (status === "scheduled") return "border-[#d8ad45]/35 bg-[#d8ad45]/10 text-[#8a6418]";
   if (status === "finished") return "border-emerald-700/20 bg-emerald-50 text-emerald-800";
@@ -196,6 +217,11 @@ function matchScore(match: AdminCompetitionMatch) {
   return `${match.home_score} - ${match.away_score}`;
 }
 
+function matchDateTimeLabel(match: AdminCompetitionMatch) {
+  if (!match.match_date) return "ยังไม่กำหนดวันเวลา";
+  return `${formatDate(match.match_date)} · ${formatTime(match.match_date)}`;
+}
+
 function matchStatusGroup(status: string): MatchStatusFilter {
   if (status === "scheduled" || status === "finished") return status;
   return "other";
@@ -210,7 +236,7 @@ function sortGroup(match: AdminCompetitionMatch) {
 function matchTime(match: AdminCompetitionMatch) {
   const value = match.match_date;
   const time = value ? new Date(value).getTime() : Number.NaN;
-  return Number.isNaN(time) ? 0 : time;
+  return Number.isNaN(time) ? Number.POSITIVE_INFINITY : time;
 }
 
 function sortMatches(matches: AdminCompetitionMatch[]) {
@@ -218,7 +244,14 @@ function sortMatches(matches: AdminCompetitionMatch[]) {
     const groupDiff = sortGroup(a) - sortGroup(b);
     if (groupDiff) return groupDiff;
 
-    const timeDiff = matchTime(a) - matchTime(b);
+    const aTime = matchTime(a);
+    const bTime = matchTime(b);
+
+    if (!Number.isFinite(aTime) && !Number.isFinite(bTime)) return 0;
+    if (!Number.isFinite(aTime)) return 1;
+    if (!Number.isFinite(bTime)) return -1;
+
+    const timeDiff = aTime - bTime;
     return a.status === "finished" ? -timeDiff : timeDiff;
   });
 }
@@ -228,6 +261,7 @@ function formFromMatch(match: AdminCompetitionMatch): MatchForm {
 
   return {
     id: match.id,
+    groupId: match.group_id ?? null,
     matchDate: toBangkokDateInput(match.match_date),
     homeTeamId: match.home_team_id,
     awayTeamId: match.away_team_id,
@@ -253,6 +287,8 @@ export function AdminCompetitionMatchManager({
   cupGroupCount = 0,
   cupGroupsReady = true,
   cupUnassignedTeamCount = 0,
+  groups = [],
+  groupTeams = [],
   initialMatches,
   initialTeams,
 }: {
@@ -260,6 +296,8 @@ export function AdminCompetitionMatchManager({
   cupGroupCount?: number;
   cupGroupsReady?: boolean;
   cupUnassignedTeamCount?: number;
+  groups?: AdminCompetitionGroup[];
+  groupTeams?: AdminCompetitionGroupTeam[];
   initialMatches: AdminCompetitionMatch[];
   initialTeams: AdminCompetitionMatchTeam[];
 }) {
@@ -272,14 +310,39 @@ export function AdminCompetitionMatchManager({
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<MatchStatusFilter>("all");
+  const [groupFilter, setGroupFilter] = useState("all");
   const matches = initialMatches;
   const teams = initialTeams;
 
   const teamsById = useMemo(() => new Map(teams.map((team) => [team.id, team])), [teams]);
+  const groupsById = useMemo(() => new Map(groups.map((group) => [group.id, group])), [groups]);
+  const teamIdsByGroup = useMemo(() => {
+    const grouped = new Map<string, Set<string>>();
+
+    groupTeams.forEach((team) => {
+      if (!team.group_id || !team.is_active) return;
+      const current = grouped.get(team.group_id) ?? new Set<string>();
+      current.add(team.team_id);
+      grouped.set(team.group_id, current);
+    });
+
+    return grouped;
+  }, [groupTeams]);
   const activeTeams = useMemo(
     () => teams.filter((team) => team.participant_is_active !== false),
     [teams],
   );
+  const formTeamOptions = useMemo(() => {
+    if (!form.groupId) return teams;
+
+    const allowedIds = teamIdsByGroup.get(form.groupId) ?? new Set<string>();
+    return teams.filter(
+      (team) =>
+        allowedIds.has(team.id) ||
+        team.id === form.homeTeamId ||
+        team.id === form.awayTeamId,
+    );
+  }, [form.awayTeamId, form.groupId, form.homeTeamId, teamIdsByGroup, teams]);
   const scheduledCount = matches.filter((match) => match.status === "scheduled").length;
   const finishedCount = matches.filter((match) => match.status === "finished").length;
   const otherCount = matches.length - scheduledCount - finishedCount;
@@ -300,13 +363,14 @@ export function AdminCompetitionMatchManager({
         .toLowerCase();
       const matchesSearch = !normalizedSearch || searchableTeams.includes(normalizedSearch);
       const matchesStatus = statusFilter === "all" || matchStatusGroup(match.status) === statusFilter;
+      const matchesGroup = groupFilter === "all" || match.group_id === groupFilter;
 
-      return matchesSearch && matchesStatus;
+      return matchesSearch && matchesStatus && matchesGroup;
     });
-  }, [matches, searchTerm, statusFilter, teamsById]);
+  }, [groupFilter, matches, searchTerm, statusFilter, teamsById]);
   const preservingLegacyStatus = form.id && isLegacyStatus(form.originalStatus) && !form.status;
   const effectiveStatus = form.status || form.originalStatus;
-  const filtersActive = searchTerm.trim() || statusFilter !== "all";
+  const filtersActive = searchTerm.trim() || statusFilter !== "all" || groupFilter !== "all";
   const isCup = competition.type === "cup";
   const matchCreationBlocked = isCup && cupGroupsReady && cupGroupCount === 0;
   const matchCreationUnavailable = isCup && !cupGroupsReady;
@@ -314,7 +378,6 @@ export function AdminCompetitionMatchManager({
     form.homeTeamId &&
     form.awayTeamId &&
     form.homeTeamId !== form.awayTeamId &&
-    form.matchDate &&
     effectiveStatus &&
     (form.id || (!matchCreationBlocked && !matchCreationUnavailable)) &&
     (form.id ? teamsById.has(form.homeTeamId) && teamsById.has(form.awayTeamId) : activeTeams.length >= 2);
@@ -334,6 +397,7 @@ export function AdminCompetitionMatchManager({
   function clearFilters() {
     setSearchTerm("");
     setStatusFilter("all");
+    setGroupFilter("all");
   }
 
   function updateScore(field: "awayScore" | "homeScore", value: string) {
@@ -515,11 +579,17 @@ export function AdminCompetitionMatchManager({
                 <input
                   className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                   onChange={(event) => setForm((current) => ({ ...current, matchDate: event.target.value }))}
-                  required
                   type="datetime-local"
                   value={form.matchDate}
                 />
+                <span className="text-xs font-bold text-slate-500">ปล่อยว่างได้หากยังไม่กำหนดวันเวลา</span>
               </label>
+
+              {form.groupId ? (
+                <p className="rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] px-3 py-2 text-xs font-bold text-[#8a6418]">
+                  {groupDisplayName(groupsById.get(form.groupId))} match: team selectors are limited to this group.
+                </p>
+              ) : null}
 
               <label className="grid gap-2 text-sm font-black">
                 Home Team
@@ -531,7 +601,7 @@ export function AdminCompetitionMatchManager({
                   value={form.homeTeamId}
                 >
                   <option value="">Select home team</option>
-                  {teams.map((team) => (
+                  {formTeamOptions.map((team) => (
                     <option
                       disabled={team.participant_is_active === false && team.id !== form.homeTeamId}
                       key={team.id}
@@ -552,7 +622,7 @@ export function AdminCompetitionMatchManager({
                   value={form.awayTeamId}
                 >
                   <option value="">Select away team</option>
-                  {teams.map((team) => (
+                  {formTeamOptions.map((team) => (
                     <option
                       disabled={team.participant_is_active === false && team.id !== form.awayTeamId}
                       key={team.id}
@@ -716,7 +786,7 @@ export function AdminCompetitionMatchManager({
               </div>
             </div>
 
-            <div className="grid gap-3 border-b border-slate-100 p-4 md:grid-cols-[minmax(0,1fr)_180px_auto] md:items-end">
+            <div className="grid gap-3 border-b border-slate-100 p-4 md:grid-cols-[minmax(0,1fr)_160px_180px_auto] md:items-end">
               <label className="grid gap-2 text-sm font-black">
                 Search matches
                 <input
@@ -740,6 +810,23 @@ export function AdminCompetitionMatchManager({
                   {otherCount > 0 ? <option value="other">Other</option> : null}
                 </select>
               </label>
+              {groups.length ? (
+                <label className="grid gap-2 text-sm font-black">
+                  Group
+                  <select
+                    className="min-h-11 w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                    onChange={(event) => setGroupFilter(event.target.value)}
+                    value={groupFilter}
+                  >
+                    <option value="all">All groups</option>
+                    {groups.map((group) => (
+                      <option key={group.id} value={group.id}>
+                        {groupDisplayName(group)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               <button
                 className="min-h-11 rounded-md border border-slate-200 px-3 py-2 text-sm font-black text-[#061426] hover:border-[#d8ad45] disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={!filtersActive}
@@ -786,7 +873,12 @@ export function AdminCompetitionMatchManager({
                         </div>
                       </div>
                       <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
-                        <span>{formatDate(match.match_date)} · {formatTime(match.match_date)}</span>
+                        {match.group_id ? (
+                          <span className="rounded-full border border-[#d8ad45]/35 bg-[#fff7e6] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#8a6418]">
+                            {groupDisplayName(groupsById.get(match.group_id))}
+                          </span>
+                        ) : null}
+                        <span>{matchDateTimeLabel(match)}</span>
                         <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${statusBadgeClass(match.status)}`}>
                           {match.status || "other"}
                         </span>

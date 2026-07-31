@@ -7,7 +7,10 @@ import {
   assignCompetitionTeamToGroup,
   createCompetitionGroup,
   deleteCompetitionGroup,
+  generateCupGroupFixtures,
+  previewCupGroupFixtures,
   updateCompetitionGroup,
+  type CupGroupFixturePreviewPair,
 } from "@/app/admin/competitions/[id]/group-actions";
 
 export type AdminCompetitionGroup = {
@@ -100,6 +103,8 @@ export function AdminCompetitionGroupsManager({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [assigningId, setAssigningId] = useState("");
+  const [fixtureActionGroupId, setFixtureActionGroupId] = useState("");
+  const [fixturePreviewByGroup, setFixturePreviewByGroup] = useState<Record<string, CupGroupFixturePreviewPair[]>>({});
   const sortedGroups = useMemo(() => unassignedFirst(groups), [groups]);
   const teamsByGroup = useMemo(() => {
     const grouped = new Map<string, AdminCompetitionGroupTeam[]>();
@@ -208,6 +213,41 @@ export function AdminCompetitionGroupsManager({
     router.refresh();
   }
 
+  async function previewFixtures(group: AdminCompetitionGroup) {
+    setFixtureActionGroupId(group.id);
+    setMessage("");
+    setError("");
+    const result = await previewCupGroupFixtures(competitionId, group.id);
+    setFixtureActionGroupId("");
+
+    if (!result.ok) {
+      setError(result.error ?? "Could not preview fixtures.");
+      return;
+    }
+
+    setFixturePreviewByGroup((current) => ({ ...current, [group.id]: result.pairs ?? [] }));
+    setMessage(`${groupDisplayName(group)} preview ready: ${result.totalPairs ?? 0} fixtures.`);
+  }
+
+  async function generateFixtures(group: AdminCompetitionGroup) {
+    setFixtureActionGroupId(group.id);
+    setMessage("");
+    setError("");
+    const result = await generateCupGroupFixtures(competitionId, group.id);
+    setFixtureActionGroupId("");
+
+    if (!result.ok) {
+      setError(result.error ?? "Could not generate fixtures.");
+      return;
+    }
+
+    setFixturePreviewByGroup((current) => ({ ...current, [group.id]: result.pairs ?? [] }));
+    setMessage(
+      `${groupDisplayName(group)} fixtures generated: ${result.createdCount ?? 0} created, ${result.skippedCount ?? 0} skipped.`,
+    );
+    router.refresh();
+  }
+
   function TeamAssignmentRow({ team }: { team: AdminCompetitionGroupTeam }) {
     return (
       <div className="grid min-w-0 gap-3 rounded-lg border border-slate-100 bg-slate-50 p-3 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-center">
@@ -281,7 +321,7 @@ export function AdminCompetitionGroupsManager({
           <WorkflowStep label="1. เพิ่มทีม" status={teams.length ? "done" : "available"} />
           <WorkflowStep label="2. สร้างกลุ่ม" status={groups.length ? "done" : "available"} />
           <WorkflowStep label="3. จัดทีมลงกลุ่ม" status={assignedCount ? "done" : "available"} />
-          <WorkflowStep label="4. สร้างการแข่งขันรอบแบ่งกลุ่ม" status="coming" />
+          <WorkflowStep label="4. สร้างการแข่งขันรอบแบ่งกลุ่ม" status={assignedCount ? "available" : "coming"} />
           <WorkflowStep label="5. ตารางคะแนนและทีมเข้ารอบ" status="coming" />
           <WorkflowStep label="6. Knockout bracket" status="coming" />
         </ol>
@@ -356,6 +396,8 @@ export function AdminCompetitionGroupsManager({
           {sortedGroups.length ? (
             sortedGroups.map((group) => {
               const groupTeams = teamsByGroup.get(group.id) ?? [];
+              const previewPairs = fixturePreviewByGroup[group.id] ?? [];
+              const missingPreviewCount = previewPairs.filter((pair) => !pair.exists).length;
               return (
                 <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm" key={group.id}>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -369,6 +411,14 @@ export function AdminCompetitionGroupsManager({
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
+                      <button
+                        className="rounded-md border border-[#d8ad45]/45 px-3 py-2 text-xs font-black text-[#061426] hover:bg-[#fff7e6] disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={!schemaReady || fixtureActionGroupId === group.id || groupTeams.length < 2}
+                        onClick={() => void previewFixtures(group)}
+                        type="button"
+                      >
+                        {fixtureActionGroupId === group.id ? "Loading..." : "Generate Fixtures"}
+                      </button>
                       <button
                         className="rounded-md border border-slate-200 px-3 py-2 text-xs font-black hover:border-[#d8ad45]"
                         onClick={() => editGroup(group)}
@@ -394,6 +444,48 @@ export function AdminCompetitionGroupsManager({
                       </p>
                     )}
                   </div>
+                  {groupTeams.length < 2 ? (
+                    <p className="mt-3 rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] px-3 py-2 text-xs font-bold text-[#8a6418]">
+                      ต้องมีอย่างน้อย 2 ทีมในกลุ่มก่อนสร้างคู่แข่งขัน
+                    </p>
+                  ) : null}
+                  {previewPairs.length ? (
+                    <div className="mt-4 rounded-lg border border-[#d8ad45]/30 bg-[#fffaf0] p-3">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a6418]">
+                            Fixture Preview
+                          </p>
+                          <p className="mt-1 text-sm font-bold text-slate-600">
+                            {previewPairs.length} fixtures · {missingPreviewCount} to create
+                          </p>
+                        </div>
+                        <button
+                          className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-xs font-black text-[#f4d58a] hover:bg-[#091f39] disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={fixtureActionGroupId === group.id || missingPreviewCount === 0}
+                          onClick={() => void generateFixtures(group)}
+                          type="button"
+                        >
+                          {missingPreviewCount === 0 ? "All Created" : "Confirm Generate"}
+                        </button>
+                      </div>
+                      <div className="mt-3 grid gap-2">
+                        {previewPairs.map((pair) => (
+                          <div
+                            className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-md border border-white bg-white px-3 py-2 text-sm font-bold text-[#061426]"
+                            key={`${pair.homeTeamId}-${pair.awayTeamId}`}
+                          >
+                            <span className="min-w-0 break-words">{pair.homeTeamName} vs {pair.awayTeamName}</span>
+                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${
+                              pair.exists ? "bg-slate-100 text-slate-500" : "bg-[#d8ad45]/15 text-[#8a6418]"
+                            }`}>
+                              {pair.exists ? "Existing" : "New"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </article>
               );
             })
