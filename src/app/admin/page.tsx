@@ -2,7 +2,6 @@ import Link from "next/link";
 import { logoutAdmin } from "./actions";
 
 const modules = [
-  { title: "Manage Matches", href: "/admin/matches", status: "Open module" },
   {
     title: "Competition Workspace",
     href: "/admin/competitions",
