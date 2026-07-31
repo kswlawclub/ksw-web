@@ -10,6 +10,12 @@ import {
   type AdminCompetitionGroup,
   type AdminCompetitionGroupTeam,
 } from "@/components/admin-competition-groups-manager";
+import { AdminCompetitionKnockoutManager } from "@/components/admin-competition-knockout-manager";
+import type {
+  KnockoutMatchSlot,
+  KnockoutSlotSource,
+  KnockoutSourceType,
+} from "@/app/admin/competitions/[id]/knockout-actions";
 import { CopyPublicLinkButton } from "@/components/copy-public-link-button";
 import { TeamLogo } from "@/components/team-logo";
 import { loadCompetitionParticipants } from "@/lib/competition-participants";
@@ -26,6 +32,8 @@ const matchColumns =
 const teamColumns = "id, name, short_name, logo_url, is_ksw";
 const groupColumns = "id, competition_id, name, label, sort_order, qualifiers_count, created_at, updated_at";
 const competitionTeamGroupColumns = "id, competition_id, team_id, group_id, is_active, display_order";
+const knockoutColumns =
+  "id, competition_id, bracket_size, round_index, round_key, round_label, match_order, home_source_type, home_group_id, home_group_rank, home_team_id, home_source_round_index, home_source_match_order, away_source_type, away_group_id, away_group_rank, away_team_id, away_source_round_index, away_source_match_order, is_manual_edited, created_at, updated_at";
 
 function text(row: Row | undefined, keys: string[], fallback = "") {
   if (!row) return fallback;
@@ -190,6 +198,50 @@ function asGroupTeam(row: Row, team: Row | undefined): AdminCompetitionGroupTeam
   };
 }
 
+function asKnockoutSource(row: Row, side: "away" | "home"): KnockoutSlotSource {
+  const sourceType = text(row, [`${side}_source_type`], "unassigned") as KnockoutSourceType;
+
+  if (sourceType === "group_rank") {
+    return {
+      groupId: text(row, [`${side}_group_id`], "") || undefined,
+      rank: number(row, [`${side}_group_rank`]) || undefined,
+      type: sourceType,
+    };
+  }
+
+  if (sourceType === "manual_team") {
+    return {
+      teamId: text(row, [`${side}_team_id`], "") || undefined,
+      type: sourceType,
+    };
+  }
+
+  if (sourceType === "match_winner") {
+    return {
+      sourceMatchOrder: number(row, [`${side}_source_match_order`]) || undefined,
+      sourceRoundIndex: number(row, [`${side}_source_round_index`]) || undefined,
+      type: sourceType,
+    };
+  }
+
+  if (sourceType === "bye") return { type: "bye" };
+  return { type: "unassigned" };
+}
+
+function asKnockoutMatch(row: Row): KnockoutMatchSlot {
+  return {
+    away: asKnockoutSource(row, "away"),
+    bracketSize: number(row, ["bracket_size"]),
+    home: asKnockoutSource(row, "home"),
+    id: text(row, ["id"], ""),
+    isManualEdited: row.is_manual_edited === true,
+    matchOrder: number(row, ["match_order"]),
+    roundIndex: number(row, ["round_index"]),
+    roundKey: text(row, ["round_key"], ""),
+    roundLabel: text(row, ["round_label"], ""),
+  };
+}
+
 function mergeMatchTeams(activeTeams: Row[], matchTeams: Row[]) {
   const merged = new Map<string, AdminCompetitionMatchTeam>();
 
@@ -256,6 +308,8 @@ async function loadWorkspaceData(id: string) {
       groupDataReady: false,
       groupTeams: [] as AdminCompetitionGroupTeam[],
       groups: [] as AdminCompetitionGroup[],
+      knockoutDataReady: false,
+      knockoutMatches: [] as KnockoutMatchSlot[],
       matchTeams: [] as Row[],
       matches: [] as Row[],
       teams: [] as Row[],
@@ -274,6 +328,8 @@ async function loadWorkspaceData(id: string) {
       groupDataReady: false,
       groupTeams: [] as AdminCompetitionGroupTeam[],
       groups: [] as AdminCompetitionGroup[],
+      knockoutDataReady: false,
+      knockoutMatches: [] as KnockoutMatchSlot[],
       matchTeams: [] as Row[],
       matches: [] as Row[],
       teams: [] as Row[],
@@ -283,7 +339,7 @@ async function loadWorkspaceData(id: string) {
   const competitionType = normalizeCompetitionType(competition.competition_type);
   const isCup = isCupCompetition(competitionType);
 
-  const [teams, matches, groupResult, competitionTeamResult] = await Promise.all([
+  const [teams, matches, groupResult, competitionTeamResult, knockoutResult] = await Promise.all([
     loadCompetitionParticipants(supabase, id, {
       includeInactiveParticipants: false,
     }),
@@ -306,6 +362,17 @@ async function loadWorkspaceData(id: string) {
             .eq("competition_id", id)
             .eq("is_active", true)
             .order("display_order", { ascending: true }),
+        )
+      : Promise.resolve({ data: [] as Row[], ok: true }),
+    isCup
+      ? runQueryStatus<Row>(
+          "workspace_competition_knockout_matches",
+          supabase
+            .from("competition_knockout_matches")
+            .select(knockoutColumns)
+            .eq("competition_id", id)
+            .order("round_index", { ascending: true })
+            .order("match_order", { ascending: true }),
         )
       : Promise.resolve({ data: [] as Row[], ok: true }),
   ]);
@@ -334,6 +401,8 @@ async function loadWorkspaceData(id: string) {
     groupDataReady: groupResult.ok && competitionTeamResult.ok,
     groupTeams,
     groups,
+    knockoutDataReady: knockoutResult.ok,
+    knockoutMatches: knockoutResult.data.map(asKnockoutMatch).filter((match) => match.roundIndex && match.matchOrder),
     matchTeams,
     matches,
     teams,
@@ -381,7 +450,7 @@ export default async function AdminCompetitionWorkspacePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { competition, groupDataReady, groupTeams, groups, matchTeams, matches, teams } = await loadWorkspaceData(id);
+  const { competition, groupDataReady, groupTeams, groups, knockoutDataReady, knockoutMatches, matchTeams, matches, teams } = await loadWorkspaceData(id);
 
   if (!competition) {
     notFound();
@@ -510,6 +579,7 @@ export default async function AdminCompetitionWorkspacePage({
               ["Overview", "#overview-summary"],
               ["Teams", "#teams-summary"],
               ...(isCup ? ([["Groups", "#groups-summary"]] as Array<[string, string]>) : []),
+              ...(isCup ? ([["Knockout", "#knockout-summary"]] as Array<[string, string]>) : []),
               ["Matches", "#matches-summary"],
               ["Publishing", "#publishing-summary"],
               ["Settings", "#settings-summary"],
@@ -660,6 +730,16 @@ export default async function AdminCompetitionWorkspacePage({
           groups={groups}
           matches={workspaceMatches}
           schemaReady={groupDataReady}
+          teams={groupTeams}
+        />
+      ) : null}
+
+      {isCup ? (
+        <AdminCompetitionKnockoutManager
+          competitionId={id}
+          groups={groups}
+          initialMatches={knockoutMatches}
+          schemaReady={knockoutDataReady}
           teams={groupTeams}
         />
       ) : null}
