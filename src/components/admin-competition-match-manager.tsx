@@ -50,6 +50,7 @@ type CompetitionSummary = {
   name: string;
   season: string;
   status: string;
+  type?: string;
 };
 
 const standardVenues = ["V1", "V2", "V3"];
@@ -249,10 +250,16 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
 
 export function AdminCompetitionMatchManager({
   competition,
+  cupGroupCount = 0,
+  cupGroupsReady = true,
+  cupUnassignedTeamCount = 0,
   initialMatches,
   initialTeams,
 }: {
   competition: CompetitionSummary;
+  cupGroupCount?: number;
+  cupGroupsReady?: boolean;
+  cupUnassignedTeamCount?: number;
   initialMatches: AdminCompetitionMatch[];
   initialTeams: AdminCompetitionMatchTeam[];
 }) {
@@ -300,18 +307,28 @@ export function AdminCompetitionMatchManager({
   const preservingLegacyStatus = form.id && isLegacyStatus(form.originalStatus) && !form.status;
   const effectiveStatus = form.status || form.originalStatus;
   const filtersActive = searchTerm.trim() || statusFilter !== "all";
+  const isCup = competition.type === "cup";
+  const matchCreationBlocked = isCup && cupGroupsReady && cupGroupCount === 0;
+  const matchCreationUnavailable = isCup && !cupGroupsReady;
   const canSubmit =
     form.homeTeamId &&
     form.awayTeamId &&
     form.homeTeamId !== form.awayTeamId &&
     form.matchDate &&
     effectiveStatus &&
+    (form.id || (!matchCreationBlocked && !matchCreationUnavailable)) &&
     (form.id ? teamsById.has(form.homeTeamId) && teamsById.has(form.awayTeamId) : activeTeams.length >= 2);
 
   function resetForm() {
     setForm(emptyForm);
     setMessage("");
     setError("");
+  }
+
+  function startNewMatch() {
+    resetForm();
+    if (matchCreationBlocked || matchCreationUnavailable) return;
+    window.setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }
 
   function clearFilters() {
@@ -435,10 +452,8 @@ export function AdminCompetitionMatchManager({
           </div>
           <button
             className="inline-flex w-fit rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] hover:bg-[#091f39]"
-            onClick={() => {
-              resetForm();
-              window.setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
-            }}
+            disabled={matchCreationBlocked || matchCreationUnavailable}
+            onClick={startNewMatch}
             type="button"
           >
             Add Match
@@ -474,6 +489,21 @@ export function AdminCompetitionMatchManager({
             </div>
 
             <div className="grid gap-4">
+              {matchCreationUnavailable && !form.id ? (
+                <p className="rounded-md border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-3 py-2 text-sm font-bold text-[#9b1c1f]">
+                  Group data is unavailable. Apply the M13C migration before adding cup matches.
+                </p>
+              ) : null}
+              {matchCreationBlocked && !form.id ? (
+                <p className="rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] px-3 py-2 text-sm font-bold text-[#8a6418]">
+                  สร้างกลุ่มและจัดทีมก่อนเพิ่มการแข่งขันรอบแบ่งกลุ่ม
+                </p>
+              ) : null}
+              {isCup && cupGroupCount > 0 && cupUnassignedTeamCount > 0 ? (
+                <p className="rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] px-3 py-2 text-sm font-bold text-[#8a6418]">
+                  This cup still has {cupUnassignedTeamCount} unassigned team{cupUnassignedTeamCount === 1 ? "" : "s"}. You can edit existing matches, but finish group assignment before building group-stage fixtures.
+                </p>
+              ) : null}
               {!form.id && activeTeams.length < 2 ? (
                 <p className="rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] px-3 py-2 text-sm font-bold text-[#8a6418]">
                   ยังไม่มีทีมในรายการแข่งขันนี้ กรุณาเพิ่มทีมที่ Manage Teams
@@ -663,10 +693,8 @@ export function AdminCompetitionMatchManager({
               <div className="flex flex-wrap gap-2">
                 <button
                   className="min-h-11 rounded-md border border-[#d8ad45]/45 px-3 py-2 text-xs font-black text-[#061426] hover:bg-[#fff4dc]"
-                  onClick={() => {
-                    resetForm();
-                    window.setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
-                  }}
+                  disabled={matchCreationBlocked || matchCreationUnavailable}
+                  onClick={startNewMatch}
                   type="button"
                 >
                   Add Match

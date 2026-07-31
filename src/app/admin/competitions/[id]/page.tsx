@@ -5,10 +5,16 @@ import {
   type AdminCompetitionMatch,
   type AdminCompetitionMatchTeam,
 } from "@/components/admin-competition-match-manager";
+import {
+  AdminCompetitionGroupsManager,
+  type AdminCompetitionGroup,
+  type AdminCompetitionGroupTeam,
+} from "@/components/admin-competition-groups-manager";
 import { CopyPublicLinkButton } from "@/components/copy-public-link-button";
 import { TeamLogo } from "@/components/team-logo";
 import { loadCompetitionParticipants } from "@/lib/competition-participants";
 import { requireAdminSession } from "@/lib/admin-server-auth";
+import { getCompetitionTypeLabel, isCupCompetition, normalizeCompetitionType } from "@/lib/competition-format";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 type Row = Record<string, unknown>;
@@ -18,6 +24,8 @@ const competitionColumns =
 const matchColumns =
   "id, match_date, home_team_id, away_team_id, home_score, away_score, venue, status";
 const teamColumns = "id, name, short_name, logo_url, is_ksw";
+const groupColumns = "id, competition_id, name, label, sort_order, created_at, updated_at";
+const competitionTeamGroupColumns = "id, competition_id, team_id, group_id, is_active, display_order";
 
 function text(row: Row | undefined, keys: string[], fallback = "") {
   if (!row) return fallback;
@@ -103,6 +111,23 @@ async function runQuery<T>(
   }
 }
 
+async function runQueryStatus<T>(
+  source: string,
+  query: PromiseLike<{ data: T[] | null; error: unknown }>,
+) {
+  try {
+    const result = await query;
+    if (result.error) {
+      console.error("admin competition workspace query failed", source, result.error);
+      return { data: [] as T[], ok: false };
+    }
+    return { data: result.data ?? [], ok: true };
+  } catch (error) {
+    console.error("admin competition workspace query failed", source, error);
+    return { data: [] as T[], ok: false };
+  }
+}
+
 function matchTeamIds(matches: Row[]) {
   return Array.from(
     new Set(
@@ -134,6 +159,30 @@ function asMatchTeam(row: Row, participantIsActive = false): AdminCompetitionMat
     name: text(row, ["name", "short_name"], "Unknown team"),
     participant_is_active: participantIsActive,
     short_name: text(row, ["short_name"], "") || null,
+  };
+}
+
+function asCompetitionGroup(row: Row): AdminCompetitionGroup {
+  const name = text(row, ["name"], "");
+  return {
+    id: text(row, ["id"], ""),
+    label: text(row, ["label"], "") || (name ? `Group ${name}` : "Group"),
+    name,
+    sort_order: number(row, ["sort_order"]),
+  };
+}
+
+function asGroupTeam(row: Row, team: Row | undefined): AdminCompetitionGroupTeam {
+  return {
+    competition_team_id: text(row, ["id"], ""),
+    display_order: number(row, ["display_order"]),
+    group_id: text(row, ["group_id"], "") || null,
+    is_active: row.is_active !== false,
+    is_ksw: team?.is_ksw === true,
+    logo_url: text(team, ["logo_url"], "") || null,
+    name: teamName(team),
+    short_name: text(team, ["short_name"], "") || null,
+    team_id: text(row, ["team_id"], ""),
   };
 }
 
@@ -200,6 +249,9 @@ async function loadWorkspaceData(id: string) {
   if (!supabase) {
     return {
       competition: undefined,
+      groupDataReady: false,
+      groupTeams: [] as AdminCompetitionGroupTeam[],
+      groups: [] as AdminCompetitionGroup[],
       matchTeams: [] as Row[],
       matches: [] as Row[],
       teams: [] as Row[],
@@ -215,13 +267,19 @@ async function loadWorkspaceData(id: string) {
   if (!competition) {
     return {
       competition: undefined,
+      groupDataReady: false,
+      groupTeams: [] as AdminCompetitionGroupTeam[],
+      groups: [] as AdminCompetitionGroup[],
       matchTeams: [] as Row[],
       matches: [] as Row[],
       teams: [] as Row[],
     };
   }
 
-  const [teams, matches] = await Promise.all([
+  const competitionType = normalizeCompetitionType(competition.competition_type);
+  const isCup = isCupCompetition(competitionType);
+
+  const [teams, matches, groupResult, competitionTeamResult] = await Promise.all([
     loadCompetitionParticipants(supabase, id, {
       includeInactiveParticipants: false,
     }),
@@ -229,8 +287,37 @@ async function loadWorkspaceData(id: string) {
       "workspace_matches",
       supabase.from("matches").select(matchColumns).eq("league_id", id).order("match_date", { ascending: true }),
     ),
+    isCup
+      ? runQueryStatus<Row>(
+          "workspace_competition_groups",
+          supabase.from("competition_groups").select(groupColumns).eq("competition_id", id).order("sort_order", { ascending: true }),
+        )
+      : Promise.resolve({ data: [] as Row[], ok: true }),
+    isCup
+      ? runQueryStatus<Row>(
+          "workspace_competition_team_groups",
+          supabase
+            .from("competition_teams")
+            .select(competitionTeamGroupColumns)
+            .eq("competition_id", id)
+            .eq("is_active", true)
+            .order("display_order", { ascending: true }),
+        )
+      : Promise.resolve({ data: [] as Row[], ok: true }),
   ]);
   const teamIds = matchTeamIds(matches);
+  const groupTeamIds = competitionTeamResult.data.map((row) => text(row, ["team_id"], "")).filter(Boolean);
+  const groupCanonicalTeams = groupTeamIds.length
+    ? await runQuery(
+        "workspace_group_teams",
+        supabase.from("teams").select(teamColumns).in("id", groupTeamIds),
+      )
+    : [];
+  const groupCanonicalTeamMap = new Map(groupCanonicalTeams.map((team) => [text(team, ["id"], ""), team]));
+  const groupTeams = competitionTeamResult.data
+    .map((row) => asGroupTeam(row, groupCanonicalTeamMap.get(text(row, ["team_id"], ""))))
+    .filter((team) => team.competition_team_id && team.team_id && team.is_active);
+  const groups = groupResult.data.map(asCompetitionGroup).filter((group) => group.id);
   const matchTeams = teamIds.length
     ? await runQuery(
         "workspace_match_teams",
@@ -238,7 +325,15 @@ async function loadWorkspaceData(id: string) {
       )
     : [];
 
-  return { competition, matchTeams, matches, teams };
+  return {
+    competition,
+    groupDataReady: groupResult.ok && competitionTeamResult.ok,
+    groupTeams,
+    groups,
+    matchTeams,
+    matches,
+    teams,
+  };
 }
 
 function DetailCard({ items, title }: { items: Array<[string, string]>; title: string }) {
@@ -282,7 +377,7 @@ export default async function AdminCompetitionWorkspacePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { competition, matchTeams, matches, teams } = await loadWorkspaceData(id);
+  const { competition, groupDataReady, groupTeams, groups, matchTeams, matches, teams } = await loadWorkspaceData(id);
 
   if (!competition) {
     notFound();
@@ -290,7 +385,9 @@ export default async function AdminCompetitionWorkspacePage({
 
   const competitionName = text(competition, ["name"], "Competition");
   const season = text(competition, ["season"], "");
-  const competitionType = text(competition, ["competition_type"], "Not set");
+  const competitionType = normalizeCompetitionType(text(competition, ["competition_type"], ""));
+  const competitionTypeLabel = getCompetitionTypeLabel(competitionType);
+  const isCup = isCupCompetition(competitionType);
   const seasonStatus = text(competition, ["season_status"], "Not set");
   const slug = text(competition, ["slug"], "");
   const coverImageUrl = text(competition, ["cover_image_url"], "");
@@ -304,12 +401,15 @@ export default async function AdminCompetitionWorkspacePage({
   const workspaceMatches = matches.map(asMatch);
   const workspaceMatchTeams = mergeMatchTeams(teams, matchTeams);
   const matchStats = workspaceMatchStats(workspaceMatches);
+  const groupedTeamCount = groupTeams.filter((team) => team.group_id).length;
+  const unassignedGroupTeamCount = Math.max(groupTeams.length - groupedTeamCount, 0);
+  const cupMatchCreationBlocked = isCup && groups.length === 0;
   const publicPath = slug && isPublished ? `/competitions/${slug}` : "";
   const statusAndActiveMisaligned =
     (seasonStatus === "completed" && isActive) || (seasonStatus === "active" && !isActive);
 
   const detailItems: Array<[string, string]> = [
-    ["Type", statusLabel(competitionType)],
+    ["Type", competitionTypeLabel],
     ["Status", statusLabel(seasonStatus)],
     ["Season", season || "Not set"],
     ["Edition", text(competition, ["edition_number"], "Not set")],
@@ -328,6 +428,11 @@ export default async function AdminCompetitionWorkspacePage({
     ["Short description", shortDescription ? "Available" : "Not set"],
     ["Full description", text(competition, ["description"], "") ? "Available" : "Not set"],
     ["Public slug", slug || "Not set"],
+  ];
+  const groupSummaryItems: Array<[string, string]> = [
+    ["Groups", String(groups.length)],
+    ["Assigned teams", String(groupedTeamCount)],
+    ["Unassigned teams", String(unassignedGroupTeamCount)],
   ];
 
   return (
@@ -349,7 +454,7 @@ export default async function AdminCompetitionWorkspacePage({
                 </span>
               ) : null}
               <span className="rounded-full border border-white/15 bg-white/[0.08] px-3 py-1 text-xs font-black uppercase text-slate-100">
-                {competitionType}
+                {competitionTypeLabel}
               </span>
               <span className="rounded-full border border-white/15 bg-white/[0.08] px-3 py-1 text-xs font-black uppercase text-slate-100">
                 {seasonStatus}
@@ -397,12 +502,13 @@ export default async function AdminCompetitionWorkspacePage({
           aria-label="Competition workspace sections"
           className="flex gap-3 overflow-x-auto pb-2"
         >
-          {[
-            ["Overview", "#overview-summary"],
-            ["Teams", "#teams-summary"],
-            ["Matches", "#matches-summary"],
-            ["Publishing", "#publishing-summary"],
-            ["Settings", "#settings-summary"],
+            {[
+              ["Overview", "#overview-summary"],
+              ["Teams", "#teams-summary"],
+              ...(isCup ? ([["Groups", "#groups-summary"]] as Array<[string, string]>) : []),
+              ["Matches", "#matches-summary"],
+              ["Publishing", "#publishing-summary"],
+              ["Settings", "#settings-summary"],
           ].map(([label, href]) => (
             <a
               className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm font-black text-[#061426] shadow-lg shadow-slate-900/5 hover:border-[#d8ad45] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d8ad45]"
@@ -424,18 +530,27 @@ export default async function AdminCompetitionWorkspacePage({
               </p>
               <h2 className="mt-2 break-words text-3xl font-black">{competitionName}</h2>
               <p className="mt-2 text-sm font-semibold text-slate-300">
-                {[season, competitionType, seasonStatus, isPublished ? "Public" : "Private"]
+                {[season, competitionTypeLabel, seasonStatus, isPublished ? "Public" : "Private"]
                   .filter(Boolean)
                   .join(" - ")}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <a
-                className="inline-flex min-h-11 items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-4 py-2 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/20"
-                href="#match-form"
-              >
-                Add Match
-              </a>
+              {cupMatchCreationBlocked ? (
+                <a
+                  className="inline-flex min-h-11 items-center justify-center rounded-md border border-[#d8ad45]/50 bg-white/[0.04] px-4 py-2 text-sm font-black text-[#f4d58a] hover:bg-[#d8ad45]/10"
+                  href="#groups-summary"
+                >
+                  Set Up Groups
+                </a>
+              ) : (
+                <a
+                  className="inline-flex min-h-11 items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-4 py-2 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/20"
+                  href="#match-form"
+                >
+                  Add Match
+                </a>
+              )}
               <a
                 className="inline-flex min-h-11 items-center justify-center rounded-md border border-[#d8ad45]/50 bg-white/[0.04] px-4 py-2 text-sm font-black text-[#f4d58a] hover:bg-[#d8ad45]/10"
                 href="#teams-summary"
@@ -457,6 +572,7 @@ export default async function AdminCompetitionWorkspacePage({
           </div>
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             <CommandStat label="Teams" value={teams.length} />
+            {isCup ? <CommandStat label="Groups" value={groups.length} /> : null}
             <CommandStat label="Total Matches" value={matchStats.total} />
             <CommandStat label="Scheduled" value={matchStats.scheduled} />
             <CommandStat label="Finished" value={matchStats.finished} />
@@ -479,6 +595,11 @@ export default async function AdminCompetitionWorkspacePage({
           {statusAndActiveMisaligned ? (
             <p className="rounded-lg border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-4 py-3 text-sm font-bold text-[#9b1c1f]">
               Season status and active flag are not aligned.
+            </p>
+          ) : null}
+          {isCup && groupDataReady && groups.length > 0 && unassignedGroupTeamCount > 0 ? (
+            <p className="rounded-lg border border-[#d8ad45]/35 bg-[#fff7e6] px-4 py-3 text-sm font-bold text-[#8a6418]">
+              This cup has {unassignedGroupTeamCount} unassigned team{unassignedGroupTeamCount === 1 ? "" : "s"}. Finish group assignments before creating group-stage fixtures.
             </p>
           ) : null}
         </section>
@@ -529,13 +650,26 @@ export default async function AdminCompetitionWorkspacePage({
         </article>
       </section>
 
+      {isCup ? (
+        <AdminCompetitionGroupsManager
+          competitionId={id}
+          groups={groups}
+          schemaReady={groupDataReady}
+          teams={groupTeams}
+        />
+      ) : null}
+
       <AdminCompetitionMatchManager
         competition={{
           id,
           name: competitionName,
           season,
           status: seasonStatus,
+          type: competitionType,
         }}
+        cupGroupCount={groups.length}
+        cupGroupsReady={groupDataReady}
+        cupUnassignedTeamCount={unassignedGroupTeamCount}
         initialMatches={workspaceMatches}
         initialTeams={workspaceMatchTeams}
       />
@@ -543,6 +677,7 @@ export default async function AdminCompetitionWorkspacePage({
       <section className="mx-auto grid w-full max-w-7xl scroll-mt-28 gap-4 px-4 pb-8 sm:px-6 lg:grid-cols-3 lg:px-10" id="publishing-summary">
         <DetailCard items={detailItems} title="Competition Details" />
         <DetailCard items={publishingItems} title="Publishing" />
+        {isCup ? <DetailCard items={groupSummaryItems} title="Group Stage" /> : null}
         <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10">
           <div className="mb-4 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
           <h2 className="text-xl font-black text-[#061426]">Public Page</h2>
