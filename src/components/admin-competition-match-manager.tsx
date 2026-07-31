@@ -10,6 +10,7 @@ import {
 } from "@/app/admin/matches/actions";
 
 type MatchStatus = "scheduled" | "finished";
+type MatchStatusFilter = "all" | "scheduled" | "finished" | "other";
 
 export type AdminCompetitionMatch = {
   id: string;
@@ -194,6 +195,11 @@ function matchScore(match: AdminCompetitionMatch) {
   return `${match.home_score} - ${match.away_score}`;
 }
 
+function matchStatusGroup(status: string): MatchStatusFilter {
+  if (status === "scheduled" || status === "finished") return status;
+  return "other";
+}
+
 function sortGroup(match: AdminCompetitionMatch) {
   if (match.status === "scheduled") return 0;
   if (match.status === "finished") return 2;
@@ -257,6 +263,8 @@ export function AdminCompetitionMatchManager({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<MatchStatusFilter>("all");
   const matches = initialMatches;
   const teams = initialTeams;
 
@@ -265,12 +273,33 @@ export function AdminCompetitionMatchManager({
     () => teams.filter((team) => team.participant_is_active !== false),
     [teams],
   );
-  const visibleMatches = useMemo(() => sortMatches(matches), [matches]);
   const scheduledCount = matches.filter((match) => match.status === "scheduled").length;
   const finishedCount = matches.filter((match) => match.status === "finished").length;
   const otherCount = matches.length - scheduledCount - finishedCount;
+  const visibleMatches = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    return sortMatches(matches).filter((match) => {
+      const homeTeam = teamsById.get(match.home_team_id);
+      const awayTeam = teamsById.get(match.away_team_id);
+      const searchableTeams = [
+        homeTeam?.name,
+        homeTeam?.short_name,
+        awayTeam?.name,
+        awayTeam?.short_name,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      const matchesSearch = !normalizedSearch || searchableTeams.includes(normalizedSearch);
+      const matchesStatus = statusFilter === "all" || matchStatusGroup(match.status) === statusFilter;
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [matches, searchTerm, statusFilter, teamsById]);
   const preservingLegacyStatus = form.id && isLegacyStatus(form.originalStatus) && !form.status;
   const effectiveStatus = form.status || form.originalStatus;
+  const filtersActive = searchTerm.trim() || statusFilter !== "all";
   const canSubmit =
     form.homeTeamId &&
     form.awayTeamId &&
@@ -283,6 +312,11 @@ export function AdminCompetitionMatchManager({
     setForm(emptyForm);
     setMessage("");
     setError("");
+  }
+
+  function clearFilters() {
+    setSearchTerm("");
+    setStatusFilter("all");
   }
 
   function updateScore(field: "awayScore" | "homeScore", value: string) {
@@ -386,7 +420,7 @@ export function AdminCompetitionMatchManager({
   }
 
   return (
-    <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="matches-summary">
+    <section className="mx-auto w-full max-w-7xl scroll-mt-28 px-4 pb-10 sm:px-6 lg:px-10" id="matches-summary">
       <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10">
         <div className="mb-4 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -415,12 +449,13 @@ export function AdminCompetitionMatchManager({
           <StatCard label="Total" value={matches.length} />
           <StatCard label="Scheduled" value={scheduledCount} />
           <StatCard label="Finished" value={finishedCount} />
-          <StatCard label="Other" value={otherCount} />
+          {otherCount > 0 ? <StatCard label="Other" value={otherCount} /> : null}
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
           <form
-            className="min-w-0 rounded-lg border border-[#d8ad45]/30 bg-slate-50 p-4"
+            className="min-w-0 scroll-mt-28 rounded-lg border border-[#d8ad45]/30 bg-slate-50 p-4"
+            id="match-form"
             onSubmit={saveMatch}
             ref={formRef}
           >
@@ -622,9 +657,69 @@ export function AdminCompetitionMatchManager({
               <div>
                 <h3 className="text-xl font-black">Match List</h3>
                 <p className="mt-1 text-sm font-semibold text-slate-600">
-                  {matches.length} linked matches
+                  Showing {visibleMatches.length} of {matches.length} linked matches
                 </p>
               </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className="min-h-11 rounded-md border border-[#d8ad45]/45 px-3 py-2 text-xs font-black text-[#061426] hover:bg-[#fff4dc]"
+                  onClick={() => {
+                    resetForm();
+                    window.setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                  }}
+                  type="button"
+                >
+                  Add Match
+                </button>
+                <button
+                  className="min-h-11 rounded-md border border-slate-200 px-3 py-2 text-xs font-black text-[#061426] hover:border-[#d8ad45]"
+                  onClick={() => setStatusFilter("scheduled")}
+                  type="button"
+                >
+                  Upcoming
+                </button>
+                <button
+                  className="min-h-11 rounded-md border border-slate-200 px-3 py-2 text-xs font-black text-[#061426] hover:border-[#d8ad45]"
+                  onClick={() => setStatusFilter("finished")}
+                  type="button"
+                >
+                  Finished
+                </button>
+              </div>
+            </div>
+
+            <div className="grid gap-3 border-b border-slate-100 p-4 md:grid-cols-[minmax(0,1fr)_180px_auto] md:items-end">
+              <label className="grid gap-2 text-sm font-black">
+                Search matches
+                <input
+                  className="min-h-11 w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Search home or away team"
+                  type="search"
+                  value={searchTerm}
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-black">
+                Status
+                <select
+                  className="min-h-11 w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                  onChange={(event) => setStatusFilter(event.target.value as MatchStatusFilter)}
+                  value={statusFilter}
+                >
+                  <option value="all">All</option>
+                  <option value="scheduled">Scheduled</option>
+                  <option value="finished">Finished</option>
+                  {otherCount > 0 ? <option value="other">Other</option> : null}
+                </select>
+              </label>
+              <button
+                className="min-h-11 rounded-md border border-slate-200 px-3 py-2 text-sm font-black text-[#061426] hover:border-[#d8ad45] disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!filtersActive}
+                onClick={clearFilters}
+                type="button"
+              >
+                Clear filters
+              </button>
             </div>
 
             <div className="grid gap-3 p-4">
@@ -690,7 +785,9 @@ export function AdminCompetitionMatchManager({
                 })
               ) : (
                 <p className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
-                  No matches linked to this competition. Use Add Match to create the first fixture.
+                  {matches.length
+                    ? "No matches match your search or filter."
+                    : "No matches yet. Use Add Match to create the first fixture."}
                 </p>
               )}
             </div>

@@ -5,6 +5,7 @@ import {
   type AdminCompetitionMatch,
   type AdminCompetitionMatchTeam,
 } from "@/components/admin-competition-match-manager";
+import { CopyPublicLinkButton } from "@/components/copy-public-link-button";
 import { TeamLogo } from "@/components/team-logo";
 import { loadCompetitionParticipants } from "@/lib/competition-participants";
 import { requireAdminSession } from "@/lib/admin-server-auth";
@@ -55,6 +56,20 @@ function formatDate(value: unknown) {
     month: "short",
     year: "numeric",
     timeZone: "Asia/Bangkok",
+  }).format(date);
+}
+
+function formatCompactDate(value: string) {
+  if (!value) return "—";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+
+  return new Intl.DateTimeFormat("en", {
+    day: "2-digit",
+    month: "short",
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
   }).format(date);
 }
 
@@ -142,6 +157,41 @@ function mergeMatchTeams(activeTeams: Row[], matchTeams: Row[]) {
   });
 }
 
+function matchTimeValue(match: AdminCompetitionMatch) {
+  const time = match.match_date ? new Date(match.match_date).getTime() : Number.NaN;
+  return Number.isNaN(time) ? 0 : time;
+}
+
+function workspaceMatchStats(matches: AdminCompetitionMatch[]) {
+  const scheduled = matches.filter((match) => match.status === "scheduled");
+  const finished = matches.filter((match) => match.status === "finished");
+  const other = matches.length - scheduled.length - finished.length;
+  const finishedWithScores = finished.filter(
+    (match) => typeof match.home_score === "number" && typeof match.away_score === "number",
+  );
+  const totalGoals = finishedWithScores.reduce(
+    (sum, match) => sum + (match.home_score ?? 0) + (match.away_score ?? 0),
+    0,
+  );
+  const nextScheduled = [...scheduled]
+    .filter((match) => matchTimeValue(match) > 0)
+    .sort((a, b) => matchTimeValue(a) - matchTimeValue(b))[0];
+  const latestFinished = [...finished]
+    .filter((match) => matchTimeValue(match) > 0)
+    .sort((a, b) => matchTimeValue(b) - matchTimeValue(a))[0];
+
+  return {
+    averageGoals: finishedWithScores.length ? (totalGoals / finishedWithScores.length).toFixed(1) : "—",
+    finished: finished.length,
+    latestFinishedDate: latestFinished ? formatCompactDate(latestFinished.match_date) : "—",
+    nextScheduledDate: nextScheduled ? formatCompactDate(nextScheduled.match_date) : "—",
+    other,
+    scheduled: scheduled.length,
+    total: matches.length,
+    totalGoals: finishedWithScores.length ? totalGoals : "—",
+  };
+}
+
 async function loadWorkspaceData(id: string) {
   await requireAdminSession();
 
@@ -217,6 +267,15 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
   );
 }
 
+function CommandStat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.07] px-4 py-3">
+      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#d8ad45]">{label}</p>
+      <p className="mt-1 text-2xl font-black text-white">{value}</p>
+    </div>
+  );
+}
+
 export default async function AdminCompetitionWorkspacePage({
   params,
 }: {
@@ -244,6 +303,8 @@ export default async function AdminCompetitionWorkspacePage({
   const hasLinkedData = teams.length > 0 || matches.length > 0;
   const workspaceMatches = matches.map(asMatch);
   const workspaceMatchTeams = mergeMatchTeams(teams, matchTeams);
+  const matchStats = workspaceMatchStats(workspaceMatches);
+  const publicPath = slug && isPublished ? `/competitions/${slug}` : "";
   const statusAndActiveMisaligned =
     (seasonStatus === "completed" && isActive) || (seasonStatus === "active" && !isActive);
 
@@ -332,26 +393,80 @@ export default async function AdminCompetitionWorkspacePage({
       </section>
 
       <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-10">
-        <nav aria-label="Competition workspace sections" className="grid gap-3 sm:grid-cols-4">
-          <span className="rounded-lg border border-[#d8ad45]/45 bg-[#061426] px-4 py-3 text-center text-sm font-black text-[#f4d58a]">
-            Overview
-          </span>
-          <a className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm font-black text-[#061426] shadow-lg shadow-slate-900/5 hover:border-[#d8ad45]" href="#teams-summary">
-            Teams
-          </a>
-          <a className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm font-black text-[#061426] shadow-lg shadow-slate-900/5 hover:border-[#d8ad45]" href="#matches-summary">
-            Matches
-          </a>
-          <a className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm font-black text-[#061426] shadow-lg shadow-slate-900/5 hover:border-[#d8ad45]" href="#settings-summary">
-            Settings
-          </a>
+        <nav
+          aria-label="Competition workspace sections"
+          className="flex gap-3 overflow-x-auto pb-2"
+        >
+          {[
+            ["Overview", "#overview-summary"],
+            ["Teams", "#teams-summary"],
+            ["Matches", "#matches-summary"],
+            ["Publishing", "#publishing-summary"],
+            ["Settings", "#settings-summary"],
+          ].map(([label, href]) => (
+            <a
+              className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm font-black text-[#061426] shadow-lg shadow-slate-900/5 hover:border-[#d8ad45] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d8ad45]"
+              href={href}
+              key={href}
+            >
+              {label}
+            </a>
+          ))}
         </nav>
       </section>
 
-      <section className="mx-auto grid w-full max-w-7xl gap-4 px-4 pb-8 sm:px-6 lg:grid-cols-3 lg:px-10">
-        <DetailCard items={detailItems} title="Competition Details" />
-        <DetailCard items={publishingItems} title="Publishing" />
-        <DetailCard items={contentItems} title="Content" />
+      <section className="mx-auto w-full max-w-7xl scroll-mt-28 px-4 pb-8 sm:px-6 lg:px-10" id="overview-summary">
+        <article className="rounded-lg border border-[#d8ad45]/30 bg-[linear-gradient(135deg,#061426,#0b2644)] p-5 text-white shadow-xl shadow-slate-900/15">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]">
+                Command Center
+              </p>
+              <h2 className="mt-2 break-words text-3xl font-black">{competitionName}</h2>
+              <p className="mt-2 text-sm font-semibold text-slate-300">
+                {[season, competitionType, seasonStatus, isPublished ? "Public" : "Private"]
+                  .filter(Boolean)
+                  .join(" - ")}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <a
+                className="inline-flex min-h-11 items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-4 py-2 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/20"
+                href="#match-form"
+              >
+                Add Match
+              </a>
+              <a
+                className="inline-flex min-h-11 items-center justify-center rounded-md border border-[#d8ad45]/50 bg-white/[0.04] px-4 py-2 text-sm font-black text-[#f4d58a] hover:bg-[#d8ad45]/10"
+                href="#teams-summary"
+              >
+                Manage Teams
+              </a>
+              {publicPath ? (
+                <Link
+                  className="inline-flex min-h-11 items-center justify-center rounded-md border border-white/20 bg-white/[0.08] px-4 py-2 text-sm font-black text-white hover:bg-white/[0.14]"
+                  href={publicPath}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  View Public Page
+                </Link>
+              ) : null}
+              {publicPath ? <CopyPublicLinkButton path={publicPath} variant="dark" /> : null}
+            </div>
+          </div>
+          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <CommandStat label="Teams" value={teams.length} />
+            <CommandStat label="Total Matches" value={matchStats.total} />
+            <CommandStat label="Scheduled" value={matchStats.scheduled} />
+            <CommandStat label="Finished" value={matchStats.finished} />
+            {matchStats.other > 0 ? <CommandStat label="Other" value={matchStats.other} /> : null}
+            <CommandStat label="Goals" value={matchStats.totalGoals} />
+            <CommandStat label="Avg Goals" value={matchStats.averageGoals} />
+            <CommandStat label="Next Match" value={matchStats.nextScheduledDate} />
+            <CommandStat label="Latest Result" value={matchStats.latestFinishedDate} />
+          </div>
+        </article>
       </section>
 
       {(hasLinkedData || statusAndActiveMisaligned) ? (
@@ -370,7 +485,7 @@ export default async function AdminCompetitionWorkspacePage({
       ) : null}
 
       <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
-        <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10" id="teams-summary">
+        <article className="min-w-0 scroll-mt-28 rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10" id="teams-summary">
           <div className="mb-4 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -407,7 +522,7 @@ export default async function AdminCompetitionWorkspacePage({
               ))
             ) : (
               <p className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
-                No teams linked to this competition.
+                No teams assigned yet. Use Manage Teams to assign participants for this competition.
               </p>
             )}
           </div>
@@ -425,7 +540,42 @@ export default async function AdminCompetitionWorkspacePage({
         initialTeams={workspaceMatchTeams}
       />
 
-      <section className="mx-auto w-full max-w-7xl px-4 pb-12 sm:px-6 lg:px-10" id="settings-summary">
+      <section className="mx-auto grid w-full max-w-7xl scroll-mt-28 gap-4 px-4 pb-8 sm:px-6 lg:grid-cols-3 lg:px-10" id="publishing-summary">
+        <DetailCard items={detailItems} title="Competition Details" />
+        <DetailCard items={publishingItems} title="Publishing" />
+        <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10">
+          <div className="mb-4 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
+          <h2 className="text-xl font-black text-[#061426]">Public Page</h2>
+          <dl className="mt-4 grid gap-3">
+            {contentItems.map(([label, value]) => (
+              <div className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2" key={label}>
+                <dt className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">{label}</dt>
+                <dd className="mt-1 break-words text-sm font-black text-[#061426]">{value || "Not set"}</dd>
+              </div>
+            ))}
+            {publicPath ? (
+              <div className="rounded-md border border-[#d8ad45]/25 bg-[#fff7e6] px-3 py-2">
+                <dt className="text-[10px] font-black uppercase tracking-[0.16em] text-[#8a6418]">Public URL</dt>
+                <dd className="mt-2 flex flex-col gap-2">
+                  <code className="break-all rounded bg-white px-2 py-1 text-xs font-bold text-[#061426]">
+                    {publicPath}
+                  </code>
+                  <CopyPublicLinkButton path={publicPath} />
+                </dd>
+              </div>
+            ) : (
+              <div className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2">
+                <dt className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Public URL</dt>
+                <dd className="mt-1 text-sm font-semibold text-slate-600">
+                  Public page unavailable. Add a slug and publish this competition before sharing it.
+                </dd>
+              </div>
+            )}
+          </dl>
+        </article>
+      </section>
+
+      <section className="mx-auto w-full max-w-7xl scroll-mt-28 px-4 pb-12 sm:px-6 lg:px-10" id="settings-summary">
         <article className="rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10">
           <div className="mb-4 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
           <h2 className="text-2xl font-black">Settings</h2>
