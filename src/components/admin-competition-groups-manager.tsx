@@ -116,6 +116,7 @@ export function AdminCompetitionGroupsManager({
   const [fixtureActionGroupId, setFixtureActionGroupId] = useState("");
   const [fixturePreviewByGroup, setFixturePreviewByGroup] = useState<Record<string, CupGroupFixturePreviewPair[]>>({});
   const [qualifierActionGroupId, setQualifierActionGroupId] = useState("");
+  const [groupOverrides, setGroupOverrides] = useState<Record<string, string | null>>({});
   const sortedGroups = useMemo(() => unassignedFirst(groups), [groups]);
   const groupStandings = useMemo(
     () => calculateCupGroupStandings({ groups, matches, teams }),
@@ -125,9 +126,18 @@ export function AdminCompetitionGroupsManager({
     () => new Map(groupStandings.map((standing) => [standing.group_id, standing])),
     [groupStandings],
   );
+  const effectiveTeams = useMemo(
+    () => teams.map((team) => ({
+      ...team,
+      group_id: Object.prototype.hasOwnProperty.call(groupOverrides, team.competition_team_id)
+        ? groupOverrides[team.competition_team_id]
+        : team.group_id,
+    })),
+    [groupOverrides, teams],
+  );
   const teamsByGroup = useMemo(() => {
     const grouped = new Map<string, AdminCompetitionGroupTeam[]>();
-    teams.forEach((team) => {
+    effectiveTeams.forEach((team) => {
       const key = team.group_id || "";
       grouped.set(key, [...(grouped.get(key) ?? []), team]);
     });
@@ -145,8 +155,8 @@ export function AdminCompetitionGroupsManager({
       );
     });
     return grouped;
-  }, [teams]);
-  const assignedCount = teams.filter((team) => team.group_id).length;
+  }, [effectiveTeams]);
+  const assignedCount = effectiveTeams.filter((team) => team.group_id).length;
   const unassignedTeams = [...(teamsByGroup.get("") ?? [])].sort((a, b) =>
     compareTeamsByName(
       { id: a.team_id, name: a.name },
@@ -238,6 +248,7 @@ export function AdminCompetitionGroupsManager({
       return;
     }
 
+    setGroupOverrides((current) => ({ ...current, [team.competition_team_id]: groupId || null }));
     setMessage(groupId ? "Team moved to group." : "Team moved to unassigned.");
     router.refresh();
   }

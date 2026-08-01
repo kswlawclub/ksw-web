@@ -528,11 +528,13 @@ export async function assignCompetitionTeamToGroup(payload: AssignPayload): Prom
     .from("competition_teams")
     .update({ group_id: groupId })
     .eq("id", competitionTeamId)
-    .eq("competition_id", competitionId);
+    .eq("competition_id", competitionId)
+    .select("id, group_id")
+    .maybeSingle();
 
-  if (result.error) {
+  if (result.error || !result.data || result.data.group_id !== groupId) {
     console.error("competition team group assignment failed", result.error);
-    return { ok: false, error: friendlyGroupError(result.error.message) };
+    return { ok: false, error: friendlyGroupError(result.error?.message ?? "The team group could not be updated.") };
   }
 
   revalidatePath(`/admin/competitions/${competitionId}`);
