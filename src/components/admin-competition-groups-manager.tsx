@@ -18,6 +18,7 @@ import {
   type CupGroupRow,
   type CupGroupStanding,
 } from "@/lib/cup-group-standings";
+import { compareTeamsByName } from "@/lib/team-sort";
 
 export type AdminCompetitionGroup = {
   id: string;
@@ -136,14 +137,22 @@ export function AdminCompetitionGroupsManager({
         [...items].sort((a, b) => {
           const orderDiff = a.display_order - b.display_order;
           if (orderDiff) return orderDiff;
-          return a.name.localeCompare(b.name);
+          return compareTeamsByName(
+            { id: a.team_id, name: a.name },
+            { id: b.team_id, name: b.name },
+          );
         }),
       );
     });
     return grouped;
   }, [teams]);
   const assignedCount = teams.filter((team) => team.group_id).length;
-  const unassignedTeams = teamsByGroup.get("") ?? [];
+  const unassignedTeams = [...(teamsByGroup.get("") ?? [])].sort((a, b) =>
+    compareTeamsByName(
+      { id: a.team_id, name: a.name },
+      { id: b.team_id, name: b.name },
+    ),
+  );
 
   function editGroup(group: AdminCompetitionGroup) {
     setForm({
