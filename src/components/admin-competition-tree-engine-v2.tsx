@@ -28,6 +28,7 @@ type AdminCompetitionTreeEngineV2Props = {
   initialSummary: CompetitionTreeSummary | null;
   initialMatches: CompetitionKnockoutMatchV2[];
   nodes: CompetitionTreeNode[];
+  qualificationApproved: boolean;
   teams: Array<{ id: string; logo_url: string | null; name: string; short_name: string | null }>;
   workflow: CompetitionEngineV2Integrity | null;
 };
@@ -189,6 +190,7 @@ export function AdminCompetitionTreeEngineV2({
   initialMatches,
   initialSummary,
   nodes,
+  qualificationApproved,
   teams,
   workflow,
 }: AdminCompetitionTreeEngineV2Props) {
@@ -236,7 +238,7 @@ export function AdminCompetitionTreeEngineV2({
   }, [activeCardId, knockoutMatches]);
 
   useEffect(() => {
-    if (!configReady || (status !== "reviewed" && status !== "fixtures_created")) return;
+    if (!configReady || !qualificationApproved || (status !== "reviewed" && status !== "fixtures_created")) return;
     let active = true;
     void previewCompetitionFixturesV2(competitionId).then((result) => {
       if (active) setFixtureResult(result);
@@ -244,7 +246,7 @@ export function AdminCompetitionTreeEngineV2({
     return () => {
       active = false;
     };
-  }, [competitionId, configReady, status]);
+  }, [competitionId, configReady, qualificationApproved, status]);
 
   function generateTree() {
     setError("");
@@ -359,9 +361,13 @@ export function AdminCompetitionTreeEngineV2({
           ].map((step) => <li className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2" key={step}>{step}</li>)}
         </ol>
 
-        {!configReady ? (
+        {!qualificationApproved ? (
           <p className="mt-4 rounded-md border border-[#8a6418]/25 bg-[#fff7e6] px-3 py-2 text-sm font-bold text-[#8a6418]">
-            ตั้งค่าทีมเข้ารอบก่อนสร้างโครงสร้างการแข่งขัน
+            รอตรวจสอบและยืนยันทีมผ่านเข้ารอบก่อนตั้งค่ารอบน็อกเอาต์
+          </p>
+        ) : !configReady ? (
+          <p className="mt-4 rounded-md border border-[#8a6418]/25 bg-[#fff7e6] px-3 py-2 text-sm font-bold text-[#8a6418]">
+            ยังไม่ได้ตั้งค่ารอบน็อกเอาต์
           </p>
         ) : null}
 
@@ -385,7 +391,7 @@ export function AdminCompetitionTreeEngineV2({
           {canGenerateTree(status) ? (
             <button
               className="min-h-11 rounded-md bg-[#061426] px-5 py-3 text-sm font-black text-[#f4d58a] disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={!configReady || isPending}
+              disabled={!configReady || !qualificationApproved || isPending}
               onClick={generateTree}
               type="button"
             >
@@ -395,7 +401,7 @@ export function AdminCompetitionTreeEngineV2({
           {canReviewTree(status) && currentWorkflow?.hasValidTree ? (
             <button
               className="min-h-11 rounded-md border border-[#d8ad45] bg-[#fff7e6] px-5 py-3 text-sm font-black text-[#8a6418] disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isPending}
+              disabled={!qualificationApproved || isPending}
               onClick={reviewTree}
               type="button"
             >
@@ -405,7 +411,7 @@ export function AdminCompetitionTreeEngineV2({
           {status === "reviewed" ? (
             <button
               className="min-h-11 rounded-md border border-slate-300 bg-white px-5 py-3 text-sm font-black text-[#061426] disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isPending}
+              disabled={!qualificationApproved || isPending}
               onClick={reopenTree}
               type="button"
             >
@@ -415,7 +421,7 @@ export function AdminCompetitionTreeEngineV2({
           {canCreateFixtures(status) ? (
             <button
               className="min-h-11 rounded-md bg-[#061426] px-5 py-3 text-sm font-black text-[#f4d58a] disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isPending || fixtureResult?.nodes.filter((node) => node.state === "eligible").length === 0}
+              disabled={!qualificationApproved || isPending || fixtureResult?.nodes.filter((node) => node.state === "eligible").length === 0}
               onClick={createFixtures}
               type="button"
             >

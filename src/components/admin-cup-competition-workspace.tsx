@@ -208,22 +208,6 @@ function CupQualificationPanel({ competitionId, config, groups, matches, teams }
     });
   }
 
-  if (!config) {
-    return (
-      <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
-        <article className="min-w-0 rounded-lg border border-[#d8ad45]/40 bg-[#fff7e6] p-5 shadow-sm">
-          <div className="flex items-start gap-3">
-            <span aria-hidden="true" className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-full border border-[#d8ad45]/40 bg-white text-sm font-black text-[#8a6418]">i</span>
-            <div className="min-w-0">
-              <h2 className="text-xl font-black text-[#061426]">ยังไม่ได้ตั้งค่ารอบน็อกเอาต์</h2>
-              <p className="mt-1 text-sm font-semibold leading-6 text-slate-700">หลังจากยืนยันทีมผ่านเข้ารอบ ระบบจะเปิดขั้นตอนถัดไปอัตโนมัติ</p>
-            </div>
-          </div>
-        </article>
-      </section>
-    );
-  }
-
   return (
     <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
       <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
@@ -397,7 +381,7 @@ export function AdminCupCompetitionWorkspace({
       <AdminCompetitionGroupsManager competitionId={competitionId} groups={groups} matches={matches} onMatchesChange={(nextMatches) => setMatches(nextMatches as AdminCompetitionMatch[])} renderGroupProgram={(group) => <CupGroupProgram group={group} matches={matches} onSave={saveGroupMatch} teamsById={teamsById} />} schemaReady={groupDataReady} teams={groupTeams} />
       <CupQualificationPanel competitionId={competitionId} config={engineConfig} groups={groups} matches={matches} teams={groupTeams} />
       <AdminCompetitionWizardV2 competitionId={competitionId} competitionType="cup" existingConfig={engineConfig} groupCount={groups.length} groups={groups} participantCount={groupTeams.length} workflow={engineWorkflow} />
-      <AdminCompetitionTreeEngineV2 bracketCapacity={engineConfig?.bracketCapacity ?? null} competitionId={competitionId} configReady={Boolean(engineConfig)} initialMatches={matches.filter((match) => match.competition_stage === "knockout").map((match) => ({ ...match, manual_winner_team_id: match.manual_winner_team_id ?? null, penalty_away_score: match.penalty_away_score ?? null, penalty_home_score: match.penalty_home_score ?? null, winner_team_id: match.winner_team_id ?? null })) as CompetitionKnockoutMatchV2[]} initialSummary={engineSummary} nodes={nodes} teams={matchTeams.map(({ id, logo_url, name, short_name }) => ({ id, logo_url, name, short_name }))} workflow={engineWorkflow} />
+      <AdminCompetitionTreeEngineV2 bracketCapacity={engineConfig?.bracketCapacity ?? null} competitionId={competitionId} configReady={Boolean(engineConfig)} initialMatches={matches.filter((match) => match.competition_stage === "knockout").map((match) => ({ ...match, manual_winner_team_id: match.manual_winner_team_id ?? null, penalty_away_score: match.penalty_away_score ?? null, penalty_home_score: match.penalty_home_score ?? null, winner_team_id: match.winner_team_id ?? null })) as CompetitionKnockoutMatchV2[]} initialSummary={engineSummary} nodes={nodes} qualificationApproved={engineConfig?.qualificationStatus === "approved"} teams={matchTeams.map(({ id, logo_url, name, short_name }) => ({ id, logo_url, name, short_name }))} workflow={engineWorkflow} />
     </>
   );
 }
