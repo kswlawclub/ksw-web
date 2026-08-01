@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useMemo, useState, useTransition } from "react";
+import { FormEvent, type MouseEvent, useEffect, useMemo, useState, useTransition } from "react";
 import { updateMatch } from "@/app/admin/matches/actions";
 import { approveCupQualification, reopenCupQualification, saveCupQualificationSettings, type ApprovedQualificationSummary } from "@/app/admin/competitions/[id]/qualification-actions";
 import { AdminCompetitionGroupsManager, type AdminCompetitionGroup, type AdminCompetitionGroupTeam } from "@/components/admin-competition-groups-manager";
@@ -244,25 +244,25 @@ function CupQualificationPanel({ competitionId, config, groups, matches, teams }
 
   if (approved && !detailsOpen) {
     return (
-      <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
+      <section className="mx-auto w-full max-w-7xl scroll-mt-28 px-4 pb-10 sm:px-6 lg:px-10" id="cup-qualification">
         <article className="min-w-0 rounded-lg border border-emerald-200 bg-emerald-50/40 p-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-black text-[#061426]">ทีมผ่านเข้ารอบ</h2><p className="mt-1 text-sm font-semibold text-emerald-900">อนุมัติแล้ว{config?.qualificationApprovedByLabel ? ` โดย ${config.qualificationApprovedByLabel}` : ""}{approvedAt ? ` · ${approvedAt}` : ""}</p></div><span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-800"><span aria-hidden="true">✓</span>อนุมัติแล้ว</span></div>
           <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3"><div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-bold"><span className="block text-xs text-slate-500">ทีมผ่านเข้ารอบ</span>{approvedEntrants || "-"}</div><div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-bold"><span className="block text-xs text-slate-500">ทีมอันดับเพิ่มเติม</span>{approvedExtraQualifierCount}</div><div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-bold"><span className="block text-xs text-slate-500">ขนาดสาย</span>{approvedCapacity || "-"}</div><div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-bold"><span className="block text-xs text-slate-500">{approvedPlayInCount ? "Play-in" : "Bye"}</span>{approvedPlayInCount || approvedByeCount || "ไม่มี"}</div><div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-bold"><span className="block text-xs text-slate-500">จำนวนรอบน็อกเอาต์</span>{approvedRoundCount || "-"}</div><div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-bold"><span className="block text-xs text-slate-500">จำนวนแมตช์</span>{approvedMatchCount || "-"}</div></div>
-          <div className="mt-4 flex flex-wrap gap-2"><button className="min-h-10 rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-black text-emerald-800" onClick={() => setDetailsOpen(true)} type="button">แสดงรายละเอียด</button><button className="min-h-10 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-black text-blue-800 disabled:opacity-60" disabled={pending || !configReady} onClick={reopen} type="button">ยกเลิกการยืนยันเพื่อแก้ไข</button></div>
+          <div className="mt-4 flex flex-wrap gap-2"><a className="inline-flex min-h-10 items-center rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-black text-[#061426]" href="#cup-workspace-nav">กลับเมนูลัด</a><button className="min-h-10 rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-black text-emerald-800" onClick={() => setDetailsOpen(true)} type="button">แสดงรายละเอียด</button><button className="min-h-10 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-black text-blue-800 disabled:opacity-60" disabled={pending || !configReady} onClick={reopen} type="button">ยกเลิกการยืนยันเพื่อแก้ไข</button></div>
         </article>
       </section>
     );
   }
 
   return (
-    <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
+    <section className="mx-auto w-full max-w-7xl scroll-mt-28 px-4 pb-10 sm:px-6 lg:px-10" id="cup-qualification">
       <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-2xl font-black text-[#061426]">ทีมผ่านเข้ารอบ</h2>
             <p className="mt-1 text-sm font-semibold text-slate-600">ตรวจสอบรายชื่อก่อนนำไปใช้ในรอบน็อกเอาต์</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2"><span className={`inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-black ${status.className}`}><span aria-hidden="true">{status.icon}</span>{status.label}</span>{approved ? <button className="min-h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-black text-[#061426]" onClick={() => setDetailsOpen(false)} type="button">พับรายละเอียด</button> : null}</div>
+          <div className="flex flex-wrap items-center gap-2"><a className="inline-flex min-h-10 items-center rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-black text-[#061426]" href="#cup-workspace-nav">กลับเมนูลัด</a><span className={`inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-black ${status.className}`}><span aria-hidden="true">{status.icon}</span>{status.label}</span>{approved ? <button className="min-h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-black text-[#061426]" onClick={() => setDetailsOpen(false)} type="button">พับรายละเอียด</button> : null}</div>
         </div>
 
         {approved ? <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm font-semibold text-emerald-900"><p><strong>ผู้อนุมัติ:</strong> {config?.qualificationApprovedByLabel ?? "ผู้ดูแลระบบ"}</p>{approvedAt ? <p className="mt-1"><strong>วันเวลาอนุมัติ:</strong> {approvedAt}</p> : null}</div> : null}
@@ -353,8 +353,42 @@ function CupCompetitionProgress({ steps }: { steps: CupCompetitionWorkflowStep[]
   );
 }
 
+function CupWorkspaceNavigation({ steps }: { steps: CupCompetitionWorkflowStep[] }) {
+  const shortcuts = [
+    { id: "teams", label: "ทีม", target: "cup-teams" },
+    { id: "group_matches", label: "รอบแบ่งกลุ่ม", target: "cup-group-stage" },
+    { id: "qualification", label: "ทีมผ่านเข้ารอบ", target: "cup-qualification" },
+    { id: "knockout_matches", label: "รอบน็อกเอาต์", target: "cup-knockout" },
+    { id: "champion", label: "แชมป์", target: "cup-champion" },
+  ] as const;
+  const statusLabels = { complete: "เสร็จแล้ว", current: "กำลังดำเนินการ", locked: "ล็อก", upcoming: "รอดำเนินการ" } as const;
+  const statusClasses = { complete: "border-emerald-200 bg-emerald-50 text-emerald-800", current: "border-[#d8ad45]/40 bg-[#fff7e6] text-[#8a6418]", locked: "border-slate-300 bg-slate-100 text-slate-600", upcoming: "border-slate-200 bg-slate-50 text-slate-600" } as const;
+
+  useEffect(() => {
+    const targetId = window.location.hash.slice(1);
+    if (!targetId) return;
+    requestAnimationFrame(() => document.getElementById(targetId)?.scrollIntoView({ block: "start" }));
+  }, []);
+
+  function jump(event: MouseEvent<HTMLAnchorElement>, target: string) {
+    event.preventDefault();
+    document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.history.replaceState(null, "", `#${target}`);
+  }
+
+  return (
+    <nav aria-label="เมนูลัดพื้นที่จัดการแข่งขัน" className="mx-auto w-full max-w-7xl px-4 pb-7 sm:px-6 lg:px-10" id="cup-workspace-nav">
+      <div className="overflow-x-auto pb-1"><div className="flex min-w-max gap-2">{shortcuts.map((shortcut) => {
+        const state = steps.find((item) => item.id === shortcut.id)?.state ?? "locked";
+        return <a className={`inline-flex min-h-10 flex-col justify-center rounded-md border px-3 py-1.5 text-xs font-black ${statusClasses[state]}`} href={`#${shortcut.target}`} key={shortcut.target} onClick={(event) => jump(event, shortcut.target)}><span>{shortcut.label}</span><span className="text-[10px] font-bold opacity-75">{statusLabels[state]}</span></a>;
+      })}</div></div>
+    </nav>
+  );
+}
+
 export function AdminCupCompetitionWorkspace({
   competitionId,
+  competitionStatus,
   engineConfig,
   engineSummary,
   engineWorkflow,
@@ -367,6 +401,7 @@ export function AdminCupCompetitionWorkspace({
   teams,
 }: {
   competitionId: string;
+  competitionStatus: string | null;
   engineConfig: CompetitionEngineV2Config | null;
   engineSummary: CompetitionTreeSummary | null;
   engineWorkflow: CompetitionEngineV2Integrity | null;
@@ -384,13 +419,14 @@ export function AdminCupCompetitionWorkspace({
   const sortedTeams = useMemo(() => sortTeamsByName(teams), [teams]);
   const visibleTeams = showAllTeams ? sortedTeams : sortedTeams.slice(0, 16);
   const workflowSteps = useMemo(() => calculateCupCompetitionWorkflow({
+    competitionStatus,
     groups: groups as unknown as Record<string, unknown>[],
     matches: matches as unknown as Record<string, unknown>[],
     nodes,
     qualificationStatus: engineConfig?.qualificationStatus ?? null,
     knockoutStatus: engineConfig?.status ?? null,
     teams: groupTeams as unknown as Record<string, unknown>[],
-  }), [engineConfig?.qualificationStatus, engineConfig?.status, groupTeams, groups, matches, nodes]);
+  }), [competitionStatus, engineConfig?.qualificationStatus, engineConfig?.status, groupTeams, groups, matches, nodes]);
 
   async function saveGroupMatch(match: AdminCompetitionMatch, form: MatchForm) {
     const result = await updateMatch(match.id, {
@@ -419,7 +455,9 @@ export function AdminCupCompetitionWorkspace({
   return (
     <>
       <CupCompetitionProgress steps={workflowSteps} />
-      <section className="mx-auto w-full max-w-7xl px-4 pb-7 sm:px-6 lg:px-10">
+      <CupWorkspaceNavigation steps={workflowSteps} />
+      {competitionStatus === "completed" ? <section className="mx-auto w-full max-w-7xl px-4 pb-7 sm:px-6 lg:px-10"><p className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-900">การแข่งขันเสร็จสิ้นแล้ว หากต้องแก้ไขผล ต้องเปิดการแข่งขันเพื่อแก้ไขก่อน เพราะอาจกระทบแชมป์</p></section> : null}
+      <section className="mx-auto w-full max-w-7xl scroll-mt-28 px-4 pb-7 sm:px-6 lg:px-10" id="cup-teams">
         <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div><h2 className="text-2xl font-black text-[#061426]">ทีมที่เข้าแข่งขัน</h2><p className="mt-1 text-sm font-semibold text-slate-600">รายชื่อทีมในรายการนี้</p></div>
@@ -432,9 +470,9 @@ export function AdminCupCompetitionWorkspace({
           {sortedTeams.length > 16 ? <button className="mt-4 min-h-11 rounded-md border border-slate-200 px-4 py-2 text-sm font-black text-[#061426] hover:border-[#d8ad45]" onClick={() => setShowAllTeams((current) => !current)} type="button">{showAllTeams ? "แสดงน้อยลง" : "แสดงทั้งหมด / Show all"}</button> : null}
         </article>
       </section>
-      <AdminCompetitionGroupsManager competitionId={competitionId} groups={groups} matches={matches} onMatchesChange={(nextMatches) => setMatches(nextMatches as AdminCompetitionMatch[])} renderGroupProgram={(group) => <CupGroupProgram group={group} matches={matches} onSave={saveGroupMatch} teamsById={teamsById} />} schemaReady={groupDataReady} teams={groupTeams} />
+      <div className="scroll-mt-28" id="cup-group-stage"><AdminCompetitionGroupsManager competitionId={competitionId} groups={groups} matches={matches} onMatchesChange={(nextMatches) => setMatches(nextMatches as AdminCompetitionMatch[])} renderGroupProgram={(group) => <CupGroupProgram group={group} matches={matches} onSave={saveGroupMatch} teamsById={teamsById} />} schemaReady={groupDataReady} teams={groupTeams} /></div>
       <CupQualificationPanel competitionId={competitionId} config={engineConfig} groups={groups} matches={matches} teams={groupTeams} />
-      <AdminCompetitionTreeEngineV2 bracketCapacity={engineConfig?.bracketCapacity ?? null} competitionId={competitionId} configReady={Boolean(engineConfig)} entryMode={engineConfig?.entryMode ?? "bye"} groupNames={groups.map(({ id, name }) => ({ id, name }))} initialMatches={matches.filter((match) => match.competition_stage === "knockout").map((match) => ({ ...match, manual_winner_team_id: match.manual_winner_team_id ?? null, penalty_away_score: match.penalty_away_score ?? null, penalty_home_score: match.penalty_home_score ?? null, winner_team_id: match.winner_team_id ?? null })) as CompetitionKnockoutMatchV2[]} initialSummary={engineSummary} key={engineConfig?.qualificationApprovedAt ?? "qualification-pending"} nodes={nodes} qualificationApproved={engineConfig?.qualificationStatus === "approved"} qualificationSnapshot={engineConfig?.qualificationSnapshot ?? []} teams={matchTeams.map(({ id, logo_url, name, short_name }) => ({ id, logo_url, name, short_name }))} workflow={engineWorkflow} />
+      <AdminCompetitionTreeEngineV2 bracketCapacity={engineConfig?.bracketCapacity ?? null} competitionId={competitionId} competitionStatus={competitionStatus} configReady={Boolean(engineConfig)} entryMode={engineConfig?.entryMode ?? "bye"} groupNames={groups.map(({ id, name }) => ({ id, name }))} initialMatches={matches.filter((match) => match.competition_stage === "knockout").map((match) => ({ ...match, manual_winner_team_id: match.manual_winner_team_id ?? null, penalty_away_score: match.penalty_away_score ?? null, penalty_home_score: match.penalty_home_score ?? null, winner_team_id: match.winner_team_id ?? null })) as CompetitionKnockoutMatchV2[]} initialSummary={engineSummary} key={engineConfig?.qualificationApprovedAt ?? "qualification-pending"} nodes={nodes} qualificationApproved={engineConfig?.qualificationStatus === "approved"} qualificationSnapshot={engineConfig?.qualificationSnapshot ?? []} teams={matchTeams.map(({ id, logo_url, name, short_name }) => ({ id, logo_url, name, short_name }))} workflow={engineWorkflow} />
     </>
   );
 }

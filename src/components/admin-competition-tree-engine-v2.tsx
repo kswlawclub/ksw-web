@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  completeCupCompetitionV2,
   generateCompetitionTreeV2,
   createCompetitionFixturesV2,
   previewCompetitionFixturesV2,
@@ -24,6 +25,7 @@ import { TeamLogo } from "@/components/team-logo";
 type AdminCompetitionTreeEngineV2Props = {
   bracketCapacity: number | null;
   competitionId: string;
+  competitionStatus: string | null;
   configReady: boolean;
   entryMode: CompetitionTreeEntryMode;
   initialSummary: CompetitionTreeSummary | null;
@@ -250,6 +252,7 @@ function KnockoutRoundMatches({
 export function AdminCompetitionTreeEngineV2({
   bracketCapacity,
   competitionId,
+  competitionStatus,
   configReady,
   entryMode,
   initialMatches,
@@ -269,6 +272,8 @@ export function AdminCompetitionTreeEngineV2({
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
   const [knockoutMatches, setKnockoutMatches] = useState(initialMatches);
+  const [competitionCompleted, setCompetitionCompleted] = useState(competitionStatus === "completed");
+  const isCompetitionCompleted = competitionCompleted || competitionStatus === "completed";
   const [localNodeLinks, setLocalNodeLinks] = useState<Record<string, string>>({});
   const [activeCardId, setActiveCardId] = useState("");
   const qualifiedSources = useMemo<KswQualificationSource[]>(() => {
@@ -471,8 +476,25 @@ export function AdminCompetitionTreeEngineV2({
     return { ok: true };
   }
 
+  function completeCompetition() {
+    if (!champion) return;
+    if (!window.confirm(`ตรวจสอบผลแล้วปิดการแข่งขัน โดยประกาศ ${champion.name} เป็นแชมป์?`)) return;
+    setError("");
+    setMessage("");
+    startTransition(async () => {
+      const result = await completeCupCompetitionV2(competitionId);
+      if (!result.ok) {
+        setError(result.error ?? "ไม่สามารถปิดการแข่งขันได้");
+        return;
+      }
+      setCompetitionCompleted(true);
+      setMessage(`ปิดการแข่งขันแล้ว · แชมป์: ${champion.name}`);
+      router.refresh();
+    });
+  }
+
   return (
-    <section className="mx-auto w-full max-w-7xl scroll-mt-28 px-4 pb-10 sm:px-6 lg:px-10" id="competition-tree-v2">
+    <section className="mx-auto w-full max-w-7xl scroll-mt-28 px-4 pb-10 sm:px-6 lg:px-10" id="cup-knockout">
       <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10">
         <div className="mb-4 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -481,6 +503,7 @@ export function AdminCompetitionTreeEngineV2({
             <p className="mt-1 text-sm font-semibold text-slate-600">
               Knockout Competition Management
             </p>
+            <a className="mt-3 inline-flex min-h-10 items-center rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-black text-[#061426]" href="#cup-workspace-nav">กลับเมนูลัด</a>
           </div>
           <span className="inline-flex w-fit shrink-0 rounded-full bg-[#fff7e6] px-3 py-2 text-sm font-black text-[#8a6418]">
             {statusLabel.th} / {statusLabel.en}
@@ -598,9 +621,11 @@ export function AdminCompetitionTreeEngineV2({
         ) : summary ? (
           <p className="mt-5 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-600">เมื่อทีมผ่านเข้ารอบพร้อม ระบบจะแสดงคู่แข่งขันในส่วนนี้</p>
         ) : null}
-        <section className="mt-6 rounded-lg border border-[#d8ad45]/35 bg-[#fff7e6] p-4">
+        <section className="mt-6 scroll-mt-28 rounded-lg border border-[#d8ad45]/35 bg-[#fff7e6] p-4" id="cup-champion">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a6418]">Champion</p>
           <p className="mt-1 text-xl font-black text-[#061426]">{champion?.name ?? "รอผลการแข่งขันรอบชิงชนะเลิศ"}</p>
+          {champion && !isCompetitionCompleted ? <div className="mt-3 flex flex-wrap items-center gap-3"><span className="rounded-full border border-[#d8ad45]/40 bg-white px-3 py-1.5 text-sm font-black text-[#8a6418]">พร้อมปิดการแข่งขัน</span><button className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={isPending} onClick={completeCompetition} type="button">ตรวจสอบและปิดการแข่งขัน</button></div> : null}
+          {isCompetitionCompleted ? <span className="mt-3 inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-black text-emerald-800">การแข่งขันเสร็จสิ้น</span> : null}
         </section>
       </article>
     </section>

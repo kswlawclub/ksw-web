@@ -263,6 +263,7 @@ function asCompetitionTreeNode(row: Row): CompetitionTreeNode {
     competitionId: text(row, ["competition_id"]),
     homeSource: asTreeSource(row, "home"),
     id: text(row, ["id"]),
+    linkedMatchId: text(row, ["linked_match_id"]) || undefined,
     matchOrder: number(row, ["match_order"]),
     roundIndex: number(row, ["round_index"]),
     roundLabel: text(row, ["round_label"]),
@@ -508,12 +509,6 @@ export default async function AdminCompetitionWorkspacePage({
     ["Full description", text(competition, ["description"], "") ? "Available" : "Not set"],
     ["Public slug", slug || "Not set"],
   ];
-  const groupSummaryItems: Array<[string, string]> = [
-    ["Groups", String(groups.length)],
-    ["Assigned teams", String(groupedTeamCount)],
-    ["Unassigned teams", String(unassignedGroupTeamCount)],
-  ];
-
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#f6f2ea] text-[#061426]">
       <section className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-10">
@@ -575,6 +570,7 @@ export default async function AdminCompetitionWorkspacePage({
       {isCup ? (
         <AdminCupCompetitionWorkspace
           competitionId={id}
+          competitionStatus={seasonStatus}
           engineConfig={engineV2Config}
           engineSummary={engineV2TreeSummary}
           engineWorkflow={engineV2Workflow}
@@ -605,54 +601,31 @@ export default async function AdminCompetitionWorkspacePage({
         />
       )}
 
-      <section className="mx-auto grid w-full max-w-7xl scroll-mt-28 gap-4 px-4 pb-8 sm:px-6 lg:grid-cols-3 lg:px-10" id="publishing-summary">
-        <DetailCard items={detailItems} title="Competition Details" />
-        <DetailCard items={publishingItems} title="Publishing" />
-        {isCup ? <DetailCard items={groupSummaryItems} title="Group Stage" /> : null}
-        <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10">
-          <div className="mb-4 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
-          <h2 className="text-xl font-black text-[#061426]">Public Page</h2>
-          <dl className="mt-4 grid gap-3">
-            {contentItems.map(([label, value]) => (
-              <div className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2" key={label}>
-                <dt className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">{label}</dt>
-                <dd className="mt-1 break-words text-sm font-black text-[#061426]">{value || "Not set"}</dd>
-              </div>
-            ))}
-            {publicPath ? (
-              <div className="rounded-md border border-[#d8ad45]/25 bg-[#fff7e6] px-3 py-2">
-                <dt className="text-[10px] font-black uppercase tracking-[0.16em] text-[#8a6418]">Public URL</dt>
-                <dd className="mt-2 flex flex-col gap-2">
-                  <code className="break-all rounded bg-white px-2 py-1 text-xs font-bold text-[#061426]">
-                    {publicPath}
-                  </code>
-                  <CopyPublicLinkButton path={publicPath} />
-                </dd>
-              </div>
-            ) : (
-              <div className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2">
-                <dt className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Public URL</dt>
-                <dd className="mt-1 text-sm font-semibold text-slate-600">
-                  Public page unavailable. Add a slug and publish this competition before sharing it.
-                </dd>
-              </div>
-            )}
-          </dl>
-        </article>
-      </section>
-
-      <section className="mx-auto w-full max-w-7xl scroll-mt-28 px-4 pb-12 sm:px-6 lg:px-10" id="settings-summary">
-        <article className="rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10">
-          <div className="mb-4 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
-          <h2 className="text-2xl font-black">Settings</h2>
-          <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
-            Competition settings are edited from the existing Competitions module in Phase 1. Open the module and choose Edit for this competition.
-          </p>
-          <Link className="mt-4 inline-flex rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] hover:bg-[#091f39]" href="/admin/competitions">
-            Open Competitions
-          </Link>
-        </article>
-      </section>
+      {!isCup ? <>
+        <section className="mx-auto grid w-full max-w-7xl scroll-mt-28 gap-4 px-4 pb-8 sm:px-6 lg:grid-cols-3 lg:px-10" id="publishing-summary">
+          <DetailCard items={detailItems} title="Competition Details" />
+          <DetailCard items={publishingItems} title="Publishing" />
+          <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10">
+            <div className="mb-4 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
+            <h2 className="text-xl font-black text-[#061426]">Public Page</h2>
+            <dl className="mt-4 grid gap-3">
+              {contentItems.map(([label, value]) => (
+                <div className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2" key={label}>
+                  <dt className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">{label}</dt>
+                  <dd className="mt-1 break-words text-sm font-black text-[#061426]">{value || "Not set"}</dd>
+                </div>
+              ))}
+              {publicPath ? (
+                <div className="rounded-md border border-[#d8ad45]/25 bg-[#fff7e6] px-3 py-2">
+                  <dt className="text-[10px] font-black uppercase tracking-[0.16em] text-[#8a6418]">Public URL</dt>
+                  <dd className="mt-2 flex flex-col gap-2"><code className="break-all rounded bg-white px-2 py-1 text-xs font-bold text-[#061426]">{publicPath}</code><CopyPublicLinkButton path={publicPath} /></dd>
+                </div>
+              ) : <div className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2"><dt className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Public URL</dt><dd className="mt-1 text-sm font-semibold text-slate-600">Public page unavailable. Add a slug and publish this competition before sharing it.</dd></div>}
+            </dl>
+          </article>
+        </section>
+        <section className="mx-auto w-full max-w-7xl scroll-mt-28 px-4 pb-12 sm:px-6 lg:px-10" id="settings-summary"><article className="rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10"><div className="mb-4 h-0.5 w-12 rounded-full bg-[#d8ad45]" /><h2 className="text-2xl font-black">Settings</h2><p className="mt-2 text-sm font-semibold leading-6 text-slate-600">Competition settings are edited from the existing Competitions module in Phase 1. Open the module and choose Edit for this competition.</p><Link className="mt-4 inline-flex rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] hover:bg-[#091f39]" href="/admin/competitions">Open Competitions</Link></article></section>
+      </> : null}
     </main>
   );
 }

@@ -450,6 +450,7 @@ export function AdminCompetitionGroupsManager({
             <p className="mt-1 text-sm font-semibold text-slate-600">
               Create cup groups and assign participating teams before building group-stage fixtures.
             </p>
+            <a className="mt-3 inline-flex min-h-10 items-center rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-black text-[#061426]" href="#cup-workspace-nav">กลับเมนูลัด</a>
           </div>
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">

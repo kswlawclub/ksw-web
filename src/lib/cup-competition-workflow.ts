@@ -16,6 +16,7 @@ export function calculateCupCompetitionWorkflow(input: {
   groups: CupGroupRow[];
   matches: CupGroupRow[];
   nodes: Array<{ linkedMatchId?: string; roundIndex: number }>;
+  competitionStatus: string | null;
   qualificationStatus: "approved" | "pending" | null;
   knockoutStatus: string | null;
   teams: CupGroupRow[];
@@ -36,7 +37,8 @@ export function calculateCupCompetitionWorkflow(input: {
   const finalNode = [...input.nodes].sort((a, b) => b.roundIndex - a.roundIndex)[0];
   const finalMatch = finalNode?.linkedMatchId ? input.matches.find((match) => text(match, "id") === finalNode.linkedMatchId) : undefined;
   const knockoutMatchesComplete = text(finalMatch, "status") === "finished";
-  const championComplete = knockoutMatchesComplete && Boolean(text(finalMatch, "winner_team_id"));
+  const championReady = knockoutMatchesComplete && Boolean(text(finalMatch, "winner_team_id"));
+  const championComplete = championReady && input.competitionStatus === "completed";
   const definitions = [
     { complete: teamsReady, description: "เพิ่มทีมที่จะเข้าร่วมการแข่งขัน", id: "teams" as const, label: "ทีมที่เข้าแข่งขัน" },
     { complete: groupsReady, description: "จัดทีมทุกทีมเข้าสู่กลุ่ม", id: "groups" as const, label: "แบ่งกลุ่ม" },

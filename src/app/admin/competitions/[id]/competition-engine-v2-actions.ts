@@ -132,6 +132,11 @@ export type SaveCompetitionKnockoutMatchV2Result = {
   ok: boolean;
 };
 
+export type CompleteCupCompetitionV2Result = {
+  error?: string;
+  ok: boolean;
+};
+
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 async function verifyCupCompetition(competitionId: string) {
@@ -151,25 +156,70 @@ async function verifyCupCompetition(competitionId: string) {
 
   const result = await supabase
     .from("leagues")
-    .select("id, competition_type")
+    .select("id, competition_type, season_status")
     .eq("id", competitionId)
     .limit(1)
     .maybeSingle();
 
   if (result.error) {
     console.error("competition engine v2 competition lookup failed", result.error);
-    return { error: "Could not verify competition.", supabase };
+    return { error: "Could not verify competition.", seasonStatus: null, supabase };
   }
 
   if (!result.data) {
-    return { error: "Competition was not found.", supabase };
+    return { error: "Competition was not found.", seasonStatus: null, supabase };
   }
 
   if (!isCupCompetition(normalizeCompetitionType(result.data.competition_type))) {
-    return { error: "Knockout competition management is available for cup competitions only.", supabase };
+    return { error: "Knockout competition management is available for cup competitions only.", seasonStatus: null, supabase };
   }
 
-  return { error: "", supabase };
+  return { error: "", seasonStatus: typeof result.data.season_status === "string" ? result.data.season_status : null, supabase };
+}
+
+export async function completeCupCompetitionV2(competitionId: string): Promise<CompleteCupCompetitionV2Result> {
+  const verified = await verifyCupCompetition(competitionId);
+  if (verified.error || !verified.supabase) return { error: verified.error, ok: false };
+  if (verified.seasonStatus === "completed") return { ok: true };
+
+  const nodesResult = await verified.supabase
+    .from("competition_bracket_nodes")
+    .select("linked_match_id, round_index")
+    .eq("competition_id", competitionId)
+    .order("round_index", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (nodesResult.error || !nodesResult.data?.linked_match_id) {
+    if (nodesResult.error) console.error("competition completion final node lookup failed", nodesResult.error);
+    return { error: "ยังไม่พบคู่รอบชิงชนะเลิศที่พร้อมปิดการแข่งขัน", ok: false };
+  }
+
+  const finalResult = await verified.supabase
+    .from("matches")
+    .select("id, league_id, competition_stage, home_team_id, away_team_id, status, winner_team_id")
+    .eq("id", nodesResult.data.linked_match_id)
+    .eq("league_id", competitionId)
+    .eq("competition_stage", "knockout")
+    .maybeSingle();
+  if (finalResult.error || !finalResult.data) {
+    if (finalResult.error) console.error("competition completion final match lookup failed", finalResult.error);
+    return { error: "ไม่พบผลรอบชิงชนะเลิศของรายการนี้", ok: false };
+  }
+  const winnerTeamId = finalResult.data.winner_team_id;
+  if (finalResult.data.status !== "finished" || typeof winnerTeamId !== "string" || !winnerTeamId || ![finalResult.data.home_team_id, finalResult.data.away_team_id].includes(winnerTeamId)) {
+    return { error: "รอบชิงชนะเลิศต้องจบการแข่งขันและมีผู้ชนะก่อนปิดรายการ", ok: false };
+  }
+
+  const updateResult = await verified.supabase
+    .from("leagues")
+    .update({ season_status: "completed" })
+    .eq("id", competitionId);
+  if (updateResult.error) {
+    console.error("competition completion status update failed", updateResult.error);
+    return { error: "ไม่สามารถปิดการแข่งขันได้", ok: false };
+  }
+  revalidatePath(`/admin/competitions/${competitionId}`);
+  return { ok: true };
 }
 
 function sourceFromDatabase(row: Record<string, unknown>, side: "away" | "home"): CompetitionTreeSource {
@@ -974,6 +1024,7 @@ export async function saveCompetitionKnockoutMatchV2(payload: {
 }): Promise<SaveCompetitionKnockoutMatchV2Result> {
   const verified = await verifyCupCompetition(payload.competitionId);
   if (verified.error || !verified.supabase) return { error: verified.error, ok: false };
+  if (verified.seasonStatus === "completed") return { error: "การแข่งขันปิดแล้ว กรุณาเปิดการแข่งขันเพื่อแก้ไขก่อน เพราะอาจกระทบแชมป์", ok: false };
   if (!uuidPattern.test(payload.matchId)) return { error: "Match id is invalid.", ok: false };
   if (![payload.homeScore, payload.awayScore, payload.penaltyHomeScore, payload.penaltyAwayScore].every(validScore)) {
     return { error: "คะแนนต้องเป็นจำนวนเต็มตั้งแต่ 0 ถึง 999", ok: false };

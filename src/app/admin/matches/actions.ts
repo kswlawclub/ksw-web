@@ -601,6 +601,19 @@ export async function updateMatch(
     return { ok: false, error: "Match competition cannot be changed from the match editor." };
   }
 
+  const competitionStatus = await supabase
+    .from("leagues")
+    .select("season_status")
+    .eq("id", existingMatch.leagueId)
+    .maybeSingle();
+  if (competitionStatus.error) {
+    console.error("admin match competition status lookup failed", competitionStatus.error);
+    return { ok: false, error: "Could not verify the competition status." };
+  }
+  if (competitionStatus.data?.season_status === "completed") {
+    return { ok: false, error: "การแข่งขันปิดแล้ว กรุณาเปิดการแข่งขันเพื่อแก้ไขก่อน เพราะอาจกระทบแชมป์" };
+  }
+
   const relationshipError = await validateCompetitionTeamRelationship(supabase, normalizedPayload, {
     away_team_id: existingMatch.awayTeamId,
     group_id: existingMatch.groupId,
