@@ -100,18 +100,17 @@ function CupGroupMatchCard({
   if (isFinished && !editing) {
     const date = compactMatchDate(match.match_date);
     return (
-      <article className="min-w-0 rounded-lg border border-emerald-200 bg-emerald-50/40 px-3 py-3" id={`group-match-${match.id}`}>
-        <div className="flex items-center justify-between gap-3">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-800"><span aria-hidden="true">✓</span>จบการแข่งขัน</span>
-          <button className="min-h-10 rounded-md border border-emerald-200 bg-white px-3 py-1.5 text-sm font-black text-emerald-800" onClick={() => { setSaved(false); setEditing(true); }} type="button">แก้ไขผล</button>
+      <article className="min-w-0 rounded-md border border-emerald-200 bg-emerald-50/40 px-2.5 py-2" id={`group-match-${match.id}`}>
+        <div className="flex min-w-0 items-center gap-2">
+          <span aria-label="จบการแข่งขัน" className="size-2 shrink-0 rounded-full bg-emerald-600" title="จบการแข่งขัน" />
+          <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-3">
+            <div className={`flex min-w-0 items-center gap-1.5 ${winner?.id === home?.id ? "font-black text-[#061426]" : "text-slate-700"}`}><TeamLogo className="!size-7 shrink-0 bg-[#061426]" initials={(home?.short_name || home?.name || "ทีม").slice(0, 3)} logoUrl={home?.logo_url ?? ""} teamName={home?.name ?? "ทีมเหย้า"} /><span className="min-w-0 break-words text-sm leading-4">{home?.name ?? "ทีมเหย้า"}</span></div>
+            <p className="rounded border border-emerald-200 bg-white px-2 py-1 text-center text-lg font-black tabular-nums text-[#061426]">{hasScore ? `${match.home_score}-${match.away_score}` : "-"}</p>
+            <div className={`flex min-w-0 items-center justify-end gap-1.5 text-right ${winner?.id === away?.id ? "font-black text-[#061426]" : "text-slate-700"}`}><span className="min-w-0 break-words text-sm leading-4">{away?.name ?? "ทีมเยือน"}</span><TeamLogo className="!size-7 shrink-0 bg-[#061426]" initials={(away?.short_name || away?.name || "ทีม").slice(0, 3)} logoUrl={away?.logo_url ?? ""} teamName={away?.name ?? "ทีมเยือน"} /></div>
+          </div>
+          <button aria-label="แก้ไขผลการแข่งขัน" className="min-h-8 shrink-0 rounded border border-emerald-200 bg-white px-2 py-1 text-xs font-black text-emerald-800" onClick={() => { setSaved(false); setEditing(true); }} type="button">แก้ไข</button>
         </div>
-        <div className="mt-3 grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-4">
-          <div className={`flex min-w-0 items-center gap-2 ${winner?.id === home?.id ? "font-black text-[#061426]" : "text-slate-700"}`}><TeamLogo className="!size-8 shrink-0 bg-[#061426]" initials={(home?.short_name || home?.name || "ทีม").slice(0, 3)} logoUrl={home?.logo_url ?? ""} teamName={home?.name ?? "ทีมเหย้า"} /><span className="min-w-0 break-words text-sm">{home?.name ?? "ทีมเหย้า"}</span></div>
-          <p className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-center text-xl font-black tabular-nums text-[#061426]">{hasScore ? `${match.home_score} - ${match.away_score}` : "-"}</p>
-          <div className={`flex min-w-0 items-center justify-end gap-2 text-right ${winner?.id === away?.id ? "font-black text-[#061426]" : "text-slate-700"}`}><span className="min-w-0 break-words text-sm">{away?.name ?? "ทีมเยือน"}</span><TeamLogo className="!size-8 shrink-0 bg-[#061426]" initials={(away?.short_name || away?.name || "ทีม").slice(0, 3)} logoUrl={away?.logo_url ?? ""} teamName={away?.name ?? "ทีมเยือน"} /></div>
-        </div>
-        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-bold text-slate-600"><span>{isDraw ? "เสมอ" : winner ? `ผู้ชนะ: ${winner.name}` : "รอผลสกอร์"}</span>{date ? <span>{date}</span> : null}{match.venue ? <span>{match.venue}</span> : null}</div>
-        {saved ? <p className="mt-2 text-xs font-bold text-emerald-800">บันทึกแล้ว</p> : null}
+        <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] font-bold leading-4 text-slate-600"><span>{isDraw ? "เสมอ" : winner ? `ผู้ชนะ: ${winner.name}` : "รอผลสกอร์"}</span>{date ? <span>{date}</span> : null}{match.venue ? <span>{match.venue}</span> : null}{saved ? <span className="text-emerald-800">บันทึกแล้ว</span> : null}</div>
       </article>
     );
   }
