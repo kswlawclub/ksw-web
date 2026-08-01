@@ -10,6 +10,7 @@ import { AdminCompetitionTreeEngineV2 } from "@/components/admin-competition-tre
 import { AdminCompetitionWizardV2 } from "@/components/admin-competition-wizard-v2";
 import { TeamLogo } from "@/components/team-logo";
 import { calculateCupQualification } from "@/lib/cup-qualification";
+import { calculateCupCompetitionWorkflow, type CupCompetitionWorkflowStep } from "@/lib/cup-competition-workflow";
 import { sortTeamsByName } from "@/lib/team-sort";
 import type { CompetitionEngineV2Config, CompetitionKnockoutMatchV2 } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
 import type { CompetitionEngineV2Integrity } from "@/lib/competition-engine-v2-state";
@@ -289,6 +290,31 @@ function CupQualificationPanel({ competitionId, config, groups, matches, teams }
   );
 }
 
+function CupCompetitionProgress({ steps }: { steps: CupCompetitionWorkflowStep[] }) {
+  const [openStep, setOpenStep] = useState<string | null>(null);
+  const presentation = {
+    complete: { className: "border-emerald-200 bg-emerald-50 text-emerald-800", icon: "✓" },
+    current: { className: "border-[#d8ad45]/40 bg-[#fff7e6] text-[#8a6418]", icon: "●" },
+    locked: { className: "border-slate-300 bg-slate-100 text-slate-600", icon: "🔒" },
+    upcoming: { className: "border-slate-200 bg-slate-50 text-slate-600", icon: "○" },
+  } as const;
+
+  return (
+    <section className="mx-auto w-full max-w-7xl px-4 pb-7 sm:px-6 lg:px-10">
+      <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <h2 className="text-lg font-black text-[#061426]">ลำดับการจัดการแข่งขัน</h2>
+        <ol className="mt-3 grid gap-2 lg:grid-cols-7">
+          {steps.map((step) => {
+            const style = presentation[step.state];
+            const isOpen = openStep === step.id;
+            return <li className="min-w-0" key={step.id}><button aria-current={step.state === "current" ? "step" : undefined} aria-expanded={isOpen} className={`group min-h-12 w-full rounded-md border px-3 py-2 text-left text-sm font-black ${style.className}`} onClick={() => setOpenStep((current) => current === step.id ? null : step.id)} title={step.description} type="button"><span className="flex min-w-0 items-center gap-2"><span aria-hidden="true" className="shrink-0">{style.icon}</span><span className="min-w-0 break-words">{step.label}</span></span>{isOpen ? <span className="mt-2 block border-t border-current/15 pt-2 text-xs font-semibold leading-5">{step.description}</span> : null}</button></li>;
+          })}
+        </ol>
+      </article>
+    </section>
+  );
+}
+
 export function AdminCupCompetitionWorkspace({
   competitionId,
   engineConfig,
@@ -319,6 +345,14 @@ export function AdminCupCompetitionWorkspace({
   const [showAllTeams, setShowAllTeams] = useState(false);
   const sortedTeams = useMemo(() => sortTeamsByName(teams), [teams]);
   const visibleTeams = showAllTeams ? sortedTeams : sortedTeams.slice(0, 16);
+  const workflowSteps = useMemo(() => calculateCupCompetitionWorkflow({
+    groups: groups as unknown as Record<string, unknown>[],
+    matches: matches as unknown as Record<string, unknown>[],
+    nodes,
+    qualificationStatus: engineConfig?.qualificationStatus ?? null,
+    knockoutStatus: engineConfig?.status ?? null,
+    teams: groupTeams as unknown as Record<string, unknown>[],
+  }), [engineConfig?.qualificationStatus, engineConfig?.status, groupTeams, groups, matches, nodes]);
 
   async function saveGroupMatch(match: AdminCompetitionMatch, form: MatchForm) {
     const result = await updateMatch(match.id, {
@@ -346,6 +380,7 @@ export function AdminCupCompetitionWorkspace({
 
   return (
     <>
+      <CupCompetitionProgress steps={workflowSteps} />
       <section className="mx-auto w-full max-w-7xl px-4 pb-7 sm:px-6 lg:px-10">
         <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
