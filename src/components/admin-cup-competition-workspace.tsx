@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import { updateMatch } from "@/app/admin/matches/actions";
 import { AdminCompetitionGroupsManager, type AdminCompetitionGroup, type AdminCompetitionGroupTeam } from "@/components/admin-competition-groups-manager";
@@ -7,6 +8,7 @@ import { AdminCompetitionTreeEngineV2 } from "@/components/admin-competition-tre
 import { AdminCompetitionWizardV2 } from "@/components/admin-competition-wizard-v2";
 import { TeamLogo } from "@/components/team-logo";
 import { calculateCupGroupStandings } from "@/lib/cup-group-standings";
+import { sortTeamsByName } from "@/lib/team-sort";
 import type { CompetitionEngineV2Config, CompetitionKnockoutMatchV2 } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
 import type { CompetitionEngineV2Integrity } from "@/lib/competition-engine-v2-state";
 import type { CompetitionTreeNode, CompetitionTreeSummary } from "@/lib/competition-tree";
@@ -46,6 +48,7 @@ export function AdminCupCompetitionWorkspace({
   initialMatches,
   matchTeams,
   nodes,
+  teams,
 }: {
   competitionId: string;
   engineConfig: CompetitionEngineV2Config | null;
@@ -57,6 +60,7 @@ export function AdminCupCompetitionWorkspace({
   initialMatches: AdminCompetitionMatch[];
   matchTeams: AdminCompetitionMatchTeam[];
   nodes: CompetitionTreeNode[];
+  teams: AdminCompetitionMatchTeam[];
 }) {
   const [matches, setMatches] = useState(initialMatches);
   const [forms, setForms] = useState<Record<string, MatchForm>>(() => Object.fromEntries(initialMatches.map((match) => [match.id, formFromMatch(match)])));
@@ -68,6 +72,9 @@ export function AdminCupCompetitionWorkspace({
   const standings = useMemo(() => calculateCupGroupStandings({ groups, matches, teams: groupTeams }), [groups, matches, groupTeams]);
   const standingsByGroup = useMemo(() => new Map(standings.map((standing) => [standing.group_id, standing])), [standings]);
   const qualifiers = useMemo(() => standings.flatMap((standing) => standing.rows.filter((row) => row.qualifies)), [standings]);
+  const [showAllTeams, setShowAllTeams] = useState(false);
+  const sortedTeams = useMemo(() => sortTeamsByName(teams), [teams]);
+  const visibleTeams = showAllTeams ? sortedTeams : sortedTeams.slice(0, 16);
 
   async function saveGroupMatch(event: FormEvent<HTMLFormElement>, match: AdminCompetitionMatch) {
     event.preventDefault();
@@ -101,6 +108,19 @@ export function AdminCupCompetitionWorkspace({
 
   return (
     <>
+      <section className="mx-auto w-full max-w-7xl px-4 pb-7 sm:px-6 lg:px-10">
+        <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div><h2 className="text-2xl font-black text-[#061426]">ทีมที่เข้าแข่งขัน</h2><p className="mt-1 text-sm font-semibold text-slate-600">รายชื่อทีมในรายการนี้</p></div>
+            <Link className="inline-flex min-h-11 w-fit items-center rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] hover:bg-[#091f39]" href={`/admin/teams?competition=${encodeURIComponent(competitionId)}`}>จัดการทีม</Link>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1 rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-600"><span>ทีมทั้งหมด <strong className="text-[#061426]">{sortedTeams.length}</strong></span><span>ทีม KSW <strong className="text-[#8a6418]">{sortedTeams.filter((team) => team.is_ksw).length}</strong></span></div>
+          <div className="mt-4 grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {visibleTeams.map((team) => <div className="flex min-w-0 items-center gap-2 rounded-md border border-slate-100 bg-slate-50 px-2.5 py-2" key={team.id}><TeamLogo className="!size-8 shrink-0 bg-[#061426]" initials={(team.short_name || team.name || "ทีม").slice(0, 3)} logoUrl={team.logo_url ?? ""} teamName={team.name} /><div className="min-w-0 flex-1"><p className="line-clamp-2 text-sm font-black leading-5 text-[#061426]">{team.name}</p></div>{team.is_ksw ? <span className="shrink-0 rounded-full bg-[#fff7e6] px-2 py-1 text-[10px] font-black text-[#8a6418]">KSW</span> : null}</div>)}
+          </div>
+          {sortedTeams.length > 16 ? <button className="mt-4 min-h-11 rounded-md border border-slate-200 px-4 py-2 text-sm font-black text-[#061426] hover:border-[#d8ad45]" onClick={() => setShowAllTeams((current) => !current)} type="button">{showAllTeams ? "แสดงน้อยลง" : "แสดงทั้งหมด / Show all"}</button> : null}
+        </article>
+      </section>
       <AdminCompetitionGroupsManager competitionId={competitionId} groups={groups} matches={matches} schemaReady={groupDataReady} teams={groupTeams} />
       <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
         <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">

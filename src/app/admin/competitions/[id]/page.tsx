@@ -502,7 +502,7 @@ export default async function AdminCompetitionWorkspacePage({
         </details>
       </section>
 
-      <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
+      {!isCup ? <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
         <article className="min-w-0 scroll-mt-28 rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10" id="teams-summary">
           <div className="mb-4 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -545,7 +545,7 @@ export default async function AdminCompetitionWorkspacePage({
             )}
           </div>
         </article>
-      </section>
+      </section> : null}
 
       {isCup ? (
         <AdminCupCompetitionWorkspace
@@ -559,6 +559,7 @@ export default async function AdminCompetitionWorkspacePage({
           initialMatches={workspaceMatches}
           matchTeams={workspaceMatchTeams}
           nodes={engineV2TreeNodes}
+          teams={teams.map((team) => asMatchTeam(team))}
         />
       ) : (
         <AdminCompetitionMatchManager
