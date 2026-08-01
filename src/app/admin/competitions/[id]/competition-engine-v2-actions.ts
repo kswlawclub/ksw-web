@@ -95,12 +95,20 @@ export type CompetitionFixturesV2Result = {
   error?: string;
   errors: string[];
   linkedCount: number;
+  linkedNodes?: CompetitionKnockoutMatchLinkV2[];
   matches?: CompetitionKnockoutMatchV2[];
   nodes: CompetitionFixtureNodeV2[];
   ok: boolean;
   pendingCount: number;
+  roundMatches?: CompetitionKnockoutMatchV2[];
   skippedCount: number;
   status?: CompetitionEngineV2Status;
+};
+
+export type CompetitionKnockoutMatchLinkV2 = {
+  matchId: string;
+  nodeId: string;
+  roundIndex: number;
 };
 
 export type CompetitionKnockoutMatchV2 = {
@@ -914,7 +922,10 @@ export async function createCompetitionFixturesV2(competitionId: string, roundIn
     console.error("competition fixture v2 linked match reload failed", { competitionId, error: matchesResult.error });
     return { ...inspected, error: matchesResult.error, ok: false };
   }
+  const targetMatchIds = new Set(matchesResult.links.filter((link) => link.roundIndex === roundIndex).map((link) => link.matchId));
+  inspected.linkedNodes = matchesResult.links.filter((link) => link.roundIndex === roundIndex);
   inspected.matches = matchesResult.matches;
+  inspected.roundMatches = matchesResult.matches.filter((match) => targetMatchIds.has(match.id));
 
   revalidatePath(`/admin/competitions/${competitionId}`);
   return inspected;
@@ -927,26 +938,27 @@ function validScore(value: number | null) {
 async function loadKnockoutMatchesForClient(supabase: SupabaseClient, competitionId: string) {
   const nodesResult = await supabase
     .from("competition_bracket_nodes")
-    .select("linked_match_id")
+    .select("id, linked_match_id, round_index")
     .eq("competition_id", competitionId)
     .not("linked_match_id", "is", null);
   if (nodesResult.error) {
     console.error("competition knockout v2 node lookup failed", nodesResult.error);
-    return { error: "Could not load knockout matches.", matches: [] as CompetitionKnockoutMatchV2[] };
+    return { error: "Could not load knockout matches.", links: [] as CompetitionKnockoutMatchLinkV2[], matches: [] as CompetitionKnockoutMatchV2[] };
   }
-  const matchIds = (nodesResult.data ?? [])
-    .map((node) => node.linked_match_id)
-    .filter((matchId): matchId is string => typeof matchId === "string");
-  if (!matchIds.length) return { error: "", matches: [] as CompetitionKnockoutMatchV2[] };
+  const links = (nodesResult.data ?? []).flatMap((node) => typeof node.id === "string" && typeof node.linked_match_id === "string" && typeof node.round_index === "number"
+    ? [{ matchId: node.linked_match_id, nodeId: node.id, roundIndex: node.round_index }]
+    : []);
+  const matchIds = links.map((link) => link.matchId);
+  if (!matchIds.length) return { error: "", links, matches: [] as CompetitionKnockoutMatchV2[] };
   const matchesResult = await supabase
     .from("matches")
     .select("id, match_date, home_team_id, away_team_id, home_score, away_score, penalty_home_score, penalty_away_score, manual_winner_team_id, winner_team_id, venue, status")
     .in("id", matchIds);
   if (matchesResult.error) {
     console.error("competition knockout v2 match lookup failed", matchesResult.error);
-    return { error: "Could not load knockout matches.", matches: [] as CompetitionKnockoutMatchV2[] };
+    return { error: "Could not load knockout matches.", links, matches: [] as CompetitionKnockoutMatchV2[] };
   }
-  return { error: "", matches: (matchesResult.data ?? []) as CompetitionKnockoutMatchV2[] };
+  return { error: "", links, matches: (matchesResult.data ?? []) as CompetitionKnockoutMatchV2[] };
 }
 
 export async function saveCompetitionKnockoutMatchV2(payload: {

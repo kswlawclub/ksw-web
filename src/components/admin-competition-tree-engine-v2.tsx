@@ -269,6 +269,7 @@ export function AdminCompetitionTreeEngineV2({
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
   const [knockoutMatches, setKnockoutMatches] = useState(initialMatches);
+  const [localNodeLinks, setLocalNodeLinks] = useState<Record<string, string>>({});
   const [activeCardId, setActiveCardId] = useState("");
   const qualifiedSources = useMemo<KswQualificationSource[]>(() => {
     const groupsById = new Map(groupNames.map((group) => [group.id, group.name]));
@@ -288,10 +289,19 @@ export function AdminCompetitionTreeEngineV2({
   const summary = generatedSummary ?? initialSummary;
   const status = currentWorkflow?.status ?? "draft";
   const teamsById = useMemo(() => new Map(teams.map((team) => [team.id, team])), [teams]);
+  const visibleKnockoutMatches = useMemo(() => {
+    const matchesById = new Map(initialMatches.map((match) => [match.id, match]));
+    knockoutMatches.forEach((match) => matchesById.set(match.id, match));
+    return Array.from(matchesById.values());
+  }, [initialMatches, knockoutMatches]);
+  const effectiveNodes = useMemo(
+    () => nodes.map((node) => localNodeLinks[node.id] ? { ...node, linkedMatchId: localNodeLinks[node.id] } : node),
+    [localNodeLinks, nodes],
+  );
   const knockoutRounds = useMemo<KnockoutRoundView[]>(() => {
-    const matchesById = new Map(knockoutMatches.map((match) => [match.id, match]));
+    const matchesById = new Map(visibleKnockoutMatches.map((match) => [match.id, match]));
     const grouped = new Map<number, CompetitionTreeNode[]>();
-    nodes.forEach((node) => grouped.set(node.roundIndex, [...(grouped.get(node.roundIndex) ?? []), node]));
+    effectiveNodes.forEach((node) => grouped.set(node.roundIndex, [...(grouped.get(node.roundIndex) ?? []), node]));
     return Array.from(grouped.entries())
       .sort(([roundA], [roundB]) => roundA - roundB)
       .map(([roundIndex, roundNodes]) => {
@@ -308,17 +318,17 @@ export function AdminCompetitionTreeEngineV2({
           roundIndex,
         };
       });
-  }, [knockoutMatches, nodes]);
+  }, [effectiveNodes, visibleKnockoutMatches]);
   const currentRoundIndex = knockoutRounds.find((round) => !round.complete)?.roundIndex ?? null;
   const currentRound = knockoutRounds.find((round) => round.roundIndex === currentRoundIndex);
   const statusLabel = status === "fixtures_created" && currentRound
     ? { en: "Current round", th: currentRound.allMatchesReady ? `กำลังแข่งขัน${currentRound.label}` : `พร้อมสร้างโปรแกรม${currentRound.label}` }
     : competitionEngineV2StatusLabel(status);
   const champion = useMemo(() => {
-    const finalNode = [...nodes].sort((a, b) => b.roundIndex - a.roundIndex || b.matchOrder - a.matchOrder)[0];
-    const finalMatch = finalNode?.linkedMatchId ? knockoutMatches.find((match) => match.id === finalNode.linkedMatchId) : undefined;
+    const finalNode = [...effectiveNodes].sort((a, b) => b.roundIndex - a.roundIndex || b.matchOrder - a.matchOrder)[0];
+    const finalMatch = finalNode?.linkedMatchId ? visibleKnockoutMatches.find((match) => match.id === finalNode.linkedMatchId) : undefined;
     return finalMatch?.status === "finished" && finalMatch.winner_team_id ? teamsById.get(finalMatch.winner_team_id) : undefined;
-  }, [knockoutMatches, nodes, teamsById]);
+  }, [effectiveNodes, teamsById, visibleKnockoutMatches]);
   const previewMatches = useMemo(() => {
     if (!configReady || !bracketCapacity || !draftSources.length) return [];
     try {
@@ -424,7 +434,15 @@ export function AdminCompetitionTreeEngineV2({
         setError(result.error ?? result.errors[0] ?? "Could not create knockout fixtures.");
         return;
       }
-      if (result.matches) setKnockoutMatches(result.matches);
+      if (!result.matches || !result.roundMatches || !result.linkedNodes || result.roundMatches.length !== result.linkedNodes.length) {
+        setError("สร้างโปรแกรมแล้ว แต่ไม่สามารถโหลดคู่แข่งขันของรอบนี้ได้");
+        return;
+      }
+      setKnockoutMatches(result.matches);
+      setLocalNodeLinks((current) => ({
+        ...current,
+        ...Object.fromEntries(result.linkedNodes!.map((link) => [link.nodeId, link.matchId])),
+      }));
       setCurrentWorkflow((current) => current ? { ...current, hasLinkedMatches: result.linkedCount > 0, status: result.status ?? current.status } : current);
       setMessage(result.createdCount ? `สร้างโปรแกรม${roundLabel} ${result.createdCount} คู่แล้ว` : `โปรแกรม${roundLabel} ถูกสร้างไว้แล้ว`);
       router.refresh();
