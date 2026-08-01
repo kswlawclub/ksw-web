@@ -168,6 +168,11 @@ function CupQualificationPanel({ competitionId, config, groups, matches, teams }
   const approvedAt = config?.qualificationApprovedAt
     ? new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(new Date(config.qualificationApprovedAt))
     : null;
+  const orderedGroups = useMemo(
+    () => [...groups].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name)),
+    [groups],
+  );
+  const bestRanked = result.preview.filter((entry) => entry.type === "best_ranked");
 
   function save() {
     startTransition(async () => {
@@ -222,8 +227,34 @@ function CupQualificationPanel({ competitionId, config, groups, matches, teams }
         </div>
 
         {result.unevenGroups ? <p className="mt-3 rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] px-3 py-2 text-sm font-bold text-[#8a6418]">ขนาดกลุ่มไม่เท่ากัน จึงใช้คะแนนต่อเกมก่อนผลต่างประตูต่อเกม</p> : null}
-        <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {result.preview.length ? result.preview.map((entry) => <div className="min-w-0 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-black text-[#061426]" key={`${entry.type}-${entry.bestOrder ?? entry.groupId}-${entry.teamId}`}><span className="mb-1 block text-xs font-black text-slate-500">{entry.label}{entry.temporary ? " · อันดับชั่วคราว" : ""}</span><span className="break-words">{entry.teamName}</span></div>) : <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-600 sm:col-span-2">ยังไม่มีทีมที่ยืนยันได้ รอให้แต่ละกลุ่มแข่งขันครบก่อน</p>}
+        <div className="mt-5 grid gap-4">
+          {orderedGroups.map((group) => {
+            const entries = result.preview.filter((entry) => entry.type === "group_rank" && entry.groupId === group.id);
+            const complete = result.groupComplete.get(group.id) === true;
+            return (
+              <section className="min-w-0 rounded-md border border-slate-200 bg-slate-50/60 p-3" key={group.id}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-base font-black text-[#061426]">{group.label || group.name}</h3>
+                  <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-black ${complete ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-[#d8ad45]/40 bg-[#fff7e6] text-[#8a6418]"}`}><span aria-hidden="true">●</span>{complete ? "แข่งครบแล้ว" : "รอผลการแข่งขัน"}</span>
+                </div>
+                {entries.length ? <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-2">{entries.map((entry) => {
+                  const rankStyle = entry.rank === 1
+                    ? "border-l-[#d8ad45] bg-white"
+                    : entry.rank === 2
+                      ? "border-l-slate-300 bg-white"
+                      : "border-l-slate-200 bg-white";
+                  const badgeStyle = entry.rank === 1
+                    ? "border-[#d8ad45]/40 bg-[#fff7e6] text-[#8a6418]"
+                    : entry.rank === 2
+                      ? "border-slate-200 bg-slate-100 text-slate-700"
+                      : "border-slate-200 bg-slate-50 text-slate-700";
+                  return <article className={`min-w-0 border border-slate-200 border-l-4 px-3 py-3 ${rankStyle}`} key={`${entry.label}-${entry.teamId}`}><div className="flex min-w-0 items-start justify-between gap-3"><div className="min-w-0"><p className="break-words text-sm font-black text-[#061426]">{entry.teamName}</p><p className="mt-1 text-xs font-bold text-slate-500">อันดับ {entry.rank}</p></div><span className={`shrink-0 rounded-full border px-2 py-1 text-xs font-black ${badgeStyle}`}>{entry.label}</span></div></article>;
+                })}</div> : <p className="mt-3 text-sm font-semibold text-slate-600">{complete ? "ยังไม่มีทีมผ่านเข้ารอบจากกลุ่มนี้" : "รอผลการแข่งขันก่อนยืนยันทีมผ่านเข้ารอบ"}</p>}
+              </section>
+            );
+          })}
+          {bestRanked.length ? <section className="min-w-0 rounded-md border border-blue-200 bg-blue-50/40 p-3"><h3 className="text-base font-black text-[#061426]">ทีมอันดับเพิ่มเติมที่ดีที่สุด</h3><div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-2">{bestRanked.map((entry) => <article className="min-w-0 border border-blue-200 border-l-4 border-l-blue-400 bg-white px-3 py-3" key={`${entry.bestOrder}-${entry.teamId}`}><div className="flex min-w-0 items-start justify-between gap-3"><div className="min-w-0"><p className="break-words text-sm font-black text-[#061426]">{entry.teamName}</p><p className="mt-1 text-xs font-bold text-slate-500">อันดับ {entry.rank} ที่ดีที่สุด{entry.temporary ? " · อันดับชั่วคราว" : ""}</p></div><span className="shrink-0 rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-black text-blue-800">#{entry.bestOrder}</span></div></article>)}</div></section> : null}
+          {!result.preview.length && !orderedGroups.length ? <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-600">ยังไม่มีข้อมูลกลุ่มสำหรับคำนวณทีมผ่านเข้ารอบ</p> : null}
         </div>
 
         <div className="mt-5 flex flex-wrap gap-2">
