@@ -934,7 +934,6 @@ export async function saveCompetitionKnockoutMatchV2(payload: {
   awayScore: number | null;
   competitionId: string;
   homeScore: number | null;
-  manualWinnerTeamId: string | null;
   matchDate: string | null;
   matchId: string;
   penaltyAwayScore: number | null;
@@ -979,12 +978,12 @@ export async function saveCompetitionKnockoutMatchV2(payload: {
     }
     if (payload.homeScore !== payload.awayScore) {
       winnerTeamId = payload.homeScore > payload.awayScore ? matchResult.data.home_team_id : matchResult.data.away_team_id;
-    } else if (payload.penaltyHomeScore !== null && payload.penaltyAwayScore !== null && payload.penaltyHomeScore !== payload.penaltyAwayScore) {
-      winnerTeamId = payload.penaltyHomeScore > payload.penaltyAwayScore ? matchResult.data.home_team_id : matchResult.data.away_team_id;
-    } else if (payload.manualWinnerTeamId === matchResult.data.home_team_id || payload.manualWinnerTeamId === matchResult.data.away_team_id) {
-      winnerTeamId = payload.manualWinnerTeamId;
+    } else if (payload.penaltyHomeScore === null || payload.penaltyAwayScore === null) {
+      return { error: "เสมอในเวลาปกติ กรุณากรอกผลการดวลจุดโทษ", ok: false };
+    } else if (payload.penaltyHomeScore === payload.penaltyAwayScore) {
+      return { error: "ผลการดวลจุดโทษต้องไม่เสมอกัน", ok: false };
     } else {
-      return { error: "ผลเสมอต้องระบุผลจุดโทษหรือคำตัดสินพิเศษ", ok: false };
+      winnerTeamId = payload.penaltyHomeScore > payload.penaltyAwayScore ? matchResult.data.home_team_id : matchResult.data.away_team_id;
     }
   }
 
@@ -993,7 +992,7 @@ export async function saveCompetitionKnockoutMatchV2(payload: {
     .update({
       away_score: payload.awayScore,
       home_score: payload.homeScore,
-      manual_winner_team_id: payload.status === "finished" && payload.homeScore === payload.awayScore ? payload.manualWinnerTeamId : null,
+      manual_winner_team_id: null,
       match_date: payload.matchDate,
       penalty_away_score: payload.status === "finished" && payload.homeScore === payload.awayScore ? payload.penaltyAwayScore : null,
       penalty_home_score: payload.status === "finished" && payload.homeScore === payload.awayScore ? payload.penaltyHomeScore : null,

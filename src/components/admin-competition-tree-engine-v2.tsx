@@ -40,7 +40,6 @@ type AdminCompetitionTreeEngineV2Props = {
 type ResultForm = {
   awayScore: string;
   homeScore: string;
-  manualWinnerTeamId: string;
   matchDate: string;
   penaltyAwayScore: string;
   penaltyHomeScore: string;
@@ -61,7 +60,6 @@ function formFromMatch(match: CompetitionKnockoutMatchV2): ResultForm {
   return {
     awayScore: match.away_score === null ? "" : String(match.away_score),
     homeScore: match.home_score === null ? "" : String(match.home_score),
-    manualWinnerTeamId: match.manual_winner_team_id ?? "",
     matchDate: dateValue(match.match_date),
     penaltyAwayScore: match.penalty_away_score === null ? "" : String(match.penalty_away_score),
     penaltyHomeScore: match.penalty_home_score === null ? "" : String(match.penalty_home_score),
@@ -108,7 +106,8 @@ function KnockoutMatchCard({
   const [editing, setEditing] = useState(false);
   const home = teamsById.get(match.home_team_id);
   const away = teamsById.get(match.away_team_id);
-  const isDraw = draft.status === "finished" && draft.homeScore !== "" && draft.homeScore === draft.awayScore;
+  const normalScoreDraw = draft.homeScore !== "" && draft.awayScore !== "" && score(draft.homeScore) === score(draft.awayScore);
+  const showPenaltyInputs = normalScoreDraw || draft.penaltyHomeScore !== "" || draft.penaltyAwayScore !== "";
   const hasScore = match.home_score !== null && match.away_score !== null;
   const compactDraw = hasScore && match.home_score === match.away_score;
   const winner = match.winner_team_id ? teamsById.get(match.winner_team_id) : undefined;
@@ -129,9 +128,22 @@ function KnockoutMatchCard({
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (draft.status === "finished" && normalScoreDraw) {
+      if (draft.penaltyHomeScore === "" || draft.penaltyAwayScore === "") {
+        setError("เสมอในเวลาปกติ กรุณากรอกผลการดวลจุดโทษ");
+        return;
+      }
+      if (score(draft.penaltyHomeScore) === score(draft.penaltyAwayScore)) {
+        setError("ผลการดวลจุดโทษต้องไม่เสมอกัน");
+        return;
+      }
+    }
     setSaving(true);
     setError("");
-    const result = await onSave(match, draft);
+    const normalizedDraft = normalScoreDraw
+      ? draft
+      : { ...draft, penaltyAwayScore: "", penaltyHomeScore: "" };
+    const result = await onSave(match, normalizedDraft);
     setSaving(false);
     if (!result.ok) {
       setError(result.error ?? "ไม่สามารถบันทึกผลการแข่งขันได้");
@@ -145,9 +157,8 @@ function KnockoutMatchCard({
   if (match.status === "finished" && !editing) {
     const date = compactMatchDate(match.match_date);
     const penaltyResult = match.penalty_home_score !== null && match.penalty_away_score !== null
-      ? `จุดโทษ ${match.penalty_home_score}-${match.penalty_away_score}`
+      ? `ชนะจุดโทษ ${match.penalty_home_score}-${match.penalty_away_score}`
       : null;
-    const specialResult = compactDraw && !penaltyResult && winner ? `ผลตัดสินพิเศษ: ${winner.name}` : null;
     return (
       <article className="min-w-0 rounded-md border border-emerald-200 bg-emerald-50/40 px-2.5 py-2" id={`knockout-match-${match.id}`}>
         <div className="flex min-w-0 items-center gap-2">
@@ -159,7 +170,7 @@ function KnockoutMatchCard({
           </div>
           <button aria-label="แก้ไขผลการแข่งขัน" className="min-h-8 shrink-0 rounded border border-emerald-200 bg-white px-2 py-1 text-xs font-black text-emerald-800" onClick={() => { setSaved(false); setEditing(true); onEditingChange?.(true); }} type="button">แก้ไข</button>
         </div>
-        <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] font-bold leading-4 text-slate-600"><span>{compactDraw ? "เสมอ" : winner ? `ผู้ชนะ: ${winner.name}` : "รอผลสกอร์"}</span>{date ? <span>{date}</span> : null}{match.venue ? <span>{match.venue}</span> : null}{penaltyResult || specialResult ? <span className="text-[#8a6418]">{penaltyResult ?? specialResult}</span> : null}{saved ? <span className="text-emerald-800">บันทึกแล้ว</span> : null}</div>
+        <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] font-bold leading-4 text-slate-600"><span>{winner ? `ผู้ชนะ: ${winner.name}` : compactDraw ? "เสมอ" : "รอผลสกอร์"}</span>{date ? <span>{date}</span> : null}{match.venue ? <span>{match.venue}</span> : null}{penaltyResult ? <span className="text-[#8a6418]">{penaltyResult}</span> : null}{saved ? <span className="text-emerald-800">บันทึกแล้ว</span> : null}</div>
       </article>
     );
   }
@@ -181,7 +192,7 @@ function KnockoutMatchCard({
         <label className="grid min-w-0 gap-1 text-xs font-black">สถานะ<select className="min-h-11 w-full rounded-md border border-slate-200 px-3" onChange={(event) => updateDraft({ status: event.target.value as ResultForm["status"] })} value={draft.status}><option value="scheduled">รอแข่งขัน</option><option value="finished">จบการแข่งขัน</option></select></label>
       </div>
       {(draft.homeScore !== "" || draft.awayScore !== "") && draft.status !== "finished" ? <p className="mt-3 rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] px-3 py-2 text-xs font-bold text-[#8a6418]">มีสกอร์แล้ว แต่ยังไม่ยืนยันจบการแข่งขัน</p> : null}
-      {isDraw ? <div className="mt-3 grid gap-3 rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] p-3 sm:grid-cols-2"><label className="grid gap-1 text-xs font-black">จุดโทษ ทีมเหย้า<input className="min-h-11 rounded-md border border-slate-200 px-3" max="999" min="0" onChange={(event) => updateDraft({ penaltyHomeScore: event.target.value })} step="1" type="number" value={draft.penaltyHomeScore} /></label><label className="grid gap-1 text-xs font-black">จุดโทษ ทีมเยือน<input className="min-h-11 rounded-md border border-slate-200 px-3" max="999" min="0" onChange={(event) => updateDraft({ penaltyAwayScore: event.target.value })} step="1" type="number" value={draft.penaltyAwayScore} /></label><details className="sm:col-span-2"><summary className="cursor-pointer text-xs font-black">คำตัดสินพิเศษ</summary><select className="mt-2 min-h-11 w-full rounded-md border border-slate-200 px-3" onChange={(event) => updateDraft({ manualWinnerTeamId: event.target.value })} value={draft.manualWinnerTeamId}><option value="">เลือกเมื่อจำเป็น</option><option value={match.home_team_id}>{home?.name ?? "ทีมเหย้า"}</option><option value={match.away_team_id}>{away?.name ?? "ทีมเยือน"}</option></select></details></div> : null}
+      {showPenaltyInputs ? <div className="mt-3 grid gap-3 rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] p-3 sm:grid-cols-2"><p className="text-xs font-bold text-[#8a6418] sm:col-span-2">เสมอในเวลาปกติ กรุณากรอกผลการดวลจุดโทษ</p><label className="grid gap-1 text-xs font-black">จุดโทษ ทีมเหย้า<input className="min-h-11 rounded-md border border-slate-200 px-3" max="999" min="0" onChange={(event) => updateDraft({ penaltyHomeScore: event.target.value })} step="1" type="number" value={draft.penaltyHomeScore} /></label><label className="grid gap-1 text-xs font-black">จุดโทษ ทีมเยือน<input className="min-h-11 rounded-md border border-slate-200 px-3" max="999" min="0" onChange={(event) => updateDraft({ penaltyAwayScore: event.target.value })} step="1" type="number" value={draft.penaltyAwayScore} /></label></div> : null}
       {error ? <p className="mt-3 rounded-md border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-3 py-2 text-sm font-bold text-[#9b1c1f]">{error}</p> : null}
       {saved ? <p className="mt-3 rounded-md border border-emerald-700/20 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">{draft.status === "finished" ? "บันทึกแล้ว ผู้ชนะจะเข้าสู่รอบถัดไปเมื่อคู่แข่งขันพร้อม" : "บันทึกแล้ว"}</p> : null}
       <div className="mt-4 flex flex-wrap justify-end gap-2">{match.status === "finished" ? <button className="min-h-11 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-black text-[#061426]" disabled={saving} onClick={cancelEdit} type="button">ยกเลิก</button> : null}<button className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={saving} type="submit">{saving ? "กำลังบันทึก..." : saved ? "บันทึกแล้ว" : "บันทึกแมตช์"}</button></div>
@@ -419,7 +430,6 @@ export function AdminCompetitionTreeEngineV2({
       awayScore: score(form.awayScore),
       competitionId,
       homeScore: score(form.homeScore),
-      manualWinnerTeamId: form.manualWinnerTeamId || null,
       matchDate: form.matchDate ? new Date(`${form.matchDate}:00+07:00`).toISOString() : null,
       matchId: match.id,
       penaltyAwayScore: score(form.penaltyAwayScore),
