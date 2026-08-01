@@ -69,6 +69,13 @@ function score(value: string) {
   return value.trim() === "" ? null : Number(value);
 }
 
+function compactMatchDate(value: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(date);
+}
+
 function Stat({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="min-w-0 rounded-md border border-slate-200 bg-slate-50 px-3 py-3">
@@ -91,9 +98,20 @@ function KnockoutMatchCard({
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
   const home = teamsById.get(match.home_team_id);
   const away = teamsById.get(match.away_team_id);
   const isDraw = draft.status === "finished" && draft.homeScore !== "" && draft.homeScore === draft.awayScore;
+  const hasScore = match.home_score !== null && match.away_score !== null;
+  const compactDraw = hasScore && match.home_score === match.away_score;
+  const winner = match.winner_team_id ? teamsById.get(match.winner_team_id) : undefined;
+
+  function cancelEdit() {
+    setDraft(formFromMatch(match));
+    setError("");
+    setSaved(false);
+    setEditing(false);
+  }
 
   function updateDraft(patch: Partial<ResultForm>) {
     setError("");
@@ -112,6 +130,31 @@ function KnockoutMatchCard({
       return;
     }
     setSaved(true);
+    setEditing(false);
+  }
+
+  if (match.status === "finished" && !editing) {
+    const date = compactMatchDate(match.match_date);
+    const penaltyResult = match.penalty_home_score !== null && match.penalty_away_score !== null
+      ? `จุดโทษ ${match.penalty_home_score}-${match.penalty_away_score}`
+      : null;
+    const specialResult = compactDraw && !penaltyResult && winner ? `ผลตัดสินพิเศษ: ${winner.name}` : null;
+    return (
+      <article className="min-w-0 rounded-lg border border-emerald-200 bg-emerald-50/40 px-3 py-3" id={`knockout-match-${match.id}`}>
+        <div className="flex items-center justify-between gap-3">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-800"><span aria-hidden="true">✓</span>จบการแข่งขัน</span>
+          <button className="min-h-10 rounded-md border border-emerald-200 bg-white px-3 py-1.5 text-sm font-black text-emerald-800" onClick={() => { setSaved(false); setEditing(true); }} type="button">แก้ไขผล</button>
+        </div>
+        <div className="mt-3 grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-4">
+          <div className={`flex min-w-0 items-center gap-2 ${winner?.id === home?.id ? "font-black text-[#061426]" : "text-slate-700"}`}><TeamLogo className="!size-8 shrink-0 bg-[#061426]" initials={(home?.short_name || home?.name || "ทีม").slice(0, 3)} logoUrl={home?.logo_url ?? ""} teamName={home?.name ?? "ทีมเหย้า"} /><span className="min-w-0 break-words text-sm">{home?.name ?? "ทีมเหย้า"}</span></div>
+          <p className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-center text-xl font-black tabular-nums text-[#061426]">{hasScore ? `${match.home_score} - ${match.away_score}` : "-"}</p>
+          <div className={`flex min-w-0 items-center justify-end gap-2 text-right ${winner?.id === away?.id ? "font-black text-[#061426]" : "text-slate-700"}`}><span className="min-w-0 break-words text-sm">{away?.name ?? "ทีมเยือน"}</span><TeamLogo className="!size-8 shrink-0 bg-[#061426]" initials={(away?.short_name || away?.name || "ทีม").slice(0, 3)} logoUrl={away?.logo_url ?? ""} teamName={away?.name ?? "ทีมเยือน"} /></div>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-bold text-slate-600"><span>{compactDraw ? "เสมอ" : winner ? `ผู้ชนะ: ${winner.name}` : "รอผลสกอร์"}</span>{date ? <span>{date}</span> : null}{match.venue ? <span>{match.venue}</span> : null}</div>
+        {penaltyResult || specialResult ? <p className="mt-1 text-xs font-bold text-[#8a6418]">{penaltyResult ?? specialResult}</p> : null}
+        {saved ? <p className="mt-2 text-xs font-bold text-emerald-800">บันทึกแล้ว</p> : null}
+      </article>
+    );
   }
 
   return (
@@ -134,7 +177,7 @@ function KnockoutMatchCard({
       {isDraw ? <div className="mt-3 grid gap-3 rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] p-3 sm:grid-cols-2"><label className="grid gap-1 text-xs font-black">จุดโทษ ทีมเหย้า<input className="min-h-11 rounded-md border border-slate-200 px-3" max="999" min="0" onChange={(event) => updateDraft({ penaltyHomeScore: event.target.value })} step="1" type="number" value={draft.penaltyHomeScore} /></label><label className="grid gap-1 text-xs font-black">จุดโทษ ทีมเยือน<input className="min-h-11 rounded-md border border-slate-200 px-3" max="999" min="0" onChange={(event) => updateDraft({ penaltyAwayScore: event.target.value })} step="1" type="number" value={draft.penaltyAwayScore} /></label><details className="sm:col-span-2"><summary className="cursor-pointer text-xs font-black">คำตัดสินพิเศษ</summary><select className="mt-2 min-h-11 w-full rounded-md border border-slate-200 px-3" onChange={(event) => updateDraft({ manualWinnerTeamId: event.target.value })} value={draft.manualWinnerTeamId}><option value="">เลือกเมื่อจำเป็น</option><option value={match.home_team_id}>{home?.name ?? "ทีมเหย้า"}</option><option value={match.away_team_id}>{away?.name ?? "ทีมเยือน"}</option></select></details></div> : null}
       {error ? <p className="mt-3 rounded-md border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-3 py-2 text-sm font-bold text-[#9b1c1f]">{error}</p> : null}
       {saved ? <p className="mt-3 rounded-md border border-emerald-700/20 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">{draft.status === "finished" ? "บันทึกแล้ว ผู้ชนะจะเข้าสู่รอบถัดไปเมื่อคู่แข่งขันพร้อม" : "บันทึกแล้ว"}</p> : null}
-      <div className="mt-4 flex justify-end"><button className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={saving} type="submit">{saving ? "กำลังบันทึก..." : saved ? "บันทึกแล้ว" : "บันทึกแมตช์"}</button></div>
+      <div className="mt-4 flex flex-wrap justify-end gap-2">{match.status === "finished" ? <button className="min-h-11 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-black text-[#061426]" disabled={saving} onClick={cancelEdit} type="button">ยกเลิก</button> : null}<button className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={saving} type="submit">{saving ? "กำลังบันทึก..." : saved ? "บันทึกแล้ว" : "บันทึกแมตช์"}</button></div>
     </form>
   );
 }

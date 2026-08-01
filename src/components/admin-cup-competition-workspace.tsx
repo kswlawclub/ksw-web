@@ -39,6 +39,13 @@ function formFromMatch(match: AdminCompetitionMatch): MatchForm {
 
 function number(value: string) { return value.trim() === "" ? null : Number(value); }
 
+function compactMatchDate(value: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(date);
+}
+
 function CupGroupMatchCard({
   away,
   home,
@@ -54,6 +61,20 @@ function CupGroupMatchCard({
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const isFinished = match.status === "finished";
+  const hasScore = match.home_score !== null && match.away_score !== null;
+  const isDraw = hasScore && match.home_score === match.away_score;
+  const winner = !isDraw && hasScore
+    ? match.home_score! > match.away_score! ? home : away
+    : undefined;
+
+  function cancelEdit() {
+    setDraft(formFromMatch(match));
+    setError("");
+    setSaved(false);
+    setEditing(false);
+  }
 
   function updateDraft(patch: Partial<MatchForm>) {
     setError("");
@@ -72,6 +93,26 @@ function CupGroupMatchCard({
       return;
     }
     setSaved(true);
+    setEditing(false);
+  }
+
+  if (isFinished && !editing) {
+    const date = compactMatchDate(match.match_date);
+    return (
+      <article className="min-w-0 rounded-lg border border-emerald-200 bg-emerald-50/40 px-3 py-3" id={`group-match-${match.id}`}>
+        <div className="flex items-center justify-between gap-3">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-800"><span aria-hidden="true">✓</span>จบการแข่งขัน</span>
+          <button className="min-h-10 rounded-md border border-emerald-200 bg-white px-3 py-1.5 text-sm font-black text-emerald-800" onClick={() => { setSaved(false); setEditing(true); }} type="button">แก้ไขผล</button>
+        </div>
+        <div className="mt-3 grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-4">
+          <div className={`flex min-w-0 items-center gap-2 ${winner?.id === home?.id ? "font-black text-[#061426]" : "text-slate-700"}`}><TeamLogo className="!size-8 shrink-0 bg-[#061426]" initials={(home?.short_name || home?.name || "ทีม").slice(0, 3)} logoUrl={home?.logo_url ?? ""} teamName={home?.name ?? "ทีมเหย้า"} /><span className="min-w-0 break-words text-sm">{home?.name ?? "ทีมเหย้า"}</span></div>
+          <p className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-center text-xl font-black tabular-nums text-[#061426]">{hasScore ? `${match.home_score} - ${match.away_score}` : "-"}</p>
+          <div className={`flex min-w-0 items-center justify-end gap-2 text-right ${winner?.id === away?.id ? "font-black text-[#061426]" : "text-slate-700"}`}><span className="min-w-0 break-words text-sm">{away?.name ?? "ทีมเยือน"}</span><TeamLogo className="!size-8 shrink-0 bg-[#061426]" initials={(away?.short_name || away?.name || "ทีม").slice(0, 3)} logoUrl={away?.logo_url ?? ""} teamName={away?.name ?? "ทีมเยือน"} /></div>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-bold text-slate-600"><span>{isDraw ? "เสมอ" : winner ? `ผู้ชนะ: ${winner.name}` : "รอผลสกอร์"}</span>{date ? <span>{date}</span> : null}{match.venue ? <span>{match.venue}</span> : null}</div>
+        {saved ? <p className="mt-2 text-xs font-bold text-emerald-800">บันทึกแล้ว</p> : null}
+      </article>
+    );
   }
 
   return (
@@ -81,7 +122,7 @@ function CupGroupMatchCard({
       <div className="mt-3 grid gap-3 sm:grid-cols-3"><label className="grid min-w-0 gap-1 text-xs font-black">วันและเวลา<input className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3" onChange={(event) => updateDraft({ matchDate: event.target.value })} type="datetime-local" value={draft.matchDate} /></label><label className="grid min-w-0 gap-1 text-xs font-black">สนาม<input className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3" onChange={(event) => updateDraft({ venue: event.target.value })} value={draft.venue} /></label><label className="grid min-w-0 gap-1 text-xs font-black">สถานะ<select className="min-h-11 w-full rounded-md border border-slate-200 px-3" onChange={(event) => updateDraft({ status: event.target.value as MatchForm["status"] })} value={draft.status}><option value="scheduled">รอแข่งขัน</option><option value="finished">จบการแข่งขัน</option></select></label></div>
       {error ? <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-800">{error}</p> : null}
       {saved ? <p className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">{draft.status === "finished" ? "บันทึกแล้ว ตารางคะแนนและทีมผ่านเข้ารอบอัปเดตทันที" : "บันทึกแล้ว"}</p> : null}
-      <div className="mt-3 flex justify-end"><button className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={saving} type="submit">{saving ? "กำลังบันทึก..." : saved ? "บันทึกแล้ว" : "บันทึกแมตช์"}</button></div>
+      <div className="mt-3 flex flex-wrap justify-end gap-2">{isFinished ? <button className="min-h-11 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-black text-[#061426]" disabled={saving} onClick={cancelEdit} type="button">ยกเลิก</button> : null}<button className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={saving} type="submit">{saving ? "กำลังบันทึก..." : saved ? "บันทึกแล้ว" : "บันทึกแมตช์"}</button></div>
     </form>
   );
 }
