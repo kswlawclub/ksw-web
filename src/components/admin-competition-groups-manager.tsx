@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, type ReactNode, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TeamLogo } from "@/components/team-logo";
 import {
@@ -98,6 +98,7 @@ export function AdminCompetitionGroupsManager({
   groups,
   matches,
   onMatchesChange,
+  renderGroupProgram,
   schemaReady,
   teams,
 }: {
@@ -105,6 +106,7 @@ export function AdminCompetitionGroupsManager({
   groups: AdminCompetitionGroup[];
   matches: CupGroupRow[];
   onMatchesChange?: (matches: CupGroupRow[]) => void;
+  renderGroupProgram?: (group: AdminCompetitionGroup, teams: AdminCompetitionGroupTeam[]) => ReactNode;
   schemaReady: boolean;
   teams: AdminCompetitionGroupTeam[];
 }) {
@@ -568,14 +570,6 @@ export function AdminCompetitionGroupsManager({
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <button
-                        className="rounded-md border border-[#d8ad45]/45 px-3 py-2 text-xs font-black text-[#061426] hover:bg-[#fff7e6] disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={!schemaReady || fixtureActionGroupId === group.id || groupTeams.length < 2}
-                        onClick={() => void generateFixtures(group)}
-                        type="button"
-                      >
-                        {fixtureActionGroupId === group.id ? "กำลังสร้าง..." : "สร้างโปรแกรมการแข่งขัน"}
-                      </button>
-                      <button
                         className="rounded-md border border-slate-200 px-3 py-2 text-xs font-black hover:border-[#d8ad45]"
                         onClick={() => editGroup(group)}
                         type="button"
@@ -609,7 +603,7 @@ export function AdminCompetitionGroupsManager({
                       Maximum {groupTeams.length} team{groupTeams.length === 1 ? "" : "s"} in this group.
                     </p>
                   </div>
-                  {standings ? <GroupStandingsTable standings={standings} /> : null}
+                  {!renderGroupProgram && standings ? <GroupStandingsTable standings={standings} /> : null}
                   <div className="mt-4 grid gap-2">
                     {groupTeams.length ? (
                       groupTeams.map((team) => <TeamAssignmentRow key={team.competition_team_id} team={team} />)
@@ -618,6 +612,16 @@ export function AdminCompetitionGroupsManager({
                         This group is empty.
                       </p>
                     )}
+                  </div>
+                  <div className="mt-4">
+                    <button
+                      className="min-h-11 rounded-md border border-[#d8ad45]/45 px-3 py-2 text-xs font-black text-[#061426] hover:bg-[#fff7e6] disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={!schemaReady || fixtureActionGroupId === group.id || groupTeams.length < 2}
+                      onClick={() => void generateFixtures(group)}
+                      type="button"
+                    >
+                      {fixtureActionGroupId === group.id ? "กำลังสร้าง..." : "สร้างโปรแกรมการแข่งขัน"}
+                    </button>
                   </div>
                   {groupTeams.length < 2 ? (
                     <p className="mt-3 rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] px-3 py-2 text-xs font-bold text-[#8a6418]">
@@ -661,6 +665,7 @@ export function AdminCompetitionGroupsManager({
                       </div>
                     </div>
                   ) : null}
+                  {renderGroupProgram ? renderGroupProgram(group, groupTeams) : null}
                 </article>
               );
             })
