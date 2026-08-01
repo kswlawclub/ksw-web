@@ -26,7 +26,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 type Row = Record<string, unknown>;
 
 const competitionColumns =
-  "id, name, season, slug, short_description, description, cover_image_url, edition_number, start_date, end_date, location, display_order, competition_type, season_status, is_active, is_featured, is_published, created_at";
+  "id, name, season, slug, short_description, description, cover_image_url, edition_number, start_date, end_date, location, display_order, competition_type, competition_engine_version, season_status, is_active, is_featured, is_published, created_at";
 const matchColumns =
   "id, group_id, competition_stage, fixture_source, match_date, home_team_id, away_team_id, home_score, away_score, penalty_home_score, penalty_away_score, manual_winner_team_id, winner_team_id, venue, status";
 const teamColumns = "id, name, short_name, logo_url, is_ksw";

@@ -7,6 +7,45 @@ import { isCupCompetition, normalizeCompetitionType } from "@/lib/competition-fo
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export type KnockoutSourceType = "bye" | "group_rank" | "manual_team" | "match_winner" | "unassigned";
+export type CompetitionEngineVersion = 1 | 2;
+export type KnockoutEntryMode = "bye" | "custom" | "preliminary";
+export type KnockoutConfigStatus = "active" | "completed" | "draft" | "fixtures_created" | "reviewed";
+export type BracketNodeSourceType = "bye" | "group_rank" | "manual_team" | "node_winner" | "unassigned";
+
+export type CompetitionKnockoutConfigV2 = {
+  bracketCapacity: number | null;
+  competitionId: string;
+  createdAt: string;
+  entrantCount: number | null;
+  entryMode: KnockoutEntryMode;
+  groupStageEnabled: boolean;
+  status: KnockoutConfigStatus;
+  updatedAt: string;
+};
+
+export type CompetitionBracketNodeV2 = {
+  awaySourceGroupId: string | null;
+  awaySourceNodeId: string | null;
+  awaySourceRank: number | null;
+  awaySourceTeamId: string | null;
+  awaySourceType: BracketNodeSourceType;
+  bracketPosition: number;
+  competitionId: string;
+  createdAt: string;
+  homeSourceGroupId: string | null;
+  homeSourceNodeId: string | null;
+  homeSourceRank: number | null;
+  homeSourceTeamId: string | null;
+  homeSourceType: BracketNodeSourceType;
+  id: string;
+  isLocked: boolean;
+  isManualEdited: boolean;
+  linkedMatchId: string | null;
+  matchOrder: number;
+  roundIndex: number;
+  roundLabel: string;
+  updatedAt: string;
+};
 
 export type KnockoutSlotSource = {
   groupId?: string;
