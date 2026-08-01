@@ -18,17 +18,21 @@ import {
   competitionEngineV2StatusLabel,
   type CompetitionEngineV2Integrity,
 } from "@/lib/competition-engine-v2-state";
-import type { CompetitionTreeNode, CompetitionTreeSummary } from "@/lib/competition-tree";
+import { buildCompetitionTree, type CompetitionTreeEntryMode, type CompetitionTreeNode, type CompetitionTreeSource, type CompetitionTreeSummary } from "@/lib/competition-tree";
+import { buildKswStandardPairing, kswSourceLabel, type KswQualificationSource } from "@/lib/ksw-knockout-template";
 import { TeamLogo } from "@/components/team-logo";
 
 type AdminCompetitionTreeEngineV2Props = {
   bracketCapacity: number | null;
   competitionId: string;
   configReady: boolean;
+  entryMode: CompetitionTreeEntryMode;
   initialSummary: CompetitionTreeSummary | null;
   initialMatches: CompetitionKnockoutMatchV2[];
   nodes: CompetitionTreeNode[];
   qualificationApproved: boolean;
+  qualificationSnapshot: CompetitionTreeSource[];
+  groupNames: Array<{ id: string; name: string }>;
   teams: Array<{ id: string; logo_url: string | null; name: string; short_name: string | null }>;
   workflow: CompetitionEngineV2Integrity | null;
 };
@@ -215,10 +219,13 @@ export function AdminCompetitionTreeEngineV2({
   bracketCapacity,
   competitionId,
   configReady,
+  entryMode,
   initialMatches,
   initialSummary,
   nodes,
   qualificationApproved,
+  qualificationSnapshot,
+  groupNames,
   teams,
   workflow,
 }: AdminCompetitionTreeEngineV2Props) {
@@ -231,6 +238,20 @@ export function AdminCompetitionTreeEngineV2({
   const [isPending, startTransition] = useTransition();
   const [knockoutMatches, setKnockoutMatches] = useState(initialMatches);
   const [activeCardId, setActiveCardId] = useState("");
+  const qualifiedSources = useMemo<KswQualificationSource[]>(() => {
+    const groupsById = new Map(groupNames.map((group) => [group.id, group.name]));
+    const teamsById = new Map(teams.map((team) => [team.id, team.name]));
+    return qualificationSnapshot.map((source) => ({
+      ...source,
+      label: source.type === "best_ranked"
+        ? `อันดับเพิ่มเติม #${source.bestOrder ?? "?"}`
+        : `${groupsById.get(source.groupId ?? "") ?? "กลุ่ม"}${source.rank ?? "?"}`,
+      teamName: source.teamId ? teamsById.get(source.teamId) : undefined,
+    }));
+  }, [groupNames, qualificationSnapshot, teams]);
+  const defaultPairing = useMemo(() => buildKswStandardPairing(qualifiedSources), [qualifiedSources]);
+  const [draftSources, setDraftSources] = useState<KswQualificationSource[]>(() => defaultPairing.sources);
+  const [editingPairing, setEditingPairing] = useState(false);
   const activeCardRef = useRef("");
   const summary = generatedSummary ?? initialSummary;
   const status = currentWorkflow?.status ?? "draft";
@@ -256,6 +277,23 @@ export function AdminCompetitionTreeEngineV2({
     const finalMatch = finalNode?.linkedMatchId ? knockoutMatches.find((match) => match.id === finalNode.linkedMatchId) : undefined;
     return finalMatch?.status === "finished" && finalMatch.winner_team_id ? teamsById.get(finalMatch.winner_team_id) : undefined;
   }, [knockoutMatches, nodes, teamsById]);
+  const previewMatches = useMemo(() => {
+    if (!configReady || !bracketCapacity || !draftSources.length) return [];
+    try {
+      const preview = buildCompetitionTree({
+        bracketCapacity,
+        competitionId,
+        entrantCount: draftSources.length,
+        entryMode,
+        entrants: draftSources,
+        idFactory: () => crypto.randomUUID(),
+      });
+      const firstRound = Math.min(...preview.nodes.map((node) => node.roundIndex));
+      return preview.nodes.filter((node) => node.roundIndex === firstRound);
+    } catch {
+      return [];
+    }
+  }, [bracketCapacity, competitionId, configReady, draftSources, entryMode]);
 
   useEffect(() => {
     if (!activeCardId) return;
@@ -280,7 +318,7 @@ export function AdminCompetitionTreeEngineV2({
     setError("");
     setMessage("");
     startTransition(async () => {
-      const result = await generateCompetitionTreeV2(competitionId);
+      const result = await generateCompetitionTreeV2(competitionId, draftSources);
       if (!result.ok) {
         setError(result.error ?? "ไม่สามารถสร้างโครงสร้างการแข่งขันได้");
         return;
@@ -290,6 +328,17 @@ export function AdminCompetitionTreeEngineV2({
       setMessage(initialSummary ? "โครงสร้างการแข่งขันถูกต้องและไม่มีการเปลี่ยนแปลง" : "บันทึกโครงสร้างการแข่งขันแล้ว ยังไม่ได้สร้างโปรแกรมแข่งขัน");
       router.refresh();
     });
+  }
+
+  function sourceKey(source: CompetitionTreeSource) {
+    return `${source.type}:${source.teamId ?? ""}:${source.groupId ?? ""}:${source.rank ?? ""}:${source.bestOrder ?? ""}`;
+  }
+
+  function selectSource(currentSourceKey: string, replacementSourceKey: string) {
+    const currentIndex = draftSources.findIndex((source) => sourceKey(source) === currentSourceKey);
+    const replacementIndex = draftSources.findIndex((source) => sourceKey(source) === replacementSourceKey);
+    if (currentIndex < 0 || replacementIndex < 0 || currentIndex === replacementIndex) return;
+    setDraftSources((current) => current.map((source, index) => index === currentIndex ? current[replacementIndex] : index === replacementIndex ? current[currentIndex] : source));
   }
 
   function reviewTree() {
@@ -415,6 +464,23 @@ export function AdminCompetitionTreeEngineV2({
           <p className="mt-4 rounded-md border border-[#8a6418]/25 bg-[#fff7e6] px-3 py-2 text-sm font-bold text-[#8a6418]">{currentWorkflow.warning}</p>
         ) : null}
 
+        {qualificationApproved && !summary && qualifiedSources.length ? (
+          <section className="mt-5 min-w-0 rounded-md border border-[#d8ad45]/40 bg-[#fffdf7] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div><h3 className="font-black text-[#061426]">รูปแบบการจัดสาย: KSW Standard</h3><p className="mt-1 text-sm font-semibold text-slate-600">แชมป์กลุ่มเป็นทีมวาง และไม่พบทีมจากกลุ่มเดียวกันในรอบแรก</p></div>
+              <div className="flex flex-wrap gap-2"><button className="min-h-10 rounded-md border border-[#d8ad45] bg-white px-3 py-2 text-sm font-black text-[#8a6418]" onClick={() => setDraftSources(defaultPairing.sources)} type="button">ใช้การจัดสายอัตโนมัติ</button><button className="min-h-10 rounded-md border border-[#d8ad45] bg-white px-3 py-2 text-sm font-black text-[#8a6418]" onClick={() => setEditingPairing((current) => !current)} type="button">{editingPairing ? "ดูตัวอย่างคู่" : "แก้ไขคู่ก่อนยืนยัน"}</button></div>
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {previewMatches.map((match, index) => (
+                <div className="min-w-0 rounded-md border border-slate-200 bg-white p-3" key={`${match.roundIndex}-${match.matchOrder}`}>
+                  <p className="text-xs font-black text-[#8a6418]">คู่ที่ {index + 1}</p>
+                  {editingPairing ? <div className="mt-2 grid gap-2">{([match.homeSource, match.awaySource] as CompetitionTreeSource[]).map((source, side) => source.type === "bye" ? <p className="rounded border border-slate-200 bg-slate-50 px-2 py-2 text-sm font-bold" key={`${side}-bye`}>Bye</p> : <select aria-label={`${side === 0 ? "ทีมเหย้า" : "ทีมเยือน"}คู่ที่ ${index + 1}`} className="min-h-10 min-w-0 rounded border border-slate-200 px-2 text-sm font-bold" key={side} onChange={(event) => selectSource(sourceKey(source), event.target.value)} value={sourceKey(source)}>{draftSources.map((candidate) => <option key={sourceKey(candidate)} value={sourceKey(candidate)}>{kswSourceLabel(candidate)}{candidate.teamName ? ` - ${candidate.teamName}` : ""}</option>)}</select>)}<span className="-order-1 text-center text-xs font-black text-slate-500">พบ</span></div> : <><p className="mt-2 break-words text-sm font-black text-[#061426]">{kswSourceLabel(match.homeSource)}{match.homeSource.teamId ? ` - ${teamsById.get(match.homeSource.teamId)?.name ?? "รอผล"}` : ""} พบ {match.awaySource.type === "bye" ? "Bye" : `${kswSourceLabel(match.awaySource)}${match.awaySource.teamId ? ` - ${teamsById.get(match.awaySource.teamId)?.name ?? "รอผล"}` : ""}`}</p><p className="mt-1 text-xs font-semibold text-slate-600">จัดตาม KSW Standard</p></>}
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           {canGenerateTree(status) ? (
             <button
@@ -423,7 +489,7 @@ export function AdminCompetitionTreeEngineV2({
               onClick={generateTree}
               type="button"
             >
-              {isPending ? "กำลังสร้าง..." : summary ? "ตรวจสอบโครงสร้างการแข่งขัน" : "สร้างโครงสร้างการแข่งขัน"}
+              {isPending ? "กำลังสร้าง..." : summary ? "ตรวจสอบโครงสร้างการแข่งขัน" : "ยืนยันการจัดสาย"}
             </button>
           ) : null}
           {canReviewTree(status) && currentWorkflow?.hasValidTree ? (

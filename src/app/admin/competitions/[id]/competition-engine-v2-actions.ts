@@ -28,6 +28,7 @@ import {
 import { requireAdminSession } from "@/lib/admin-server-auth";
 import { isCupCompetition, normalizeCompetitionType } from "@/lib/competition-format";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { buildKswStandardPairing } from "@/lib/ksw-knockout-template";
 
 export type CompetitionEngineV2Config = {
   bracketCapacity: number | null;
@@ -41,6 +42,7 @@ export type CompetitionEngineV2Config = {
   qualificationStatus: "pending" | "approved";
   qualificationApprovedAt: string | null;
   qualificationApprovedByLabel: string | null;
+  qualificationSnapshot: CompetitionTreeSource[];
   status: CompetitionEngineV2Status;
 };
 
@@ -273,7 +275,22 @@ export async function getCompetitionEngineV2WorkflowState(competitionId: string)
   return { ok: true, workflow: result.workflow };
 }
 
-export async function generateCompetitionTreeV2(competitionId: string): Promise<CompetitionTreeV2Result> {
+function sourceIdentity(source: CompetitionTreeSource) {
+  return [source.type, source.teamId ?? "", source.groupId ?? "", source.rank ?? "", source.bestOrder ?? ""].join(":");
+}
+
+function hasSameSources(left: CompetitionTreeSource[], right: CompetitionTreeSource[]) {
+  if (left.length !== right.length) return false;
+  const counts = new Map<string, number>();
+  left.forEach((source) => counts.set(sourceIdentity(source), (counts.get(sourceIdentity(source)) ?? 0) + 1));
+  right.forEach((source) => counts.set(sourceIdentity(source), (counts.get(sourceIdentity(source)) ?? 0) - 1));
+  return Array.from(counts.values()).every((count) => count === 0);
+}
+
+export async function generateCompetitionTreeV2(
+  competitionId: string,
+  previewSources?: CompetitionTreeSource[],
+): Promise<CompetitionTreeV2Result> {
   const verified = await verifyCupCompetition(competitionId);
   if (verified.error || !verified.supabase) return { error: verified.error, ok: false };
 
@@ -370,6 +387,14 @@ export async function generateCompetitionTreeV2(competitionId: string): Promise<
     return { error: "Configured knockout entrants do not match the available qualification sources.", ok: false };
   }
 
+  if (config.group_stage_enabled) {
+    const defaultSources = buildKswStandardPairing(entrants).sources;
+    if (previewSources && !hasSameSources(entrants, previewSources)) {
+      return { error: "คู่แข่งขันที่เลือกไม่ตรงกับทีมผ่านเข้ารอบที่อนุมัติแล้ว", ok: false };
+    }
+    entrants = previewSources ?? defaultSources;
+  }
+
   try {
     const tree = buildCompetitionTree({
       bracketCapacity: config.bracket_capacity,
@@ -379,6 +404,15 @@ export async function generateCompetitionTreeV2(competitionId: string): Promise<
       entrants,
       idFactory: () => crypto.randomUUID(),
     });
+    const firstRoundIndex = Math.min(...tree.nodes.map((node) => node.roundIndex));
+    const sameGroupPair = tree.nodes.find((node) =>
+      node.roundIndex === firstRoundIndex
+      && node.homeSource.groupId
+      && node.homeSource.groupId === node.awaySource.groupId,
+    );
+    if (sameGroupPair) {
+      return { error: "ไม่สามารถให้ทีมจากกลุ่มเดียวกันพบกันในรอบแรกได้", ok: false };
+    }
     const insertResult = await verified.supabase.from("competition_bracket_nodes").insert(tree.nodes.map(nodeForInsert));
     if (insertResult.error) {
       console.error("competition tree v2 insert failed", insertResult.error);
@@ -1055,6 +1089,7 @@ export async function saveCompetitionEngineV2Config(
           qualificationStatus: "pending",
           qualificationApprovedAt: null,
           qualificationApprovedByLabel: null,
+          qualificationSnapshot: [],
           status: result.data.status,
         }
       : undefined,

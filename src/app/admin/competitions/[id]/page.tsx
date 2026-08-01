@@ -37,7 +37,7 @@ const teamColumns = "id, name, short_name, logo_url, is_ksw";
 const groupColumns = "id, competition_id, name, label, sort_order, qualifiers_count, created_at, updated_at";
 const competitionTeamGroupColumns = "id, competition_id, team_id, group_id, is_active, display_order";
 const engineV2ConfigColumns =
-  "competition_id, entrant_count, bracket_capacity, entry_mode, group_stage_enabled, status, extra_rank_enabled, extra_rank, extra_qualifier_count, qualification_status, qualification_approved_at, qualification_approved_by_label";
+  "competition_id, entrant_count, bracket_capacity, entry_mode, group_stage_enabled, status, extra_rank_enabled, extra_rank, extra_qualifier_count, qualification_status, qualification_approved_at, qualification_approved_by_label, qualification_snapshot";
 const bracketNodeColumns =
   "id, competition_id, round_index, round_label, match_order, bracket_position, home_source_type, away_source_type, home_source_group_id, home_source_rank, home_source_team_id, home_source_node_id, away_source_group_id, away_source_rank, away_source_team_id, away_source_node_id, linked_match_id";
 
@@ -206,6 +206,7 @@ type CompetitionEngineV2Config = {
   qualificationStatus: "pending" | "approved";
   qualificationApprovedAt: string | null;
   qualificationApprovedByLabel: string | null;
+  qualificationSnapshot: CompetitionTreeSource[];
   status: "active" | "completed" | "draft" | "fixtures_created" | "reviewed";
 };
 
@@ -224,6 +225,16 @@ function asEngineV2Config(row: Row | undefined): CompetitionEngineV2Config | nul
     qualificationStatus: row.qualification_status === "approved" ? "approved" : "pending",
     qualificationApprovedAt: typeof row.qualification_approved_at === "string" ? row.qualification_approved_at : null,
     qualificationApprovedByLabel: typeof row.qualification_approved_by_label === "string" ? row.qualification_approved_by_label : null,
+    qualificationSnapshot: Array.isArray(row.qualification_snapshot) ? row.qualification_snapshot.map((entry) => {
+      const value = entry as Row;
+      return {
+        bestOrder: typeof value.bestOrder === "number" ? value.bestOrder : undefined,
+        groupId: typeof value.groupId === "string" ? value.groupId : undefined,
+        rank: typeof value.rank === "number" ? value.rank : undefined,
+        teamId: typeof value.teamId === "string" ? value.teamId : undefined,
+        type: value.type === "best_ranked" ? "best_ranked" : "group_rank",
+      };
+    }) : [],
     status: text(row, ["status"], "draft") as CompetitionEngineV2Config["status"],
   };
 }
