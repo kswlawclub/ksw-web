@@ -10,8 +10,6 @@ import {
   type AdminCompetitionGroup,
   type AdminCompetitionGroupTeam,
 } from "@/components/admin-competition-groups-manager";
-import { AdminCompetitionTreeEngineV2 } from "@/components/admin-competition-tree-engine-v2";
-import { AdminCompetitionWizardV2 } from "@/components/admin-competition-wizard-v2";
 import { CopyPublicLinkButton } from "@/components/copy-public-link-button";
 import { TeamLogo } from "@/components/team-logo";
 import { loadCompetitionParticipants } from "@/lib/competition-participants";
@@ -80,20 +78,6 @@ function formatDate(value: unknown) {
     month: "short",
     year: "numeric",
     timeZone: "Asia/Bangkok",
-  }).format(date);
-}
-
-function formatCompactDate(value: string | null) {
-  if (!value) return "—";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-
-  return new Intl.DateTimeFormat("en", {
-    day: "2-digit",
-    month: "short",
-    timeZone: "Asia/Bangkok",
-    year: "numeric",
   }).format(date);
 }
 
@@ -280,41 +264,6 @@ function mergeMatchTeams(activeTeams: Row[], matchTeams: Row[]) {
   });
 }
 
-function matchTimeValue(match: AdminCompetitionMatch) {
-  const time = match.match_date ? new Date(match.match_date).getTime() : Number.NaN;
-  return Number.isNaN(time) ? 0 : time;
-}
-
-function workspaceMatchStats(matches: AdminCompetitionMatch[]) {
-  const scheduled = matches.filter((match) => match.status === "scheduled");
-  const finished = matches.filter((match) => match.status === "finished");
-  const other = matches.length - scheduled.length - finished.length;
-  const finishedWithScores = finished.filter(
-    (match) => typeof match.home_score === "number" && typeof match.away_score === "number",
-  );
-  const totalGoals = finishedWithScores.reduce(
-    (sum, match) => sum + (match.home_score ?? 0) + (match.away_score ?? 0),
-    0,
-  );
-  const nextScheduled = [...scheduled]
-    .filter((match) => matchTimeValue(match) > 0)
-    .sort((a, b) => matchTimeValue(a) - matchTimeValue(b))[0];
-  const latestFinished = [...finished]
-    .filter((match) => matchTimeValue(match) > 0)
-    .sort((a, b) => matchTimeValue(b) - matchTimeValue(a))[0];
-
-  return {
-    averageGoals: finishedWithScores.length ? (totalGoals / finishedWithScores.length).toFixed(1) : "—",
-    finished: finished.length,
-    latestFinishedDate: latestFinished ? formatCompactDate(latestFinished.match_date) : "—",
-    nextScheduledDate: nextScheduled ? formatCompactDate(nextScheduled.match_date) : "—",
-    other,
-    scheduled: scheduled.length,
-    total: matches.length,
-    totalGoals: finishedWithScores.length ? totalGoals : "—",
-  };
-}
-
 async function loadWorkspaceData(id: string) {
   await requireAdminSession();
 
@@ -480,15 +429,6 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function CommandStat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-lg border border-white/10 bg-white/[0.07] px-4 py-3">
-      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#d8ad45]">{label}</p>
-      <p className="mt-1 text-2xl font-black text-white">{value}</p>
-    </div>
-  );
-}
-
 export default async function AdminCompetitionWorkspacePage({
   params,
 }: {
@@ -515,16 +455,11 @@ export default async function AdminCompetitionWorkspacePage({
   const isActive = competition.is_active === true;
   const displayOrder = number(competition, ["display_order"]);
   const kswTeamCount = teams.filter((team) => team.is_ksw === true).length;
-  const hasLinkedData = teams.length > 0 || matches.length > 0;
   const workspaceMatches = matches.map(asMatch);
   const workspaceMatchTeams = mergeMatchTeams(teams, matchTeams);
-  const matchStats = workspaceMatchStats(workspaceMatches);
   const groupedTeamCount = groupTeams.filter((team) => team.group_id).length;
   const unassignedGroupTeamCount = Math.max(groupTeams.length - groupedTeamCount, 0);
-  const cupMatchCreationBlocked = isCup && groups.length === 0;
   const publicPath = slug && isPublished ? `/competitions/${slug}` : "";
-  const statusAndActiveMisaligned =
-    (seasonStatus === "completed" && isActive) || (seasonStatus === "active" && !isActive);
 
   const detailItems: Array<[string, string]> = [
     ["Type", competitionTypeLabel],
@@ -555,174 +490,16 @@ export default async function AdminCompetitionWorkspacePage({
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#f6f2ea] text-[#061426]">
-      <section className="bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.16),transparent_34%),linear-gradient(135deg,#061426,#091f39)] px-4 py-12 text-white sm:px-6 lg:px-10">
-        <div className="mx-auto grid w-full max-w-7xl gap-6 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-end">
-          <div className="min-w-0">
-            <Link className="text-sm font-bold text-[#f4d58a] hover:text-white" href="/admin/competitions">
-              Back to Competitions
-            </Link>
-            <p className="mt-6 text-xs font-black uppercase tracking-[0.24em] text-[#d8ad45]">
-              Competition Workspace
-            </p>
-            <h1 className="mt-3 break-words text-4xl font-black tracking-tight">{competitionName}</h1>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {season ? (
-                <span className="rounded-full border border-[#d8ad45]/35 bg-[#d8ad45]/10 px-3 py-1 text-xs font-black text-[#f4d58a]">
-                  {season}
-                </span>
-              ) : null}
-              <span className="rounded-full border border-white/15 bg-white/[0.08] px-3 py-1 text-xs font-black uppercase text-slate-100">
-                {competitionTypeLabel}
-              </span>
-              <span className="rounded-full border border-white/15 bg-white/[0.08] px-3 py-1 text-xs font-black uppercase text-slate-100">
-                {seasonStatus}
-              </span>
-            </div>
-            {shortDescription ? (
-              <p className="mt-4 max-w-3xl text-base leading-7 text-slate-300">{shortDescription}</p>
-            ) : null}
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-              {slug && isPublished ? (
-                <Link
-                  className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/15 transition-transform hover:scale-[1.02]"
-                  href={`/competitions/${slug}`}
-                  rel="noopener noreferrer"
-                  target="_blank"
-                >
-                  View Public Page
-                </Link>
-              ) : null}
-              <Link
-                className="inline-flex items-center justify-center rounded-md border border-[#d8ad45]/50 bg-white/[0.03] px-5 py-3 text-sm font-black text-[#f4d58a] transition-colors hover:bg-[#d8ad45]/10"
-                href="/admin/competitions"
-              >
-                Back to Competitions
-              </Link>
-            </div>
+      <section className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-10">
+        <details className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <summary className="cursor-pointer text-xl font-black text-[#061426]">ข้อมูลรายการแข่งขัน</summary>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <StatCard label="ชื่อรายการ" value={competitionName} />
+            <StatCard label="ประเภท" value={competitionTypeLabel} />
+            <StatCard label="สถานะ" value={seasonStatus} />
           </div>
-          {coverImageUrl ? (
-            <div
-              aria-label={`${competitionName} cover image`}
-              className="aspect-video w-full overflow-hidden rounded-lg border border-[#d8ad45]/35 bg-white/10 bg-cover bg-center shadow-xl shadow-black/20"
-              role="img"
-              style={{ backgroundImage: `url("${coverImageUrl}")` }}
-            />
-          ) : (
-            <div className="flex aspect-video w-full items-center justify-center rounded-lg border border-dashed border-[#d8ad45]/35 bg-white/[0.06] text-xs font-black uppercase tracking-[0.18em] text-slate-400">
-              No Cover
-            </div>
-          )}
-        </div>
+        </details>
       </section>
-
-      <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-10">
-        <nav
-          aria-label="Competition workspace sections"
-          className="flex gap-3 overflow-x-auto pb-2"
-        >
-            {[
-              ["Overview", "#overview-summary"],
-              ["Teams", "#teams-summary"],
-              ...(isCup ? ([["รอบน็อกเอาต์", "#competition-wizard-v2"]] as Array<[string, string]>) : []),
-              ...(isCup ? ([["Groups", "#groups-summary"]] as Array<[string, string]>) : []),
-              ["Matches", "#matches-summary"],
-              ["Publishing", "#publishing-summary"],
-              ["Settings", "#settings-summary"],
-          ].map(([label, href]) => (
-            <a
-              className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm font-black text-[#061426] shadow-lg shadow-slate-900/5 hover:border-[#d8ad45] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d8ad45]"
-              href={href}
-              key={href}
-            >
-              {label}
-            </a>
-          ))}
-        </nav>
-      </section>
-
-      <section className="mx-auto w-full max-w-7xl scroll-mt-28 px-4 pb-8 sm:px-6 lg:px-10" id="overview-summary">
-        <article className="rounded-lg border border-[#d8ad45]/30 bg-[linear-gradient(135deg,#061426,#0b2644)] p-5 text-white shadow-xl shadow-slate-900/15">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0">
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]">
-                Command Center
-              </p>
-              <h2 className="mt-2 break-words text-3xl font-black">{competitionName}</h2>
-              <p className="mt-2 text-sm font-semibold text-slate-300">
-                {[season, competitionTypeLabel, seasonStatus, isPublished ? "Public" : "Private"]
-                  .filter(Boolean)
-                  .join(" - ")}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {cupMatchCreationBlocked ? (
-                <a
-                  className="inline-flex min-h-11 items-center justify-center rounded-md border border-[#d8ad45]/50 bg-white/[0.04] px-4 py-2 text-sm font-black text-[#f4d58a] hover:bg-[#d8ad45]/10"
-                  href="#groups-summary"
-                >
-                  Set Up Groups
-                </a>
-              ) : (
-                <a
-                  className="inline-flex min-h-11 items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-4 py-2 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/20"
-                  href="#match-form"
-                >
-                  Add Match
-                </a>
-              )}
-              <a
-                className="inline-flex min-h-11 items-center justify-center rounded-md border border-[#d8ad45]/50 bg-white/[0.04] px-4 py-2 text-sm font-black text-[#f4d58a] hover:bg-[#d8ad45]/10"
-                href="#teams-summary"
-              >
-                Manage Teams
-              </a>
-              {publicPath ? (
-                <Link
-                  className="inline-flex min-h-11 items-center justify-center rounded-md border border-white/20 bg-white/[0.08] px-4 py-2 text-sm font-black text-white hover:bg-white/[0.14]"
-                  href={publicPath}
-                  rel="noopener noreferrer"
-                  target="_blank"
-                >
-                  View Public Page
-                </Link>
-              ) : null}
-              {publicPath ? <CopyPublicLinkButton path={publicPath} variant="dark" /> : null}
-            </div>
-          </div>
-          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            <CommandStat label="Teams" value={teams.length} />
-            {isCup ? <CommandStat label="Groups" value={groups.length} /> : null}
-            <CommandStat label="Total Matches" value={matchStats.total} />
-            <CommandStat label="Scheduled" value={matchStats.scheduled} />
-            <CommandStat label="Finished" value={matchStats.finished} />
-            {matchStats.other > 0 ? <CommandStat label="Other" value={matchStats.other} /> : null}
-            <CommandStat label="Goals" value={matchStats.totalGoals} />
-            <CommandStat label="Avg Goals" value={matchStats.averageGoals} />
-            <CommandStat label="Next Match" value={matchStats.nextScheduledDate} />
-            <CommandStat label="Latest Result" value={matchStats.latestFinishedDate} />
-          </div>
-        </article>
-      </section>
-
-      {(hasLinkedData || statusAndActiveMisaligned) ? (
-        <section className="mx-auto grid w-full max-w-7xl gap-3 px-4 pb-8 sm:px-6 lg:px-10">
-          {hasLinkedData ? (
-            <p className="rounded-lg border border-[#d8ad45]/35 bg-[#fff7e6] px-4 py-3 text-sm font-bold text-[#8a6418]">
-              This competition contains linked teams or matches. Review linked data before deleting it.
-            </p>
-          ) : null}
-          {statusAndActiveMisaligned ? (
-            <p className="rounded-lg border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-4 py-3 text-sm font-bold text-[#9b1c1f]">
-              Season status and active flag are not aligned.
-            </p>
-          ) : null}
-          {isCup && groupDataReady && groups.length > 0 && unassignedGroupTeamCount > 0 ? (
-            <p className="rounded-lg border border-[#d8ad45]/35 bg-[#fff7e6] px-4 py-3 text-sm font-bold text-[#8a6418]">
-              This cup has {unassignedGroupTeamCount} unassigned team{unassignedGroupTeamCount === 1 ? "" : "s"}. Finish group assignments before creating group-stage fixtures.
-            </p>
-          ) : null}
-        </section>
-      ) : null}
 
       <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
         <article className="min-w-0 scroll-mt-28 rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10" id="teams-summary">
@@ -770,32 +547,6 @@ export default async function AdminCompetitionWorkspacePage({
       </section>
 
       {isCup ? (
-        <AdminCompetitionWizardV2
-          competitionId={id}
-          competitionType={competitionType}
-          existingConfig={engineV2Config}
-          groupCount={groups.length}
-          groups={groups.map((group) => ({
-            id: group.id,
-            name: group.name || group.label,
-            qualifiers_count: group.qualifiers_count,
-          }))}
-          participantCount={teams.length}
-          workflow={engineV2Workflow}
-        />
-      ) : null}
-
-      {isCup ? (
-        <AdminCompetitionTreeEngineV2
-          bracketCapacity={engineV2Config?.bracketCapacity ?? null}
-          competitionId={id}
-          configReady={Boolean(engineV2Config?.entrantCount && engineV2Config.bracketCapacity)}
-          initialSummary={engineV2TreeSummary}
-          workflow={engineV2Workflow}
-        />
-      ) : null}
-
-      {isCup ? (
         <AdminCompetitionGroupsManager
           competitionId={id}
           groups={groups}
@@ -821,6 +572,45 @@ export default async function AdminCompetitionWorkspacePage({
         initialMatches={workspaceMatches}
         initialTeams={workspaceMatchTeams}
       />
+
+      {isCup ? (
+        <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
+          <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-2xl font-black text-[#061426]">ทีมผ่านเข้ารอบ</h2>
+            <p className="mt-1 text-sm font-semibold text-slate-600">
+              Preview จากจำนวนทีมผ่านเข้ารอบที่กำหนดในแต่ละกลุ่ม
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <StatCard label="ทีมผ่านเข้ารอบ" value={engineV2Config?.entrantCount ?? 0} />
+              <StatCard label="ความจุสาย" value={engineV2Config?.bracketCapacity ?? "—"} />
+              <StatCard label="กลุ่ม" value={groups.length} />
+              <StatCard label="สถานะ" value={engineV2Workflow?.status ?? "ยังไม่ยืนยัน"} />
+            </div>
+          </article>
+        </section>
+      ) : null}
+
+      {isCup ? (
+        <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
+          <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-2xl font-black text-[#061426]">รอบน็อกเอาต์</h2>
+            <p className="mt-1 text-sm font-semibold text-slate-600">
+              Quarterfinal · Semifinal · Final จะปรากฏตามข้อมูลโปรแกรมการแข่งขันที่มีอยู่
+            </p>
+            <div className="mt-4 grid gap-3">
+              {engineV2TreeSummary ? (
+                <p className="rounded-md border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+                  มีโครงสร้างการแข่งขัน {engineV2TreeSummary.roundCount} รอบ และยังใช้ข้อมูลเดิมทั้งหมด
+                </p>
+              ) : (
+                <p className="rounded-md border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+                  ยังไม่มีโปรแกรมรอบน็อกเอาต์
+                </p>
+              )}
+            </div>
+          </article>
+        </section>
+      ) : null}
 
       <section className="mx-auto grid w-full max-w-7xl scroll-mt-28 gap-4 px-4 pb-8 sm:px-6 lg:grid-cols-3 lg:px-10" id="publishing-summary">
         <DetailCard items={detailItems} title="Competition Details" />
