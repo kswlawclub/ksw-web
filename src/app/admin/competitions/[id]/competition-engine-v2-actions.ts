@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   calculateCompetitionStructure,
   type CompetitionStructureEntryMode,
@@ -14,6 +15,15 @@ import {
   type CompetitionTreeSource,
   type CompetitionTreeSummary,
 } from "@/lib/competition-tree";
+import {
+  assertAllowedTransition,
+  canEditQualification,
+  canGenerateTree,
+  deriveCompetitionEngineV2Integrity,
+  isCompetitionEngineV2Status,
+  type CompetitionEngineV2Integrity,
+  type CompetitionEngineV2Status,
+} from "@/lib/competition-engine-v2-state";
 import { requireAdminSession } from "@/lib/admin-server-auth";
 import { isCupCompetition, normalizeCompetitionType } from "@/lib/competition-format";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
@@ -24,7 +34,7 @@ export type CompetitionEngineV2Config = {
   entrantCount: number | null;
   entryMode: "bye" | "custom" | "preliminary";
   groupStageEnabled: boolean;
-  status: "active" | "completed" | "draft" | "fixtures_created" | "reviewed";
+  status: CompetitionEngineV2Status;
 };
 
 export type CompetitionEngineV2WizardPayload = {
@@ -50,6 +60,12 @@ export type CompetitionTreeV2Result = {
   summary?: CompetitionTreeSummary;
 };
 
+export type CompetitionEngineV2WorkflowResult = {
+  error?: string;
+  ok: boolean;
+  workflow?: CompetitionEngineV2Integrity;
+};
+
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 async function verifyCupCompetition(competitionId: string) {
@@ -69,7 +85,7 @@ async function verifyCupCompetition(competitionId: string) {
 
   const result = await supabase
     .from("leagues")
-    .select("id, competition_type")
+    .select("id, competition_type, competition_engine_version")
     .eq("id", competitionId)
     .limit(1)
     .maybeSingle();
@@ -85,6 +101,10 @@ async function verifyCupCompetition(competitionId: string) {
 
   if (!isCupCompetition(normalizeCompetitionType(result.data.competition_type))) {
     return { error: "Competition Wizard V2 is available for cup competitions only.", supabase };
+  }
+
+  if (result.data.competition_engine_version !== 2) {
+    return { error: "Competition Engine V2 is not enabled for this competition.", supabase };
   }
 
   return { error: "", supabase };
@@ -143,6 +163,63 @@ function nodeForInsert(node: CompetitionTreeNode) {
   };
 }
 
+async function loadCompetitionEngineV2Workflow(
+  supabase: SupabaseClient,
+  competitionId: string,
+  engineVersion = 2,
+) {
+  const [configResult, nodesResult] = await Promise.all([
+    supabase
+      .from("competition_knockout_configs")
+      .select("entrant_count, bracket_capacity, entry_mode, group_stage_enabled, status")
+      .eq("competition_id", competitionId)
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("competition_bracket_nodes")
+      .select("id, competition_id, round_index, round_label, match_order, bracket_position, home_source_type, away_source_type, home_source_group_id, home_source_rank, home_source_team_id, home_source_node_id, away_source_group_id, away_source_rank, away_source_team_id, away_source_node_id, linked_match_id")
+      .eq("competition_id", competitionId),
+  ]);
+
+  if (configResult.error || nodesResult.error) {
+    console.error("competition engine v2 workflow lookup failed", {
+      config: configResult.error,
+      nodes: nodesResult.error,
+    });
+    return { error: "Could not load Competition Engine V2 workflow state.", workflow: null };
+  }
+
+  const config = configResult.data;
+  const nodes = (nodesResult.data ?? []).map((row) => nodeFromDatabase(row as Record<string, unknown>));
+  const status = isCompetitionEngineV2Status(config?.status) ? config.status : null;
+  const hasValidTree = config && typeof config.entrant_count === "number" && nodes.length > 0
+    ? validateCompetitionTree(nodes, config.entrant_count).valid
+    : false;
+  const hasLinkedMatches = (nodesResult.data ?? []).some((node) => typeof node.linked_match_id === "string" && node.linked_match_id.length > 0);
+
+  return {
+    config,
+    error: "",
+    nodes,
+    workflow: deriveCompetitionEngineV2Integrity({
+      engineVersion,
+      hasConfig: Boolean(config),
+      hasLinkedMatches,
+      hasValidTree,
+      status,
+    }),
+  };
+}
+
+export async function getCompetitionEngineV2WorkflowState(competitionId: string): Promise<CompetitionEngineV2WorkflowResult> {
+  const verified = await verifyCupCompetition(competitionId);
+  if (verified.error || !verified.supabase) return { error: verified.error, ok: false };
+
+  const result = await loadCompetitionEngineV2Workflow(verified.supabase, competitionId);
+  if (result.error || !result.workflow) return { error: result.error, ok: false };
+  return { ok: true, workflow: result.workflow };
+}
+
 export async function generateCompetitionTreeV2(competitionId: string): Promise<CompetitionTreeV2Result> {
   const verified = await verifyCupCompetition(competitionId);
   if (verified.error || !verified.supabase) return { error: verified.error, ok: false };
@@ -150,7 +227,7 @@ export async function generateCompetitionTreeV2(competitionId: string): Promise<
   const [configResult, groupsResult, participantsResult, existingNodesResult] = await Promise.all([
     verified.supabase
       .from("competition_knockout_configs")
-      .select("entrant_count, bracket_capacity, entry_mode, group_stage_enabled")
+      .select("entrant_count, bracket_capacity, entry_mode, group_stage_enabled, status")
       .eq("competition_id", competitionId)
       .limit(1)
       .maybeSingle(),
@@ -188,6 +265,9 @@ export async function generateCompetitionTreeV2(competitionId: string): Promise<
   const config = configResult.data;
   if (!config || typeof config.entrant_count !== "number" || typeof config.bracket_capacity !== "number") {
     return { error: "Confirm Competition Wizard V2 before generating the tree.", ok: false };
+  }
+  if (!isCompetitionEngineV2Status(config.status) || !canGenerateTree(config.status)) {
+    return { error: "Reopen Competition Tree V2 for editing before generating it again.", ok: false };
   }
   const entryMode = config.entry_mode as CompetitionTreeEntryMode;
   if (entryMode !== "bye" && entryMode !== "preliminary" && entryMode !== "custom") {
@@ -277,13 +357,92 @@ export async function generateCompetitionTreeV2(competitionId: string): Promise<
   }
 }
 
+export async function reviewCompetitionTreeV2(competitionId: string): Promise<CompetitionEngineV2WorkflowResult> {
+  const verified = await verifyCupCompetition(competitionId);
+  if (verified.error || !verified.supabase) return { error: verified.error, ok: false };
+
+  const workflowResult = await loadCompetitionEngineV2Workflow(verified.supabase, competitionId);
+  if (workflowResult.error || !workflowResult.workflow || !workflowResult.config) {
+    return { error: workflowResult.error || "Competition Engine V2 configuration is missing.", ok: false };
+  }
+  const status = workflowResult.workflow.status;
+  if (status !== "draft") return { error: "Only a draft Competition Tree V2 can be reviewed.", ok: false };
+  if (typeof workflowResult.config.entrant_count !== "number" || typeof workflowResult.config.bracket_capacity !== "number") {
+    return { error: "Competition Engine V2 configuration is incomplete.", ok: false };
+  }
+  if (!workflowResult.workflow.hasValidTree) {
+    return { error: "Generate a valid Competition Tree V2 before reviewing it.", ok: false };
+  }
+
+  try {
+    assertAllowedTransition(status, "reviewed");
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Competition Engine V2 transition is invalid.", ok: false };
+  }
+
+  const updateResult = await verified.supabase
+    .from("competition_knockout_configs")
+    .update({ status: "reviewed", updated_at: new Date().toISOString() })
+    .eq("competition_id", competitionId)
+    .eq("status", "draft");
+  if (updateResult.error) {
+    console.error("competition tree v2 review failed", updateResult.error);
+    return { error: "Could not review Competition Tree V2.", ok: false };
+  }
+
+  revalidatePath(`/admin/competitions/${competitionId}`);
+  return {
+    ok: true,
+    workflow: { ...workflowResult.workflow, status: "reviewed", warning: null },
+  };
+}
+
+export async function reopenCompetitionTreeV2(
+  competitionId: string,
+  confirmation: string,
+): Promise<CompetitionEngineV2WorkflowResult> {
+  const verified = await verifyCupCompetition(competitionId);
+  if (verified.error || !verified.supabase) return { error: verified.error, ok: false };
+  if (confirmation !== "REOPEN") return { error: "Reopen confirmation was not accepted.", ok: false };
+
+  const workflowResult = await loadCompetitionEngineV2Workflow(verified.supabase, competitionId);
+  if (workflowResult.error || !workflowResult.workflow) {
+    return { error: workflowResult.error || "Could not load Competition Engine V2 workflow.", ok: false };
+  }
+  if (workflowResult.workflow.status !== "reviewed") {
+    return { error: "Only a reviewed Competition Tree V2 can be reopened for editing.", ok: false };
+  }
+
+  try {
+    assertAllowedTransition("reviewed", "draft");
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Competition Engine V2 transition is invalid.", ok: false };
+  }
+
+  const updateResult = await verified.supabase
+    .from("competition_knockout_configs")
+    .update({ status: "draft", updated_at: new Date().toISOString() })
+    .eq("competition_id", competitionId)
+    .eq("status", "reviewed");
+  if (updateResult.error) {
+    console.error("competition tree v2 reopen failed", updateResult.error);
+    return { error: "Could not reopen Competition Tree V2 for editing.", ok: false };
+  }
+
+  revalidatePath(`/admin/competitions/${competitionId}`);
+  return {
+    ok: true,
+    workflow: { ...workflowResult.workflow, status: "draft", warning: null },
+  };
+}
+
 export async function saveCompetitionEngineV2Config(
   payload: CompetitionEngineV2WizardPayload,
 ): Promise<CompetitionEngineV2WizardResult> {
   const verified = await verifyCupCompetition(payload.competitionId);
   if (verified.error || !verified.supabase) return { error: verified.error, ok: false };
 
-  const [groupsResult, participantsResult] = await Promise.all([
+  const [groupsResult, participantsResult, existingConfigResult, existingNodesResult] = await Promise.all([
     verified.supabase
       .from("competition_groups")
       .select("id, qualifiers_count")
@@ -293,6 +452,16 @@ export async function saveCompetitionEngineV2Config(
       .select("team_id")
       .eq("competition_id", payload.competitionId)
       .eq("is_active", true),
+    verified.supabase
+      .from("competition_knockout_configs")
+      .select("entrant_count, bracket_capacity, entry_mode, group_stage_enabled, status")
+      .eq("competition_id", payload.competitionId)
+      .limit(1)
+      .maybeSingle(),
+    verified.supabase
+      .from("competition_bracket_nodes")
+      .select("id, linked_match_id")
+      .eq("competition_id", payload.competitionId),
   ]);
 
   if (groupsResult.error) {
@@ -303,6 +472,19 @@ export async function saveCompetitionEngineV2Config(
   if (participantsResult.error) {
     console.error("competition engine v2 participants lookup failed", participantsResult.error);
     return { error: "Could not verify competition participants.", ok: false };
+  }
+
+  if (existingConfigResult.error || existingNodesResult.error) {
+    console.error("competition engine v2 edit guard lookup failed", {
+      config: existingConfigResult.error,
+      nodes: existingNodesResult.error,
+    });
+    return { error: "Could not verify Competition Engine V2 editing state.", ok: false };
+  }
+
+  const existingConfig = existingConfigResult.data;
+  if (existingConfig && (!isCompetitionEngineV2Status(existingConfig.status) || !canEditQualification(existingConfig.status))) {
+    return { error: "Reopen Competition Tree V2 for editing before changing qualification settings.", ok: false };
   }
 
   const groups = groupsResult.data ?? [];
@@ -329,6 +511,26 @@ export async function saveCompetitionEngineV2Config(
     return { error: error instanceof Error ? error.message : "Competition structure is invalid.", ok: false };
   }
 
+  const treeNeedsReset = Boolean(existingNodesResult.data?.length) && (
+    existingConfig?.entrant_count !== knockoutEntrantCount
+    || existingConfig?.bracket_capacity !== preview.bracketCapacity
+    || existingConfig?.entry_mode !== preview.entryMode
+    || existingConfig?.group_stage_enabled !== payload.groupStageEnabled
+  );
+  if (treeNeedsReset) {
+    if (existingNodesResult.data?.some((node) => typeof node.linked_match_id === "string" && node.linked_match_id.length > 0)) {
+      return { error: "Competition Tree V2 has linked matches and cannot be reset in this workflow.", ok: false };
+    }
+    const deleteResult = await verified.supabase
+      .from("competition_bracket_nodes")
+      .delete()
+      .eq("competition_id", payload.competitionId);
+    if (deleteResult.error) {
+      console.error("competition engine v2 stale tree reset failed", deleteResult.error);
+      return { error: "Could not reset the stale Competition Tree V2.", ok: false };
+    }
+  }
+
   const result = await verified.supabase
     .from("competition_knockout_configs")
     .upsert(
@@ -338,7 +540,7 @@ export async function saveCompetitionEngineV2Config(
         entrant_count: knockoutEntrantCount,
         entry_mode: preview.entryMode,
         group_stage_enabled: payload.groupStageEnabled,
-        status: "reviewed",
+        status: "draft",
         updated_at: new Date().toISOString(),
       },
       { onConflict: "competition_id" },

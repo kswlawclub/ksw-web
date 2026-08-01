@@ -9,6 +9,11 @@ import {
   calculateCompetitionStructure,
   type CompetitionStructurePreview,
 } from "@/lib/competition-structure";
+import {
+  canEditQualification,
+  competitionEngineV2StatusLabel,
+  type CompetitionEngineV2Integrity,
+} from "@/lib/competition-engine-v2-state";
 
 type CompetitionType = "cup" | "friendly" | "league" | "tournament";
 
@@ -19,6 +24,7 @@ export type AdminCompetitionWizardV2Props = {
   groupCount: number;
   groups: Array<{ id: string; name: string; qualifiers_count: number }>;
   participantCount: number;
+  workflow: CompetitionEngineV2Integrity | null;
 };
 
 const competitionTypes: Array<{ label: string; sublabel: string; value: CompetitionType }> = [
@@ -51,6 +57,7 @@ export function AdminCompetitionWizardV2({
   groupCount,
   groups,
   participantCount,
+  workflow,
 }: AdminCompetitionWizardV2Props) {
   const hasExistingGroups = groups.length > 0;
   const groupDerivedKnockoutEntrants = groups.reduce((sum, group) => sum + group.qualifiers_count, 0);
@@ -64,6 +71,7 @@ export function AdminCompetitionWizardV2({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
+  const qualificationLocked = Boolean(workflow?.status && !canEditQualification(workflow.status));
 
   const preview = useMemo<{ error: string; value: CompetitionStructurePreview | null }>(() => {
     if (selectedType !== "cup") return { error: "Competition Wizard V2 รอบนี้รองรับ Cup เท่านั้น", value: null };
@@ -139,6 +147,27 @@ export function AdminCompetitionWizardV2({
 
       setMessage("บันทึกโครงสร้าง Competition Wizard V2 แล้ว ยังไม่ได้สร้างสายหรือแมตช์");
     });
+  }
+
+  if (qualificationLocked && workflow?.status) {
+    const statusLabel = competitionEngineV2StatusLabel(workflow.status);
+    return (
+      <section className="mx-auto w-full max-w-7xl scroll-mt-28 px-4 pb-10 sm:px-6 lg:px-10" id="competition-wizard-v2">
+        <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a6418]">Competition Engine V2</p>
+          <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-2xl font-black text-[#061426]">Competition Wizard V2</h2>
+              <p className="mt-1 text-sm font-semibold text-slate-600">ล็อกการตั้งค่าทีมเข้ารอบแล้วในสถานะ {statusLabel.th} / {statusLabel.en}</p>
+            </div>
+            <span className="inline-flex w-fit rounded-full bg-emerald-100 px-3 py-2 text-sm font-black text-emerald-800">{statusLabel.th}</span>
+          </div>
+          <p className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-600">
+            ใช้ “กลับไปแก้ไขโครงสร้าง / Reopen for Editing” ในส่วน Competition Tree V2 ก่อนแก้ configuration.
+          </p>
+        </article>
+      </section>
+    );
   }
 
   return (

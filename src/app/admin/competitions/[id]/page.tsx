@@ -26,6 +26,10 @@ import { requireAdminSession } from "@/lib/admin-server-auth";
 import { getCompetitionTypeLabel, isCupCompetition, normalizeCompetitionType } from "@/lib/competition-format";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import {
+  deriveCompetitionEngineV2Integrity,
+  type CompetitionEngineV2Integrity,
+} from "@/lib/competition-engine-v2-state";
+import {
   validateCompetitionTree,
   type CompetitionTreeNode,
   type CompetitionTreeSource,
@@ -46,7 +50,7 @@ const knockoutColumns =
 const engineV2ConfigColumns =
   "competition_id, entrant_count, bracket_capacity, entry_mode, group_stage_enabled, status";
 const bracketNodeColumns =
-  "id, competition_id, round_index, round_label, match_order, bracket_position, home_source_type, away_source_type, home_source_group_id, home_source_rank, home_source_team_id, home_source_node_id, away_source_group_id, away_source_rank, away_source_team_id, away_source_node_id";
+  "id, competition_id, round_index, round_label, match_order, bracket_position, home_source_type, away_source_type, home_source_group_id, home_source_rank, home_source_team_id, home_source_node_id, away_source_group_id, away_source_rank, away_source_team_id, away_source_node_id, linked_match_id";
 
 function text(row: Row | undefined, keys: string[], fallback = "") {
   if (!row) return fallback;
@@ -374,6 +378,7 @@ async function loadWorkspaceData(id: string) {
       groups: [] as AdminCompetitionGroup[],
       engineV2Config: null as CompetitionEngineV2Config | null,
       engineV2TreeSummary: null as CompetitionTreeSummary | null,
+      engineV2Workflow: null as CompetitionEngineV2Integrity | null,
       knockoutDataReady: false,
       knockoutMatches: [] as KnockoutMatchSlot[],
       matchTeams: [] as Row[],
@@ -396,6 +401,7 @@ async function loadWorkspaceData(id: string) {
       groups: [] as AdminCompetitionGroup[],
       engineV2Config: null as CompetitionEngineV2Config | null,
       engineV2TreeSummary: null as CompetitionTreeSummary | null,
+      engineV2Workflow: null as CompetitionEngineV2Integrity | null,
       knockoutDataReady: false,
       knockoutMatches: [] as KnockoutMatchSlot[],
       matchTeams: [] as Row[],
@@ -406,6 +412,7 @@ async function loadWorkspaceData(id: string) {
 
   const competitionType = normalizeCompetitionType(competition.competition_type);
   const isCup = isCupCompetition(competitionType);
+  const isEngineV2 = number(competition, ["competition_engine_version"]) === 2;
 
   const [teams, matches, groupResult, competitionTeamResult, engineV2ConfigResult, engineV2TreeResult, knockoutResult] = await Promise.all([
     loadCompetitionParticipants(supabase, id, {
@@ -432,7 +439,7 @@ async function loadWorkspaceData(id: string) {
             .order("display_order", { ascending: true }),
         )
       : Promise.resolve({ data: [] as Row[], ok: true }),
-    isCup
+    isCup && isEngineV2
       ? runQueryStatus<Row>(
           "workspace_competition_engine_v2_config",
           supabase
@@ -442,7 +449,7 @@ async function loadWorkspaceData(id: string) {
             .limit(1),
         )
       : Promise.resolve({ data: [] as Row[], ok: true }),
-    isCup
+    isCup && isEngineV2
       ? runQueryStatus<Row>(
           "workspace_competition_engine_v2_tree",
           supabase
@@ -480,9 +487,19 @@ async function loadWorkspaceData(id: string) {
   const groups = groupResult.data.map(asCompetitionGroup).filter((group) => group.id);
   const engineV2Config = asEngineV2Config(engineV2ConfigResult.data[0]);
   const engineV2TreeNodes = engineV2TreeResult.data.map(asCompetitionTreeNode).filter((node) => node.id);
-  const engineV2TreeSummary = engineV2TreeResult.ok && engineV2Config && engineV2TreeNodes.length
-    ? validateCompetitionTree(engineV2TreeNodes, engineV2Config.entrantCount ?? 0).summary
+  const engineV2TreeValidation = engineV2TreeResult.ok && engineV2Config && engineV2TreeNodes.length
+    ? validateCompetitionTree(engineV2TreeNodes, engineV2Config.entrantCount ?? 0)
     : null;
+  const engineV2TreeSummary = engineV2TreeValidation
+    ? engineV2TreeValidation.summary
+    : null;
+  const engineV2Workflow = deriveCompetitionEngineV2Integrity({
+    engineVersion: number(competition, ["competition_engine_version"]) || null,
+    hasConfig: Boolean(engineV2Config),
+    hasLinkedMatches: engineV2TreeResult.data.some((node) => text(node, ["linked_match_id"], "") !== ""),
+    hasValidTree: engineV2TreeValidation?.valid === true,
+    status: engineV2Config?.status ?? null,
+  });
   const matchTeams = teamIds.length
     ? await runQuery(
         "workspace_match_teams",
@@ -497,6 +514,7 @@ async function loadWorkspaceData(id: string) {
     groups,
     engineV2Config,
     engineV2TreeSummary,
+    engineV2Workflow,
     knockoutDataReady: knockoutResult.ok,
     knockoutMatches: knockoutResult.data.map(asKnockoutMatch).filter((match) => match.roundIndex && match.matchOrder),
     matchTeams,
@@ -546,7 +564,7 @@ export default async function AdminCompetitionWorkspacePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { competition, engineV2Config, engineV2TreeSummary, groupDataReady, groupTeams, groups, knockoutDataReady, knockoutMatches, matchTeams, matches, teams } = await loadWorkspaceData(id);
+  const { competition, engineV2Config, engineV2TreeSummary, engineV2Workflow, groupDataReady, groupTeams, groups, knockoutDataReady, knockoutMatches, matchTeams, matches, teams } = await loadWorkspaceData(id);
 
   if (!competition) {
     notFound();
@@ -557,6 +575,7 @@ export default async function AdminCompetitionWorkspacePage({
   const competitionType = normalizeCompetitionType(text(competition, ["competition_type"], ""));
   const competitionTypeLabel = getCompetitionTypeLabel(competitionType);
   const isCup = isCupCompetition(competitionType);
+  const isEngineV2 = number(competition, ["competition_engine_version"]) === 2;
   const seasonStatus = text(competition, ["season_status"], "Not set");
   const slug = text(competition, ["slug"], "");
   const coverImageUrl = text(competition, ["cover_image_url"], "");
@@ -674,8 +693,8 @@ export default async function AdminCompetitionWorkspacePage({
             {[
               ["Overview", "#overview-summary"],
               ["Teams", "#teams-summary"],
-              ...(isCup ? ([["Wizard V2", "#competition-wizard-v2"]] as Array<[string, string]>) : []),
-              ...(isCup ? ([["Tree V2", "#competition-tree-v2"]] as Array<[string, string]>) : []),
+              ...(isEngineV2 ? ([["Wizard V2", "#competition-wizard-v2"]] as Array<[string, string]>) : []),
+              ...(isEngineV2 ? ([["Tree V2", "#competition-tree-v2"]] as Array<[string, string]>) : []),
               ...(isCup ? ([["Groups", "#groups-summary"]] as Array<[string, string]>) : []),
               ...(isCup ? ([["Knockout", "#knockout-summary"]] as Array<[string, string]>) : []),
               ["Matches", "#matches-summary"],
@@ -822,7 +841,7 @@ export default async function AdminCompetitionWorkspacePage({
         </article>
       </section>
 
-      {isCup ? (
+      {isEngineV2 ? (
         <AdminCompetitionWizardV2
           competitionId={id}
           competitionType={competitionType}
@@ -834,15 +853,17 @@ export default async function AdminCompetitionWorkspacePage({
             qualifiers_count: group.qualifiers_count,
           }))}
           participantCount={teams.length}
+          workflow={engineV2Workflow}
         />
       ) : null}
 
-      {isCup ? (
+      {isEngineV2 ? (
         <AdminCompetitionTreeEngineV2
           bracketCapacity={engineV2Config?.bracketCapacity ?? null}
           competitionId={id}
           configReady={Boolean(engineV2Config?.entrantCount && engineV2Config.bracketCapacity)}
           initialSummary={engineV2TreeSummary}
+          workflow={engineV2Workflow}
         />
       ) : null}
 
