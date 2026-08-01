@@ -88,10 +88,12 @@ function Stat({ label, value }: { label: string; value: number | string }) {
 
 function KnockoutMatchCard({
   match,
+  onEditingChange,
   onSave,
   teamsById,
 }: {
   match: CompetitionKnockoutMatchV2;
+  onEditingChange?: (editing: boolean) => void;
   onSave: (match: CompetitionKnockoutMatchV2, draft: ResultForm) => Promise<{ error?: string; ok: boolean }>;
   teamsById: Map<string, { id: string; logo_url: string | null; name: string; short_name: string | null }>;
 }) {
@@ -112,6 +114,7 @@ function KnockoutMatchCard({
     setError("");
     setSaved(false);
     setEditing(false);
+    onEditingChange?.(false);
   }
 
   function updateDraft(patch: Partial<ResultForm>) {
@@ -132,6 +135,7 @@ function KnockoutMatchCard({
     }
     setSaved(true);
     setEditing(false);
+    onEditingChange?.(false);
   }
 
   if (match.status === "finished" && !editing) {
@@ -149,7 +153,7 @@ function KnockoutMatchCard({
             <p className="rounded border border-emerald-200 bg-white px-2 py-1 text-center text-lg font-black tabular-nums text-[#061426]">{hasScore ? `${match.home_score}-${match.away_score}` : "-"}</p>
             <div className={`flex min-w-0 items-center justify-end gap-1.5 text-right ${winner?.id === away?.id ? "font-black text-[#061426]" : "text-slate-700"}`}><span className="min-w-0 break-words text-sm leading-4">{away?.name ?? "ทีมเยือน"}</span><TeamLogo className="!size-7 shrink-0 bg-[#061426]" initials={(away?.short_name || away?.name || "ทีม").slice(0, 3)} logoUrl={away?.logo_url ?? ""} teamName={away?.name ?? "ทีมเยือน"} /></div>
           </div>
-          <button aria-label="แก้ไขผลการแข่งขัน" className="min-h-8 shrink-0 rounded border border-emerald-200 bg-white px-2 py-1 text-xs font-black text-emerald-800" onClick={() => { setSaved(false); setEditing(true); }} type="button">แก้ไข</button>
+          <button aria-label="แก้ไขผลการแข่งขัน" className="min-h-8 shrink-0 rounded border border-emerald-200 bg-white px-2 py-1 text-xs font-black text-emerald-800" onClick={() => { setSaved(false); setEditing(true); onEditingChange?.(true); }} type="button">แก้ไข</button>
         </div>
         <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] font-bold leading-4 text-slate-600"><span>{compactDraw ? "เสมอ" : winner ? `ผู้ชนะ: ${winner.name}` : "รอผลสกอร์"}</span>{date ? <span>{date}</span> : null}{match.venue ? <span>{match.venue}</span> : null}{penaltyResult || specialResult ? <span className="text-[#8a6418]">{penaltyResult ?? specialResult}</span> : null}{saved ? <span className="text-emerald-800">บันทึกแล้ว</span> : null}</div>
       </article>
@@ -178,6 +182,32 @@ function KnockoutMatchCard({
       {saved ? <p className="mt-3 rounded-md border border-emerald-700/20 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">{draft.status === "finished" ? "บันทึกแล้ว ผู้ชนะจะเข้าสู่รอบถัดไปเมื่อคู่แข่งขันพร้อม" : "บันทึกแล้ว"}</p> : null}
       <div className="mt-4 flex flex-wrap justify-end gap-2">{match.status === "finished" ? <button className="min-h-11 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-black text-[#061426]" disabled={saving} onClick={cancelEdit} type="button">ยกเลิก</button> : null}<button className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={saving} type="submit">{saving ? "กำลังบันทึก..." : saved ? "บันทึกแล้ว" : "บันทึกแมตช์"}</button></div>
     </form>
+  );
+}
+
+function KnockoutRoundMatches({
+  matches,
+  onSave,
+  roundLabel,
+  teamsById,
+}: {
+  matches: CompetitionKnockoutMatchV2[];
+  onSave: (match: CompetitionKnockoutMatchV2, draft: ResultForm) => Promise<{ error?: string; ok: boolean }>;
+  roundLabel: string;
+  teamsById: Map<string, { id: string; logo_url: string | null; name: string; short_name: string | null }>;
+}) {
+  const [finishedCollapsed, setFinishedCollapsed] = useState(false);
+  const [editingMatchId, setEditingMatchId] = useState("");
+  const finishedMatches = matches.filter((match) => match.status === "finished");
+  const displayedMatches = finishedCollapsed ? matches.filter((match) => match.status !== "finished") : matches;
+  const finishedGoals = finishedMatches.reduce((total, match) => total + (match.home_score ?? 0) + (match.away_score ?? 0), 0);
+
+  return (
+    <section className="min-w-0 rounded-lg border border-slate-200 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-xl font-black text-[#061426]">{roundLabel}</h3><p className="mt-1 text-sm font-semibold text-slate-600">กำหนดวันเวลา สนาม และบันทึกผลของแต่ละคู่ได้ที่นี่</p></div>{finishedMatches.length ? <button className="min-h-10 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-black text-[#061426] disabled:opacity-50" disabled={Boolean(editingMatchId)} onClick={() => setFinishedCollapsed((current) => !current)} title={editingMatchId ? "ปิดการแก้ไขผลก่อนพับรายการ" : undefined} type="button">{finishedCollapsed ? "แสดงผลการแข่งขัน" : "พับผลการแข่งขัน"}</button> : null}</div>
+      {finishedCollapsed ? <p className="mt-2 text-xs font-bold text-slate-600">จบแล้ว {finishedMatches.length} นัด · รวม {finishedGoals} ประตู</p> : null}
+      <div className="mt-4 grid gap-3">{displayedMatches.map((match) => <KnockoutMatchCard key={match.id} match={match} onEditingChange={(editing) => setEditingMatchId(editing ? match.id : "")} onSave={onSave} teamsById={teamsById} />)}</div>
+    </section>
   );
 }
 
@@ -435,13 +465,7 @@ export function AdminCompetitionTreeEngineV2({
 
         {matchesByRound.length ? (
           <div className="mt-6 grid gap-5">
-            {matchesByRound.map(([roundLabel, roundMatches]) => (
-              <section className="min-w-0 rounded-lg border border-slate-200 p-4" key={roundLabel}>
-                <h3 className="text-xl font-black text-[#061426]">{roundLabel}</h3>
-                <p className="mt-1 text-sm font-semibold text-slate-600">กำหนดวันเวลา สนาม และบันทึกผลของแต่ละคู่ได้ที่นี่</p>
-                <div className="mt-4 grid gap-3">{roundMatches.map((match) => <KnockoutMatchCard key={match.id} match={match} onSave={saveMatch} teamsById={teamsById} />)}</div>
-              </section>
-            ))}
+            {matchesByRound.map(([roundLabel, roundMatches]) => <KnockoutRoundMatches key={roundLabel} matches={roundMatches} onSave={saveMatch} roundLabel={roundLabel} teamsById={teamsById} />)}
           </div>
         ) : summary ? (
           <p className="mt-5 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-600">เมื่อทีมผ่านเข้ารอบพร้อม ระบบจะแสดงคู่แข่งขันในส่วนนี้</p>

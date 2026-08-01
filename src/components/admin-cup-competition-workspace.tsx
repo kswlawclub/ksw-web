@@ -51,11 +51,13 @@ function CupGroupMatchCard({
   away,
   home,
   match,
+  onEditingChange,
   onSave,
 }: {
   away: AdminCompetitionMatchTeam | undefined;
   home: AdminCompetitionMatchTeam | undefined;
   match: AdminCompetitionMatch;
+  onEditingChange?: (editing: boolean) => void;
   onSave: (match: AdminCompetitionMatch, draft: MatchForm) => Promise<{ error?: string; ok: boolean }>;
 }) {
   const [draft, setDraft] = useState(() => formFromMatch(match));
@@ -75,6 +77,7 @@ function CupGroupMatchCard({
     setError("");
     setSaved(false);
     setEditing(false);
+    onEditingChange?.(false);
   }
 
   function updateDraft(patch: Partial<MatchForm>) {
@@ -95,6 +98,7 @@ function CupGroupMatchCard({
     }
     setSaved(true);
     setEditing(false);
+    onEditingChange?.(false);
   }
 
   if (isFinished && !editing) {
@@ -108,7 +112,7 @@ function CupGroupMatchCard({
             <p className="rounded border border-emerald-200 bg-white px-2 py-1 text-center text-lg font-black tabular-nums text-[#061426]">{hasScore ? `${match.home_score}-${match.away_score}` : "-"}</p>
             <div className={`flex min-w-0 items-center justify-end gap-1.5 text-right ${winner?.id === away?.id ? "font-black text-[#061426]" : "text-slate-700"}`}><span className="min-w-0 break-words text-sm leading-4">{away?.name ?? "ทีมเยือน"}</span><TeamLogo className="!size-7 shrink-0 bg-[#061426]" initials={(away?.short_name || away?.name || "ทีม").slice(0, 3)} logoUrl={away?.logo_url ?? ""} teamName={away?.name ?? "ทีมเยือน"} /></div>
           </div>
-          <button aria-label="แก้ไขผลการแข่งขัน" className="min-h-8 shrink-0 rounded border border-emerald-200 bg-white px-2 py-1 text-xs font-black text-emerald-800" onClick={() => { setSaved(false); setEditing(true); }} type="button">แก้ไข</button>
+          <button aria-label="แก้ไขผลการแข่งขัน" className="min-h-8 shrink-0 rounded border border-emerald-200 bg-white px-2 py-1 text-xs font-black text-emerald-800" onClick={() => { setSaved(false); setEditing(true); onEditingChange?.(true); }} type="button">แก้ไข</button>
         </div>
         <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] font-bold leading-4 text-slate-600"><span>{isDraw ? "เสมอ" : winner ? `ผู้ชนะ: ${winner.name}` : "รอผลสกอร์"}</span>{date ? <span>{date}</span> : null}{match.venue ? <span>{match.venue}</span> : null}{saved ? <span className="text-emerald-800">บันทึกแล้ว</span> : null}</div>
       </article>
@@ -138,12 +142,18 @@ function CupGroupProgram({
   onSave: (match: AdminCompetitionMatch, draft: MatchForm) => Promise<{ error?: string; ok: boolean }>;
   teamsById: Map<string, AdminCompetitionMatchTeam>;
 }) {
+  const [finishedCollapsed, setFinishedCollapsed] = useState(false);
+  const [editingMatchId, setEditingMatchId] = useState("");
   const groupMatches = matches.filter((match) => match.competition_stage === "group" && match.group_id === group.id);
+  const finishedMatches = groupMatches.filter((match) => match.status === "finished");
+  const displayedMatches = finishedCollapsed ? groupMatches.filter((match) => match.status !== "finished") : groupMatches;
+  const finishedGoals = finishedMatches.reduce((total, match) => total + (match.home_score ?? 0) + (match.away_score ?? 0), 0);
   return (
     <section className="mt-5 min-w-0 border-t border-slate-200 pt-5">
-      <h4 className="text-lg font-black text-[#061426]">โปรแกรมการแข่งขัน</h4>
+      <div className="flex flex-wrap items-center justify-between gap-2"><h4 className="text-lg font-black text-[#061426]">โปรแกรมการแข่งขัน</h4>{finishedMatches.length ? <button className="min-h-10 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-black text-[#061426] disabled:opacity-50" disabled={Boolean(editingMatchId)} onClick={() => setFinishedCollapsed((current) => !current)} title={editingMatchId ? "ปิดการแก้ไขผลก่อนพับรายการ" : undefined} type="button">{finishedCollapsed ? "แสดงผลการแข่งขัน" : "พับผลการแข่งขัน"}</button> : null}</div>
+      {finishedCollapsed ? <p className="mt-2 text-xs font-bold text-slate-600">จบแล้ว {finishedMatches.length} นัด{finishedMatches.length ? ` · รวม ${finishedGoals} ประตู` : ""}</p> : null}
       <div className="mt-3 grid gap-3">
-        {groupMatches.length ? groupMatches.map((match) => <CupGroupMatchCard away={teamsById.get(match.away_team_id)} home={teamsById.get(match.home_team_id)} key={match.id} match={match} onSave={onSave} />) : <p className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600">ยังไม่มีโปรแกรมของกลุ่มนี้ กด “สร้างโปรแกรมการแข่งขัน” ด้านบน</p>}
+        {groupMatches.length ? displayedMatches.map((match) => <CupGroupMatchCard away={teamsById.get(match.away_team_id)} home={teamsById.get(match.home_team_id)} key={match.id} match={match} onEditingChange={(editing) => setEditingMatchId(editing ? match.id : "")} onSave={onSave} />) : <p className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600">ยังไม่มีโปรแกรมของกลุ่มนี้ กด “สร้างโปรแกรมการแข่งขัน” ด้านบน</p>}
       </div>
     </section>
   );
