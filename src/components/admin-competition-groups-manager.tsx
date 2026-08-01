@@ -549,7 +549,7 @@ export function AdminCompetitionGroupsManager({
           </p>
         ) : null}
 
-        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <div className="mt-6 grid gap-4">
           {sortedGroups.length ? (
             sortedGroups.map((group) => {
               const groupTeams = teamsByGroup.get(group.id) ?? [];
@@ -670,7 +670,7 @@ export function AdminCompetitionGroupsManager({
               );
             })
           ) : (
-            <p className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600 lg:col-span-2">
+            <p className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
               No groups yet. Create Group A, Group B, or another group to start the cup group stage.
             </p>
           )}
