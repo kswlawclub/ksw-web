@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   generateCompetitionTreeV2,
+  createCompetitionFixturesV2,
+  previewCompetitionFixturesV2,
   reopenCompetitionTreeV2,
   reviewCompetitionTreeV2,
 } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
+import type { CompetitionFixturesV2Result } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
 import {
   canCreateFixtures,
   canGenerateTree,
@@ -43,12 +46,24 @@ export function AdminCompetitionTreeEngineV2({
   const router = useRouter();
   const [generatedSummary, setGeneratedSummary] = useState<CompetitionTreeSummary | null>(null);
   const [currentWorkflow, setCurrentWorkflow] = useState(workflow);
+  const [fixtureResult, setFixtureResult] = useState<CompetitionFixturesV2Result | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
   const summary = generatedSummary ?? initialSummary;
   const status = currentWorkflow?.status ?? "draft";
   const statusLabel = competitionEngineV2StatusLabel(status);
+
+  useEffect(() => {
+    if (!configReady || (status !== "reviewed" && status !== "fixtures_created")) return;
+    let active = true;
+    void previewCompetitionFixturesV2(competitionId).then((result) => {
+      if (active) setFixtureResult(result);
+    });
+    return () => {
+      active = false;
+    };
+  }, [competitionId, configReady, status]);
 
   function generateTree() {
     setError("");
@@ -93,6 +108,22 @@ export function AdminCompetitionTreeEngineV2({
       }
       setCurrentWorkflow(result.workflow ?? currentWorkflow);
       setMessage("กลับสู่สถานะกำลังตั้งค่าแล้ว โครงสร้างเดิมยังคงอยู่");
+      router.refresh();
+    });
+  }
+
+  function createFixtures() {
+    setError("");
+    setMessage("");
+    startTransition(async () => {
+      const result = await createCompetitionFixturesV2(competitionId);
+      setFixtureResult(result);
+      if (!result.ok) {
+        setError(result.error ?? result.errors[0] ?? "Could not create knockout fixtures.");
+        return;
+      }
+      setCurrentWorkflow((current) => current ? { ...current, hasLinkedMatches: result.linkedCount > 0, status: result.status ?? current.status } : current);
+      setMessage(`สร้าง ${result.createdCount} คู่, ข้าม ${result.skippedCount} คู่, รอ ${result.pendingCount} คู่`);
       router.refresh();
     });
   }
@@ -189,14 +220,38 @@ export function AdminCompetitionTreeEngineV2({
           ) : null}
           {canCreateFixtures(status) ? (
             <button
-              className="min-h-11 rounded-md border border-slate-200 bg-slate-100 px-5 py-3 text-sm font-black text-slate-500"
-              disabled
+              className="min-h-11 rounded-md bg-[#061426] px-5 py-3 text-sm font-black text-[#f4d58a] disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isPending || fixtureResult?.nodes.filter((node) => node.state === "eligible").length === 0}
+              onClick={createFixtures}
               type="button"
             >
-              สร้างโปรแกรมการแข่งขัน / Available next phase
+              {isPending ? "Creating..." : "สร้างโปรแกรมรอบน็อกเอาต์ / Create Knockout Fixtures"}
             </button>
           ) : null}
         </div>
+
+        {fixtureResult ? (
+          <section className="mt-5 min-w-0 rounded-md border border-slate-200 bg-slate-50 p-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Stat label="Ready" value={fixtureResult.nodes.filter((node) => node.state === "eligible").length} />
+              <Stat label="Waiting" value={fixtureResult.nodes.filter((node) => node.state === "waiting_winner").length} />
+              <Stat label="Bye" value={fixtureResult.nodes.filter((node) => node.state === "bye").length} />
+              <Stat label="Incomplete" value={fixtureResult.nodes.filter((node) => node.state === "incomplete").length} />
+              <Stat label="Created" value={fixtureResult.createdCount} />
+              <Stat label="Skipped" value={fixtureResult.skippedCount} />
+              <Stat label="Pending" value={fixtureResult.pendingCount} />
+              <Stat label="Linked" value={fixtureResult.linkedCount} />
+            </div>
+            <div className="mt-4 grid gap-2">
+              {fixtureResult.nodes.filter((node) => node.state === "linked").map((node) => (
+                <p className="break-words rounded-md border border-emerald-700/20 bg-white px-3 py-2 text-sm font-bold text-emerald-800" key={node.nodeId}>
+                  {node.roundLabel}: {node.homeTeamName ?? node.homeTeamId ?? "?"} vs {node.awayTeamName ?? node.awayTeamId ?? "?"} · Match {node.matchId}
+                </p>
+              ))}
+            </div>
+            {fixtureResult.errors.length ? <p className="mt-3 text-sm font-bold text-[#9b1c1f]">{fixtureResult.errors.join(" ")}</p> : null}
+          </section>
+        ) : null}
 
         {error ? <p className="mt-4 rounded-md border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-3 py-2 text-sm font-bold text-[#9b1c1f]">{error}</p> : null}
         {message ? <p className="mt-4 rounded-md border border-emerald-700/20 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">{message}</p> : null}

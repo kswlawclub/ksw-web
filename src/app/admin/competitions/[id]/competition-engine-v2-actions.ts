@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { calculateCupGroupStandings, type CupGroupRow } from "@/lib/cup-group-standings";
 import {
   calculateCompetitionStructure,
   type CompetitionStructureEntryMode,
@@ -64,6 +65,30 @@ export type CompetitionEngineV2WorkflowResult = {
   error?: string;
   ok: boolean;
   workflow?: CompetitionEngineV2Integrity;
+};
+
+export type CompetitionFixtureNodeV2 = {
+  awayTeamId?: string;
+  awayTeamName?: string;
+  homeTeamId?: string;
+  homeTeamName?: string;
+  matchId?: string;
+  nodeId: string;
+  reason?: string;
+  roundLabel: string;
+  state: "bye" | "eligible" | "incomplete" | "linked" | "waiting_winner";
+};
+
+export type CompetitionFixturesV2Result = {
+  createdCount: number;
+  error?: string;
+  errors: string[];
+  linkedCount: number;
+  nodes: CompetitionFixtureNodeV2[];
+  ok: boolean;
+  pendingCount: number;
+  skippedCount: number;
+  status?: CompetitionEngineV2Status;
 };
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -136,6 +161,7 @@ function nodeFromDatabase(row: Record<string, unknown>): CompetitionTreeNode {
     competitionId: typeof row.competition_id === "string" ? row.competition_id : "",
     homeSource: sourceFromDatabase(row, "home"),
     id: typeof row.id === "string" ? row.id : "",
+    linkedMatchId: typeof row.linked_match_id === "string" ? row.linked_match_id : undefined,
     matchOrder: typeof row.match_order === "number" ? row.match_order : 0,
     roundIndex: typeof row.round_index === "number" ? row.round_index : 0,
     roundLabel: typeof row.round_label === "string" ? row.round_label : "",
@@ -434,6 +460,338 @@ export async function reopenCompetitionTreeV2(
     ok: true,
     workflow: { ...workflowResult.workflow, status: "draft", warning: null },
   };
+}
+
+type ResolvedTreeSource =
+  | { state: "bye" }
+  | { reason: string; state: "pending" }
+  | { state: "team"; teamId: string };
+
+function fixtureResultBase(status?: CompetitionEngineV2Status): CompetitionFixturesV2Result {
+  return {
+    createdCount: 0,
+    errors: [],
+    linkedCount: 0,
+    nodes: [],
+    ok: true,
+    pendingCount: 0,
+    skippedCount: 0,
+    status,
+  };
+}
+
+async function loadCompetitionFixturesV2Context(
+  supabase: SupabaseClient,
+  competitionId: string,
+) {
+  const [workflowResult, groupsResult, participantsResult, groupMatchesResult] = await Promise.all([
+    loadCompetitionEngineV2Workflow(supabase, competitionId),
+    supabase
+      .from("competition_groups")
+      .select("id, name, label, sort_order, qualifiers_count")
+      .eq("competition_id", competitionId)
+      .order("sort_order", { ascending: true })
+      .order("name", { ascending: true }),
+    supabase
+      .from("competition_teams")
+      .select("team_id, group_id, is_active, display_order")
+      .eq("competition_id", competitionId)
+      .eq("is_active", true)
+      .order("display_order", { ascending: true }),
+    supabase
+      .from("matches")
+      .select("id, league_id, group_id, competition_stage, fixture_source, home_team_id, away_team_id, home_score, away_score, status, winner_team_id")
+      .eq("league_id", competitionId)
+      .eq("competition_stage", "group"),
+  ]);
+
+  if (workflowResult.error || !workflowResult.config || !workflowResult.workflow) {
+    return { error: workflowResult.error || "Competition Engine V2 configuration is missing." };
+  }
+  if (groupsResult.error || participantsResult.error || groupMatchesResult.error) {
+    console.error("competition fixture v2 context lookup failed", {
+      groupMatches: groupMatchesResult.error,
+      groups: groupsResult.error,
+      participants: participantsResult.error,
+    });
+    return { error: "Could not load Competition Tree V2 fixture inputs." };
+  }
+
+  const participants = participantsResult.data ?? [];
+  const participantIds = Array.from(new Set(participants.map((participant) => participant.team_id).filter(Boolean)));
+  const teamsResult = participantIds.length
+    ? await supabase.from("teams").select("id, name, short_name, logo_url, is_ksw").in("id", participantIds)
+    : { data: [], error: null };
+  if (teamsResult.error) {
+    console.error("competition fixture v2 team lookup failed", teamsResult.error);
+    return { error: "Could not load competition teams." };
+  }
+
+  const linkedMatchIds = (workflowResult.nodes ?? [])
+    .map((node) => {
+      const raw = (node as CompetitionTreeNode & { linkedMatchId?: string }).linkedMatchId;
+      return raw;
+    })
+    .filter((matchId): matchId is string => Boolean(matchId));
+  const linkedMatchesResult = linkedMatchIds.length
+    ? await supabase
+        .from("matches")
+        .select("id, league_id, competition_stage, fixture_source, home_team_id, away_team_id, winner_team_id")
+        .in("id", linkedMatchIds)
+    : { data: [], error: null };
+  if (linkedMatchesResult.error) {
+    console.error("competition fixture v2 linked match lookup failed", linkedMatchesResult.error);
+    return { error: "Could not verify linked knockout matches." };
+  }
+
+  const teamsById = new Map((teamsResult.data ?? []).map((team) => [team.id, team]));
+  const standingTeams = participants.map((participant) => ({
+    ...teamsById.get(participant.team_id),
+    display_order: participant.display_order,
+    group_id: participant.group_id,
+    is_active: participant.is_active,
+    team_id: participant.team_id,
+  }));
+  const standings = calculateCupGroupStandings({
+    groups: (groupsResult.data ?? []) as CupGroupRow[],
+    matches: (groupMatchesResult.data ?? []) as CupGroupRow[],
+    teams: standingTeams as CupGroupRow[],
+  });
+
+  return {
+    activeParticipantIds: new Set(participantIds),
+    config: workflowResult.config,
+    groups: groupsResult.data ?? [],
+    linkedMatchesById: new Map((linkedMatchesResult.data ?? []).map((match) => [match.id, match])),
+    nodes: workflowResult.nodes,
+    rawNodes: workflowResult.nodes,
+    standingsByGroupId: new Map(standings.map((standing) => [standing.group_id, standing])),
+    teamNamesById: new Map((teamsResult.data ?? []).map((team) => [team.id, team.name || team.short_name || team.id])),
+    workflow: workflowResult.workflow,
+  };
+}
+
+function linkedMatchIdForNode(node: CompetitionTreeNode & { linkedMatchId?: string }) {
+  return typeof node.linkedMatchId === "string" && node.linkedMatchId ? node.linkedMatchId : null;
+}
+
+function resolveCompetitionTreeSource(
+  source: CompetitionTreeSource,
+  context: {
+    activeParticipantIds: Set<string>;
+    linkedMatchesById: Map<string, Record<string, unknown>>;
+    nodesById: Map<string, CompetitionTreeNode & { linkedMatchId?: string }>;
+    standingsByGroupId: Map<string, ReturnType<typeof calculateCupGroupStandings>[number]>;
+    teamNamesById: Map<string, string>;
+  },
+): ResolvedTreeSource {
+  if (source.type === "bye") return { state: "bye" };
+  if (source.type === "unassigned") return { reason: "Waiting for an assigned entrant.", state: "pending" };
+  if (source.type === "manual_team") {
+    if (!source.teamId || !context.activeParticipantIds.has(source.teamId)) {
+      return { reason: "Manual team is not an active competition participant.", state: "pending" };
+    }
+    return { state: "team", teamId: source.teamId };
+  }
+  if (source.type === "group_rank") {
+    const standing = source.groupId ? context.standingsByGroupId.get(source.groupId) : undefined;
+    const row = standing && source.rank ? standing.rows[source.rank - 1] : undefined;
+    if (!row || !context.activeParticipantIds.has(row.team_id)) {
+      return { reason: "Waiting for the requested group standing.", state: "pending" };
+    }
+    return { state: "team", teamId: row.team_id };
+  }
+  if (source.type === "node_winner") {
+    const sourceNode = source.nodeId ? context.nodesById.get(source.nodeId) : undefined;
+    const matchId = sourceNode ? linkedMatchIdForNode(sourceNode) : null;
+    const match = matchId ? context.linkedMatchesById.get(matchId) : undefined;
+    const winnerTeamId = match && typeof match.winner_team_id === "string" ? match.winner_team_id : "";
+    if (!winnerTeamId || !context.activeParticipantIds.has(winnerTeamId)) {
+      return { reason: "Waiting for the winner of the previous tree node.", state: "pending" };
+    }
+    return { state: "team", teamId: winnerTeamId };
+  }
+  return { reason: "Tree source is invalid.", state: "pending" };
+}
+
+async function inspectCompetitionFixturesV2(
+  supabase: SupabaseClient,
+  competitionId: string,
+): Promise<CompetitionFixturesV2Result> {
+  const context = await loadCompetitionFixturesV2Context(supabase, competitionId);
+  if ("error" in context) return { ...fixtureResultBase(), error: context.error, ok: false };
+  const result = fixtureResultBase(context.workflow.status ?? undefined);
+  const config = context.config;
+  const treeValidation = validateCompetitionTree(context.nodes, config.entrant_count ?? 0);
+  if (!treeValidation.valid) {
+    return { ...result, error: `Competition Tree V2 is invalid: ${treeValidation.errors[0]}`, ok: false };
+  }
+
+  const nodesById = new Map(context.nodes.map((node) => [node.id, node as CompetitionTreeNode & { linkedMatchId?: string }]));
+  const resolverContext = {
+    activeParticipantIds: context.activeParticipantIds,
+    linkedMatchesById: context.linkedMatchesById as Map<string, Record<string, unknown>>,
+    nodesById,
+    standingsByGroupId: context.standingsByGroupId,
+    teamNamesById: context.teamNamesById,
+  };
+
+  for (const node of context.nodes as Array<CompetitionTreeNode & { linkedMatchId?: string }>) {
+    const matchId = linkedMatchIdForNode(node);
+    if (matchId) {
+      const linkedMatch = context.linkedMatchesById.get(matchId);
+      if (!linkedMatch || linkedMatch.league_id !== competitionId || linkedMatch.competition_stage !== "knockout") {
+        result.errors.push(`Node ${node.id} has an invalid linked match.`);
+      } else {
+        result.linkedCount += 1;
+        result.skippedCount += 1;
+        result.nodes.push({
+          awayTeamId: typeof linkedMatch.away_team_id === "string" ? linkedMatch.away_team_id : undefined,
+          awayTeamName: typeof linkedMatch.away_team_id === "string" ? resolverContext.teamNamesById.get(linkedMatch.away_team_id) : undefined,
+          homeTeamId: typeof linkedMatch.home_team_id === "string" ? linkedMatch.home_team_id : undefined,
+          homeTeamName: typeof linkedMatch.home_team_id === "string" ? resolverContext.teamNamesById.get(linkedMatch.home_team_id) : undefined,
+          matchId,
+          nodeId: node.id,
+          roundLabel: node.roundLabel,
+          state: "linked",
+        });
+      }
+      continue;
+    }
+
+    const home = resolveCompetitionTreeSource(node.homeSource, resolverContext);
+    const away = resolveCompetitionTreeSource(node.awaySource, resolverContext);
+    if (home.state === "bye" || away.state === "bye") {
+      result.pendingCount += 1;
+      result.nodes.push({ nodeId: node.id, reason: "Bye advancement is pending a later phase.", roundLabel: node.roundLabel, state: "bye" });
+      continue;
+    }
+    if (home.state !== "team" || away.state !== "team") {
+      result.pendingCount += 1;
+      const pendingReason = home.state === "pending"
+        ? home.reason
+        : away.state === "pending"
+          ? away.reason
+          : "Waiting for a resolved tree source.";
+      const waitingWinner = pendingReason.includes("winner");
+      result.nodes.push({
+        nodeId: node.id,
+        reason: pendingReason,
+        roundLabel: node.roundLabel,
+        state: waitingWinner ? "waiting_winner" : "incomplete",
+      });
+      continue;
+    }
+    if (home.teamId === away.teamId) {
+      result.errors.push(`Node ${node.id} resolves the same team on both sides.`);
+      continue;
+    }
+    result.nodes.push({
+      awayTeamId: away.teamId,
+      awayTeamName: resolverContext.teamNamesById.get(away.teamId),
+      homeTeamId: home.teamId,
+      homeTeamName: resolverContext.teamNamesById.get(home.teamId),
+      nodeId: node.id,
+      roundLabel: node.roundLabel,
+      state: "eligible",
+    });
+  }
+
+  if (result.errors.length) result.ok = false;
+  return result;
+}
+
+export async function previewCompetitionFixturesV2(competitionId: string): Promise<CompetitionFixturesV2Result> {
+  const verified = await verifyCupCompetition(competitionId);
+  if (verified.error || !verified.supabase) return { ...fixtureResultBase(), error: verified.error, ok: false };
+  return inspectCompetitionFixturesV2(verified.supabase, competitionId);
+}
+
+export async function createCompetitionFixturesV2(competitionId: string): Promise<CompetitionFixturesV2Result> {
+  const verified = await verifyCupCompetition(competitionId);
+  if (verified.error || !verified.supabase) return { ...fixtureResultBase(), error: verified.error, ok: false };
+
+  const inspected = await inspectCompetitionFixturesV2(verified.supabase, competitionId);
+  if (!inspected.ok) return inspected;
+  if (inspected.status !== "reviewed" && inspected.status !== "fixtures_created") {
+    return { ...inspected, error: "Competition fixtures can only be created after the tree is reviewed.", ok: false };
+  }
+  if (inspected.status === "fixtures_created") return inspected;
+
+  for (const node of inspected.nodes.filter((item) => item.state === "eligible")) {
+    if (!node.homeTeamId || !node.awayTeamId) continue;
+    const insertResult = await verified.supabase
+      .from("matches")
+      .insert({
+        away_score: null,
+        away_team_id: node.awayTeamId,
+        competition_stage: "knockout",
+        fixture_source: "generated",
+        group_id: null,
+        home_score: null,
+        home_team_id: node.homeTeamId,
+        league_id: competitionId,
+        match_date: null,
+        match_type: "cup",
+        status: "scheduled",
+        venue: null,
+        winner_team_id: null,
+      })
+      .select("id")
+      .maybeSingle();
+    if (insertResult.error || !insertResult.data?.id) {
+      inspected.errors.push(`Node ${node.nodeId}: could not create its match.`);
+      continue;
+    }
+
+    const linkResult = await verified.supabase
+      .from("competition_bracket_nodes")
+      .update({ linked_match_id: insertResult.data.id })
+      .eq("competition_id", competitionId)
+      .eq("id", node.nodeId)
+      .is("linked_match_id", null)
+      .select("id");
+    if (linkResult.error || !linkResult.data?.length) {
+      const compensation = await verified.supabase.from("matches").delete().eq("id", insertResult.data.id);
+      if (compensation.error) {
+        console.error("competition fixture v2 compensation failed", compensation.error);
+        inspected.errors.push(`Node ${node.nodeId}: match link failed and compensation also failed.`);
+      } else {
+        inspected.errors.push(`Node ${node.nodeId}: match link failed; the new match was removed.`);
+      }
+      continue;
+    }
+    inspected.createdCount += 1;
+    inspected.linkedCount += 1;
+  }
+
+  if (inspected.errors.length) {
+    inspected.ok = false;
+    if (inspected.createdCount > 0) revalidatePath(`/admin/competitions/${competitionId}`);
+    return inspected;
+  }
+
+  if (inspected.createdCount > 0 || inspected.linkedCount > 0) {
+    try {
+      assertAllowedTransition("reviewed", "fixtures_created");
+    } catch (error) {
+      return { ...inspected, error: error instanceof Error ? error.message : "Competition Engine V2 transition is invalid.", ok: false };
+    }
+    const statusResult = await verified.supabase
+      .from("competition_knockout_configs")
+      .update({ status: "fixtures_created", updated_at: new Date().toISOString() })
+      .eq("competition_id", competitionId)
+      .eq("status", "reviewed");
+    if (statusResult.error) {
+      console.error("competition fixture v2 status update failed", statusResult.error);
+      revalidatePath(`/admin/competitions/${competitionId}`);
+      return { ...inspected, error: "Fixtures were linked, but workflow status could not be updated.", ok: false };
+    }
+    inspected.status = "fixtures_created";
+  }
+
+  revalidatePath(`/admin/competitions/${competitionId}`);
+  return inspected;
 }
 
 export async function saveCompetitionEngineV2Config(

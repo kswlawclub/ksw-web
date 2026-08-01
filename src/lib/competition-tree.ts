@@ -15,6 +15,7 @@ export type CompetitionTreeNode = {
   competitionId: string;
   homeSource: CompetitionTreeSource;
   id: string;
+  linkedMatchId?: string;
   matchOrder: number;
   roundIndex: number;
   roundLabel: string;
