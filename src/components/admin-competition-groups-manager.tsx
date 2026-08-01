@@ -378,23 +378,22 @@ export function AdminCompetitionGroupsManager({
 
   function TeamAssignmentRow({ team }: { team: AdminCompetitionGroupTeam }) {
     return (
-      <div className="grid min-w-0 gap-3 rounded-lg border border-slate-100 bg-slate-50 p-3 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-center">
-        <div className="flex min-w-0 items-center gap-3">
+      <div className="grid min-w-0 gap-2 rounded-md border border-slate-100 bg-slate-50 p-2.5">
+        <div className="flex min-w-0 items-center gap-2">
           <TeamLogo
-            className="!size-10 shrink-0 bg-[#061426]"
+            className="!size-8 shrink-0 bg-[#061426]"
             initials={teamInitials(team)}
             logoUrl={team.logo_url ?? ""}
             teamName={team.name}
           />
-          <div className="min-w-0">
-            <p className="break-words text-sm font-black text-[#061426]">{team.name}</p>
-            {team.is_ksw ? <p className="text-xs font-bold text-[#8a6418]">KSW team</p> : null}
-          </div>
+          <p className="min-w-0 flex-1 break-words text-sm font-black leading-5 text-[#061426]">{team.name}</p>
+          {team.is_ksw ? <span className="shrink-0 rounded-full bg-[#fff7e6] px-2 py-1 text-[10px] font-black text-[#8a6418]">KSW</span> : null}
         </div>
-        <label className="grid min-w-0 gap-1 text-xs font-black text-slate-600">
-          Group
+        <label className="grid min-w-0 gap-1 text-[11px] font-black text-slate-600">
+          <span className="sr-only">เลือกกลุ่มสำหรับ {team.name}</span>
           <select
-            className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-[#061426] outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20 disabled:cursor-not-allowed disabled:opacity-60"
+            aria-label={`เลือกกลุ่มสำหรับ ${team.name}`}
+            className="min-h-10 w-full min-w-0 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-[#061426] outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={assigningId === team.competition_team_id || !schemaReady}
             onChange={(event) => void assignTeam(team, event.target.value)}
             value={team.group_id ?? ""}
@@ -565,7 +564,7 @@ export function AdminCompetitionGroupsManager({
                       </p>
                       <h3 className="mt-1 break-words text-xl font-black">{groupDisplayName(group)}</h3>
                       <p className="mt-1 text-sm font-semibold text-slate-500">
-                        {groupTeams.length} teams · Sort {group.sort_order}
+                        {groupTeams.length} ทีม · ผ่านเข้ารอบ {group.qualifiers_count} ทีม
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -603,12 +602,12 @@ export function AdminCompetitionGroupsManager({
                       Maximum {groupTeams.length} team{groupTeams.length === 1 ? "" : "s"} in this group.
                     </p>
                   </div>
-                  {!renderGroupProgram && standings ? <GroupStandingsTable standings={standings} /> : null}
-                  <div className="mt-4 grid gap-2">
+                  {standings ? <GroupStandingsTable standings={standings} /> : null}
+                  <div className="mt-4 grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4">
                     {groupTeams.length ? (
                       groupTeams.map((team) => <TeamAssignmentRow key={team.competition_team_id} team={team} />)
                     ) : (
-                      <p className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600">
+                      <p className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600 xl:col-span-4">
                         This group is empty.
                       </p>
                     )}

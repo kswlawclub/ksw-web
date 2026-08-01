@@ -70,7 +70,6 @@ export function AdminCupCompetitionWorkspace({
   const [message, setMessage] = useState("");
   const teamsById = useMemo(() => new Map(matchTeams.map((team) => [team.id, team])), [matchTeams]);
   const standings = useMemo(() => calculateCupGroupStandings({ groups, matches, teams: groupTeams }), [groups, matches, groupTeams]);
-  const standingsByGroup = useMemo(() => new Map(standings.map((standing) => [standing.group_id, standing])), [standings]);
   const qualifiers = useMemo(() => standings.flatMap((standing) => standing.rows.filter((row) => row.qualifies)), [standings]);
   const [showAllTeams, setShowAllTeams] = useState(false);
   const sortedTeams = useMemo(() => sortTeamsByName(teams), [teams]);
@@ -109,7 +108,6 @@ export function AdminCupCompetitionWorkspace({
 
   function GroupProgram({ group }: { group: AdminCompetitionGroup }) {
     const groupMatches = matches.filter((match) => match.competition_stage === "group" && match.group_id === group.id);
-    const groupStanding = standingsByGroup.get(group.id);
     return (
       <section className="mt-5 min-w-0 border-t border-slate-200 pt-5">
         <h4 className="text-lg font-black text-[#061426]">โปรแกรมการแข่งขัน</h4>
@@ -126,7 +124,6 @@ export function AdminCupCompetitionWorkspace({
             </form>;
           }) : <p className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600">ยังไม่มีโปรแกรมของกลุ่มนี้ กด “สร้างโปรแกรมการแข่งขัน” ด้านบน</p>}
         </div>
-        <div className="mt-5 overflow-hidden rounded-lg border border-slate-200"><div className="bg-[#061426] px-3 py-2 text-sm font-black text-white">ตารางคะแนน</div>{groupStanding?.rows.length ? <div className="overflow-x-auto"><table className="w-full min-w-[520px] text-left text-xs"><thead className="bg-slate-50"><tr>{["#", "ทีม", "แข่ง", "ชนะ", "เสมอ", "แพ้", "ได้", "เสีย", "ต่าง", "คะแนน"].map((label) => <th className="px-3 py-2" key={label}>{label}</th>)}</tr></thead><tbody>{groupStanding.rows.map((row) => <tr className={row.qualifies ? "bg-[#fff7e6]" : "bg-white"} key={row.team_id}><td className="border-t px-3 py-2 font-black">{row.position}</td><td className="border-t px-3 py-2 font-black">{row.team_name}{row.qualifies ? <span className="ml-2 text-[10px] text-[#8a6418]">ผ่านเข้ารอบ</span> : null}</td>{[row.played,row.won,row.drawn,row.lost,row.goals_for,row.goals_against,row.goal_difference,row.points].map((value,index) => <td className="border-t px-3 py-2" key={index}>{value}</td>)}</tr>)}</tbody></table></div> : <p className="px-3 py-3 text-sm font-semibold text-slate-600">ยังไม่มีทีมในกลุ่มนี้</p>}</div>
       </section>
     );
   }
