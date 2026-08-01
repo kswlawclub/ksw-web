@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import sharp from "sharp";
 import { loadCompetitionParticipants } from "@/lib/competition-participants";
+import { sortTeamsByName } from "@/lib/team-sort";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAdminSession } from "@/lib/admin-server-auth";
 
@@ -215,15 +216,15 @@ export async function loadAdminTeamsData(competitionId = ""): Promise<AdminTeams
   }
 
   const assignedTeamIds = new Set(teams.map((team) => team.id));
-  const availableTeams = ((availableTeamsResult?.data ?? []) as TeamRow[]).filter(
+  const availableTeams = sortTeamsByName(((availableTeamsResult?.data ?? []) as TeamRow[]).filter(
     (team) => !assignedTeamIds.has(team.id),
-  );
+  ));
 
   return {
     ok: true,
     availableTeams,
     competitions: (competitionsResult.data ?? []) as CompetitionRow[],
-    teams,
+    teams: sortTeamsByName(teams),
   };
 }
 

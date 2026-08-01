@@ -1,4 +1,5 @@
 import { getSupabase } from "@/lib/supabase";
+import { compareTeamsByName } from "@/lib/team-sort";
 
 type Row = Record<string, unknown>;
 
@@ -74,7 +75,7 @@ function byDisplayOrderAndName(a: CompetitionParticipant, b: CompetitionParticip
   const orderDiff = a.display_order - b.display_order;
   if (orderDiff) return orderDiff;
 
-  return a.name.localeCompare(b.name);
+  return compareTeamsByName(a, b);
 }
 
 function logSupabaseReadError(source: string, error: unknown, context?: Record<string, unknown>) {
