@@ -121,7 +121,7 @@ export function AdminCupCompetitionWorkspace({
           {sortedTeams.length > 16 ? <button className="mt-4 min-h-11 rounded-md border border-slate-200 px-4 py-2 text-sm font-black text-[#061426] hover:border-[#d8ad45]" onClick={() => setShowAllTeams((current) => !current)} type="button">{showAllTeams ? "แสดงน้อยลง" : "แสดงทั้งหมด / Show all"}</button> : null}
         </article>
       </section>
-      <AdminCompetitionGroupsManager competitionId={competitionId} groups={groups} matches={matches} schemaReady={groupDataReady} teams={groupTeams} />
+      <AdminCompetitionGroupsManager competitionId={competitionId} groups={groups} matches={matches} onMatchesChange={(nextMatches) => setMatches(nextMatches as AdminCompetitionMatch[])} schemaReady={groupDataReady} teams={groupTeams} />
       <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
         <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-2xl font-black text-[#061426]">โปรแกรมรอบแบ่งกลุ่ม</h2>

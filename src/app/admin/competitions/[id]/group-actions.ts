@@ -20,6 +20,7 @@ export type CupGroupFixturePreviewPair = {
 
 export type CupGroupFixtureResult = ActionResult & {
   createdCount?: number;
+  matches?: Array<Record<string, unknown>>;
   pairs?: CupGroupFixturePreviewPair[];
   skippedCount?: number;
   totalPairs?: number;
@@ -618,9 +619,22 @@ export async function generateCupGroupFixtures(
     return { ok: false, error: "Could not generate group fixtures." };
   }
 
+  const groupMatchesResult = await supabase
+    .from("matches")
+    .select("id, group_id, competition_stage, fixture_source, match_date, home_team_id, away_team_id, home_score, away_score, venue, status")
+    .eq("league_id", competitionId)
+    .eq("group_id", groupId)
+    .eq("competition_stage", "group")
+    .order("match_date", { ascending: true });
+  if (groupMatchesResult.error) {
+    console.error("cup group fixture reload failed", groupMatchesResult.error);
+    return { ok: false, error: "Fixtures were created, but could not be reloaded." };
+  }
+
   revalidatePath(`/admin/competitions/${competitionId}`);
   return {
     createdCount: missingPairs.length,
+    matches: groupMatchesResult.data ?? [],
     ok: true,
     pairs: pairs.map((pair) => ({ ...pair, exists: true })),
     skippedCount: pairs.length - missingPairs.length,

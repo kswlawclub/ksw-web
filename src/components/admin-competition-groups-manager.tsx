@@ -8,7 +8,6 @@ import {
   createCompetitionGroup,
   deleteCompetitionGroup,
   generateCupGroupFixtures,
-  previewCupGroupFixtures,
   updateCompetitionGroup,
   updateCompetitionGroupQualifiers,
   type CupGroupFixturePreviewPair,
@@ -98,12 +97,14 @@ export function AdminCompetitionGroupsManager({
   competitionId,
   groups,
   matches,
+  onMatchesChange,
   schemaReady,
   teams,
 }: {
   competitionId: string;
   groups: AdminCompetitionGroup[];
   matches: CupGroupRow[];
+  onMatchesChange?: (matches: CupGroupRow[]) => void;
   schemaReady: boolean;
   teams: AdminCompetitionGroupTeam[];
 }) {
@@ -253,22 +254,6 @@ export function AdminCompetitionGroupsManager({
     router.refresh();
   }
 
-  async function previewFixtures(group: AdminCompetitionGroup) {
-    setFixtureActionGroupId(group.id);
-    setMessage("");
-    setError("");
-    const result = await previewCupGroupFixtures(competitionId, group.id);
-    setFixtureActionGroupId("");
-
-    if (!result.ok) {
-      setError(result.error ?? "Could not preview fixtures.");
-      return;
-    }
-
-    setFixturePreviewByGroup((current) => ({ ...current, [group.id]: result.pairs ?? [] }));
-    setMessage(`${groupDisplayName(group)} preview ready: ${result.totalPairs ?? 0} fixtures.`);
-  }
-
   async function generateFixtures(group: AdminCompetitionGroup) {
     setFixtureActionGroupId(group.id);
     setMessage("");
@@ -282,6 +267,12 @@ export function AdminCompetitionGroupsManager({
     }
 
     setFixturePreviewByGroup((current) => ({ ...current, [group.id]: result.pairs ?? [] }));
+    if (result.matches) {
+      onMatchesChange?.([
+        ...matches.filter((match) => match.group_id !== group.id),
+        ...result.matches,
+      ]);
+    }
     setMessage(
       `${groupDisplayName(group)} fixtures generated: ${result.createdCount ?? 0} created, ${result.skippedCount ?? 0} skipped.`,
     );
@@ -579,10 +570,10 @@ export function AdminCompetitionGroupsManager({
                       <button
                         className="rounded-md border border-[#d8ad45]/45 px-3 py-2 text-xs font-black text-[#061426] hover:bg-[#fff7e6] disabled:cursor-not-allowed disabled:opacity-60"
                         disabled={!schemaReady || fixtureActionGroupId === group.id || groupTeams.length < 2}
-                        onClick={() => void previewFixtures(group)}
+                        onClick={() => void generateFixtures(group)}
                         type="button"
                       >
-                        {fixtureActionGroupId === group.id ? "Loading..." : "Generate Fixtures"}
+                        {fixtureActionGroupId === group.id ? "กำลังสร้าง..." : "สร้างโปรแกรมการแข่งขัน"}
                       </button>
                       <button
                         className="rounded-md border border-slate-200 px-3 py-2 text-xs font-black hover:border-[#d8ad45]"
