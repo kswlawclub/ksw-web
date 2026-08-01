@@ -197,24 +197,40 @@ function nodeFromDatabase(row: Record<string, unknown>): CompetitionTreeNode {
   };
 }
 
+function sourceForInsert(source: CompetitionTreeSource) {
+  if (source.type === "group_rank") {
+    return { bestOrder: null, groupId: source.groupId ?? null, nodeId: null, rank: source.rank ?? null, teamId: null };
+  }
+  if (source.type === "best_ranked") {
+    return { bestOrder: source.bestOrder ?? null, groupId: null, nodeId: null, rank: source.rank ?? null, teamId: source.teamId ?? null };
+  }
+  if (source.type === "manual_team") {
+    return { bestOrder: null, groupId: null, nodeId: null, rank: null, teamId: source.teamId ?? null };
+  }
+  if (source.type === "node_winner") {
+    return { bestOrder: null, groupId: null, nodeId: source.nodeId ?? null, rank: null, teamId: null };
+  }
+  return { bestOrder: null, groupId: null, nodeId: null, rank: null, teamId: null };
+}
+
 function nodeForInsert(node: CompetitionTreeNode) {
-  const awayGroupId = node.awaySource.type === "best_ranked" ? null : node.awaySource.groupId ?? null;
-  const homeGroupId = node.homeSource.type === "best_ranked" ? null : node.homeSource.groupId ?? null;
+  const away = sourceForInsert(node.awaySource);
+  const home = sourceForInsert(node.homeSource);
 
   return {
-    away_source_best_order: node.awaySource.bestOrder ?? null,
-    away_source_group_id: awayGroupId,
-    away_source_node_id: node.awaySource.nodeId ?? null,
-    away_source_rank: node.awaySource.rank ?? null,
-    away_source_team_id: node.awaySource.teamId ?? null,
+    away_source_best_order: away.bestOrder,
+    away_source_group_id: away.groupId,
+    away_source_node_id: away.nodeId,
+    away_source_rank: away.rank,
+    away_source_team_id: away.teamId,
     away_source_type: node.awaySource.type,
     bracket_position: node.bracketPosition,
     competition_id: node.competitionId,
-    home_source_best_order: node.homeSource.bestOrder ?? null,
-    home_source_group_id: homeGroupId,
-    home_source_node_id: node.homeSource.nodeId ?? null,
-    home_source_rank: node.homeSource.rank ?? null,
-    home_source_team_id: node.homeSource.teamId ?? null,
+    home_source_best_order: home.bestOrder,
+    home_source_group_id: home.groupId,
+    home_source_node_id: home.nodeId,
+    home_source_rank: home.rank,
+    home_source_team_id: home.teamId,
     home_source_type: node.homeSource.type,
     id: node.id,
     match_order: node.matchOrder,
