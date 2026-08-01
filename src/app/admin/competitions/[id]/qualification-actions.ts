@@ -6,19 +6,41 @@ import { calculateCupQualification } from "@/lib/cup-qualification";
 import { isCupCompetition, normalizeCompetitionType } from "@/lib/competition-format";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
+function qualificationLoadError(source: string, error?: { code?: string | null; message?: string | null } | null) {
+  // Keep database details on the server while telling the admin which data set needs attention.
+  console.error("cup qualification load failed", { code: error?.code, message: error?.message, source });
+
+  if (error?.code === "42703") {
+    return "ระบบทีมผ่านเข้ารอบยังไม่พร้อมใช้งาน โปรดตรวจสอบว่า migration ล่าสุดถูกใช้งานแล้ว";
+  }
+
+  const labels: Record<string, string> = {
+    config: "การตั้งค่ารอบน็อกเอาต์",
+    groups: "ข้อมูลกลุ่มการแข่งขัน",
+    matches: "ผลและโปรแกรมการแข่งขัน",
+    participants: "รายชื่อทีมในรายการ",
+  };
+  return `ไม่สามารถโหลด${labels[source] ?? "ข้อมูลทีมผ่านเข้ารอบ"}ได้ในขณะนี้`;
+}
+
 async function load(competitionId: string) {
   await requireAdminSession();
   const supabase = getSupabaseAdmin();
   if (!supabase) return { error: "ไม่สามารถเชื่อมต่อข้อมูลผู้ดูแล", supabase: null };
   const competition = await supabase.from("leagues").select("competition_type").eq("id", competitionId).maybeSingle();
-  if (competition.error || !competition.data || !isCupCompetition(normalizeCompetitionType(competition.data.competition_type))) return { error: "ไม่พบการแข่งขันแบบ Cup", supabase: null };
+  if (competition.error) return { error: qualificationLoadError("competition", competition.error), supabase: null };
+  if (!competition.data || !isCupCompetition(normalizeCompetitionType(competition.data.competition_type))) return { error: "ไม่พบการแข่งขันแบบ Cup", supabase: null };
   const [config, groups, participants, matches] = await Promise.all([
     supabase.from("competition_knockout_configs").select("entrant_count, extra_rank_enabled, extra_rank, extra_qualifier_count, qualification_status").eq("competition_id", competitionId).maybeSingle(),
     supabase.from("competition_groups").select("id, name, label, sort_order, qualifiers_count").eq("competition_id", competitionId),
     supabase.from("competition_teams").select("team_id, group_id, teams!inner(id, name, short_name, is_ksw)").eq("competition_id", competitionId).eq("is_active", true),
     supabase.from("matches").select("id, group_id, competition_stage, home_team_id, away_team_id, home_score, away_score, status").eq("league_id", competitionId),
   ]);
-  if (config.error || groups.error || participants.error || matches.error || !config.data) return { error: "ไม่สามารถโหลดข้อมูลทีมผ่านเข้ารอบ", supabase: null };
+  if (config.error) return { error: qualificationLoadError("config", config.error), supabase: null };
+  if (groups.error) return { error: qualificationLoadError("groups", groups.error), supabase: null };
+  if (participants.error) return { error: qualificationLoadError("participants", participants.error), supabase: null };
+  if (matches.error) return { error: qualificationLoadError("matches", matches.error), supabase: null };
+  if (!config.data) return { error: "ยังไม่มีการตั้งค่ารอบน็อกเอาต์สำหรับรายการนี้", supabase: null };
   const teams = (participants.data ?? []).map((row) => ({ ...(Array.isArray(row.teams) ? row.teams[0] : row.teams), group_id: row.group_id, team_id: row.team_id }));
   return { config: config.data, groups: groups.data ?? [], matches: matches.data ?? [], supabase, teams };
 }

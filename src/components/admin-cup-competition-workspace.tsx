@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState, useTransition } from "react";
 import { updateMatch } from "@/app/admin/matches/actions";
 import { approveCupQualification, reopenCupQualification, saveCupQualificationSettings } from "@/app/admin/competitions/[id]/qualification-actions";
@@ -108,16 +109,96 @@ function CupGroupProgram({
 }
 
 function CupQualificationPanel({ competitionId, config, groups, matches, teams }: { competitionId: string; config: CompetitionEngineV2Config | null; groups: AdminCompetitionGroup[]; matches: AdminCompetitionMatch[]; teams: AdminCompetitionGroupTeam[] }) {
+  const router = useRouter();
   const [enabled, setEnabled] = useState(config?.extraRankEnabled ?? false);
   const [rank, setRank] = useState(String(config?.extraRank ?? 3));
   const [count, setCount] = useState(String(config?.extraQualifierCount ?? 0));
-  const [message, setMessage] = useState(""); const [error, setError] = useState(""); const [pending, startTransition] = useTransition();
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [workflowState, setWorkflowState] = useState<"approved" | "editing" | "pending">(config?.qualificationStatus === "approved" ? "approved" : "pending");
+  const [pending, startTransition] = useTransition();
   const result = useMemo(() => calculateCupQualification({ groups: groups as unknown as Record<string, unknown>[], matches: matches as unknown as Record<string, unknown>[], settings: { extraRankEnabled: enabled, extraRank: enabled ? Number(rank) : null, extraQualifierCount: enabled ? Number(count) : 0 }, teams: teams as unknown as Record<string, unknown>[] }), [count, enabled, groups, matches, rank, teams]);
-  const approved = config?.qualificationStatus === "approved";
-  function save() { startTransition(async () => { const response = await saveCupQualificationSettings(competitionId, enabled, enabled ? Number(rank) : null, enabled ? Number(count) : 0); if (!response.ok) { setError(response.error ?? "บันทึกไม่สำเร็จ"); return; } setError(""); setMessage("บันทึกกติกาแล้ว"); }); }
-  function approve() { startTransition(async () => { const response = await approveCupQualification(competitionId); if (!response.ok) { setError(response.error ?? "ยืนยันไม่สำเร็จ"); return; } setError(""); setMessage("ยืนยันทีมผ่านเข้ารอบแล้ว"); }); }
-  function reopen() { startTransition(async () => { const response = await reopenCupQualification(competitionId); if (!response.ok) { setError(response.error ?? "ยกเลิกการยืนยันไม่สำเร็จ"); return; } setError(""); setMessage("ยกเลิกการยืนยันแล้ว"); }); }
-  return <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10"><article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-sm"><h2 className="text-2xl font-black">ทีมผ่านเข้ารอบ</h2><p className="mt-1 text-sm font-semibold text-slate-600">{approved ? `ยืนยันแล้ว${config?.qualificationApprovedByLabel ? ` โดย ${config.qualificationApprovedByLabel}` : ""}` : "รอการตรวจสอบ"}</p><div className="mt-4 grid gap-3 sm:grid-cols-3"><label className="flex items-center gap-2 text-sm font-bold"><input checked={enabled} onChange={(event) => setEnabled(event.target.checked)} type="checkbox" />ใช้อันดับเพิ่มเติม</label><label className="grid gap-1 text-sm font-bold">อันดับเพิ่มเติม<input disabled={!enabled} min="1" onChange={(event) => setRank(event.target.value)} type="number" value={rank} /></label><label className="grid gap-1 text-sm font-bold">จำนวนทีม<input disabled={!enabled} min="0" onChange={(event) => setCount(event.target.value)} type="number" value={count} /></label></div>{result.unevenGroups ? <p className="mt-3 text-sm font-bold text-[#8a6418]">ขนาดกลุ่มไม่เท่ากัน ใช้คะแนนต่อเกมก่อนผลต่างประตูต่อเกม</p> : null}<div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{result.preview.map((entry) => <div className="rounded-md border border-slate-200 px-3 py-2 text-sm font-black" key={entry.teamId}><span className="block text-xs text-slate-500">{entry.label}{entry.temporary ? " · อันดับชั่วคราว" : ""}</span>{entry.teamName}</div>)}</div>{Array.from(result.groupComplete.entries()).map(([id, complete]) => <p className="mt-2 text-xs font-bold text-slate-600" key={id}>{groups.find((group) => group.id === id)?.label || "กลุ่ม"}: {complete ? "แข่งครบแล้ว" : "รอผลการแข่งขัน"}</p>)}{error ? <p className="mt-3 text-sm font-bold text-red-700">{error}</p> : null}{message ? <p className="mt-3 text-sm font-bold text-emerald-700">{message}</p> : null}<div className="mt-4 flex flex-wrap gap-2"><button disabled={pending || approved} onClick={save} type="button">บันทึกกติกา</button><button disabled={pending || approved || result.preview.some((entry) => entry.temporary)} onClick={approve} type="button">ยืนยันทีมผ่านเข้ารอบ</button>{approved ? <button disabled={pending} onClick={reopen} type="button">ยกเลิกการยืนยันเพื่อแก้ไข</button> : null}</div></article></section>;
+  const approved = workflowState === "approved";
+  const status = approved
+    ? { className: "border-emerald-200 bg-emerald-50 text-emerald-800", icon: "✓", label: "อนุมัติแล้ว" }
+    : workflowState === "editing"
+      ? { className: "border-blue-200 bg-blue-50 text-blue-800", icon: "▣", label: "เปิดแก้ไข" }
+      : { className: "border-[#d8ad45]/40 bg-[#fff7e6] text-[#8a6418]", icon: "◷", label: "รอการตรวจสอบ" };
+  const approvedAt = config?.qualificationApprovedAt
+    ? new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(new Date(config.qualificationApprovedAt))
+    : null;
+
+  function save() {
+    startTransition(async () => {
+      const response = await saveCupQualificationSettings(competitionId, enabled, enabled ? Number(rank) : null, enabled ? Number(count) : 0);
+      if (!response.ok) { setError(response.error ?? "บันทึกไม่สำเร็จ"); return; }
+      setError("");
+      setMessage("บันทึกกติกาแล้ว");
+      setWorkflowState("pending");
+      router.refresh();
+    });
+  }
+
+  function approve() {
+    startTransition(async () => {
+      const response = await approveCupQualification(competitionId);
+      if (!response.ok) { setError(response.error ?? "ยืนยันไม่สำเร็จ"); return; }
+      setError("");
+      setMessage("ยืนยันทีมผ่านเข้ารอบแล้ว");
+      setWorkflowState("approved");
+      router.refresh();
+    });
+  }
+
+  function reopen() {
+    startTransition(async () => {
+      const response = await reopenCupQualification(competitionId);
+      if (!response.ok) { setError(response.error ?? "ยกเลิกการยืนยันไม่สำเร็จ"); return; }
+      setError("");
+      setMessage("เปิดให้แก้ไขรายชื่อทีมผ่านเข้ารอบแล้ว");
+      setWorkflowState("editing");
+      router.refresh();
+    });
+  }
+
+  return (
+    <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
+      <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-2xl font-black text-[#061426]">ทีมผ่านเข้ารอบ</h2>
+            <p className="mt-1 text-sm font-semibold text-slate-600">ตรวจสอบรายชื่อก่อนนำไปใช้ในรอบน็อกเอาต์</p>
+          </div>
+          <span className={`inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-black ${status.className}`}><span aria-hidden="true">{status.icon}</span>{status.label}</span>
+        </div>
+
+        {approved ? <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm font-semibold text-emerald-900"><p><strong>ผู้อนุมัติ:</strong> {config?.qualificationApprovedByLabel ?? "ผู้ดูแลระบบ"}</p>{approvedAt ? <p className="mt-1"><strong>วันเวลาอนุมัติ:</strong> {approvedAt}</p> : null}</div> : null}
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <label className="flex min-h-11 items-center gap-2 text-sm font-bold"><input checked={enabled} disabled={approved} onChange={(event) => setEnabled(event.target.checked)} type="checkbox" />ใช้อันดับเพิ่มเติม</label>
+          <label className="grid gap-1 text-sm font-bold">อันดับเพิ่มเติม<input className="min-h-11 rounded-md border border-slate-200 px-3 disabled:bg-slate-100" disabled={!enabled || approved} min="1" onChange={(event) => setRank(event.target.value)} type="number" value={rank} /></label>
+          <label className="grid gap-1 text-sm font-bold">จำนวนทีม<input className="min-h-11 rounded-md border border-slate-200 px-3 disabled:bg-slate-100" disabled={!enabled || approved} min="0" onChange={(event) => setCount(event.target.value)} type="number" value={count} /></label>
+        </div>
+
+        {result.unevenGroups ? <p className="mt-3 rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] px-3 py-2 text-sm font-bold text-[#8a6418]">ขนาดกลุ่มไม่เท่ากัน จึงใช้คะแนนต่อเกมก่อนผลต่างประตูต่อเกม</p> : null}
+        <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {result.preview.length ? result.preview.map((entry) => <div className="min-w-0 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-black text-[#061426]" key={`${entry.type}-${entry.bestOrder ?? entry.groupId}-${entry.teamId}`}><span className="mb-1 block text-xs font-black text-slate-500">{entry.label}{entry.temporary ? " · อันดับชั่วคราว" : ""}</span><span className="break-words">{entry.teamName}</span></div>) : <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-600 sm:col-span-2">ยังไม่มีทีมที่ยืนยันได้ รอให้แต่ละกลุ่มแข่งขันครบก่อน</p>}
+        </div>
+
+        <div className="mt-5 flex flex-wrap gap-2">
+          {Array.from(result.groupComplete.entries()).map(([id, complete]) => <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-black ${complete ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-[#d8ad45]/40 bg-[#fff7e6] text-[#8a6418]"}`} key={id}><span aria-hidden="true">●</span>{groups.find((group) => group.id === id)?.label || "กลุ่ม"}: {complete ? "แข่งครบแล้ว" : "รอผลการแข่งขัน"}</span>)}
+        </div>
+
+        {error ? <div className="mt-5 rounded-md border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-900"><p>{error}</p><button className="mt-3 min-h-11 rounded-md border border-red-300 bg-white px-4 py-2 font-black text-red-800" onClick={() => { setError(""); router.refresh(); }} type="button">ลองใหม่</button></div> : null}
+        {message ? <p className="mt-5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">{message}</p> : null}
+
+        <div className="mt-5 flex flex-wrap gap-3 border-t border-slate-100 pt-5">
+          {!approved ? <button className="min-h-11 rounded-md border border-slate-200 px-4 py-2 text-sm font-black text-[#061426] disabled:opacity-60" disabled={pending} onClick={save} type="button">บันทึกกติกา</button> : null}
+          {approved ? <button className="min-h-11 rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black text-blue-800 disabled:opacity-60" disabled={pending} onClick={reopen} type="button">ยกเลิกการยืนยันเพื่อแก้ไข</button> : <button className="min-h-11 rounded-md bg-[#061426] px-5 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={pending || result.preview.some((entry) => entry.temporary)} onClick={approve} type="button">{pending ? "กำลังดำเนินการ..." : "ยืนยันทีมผ่านเข้ารอบ"}</button>}
+        </div>
+      </article>
+    </section>
+  );
 }
 
 export function AdminCupCompetitionWorkspace({
