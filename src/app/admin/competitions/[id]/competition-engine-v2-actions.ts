@@ -6,6 +6,14 @@ import {
   type CompetitionStructureEntryMode,
   type CompetitionStructurePreview,
 } from "@/lib/competition-structure";
+import {
+  buildCompetitionTree,
+  validateCompetitionTree,
+  type CompetitionTreeEntryMode,
+  type CompetitionTreeNode,
+  type CompetitionTreeSource,
+  type CompetitionTreeSummary,
+} from "@/lib/competition-tree";
 import { requireAdminSession } from "@/lib/admin-server-auth";
 import { isCupCompetition, normalizeCompetitionType } from "@/lib/competition-format";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
@@ -34,6 +42,12 @@ export type CompetitionEngineV2WizardResult = {
   error?: string;
   ok: boolean;
   preview?: CompetitionStructurePreview;
+};
+
+export type CompetitionTreeV2Result = {
+  error?: string;
+  ok: boolean;
+  summary?: CompetitionTreeSummary;
 };
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -74,6 +88,193 @@ async function verifyCupCompetition(competitionId: string) {
   }
 
   return { error: "", supabase };
+}
+
+function sourceFromDatabase(row: Record<string, unknown>, side: "away" | "home"): CompetitionTreeSource {
+  const type = row[`${side}_source_type`];
+  const sourceType = type === "bye" || type === "group_rank" || type === "manual_team" || type === "node_winner" || type === "unassigned"
+    ? type
+    : "unassigned";
+  const rank = row[`${side}_source_rank`];
+  const groupId = row[`${side}_source_group_id`];
+  const nodeId = row[`${side}_source_node_id`];
+  const teamId = row[`${side}_source_team_id`];
+
+  return {
+    groupId: typeof groupId === "string" ? groupId : undefined,
+    nodeId: typeof nodeId === "string" ? nodeId : undefined,
+    rank: typeof rank === "number" ? rank : undefined,
+    teamId: typeof teamId === "string" ? teamId : undefined,
+    type: sourceType,
+  };
+}
+
+function nodeFromDatabase(row: Record<string, unknown>): CompetitionTreeNode {
+  return {
+    awaySource: sourceFromDatabase(row, "away"),
+    bracketPosition: typeof row.bracket_position === "number" ? row.bracket_position : 0,
+    competitionId: typeof row.competition_id === "string" ? row.competition_id : "",
+    homeSource: sourceFromDatabase(row, "home"),
+    id: typeof row.id === "string" ? row.id : "",
+    matchOrder: typeof row.match_order === "number" ? row.match_order : 0,
+    roundIndex: typeof row.round_index === "number" ? row.round_index : 0,
+    roundLabel: typeof row.round_label === "string" ? row.round_label : "",
+  };
+}
+
+function nodeForInsert(node: CompetitionTreeNode) {
+  return {
+    away_source_group_id: node.awaySource.groupId ?? null,
+    away_source_node_id: node.awaySource.nodeId ?? null,
+    away_source_rank: node.awaySource.rank ?? null,
+    away_source_team_id: node.awaySource.teamId ?? null,
+    away_source_type: node.awaySource.type,
+    bracket_position: node.bracketPosition,
+    competition_id: node.competitionId,
+    home_source_group_id: node.homeSource.groupId ?? null,
+    home_source_node_id: node.homeSource.nodeId ?? null,
+    home_source_rank: node.homeSource.rank ?? null,
+    home_source_team_id: node.homeSource.teamId ?? null,
+    home_source_type: node.homeSource.type,
+    id: node.id,
+    match_order: node.matchOrder,
+    round_index: node.roundIndex,
+    round_label: node.roundLabel,
+  };
+}
+
+export async function generateCompetitionTreeV2(competitionId: string): Promise<CompetitionTreeV2Result> {
+  const verified = await verifyCupCompetition(competitionId);
+  if (verified.error || !verified.supabase) return { error: verified.error, ok: false };
+
+  const [configResult, groupsResult, participantsResult, existingNodesResult] = await Promise.all([
+    verified.supabase
+      .from("competition_knockout_configs")
+      .select("entrant_count, bracket_capacity, entry_mode, group_stage_enabled")
+      .eq("competition_id", competitionId)
+      .limit(1)
+      .maybeSingle(),
+    verified.supabase
+      .from("competition_groups")
+      .select("id, name, sort_order, qualifiers_count")
+      .eq("competition_id", competitionId)
+      .order("sort_order", { ascending: true })
+      .order("name", { ascending: true }),
+    verified.supabase
+      .from("competition_teams")
+      .select("team_id, group_id, display_order")
+      .eq("competition_id", competitionId)
+      .eq("is_active", true)
+      .order("display_order", { ascending: true }),
+    verified.supabase
+      .from("competition_bracket_nodes")
+      .select("id, competition_id, round_index, round_label, match_order, bracket_position, home_source_type, away_source_type, home_source_group_id, home_source_rank, home_source_team_id, home_source_node_id, away_source_group_id, away_source_rank, away_source_team_id, away_source_node_id")
+      .eq("competition_id", competitionId),
+  ]);
+
+  if (configResult.error) {
+    console.error("competition tree v2 config lookup failed", configResult.error);
+    return { error: "Could not load Competition Engine V2 configuration.", ok: false };
+  }
+  if (groupsResult.error || participantsResult.error || existingNodesResult.error) {
+    console.error("competition tree v2 input lookup failed", {
+      existingNodes: existingNodesResult.error,
+      groups: groupsResult.error,
+      participants: participantsResult.error,
+    });
+    return { error: "Could not load the inputs for this competition tree.", ok: false };
+  }
+
+  const config = configResult.data;
+  if (!config || typeof config.entrant_count !== "number" || typeof config.bracket_capacity !== "number") {
+    return { error: "Confirm Competition Wizard V2 before generating the tree.", ok: false };
+  }
+  const entryMode = config.entry_mode as CompetitionTreeEntryMode;
+  if (entryMode !== "bye" && entryMode !== "preliminary" && entryMode !== "custom") {
+    return { error: "Competition Engine V2 entry mode is invalid.", ok: false };
+  }
+
+  const existingNodes = (existingNodesResult.data ?? []).map((row) => nodeFromDatabase(row as Record<string, unknown>));
+  if (existingNodes.length) {
+    const existingValidation = validateCompetitionTree(existingNodes, config.entrant_count);
+    if (!existingValidation.valid) {
+      return { error: `Existing Competition Tree V2 is invalid: ${existingValidation.errors[0]}`, ok: false };
+    }
+    const expectedNodeCount = entryMode === "preliminary" && ![2, 4, 8, 16, 32, 64].includes(config.entrant_count)
+      ? config.entrant_count - 1
+      : config.bracket_capacity - 1;
+    if (existingValidation.summary.nodeCount !== expectedNodeCount) {
+      return { error: "Existing Competition Tree V2 does not match the current configuration.", ok: false };
+    }
+    return { ok: true, summary: existingValidation.summary };
+  }
+
+  const participants = participantsResult.data ?? [];
+  const groups = groupsResult.data ?? [];
+  let entrants: CompetitionTreeSource[];
+
+  if (config.group_stage_enabled) {
+    if (!groups.length) return { error: "Group Stage is enabled, but no competition groups exist.", ok: false };
+    const activeByGroup = new Map<string, number>();
+    participants.forEach((participant) => {
+      if (typeof participant.group_id === "string") {
+        activeByGroup.set(participant.group_id, (activeByGroup.get(participant.group_id) ?? 0) + 1);
+      }
+    });
+    entrants = groups.flatMap((group) => {
+      const qualifiers = typeof group.qualifiers_count === "number" ? group.qualifiers_count : 0;
+      return Array.from({ length: qualifiers }, (_, index) => ({
+        groupId: group.id,
+        rank: index + 1,
+        type: "group_rank" as const,
+      }));
+    });
+    const insufficientGroup = groups.find((group) => {
+      const qualifiers = typeof group.qualifiers_count === "number" ? group.qualifiers_count : 0;
+      return qualifiers > (activeByGroup.get(group.id) ?? 0);
+    });
+    if (insufficientGroup) {
+      return {
+        error: `Group ${insufficientGroup.name || insufficientGroup.id} has fewer active teams than its qualifier count.`,
+        ok: false,
+      };
+    }
+  } else if (entryMode === "custom") {
+    entrants = Array.from({ length: config.entrant_count }, () => ({ type: "unassigned" as const }));
+  } else {
+    if (participants.length < config.entrant_count) {
+      return { error: "There are not enough active competition teams for the configured knockout entrants.", ok: false };
+    }
+    entrants = participants.slice(0, config.entrant_count).map((participant) => ({
+      teamId: participant.team_id,
+      type: "manual_team" as const,
+    }));
+  }
+
+  if (entrants.length !== config.entrant_count) {
+    return { error: "Configured knockout entrants do not match the available qualification sources.", ok: false };
+  }
+
+  try {
+    const tree = buildCompetitionTree({
+      bracketCapacity: config.bracket_capacity,
+      competitionId,
+      entrantCount: config.entrant_count,
+      entryMode,
+      entrants,
+      idFactory: () => crypto.randomUUID(),
+    });
+    const insertResult = await verified.supabase.from("competition_bracket_nodes").insert(tree.nodes.map(nodeForInsert));
+    if (insertResult.error) {
+      console.error("competition tree v2 insert failed", insertResult.error);
+      return { error: "Could not save Competition Tree V2.", ok: false };
+    }
+    revalidatePath(`/admin/competitions/${competitionId}`);
+    return { ok: true, summary: tree.summary };
+  } catch (error) {
+    console.error("competition tree v2 generation failed", error);
+    return { error: error instanceof Error ? error.message : "Could not generate Competition Tree V2.", ok: false };
+  }
 }
 
 export async function saveCompetitionEngineV2Config(
