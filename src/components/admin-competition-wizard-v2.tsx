@@ -74,7 +74,7 @@ export function AdminCompetitionWizardV2({
   const qualificationLocked = Boolean(workflow?.status && !canEditQualification(workflow.status));
 
   const preview = useMemo<{ error: string; value: CompetitionStructurePreview | null }>(() => {
-    if (selectedType !== "cup") return { error: "Competition Wizard V2 รอบนี้รองรับ Cup เท่านั้น", value: null };
+    if (selectedType !== "cup") return { error: "การตั้งค่ารอบน็อกเอาต์รองรับเฉพาะการแข่งขันแบบ Cup", value: null };
     if (qualificationMode === "custom") return { error: "Custom Rule เป็น placeholder สำหรับเฟสถัดไป", value: null };
 
     const knockoutEntrantCount = groupStageEnabled && hasExistingGroups
@@ -141,11 +141,11 @@ export function AdminCompetitionWizardV2({
       });
 
       if (!result.ok) {
-        setError(result.error ?? "Could not save Competition Wizard V2 config.");
+        setError(result.error ?? "ไม่สามารถบันทึกการตั้งค่าทีมเข้ารอบได้");
         return;
       }
 
-      setMessage("บันทึกโครงสร้าง Competition Wizard V2 แล้ว ยังไม่ได้สร้างสายหรือแมตช์");
+      setMessage("บันทึกการตั้งค่าทีมเข้ารอบแล้ว ยังไม่ได้สร้างโครงสร้างหรือแมตช์");
     });
   }
 
@@ -154,16 +154,15 @@ export function AdminCompetitionWizardV2({
     return (
       <section className="mx-auto w-full max-w-7xl scroll-mt-28 px-4 pb-10 sm:px-6 lg:px-10" id="competition-wizard-v2">
         <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a6418]">Competition Engine V2</p>
           <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-2xl font-black text-[#061426]">Competition Wizard V2</h2>
+              <h2 className="text-2xl font-black text-[#061426]">ตั้งค่าทีมเข้ารอบน็อกเอาต์</h2>
               <p className="mt-1 text-sm font-semibold text-slate-600">ล็อกการตั้งค่าทีมเข้ารอบแล้วในสถานะ {statusLabel.th} / {statusLabel.en}</p>
             </div>
             <span className="inline-flex w-fit rounded-full bg-emerald-100 px-3 py-2 text-sm font-black text-emerald-800">{statusLabel.th}</span>
           </div>
           <p className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-600">
-            ใช้ “กลับไปแก้ไขโครงสร้าง / Reopen for Editing” ในส่วน Competition Tree V2 ก่อนแก้ configuration.
+            ใช้ “กลับไปแก้ไขโครงสร้าง” ในส่วนจัดการแข่งขันรอบน็อกเอาต์ก่อนแก้การตั้งค่า
           </p>
         </article>
       </section>
@@ -175,8 +174,7 @@ export function AdminCompetitionWizardV2({
       <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10">
         <div className="mb-4 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
         <div className="flex flex-col gap-2">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a6418]">Competition Engine V2</p>
-          <h2 className="text-2xl font-black text-[#061426]">Competition Wizard V2</h2>
+          <h2 className="text-2xl font-black text-[#061426]">ตั้งค่าทีมเข้ารอบน็อกเอาต์</h2>
           <p className="text-sm font-semibold text-slate-600">
             ตั้งค่าโครงสร้าง Cup ล่วงหน้าเท่านั้น ยังไม่สร้าง Bracket หรือ Match
           </p>
@@ -360,7 +358,7 @@ export function AdminCompetitionWizardV2({
             </>
           ) : (
             <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
-              Wizard V2 รอบนี้เปิดให้ตั้งค่าเฉพาะ Cup ก่อน ประเภทอื่นยังใช้ workflow เดิม
+              การตั้งค่ารอบน็อกเอาต์ใช้กับการแข่งขันแบบ Cup เท่านั้น
             </p>
           )}
         </div>

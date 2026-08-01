@@ -908,7 +908,7 @@ export function AdminCompetitionMatchManager({
                 <h3 className="text-xl font-black">Match List</h3>
                 <p className="mt-1 text-sm font-semibold text-slate-600">
                   Showing {visibleMatches.length} of {standardMatches.length} standard matches
-                  {knockoutMatchCount ? ` (${knockoutMatchCount} knockout managed in Knockout)` : ""}
+                  {knockoutMatchCount ? ` (${knockoutMatchCount} คู่จัดการในรอบน็อกเอาต์)` : ""}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -1073,7 +1073,7 @@ export function AdminCompetitionMatchManager({
                   {standardMatches.length
                     ? "No matches match your search or filter."
                     : knockoutMatchCount
-                      ? "Knockout matches are managed in Knockout Bracket Management."
+                      ? "แมตช์รอบน็อกเอาต์จัดการในส่วนรอบน็อกเอาต์"
                     : "No matches yet. Use Add Match to create the first fixture."}
                 </p>
               )}

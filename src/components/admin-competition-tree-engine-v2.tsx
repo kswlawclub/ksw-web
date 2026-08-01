@@ -71,12 +71,12 @@ export function AdminCompetitionTreeEngineV2({
     startTransition(async () => {
       const result = await generateCompetitionTreeV2(competitionId);
       if (!result.ok) {
-        setError(result.error ?? "Could not generate Competition Tree V2.");
+        setError(result.error ?? "ไม่สามารถสร้างโครงสร้างการแข่งขันได้");
         return;
       }
       setGeneratedSummary(result.summary ?? null);
       setCurrentWorkflow((current) => current ? { ...current, hasValidTree: true, warning: null } : current);
-      setMessage(initialSummary ? "Competition Tree V2 is already valid and unchanged." : "Competition Tree V2 has been saved. No matches were created.");
+      setMessage(initialSummary ? "โครงสร้างการแข่งขันถูกต้องและไม่มีการเปลี่ยนแปลง" : "บันทึกโครงสร้างการแข่งขันแล้ว ยังไม่ได้สร้างโปรแกรมแข่งขัน");
       router.refresh();
     });
   }
@@ -87,7 +87,7 @@ export function AdminCompetitionTreeEngineV2({
     startTransition(async () => {
       const result = await reviewCompetitionTreeV2(competitionId);
       if (!result.ok) {
-        setError(result.error ?? "Could not review Competition Tree V2.");
+        setError(result.error ?? "ไม่สามารถตรวจสอบโครงสร้างการแข่งขันได้");
         return;
       }
       setCurrentWorkflow(result.workflow ?? currentWorkflow);
@@ -103,7 +103,7 @@ export function AdminCompetitionTreeEngineV2({
     startTransition(async () => {
       const result = await reopenCompetitionTreeV2(competitionId, "REOPEN");
       if (!result.ok) {
-        setError(result.error ?? "Could not reopen Competition Tree V2.");
+        setError(result.error ?? "ไม่สามารถกลับไปแก้ไขโครงสร้างการแข่งขันได้");
         return;
       }
       setCurrentWorkflow(result.workflow ?? currentWorkflow);
@@ -134,10 +134,9 @@ export function AdminCompetitionTreeEngineV2({
         <div className="mb-4 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a6418]">Competition Engine V2</p>
-            <h2 className="mt-1 text-2xl font-black text-[#061426]">Competition Tree Debug Summary</h2>
+            <h2 className="text-2xl font-black text-[#061426]">จัดการแข่งขันรอบน็อกเอาต์</h2>
             <p className="mt-1 text-sm font-semibold text-slate-600">
-              Tree is the source of truth. This creates topology only; no bracket UI, match, or winner progression is created.
+              Knockout Competition Management
             </p>
           </div>
           <span className="inline-flex w-fit shrink-0 rounded-full bg-[#fff7e6] px-3 py-2 text-sm font-black text-[#8a6418]">
@@ -147,24 +146,25 @@ export function AdminCompetitionTreeEngineV2({
 
         <ol className="mt-5 grid gap-2 text-sm font-bold text-slate-600 sm:grid-cols-2 lg:grid-cols-3">
           {[
-            "1. ตั้งค่าทีมเข้ารอบ / Qualification",
-            "2. สร้างโครงสร้างการแข่งขัน / Tree",
-            "3. ตรวจสอบและยืนยันโครงสร้าง / Review",
-            "4. สร้างโปรแกรมการแข่งขัน / Fixtures",
-            "5. จัดการแข่งขัน / Competition",
-            "6. จบการแข่งขัน / Complete",
+            "1. ตั้งค่าทีมเข้ารอบ",
+            "2. สร้างโครงสร้างการแข่งขัน",
+            "3. ตรวจสอบและยืนยัน",
+            "4. สร้างโปรแกรมการแข่งขัน",
+            "5. จัดการแข่งขันและบันทึกผล",
+            "6. สรุปผลการแข่งขัน",
           ].map((step) => <li className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2" key={step}>{step}</li>)}
         </ol>
 
         {!configReady ? (
           <p className="mt-4 rounded-md border border-[#8a6418]/25 bg-[#fff7e6] px-3 py-2 text-sm font-bold text-[#8a6418]">
-            Confirm Competition Wizard V2 before generating a tree.
+            ตั้งค่าทีมเข้ารอบก่อนสร้างโครงสร้างการแข่งขัน
           </p>
         ) : null}
 
         {summary ? (
-          <div className="mt-5">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <details className="mt-5 min-w-0 rounded-md border border-slate-200 bg-slate-50 p-4">
+            <summary className="cursor-pointer text-sm font-black text-[#061426]">ข้อมูลทางเทคนิคสำหรับผู้ดูแล</summary>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Stat label="Rounds" value={summary.roundCount} />
               <Stat label="Nodes" value={summary.nodeCount} />
               <Stat label="Leaves" value={summary.leafNodeCount} />
@@ -176,10 +176,10 @@ export function AdminCompetitionTreeEngineV2({
               <Stat label="Root Node" value={summary.rootNodeId ? "Valid" : "Missing"} />
             </div>
             <p className="mt-4 break-words text-sm font-bold text-slate-600">{summary.roundLabels.join(" → ")}</p>
-          </div>
+          </details>
         ) : (
           <p className="mt-5 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-600">
-            No Competition Tree V2 has been generated yet.
+            ยังไม่ได้สร้างโครงสร้างการแข่งขัน
           </p>
         )}
 
@@ -195,7 +195,7 @@ export function AdminCompetitionTreeEngineV2({
               onClick={generateTree}
               type="button"
             >
-              {isPending ? "Generating..." : summary ? "Validate Competition Tree" : "Generate Competition Tree"}
+              {isPending ? "กำลังสร้าง..." : summary ? "ตรวจสอบโครงสร้างการแข่งขัน" : "สร้างโครงสร้างการแข่งขัน"}
             </button>
           ) : null}
           {canReviewTree(status) && currentWorkflow?.hasValidTree ? (
@@ -205,7 +205,7 @@ export function AdminCompetitionTreeEngineV2({
               onClick={reviewTree}
               type="button"
             >
-              ยืนยันโครงสร้างการแข่งขัน / Review & Confirm
+              ยืนยันโครงสร้างการแข่งขัน
             </button>
           ) : null}
           {status === "reviewed" ? (
@@ -215,7 +215,7 @@ export function AdminCompetitionTreeEngineV2({
               onClick={reopenTree}
               type="button"
             >
-              กลับไปแก้ไขโครงสร้าง / Reopen for Editing
+              กลับไปแก้ไขโครงสร้าง
             </button>
           ) : null}
           {canCreateFixtures(status) ? (
@@ -225,13 +225,14 @@ export function AdminCompetitionTreeEngineV2({
               onClick={createFixtures}
               type="button"
             >
-              {isPending ? "Creating..." : "สร้างโปรแกรมรอบน็อกเอาต์ / Create Knockout Fixtures"}
+              {isPending ? "กำลังสร้าง..." : "สร้างโปรแกรมรอบน็อกเอาต์"}
             </button>
           ) : null}
         </div>
 
         {fixtureResult ? (
-          <section className="mt-5 min-w-0 rounded-md border border-slate-200 bg-slate-50 p-4">
+          <details className="mt-5 min-w-0 rounded-md border border-slate-200 bg-slate-50 p-4">
+            <summary className="cursor-pointer text-sm font-black text-[#061426]">ข้อมูลทางเทคนิคสำหรับผู้ดูแล</summary>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Stat label="Ready" value={fixtureResult.nodes.filter((node) => node.state === "eligible").length} />
               <Stat label="Waiting" value={fixtureResult.nodes.filter((node) => node.state === "waiting_winner").length} />
@@ -250,7 +251,7 @@ export function AdminCompetitionTreeEngineV2({
               ))}
             </div>
             {fixtureResult.errors.length ? <p className="mt-3 text-sm font-bold text-[#9b1c1f]">{fixtureResult.errors.join(" ")}</p> : null}
-          </section>
+          </details>
         ) : null}
 
         {error ? <p className="mt-4 rounded-md border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-3 py-2 text-sm font-bold text-[#9b1c1f]">{error}</p> : null}

@@ -110,7 +110,7 @@ async function verifyCupCompetition(competitionId: string) {
 
   const result = await supabase
     .from("leagues")
-    .select("id, competition_type, competition_engine_version")
+    .select("id, competition_type")
     .eq("id", competitionId)
     .limit(1)
     .maybeSingle();
@@ -125,11 +125,7 @@ async function verifyCupCompetition(competitionId: string) {
   }
 
   if (!isCupCompetition(normalizeCompetitionType(result.data.competition_type))) {
-    return { error: "Competition Wizard V2 is available for cup competitions only.", supabase };
-  }
-
-  if (result.data.competition_engine_version !== 2) {
-    return { error: "Competition Engine V2 is not enabled for this competition.", supabase };
+    return { error: "Knockout competition management is available for cup competitions only.", supabase };
   }
 
   return { error: "", supabase };
@@ -212,7 +208,7 @@ async function loadCompetitionEngineV2Workflow(
       config: configResult.error,
       nodes: nodesResult.error,
     });
-    return { error: "Could not load Competition Engine V2 workflow state.", workflow: null };
+    return { error: "Could not load knockout competition workflow state.", workflow: null };
   }
 
   const config = configResult.data;
@@ -277,7 +273,7 @@ export async function generateCompetitionTreeV2(competitionId: string): Promise<
 
   if (configResult.error) {
     console.error("competition tree v2 config lookup failed", configResult.error);
-    return { error: "Could not load Competition Engine V2 configuration.", ok: false };
+    return { error: "Could not load knockout competition configuration.", ok: false };
   }
   if (groupsResult.error || participantsResult.error || existingNodesResult.error) {
     console.error("competition tree v2 input lookup failed", {
@@ -290,27 +286,27 @@ export async function generateCompetitionTreeV2(competitionId: string): Promise<
 
   const config = configResult.data;
   if (!config || typeof config.entrant_count !== "number" || typeof config.bracket_capacity !== "number") {
-    return { error: "Confirm Competition Wizard V2 before generating the tree.", ok: false };
+    return { error: "Confirm qualification settings before creating the competition structure.", ok: false };
   }
   if (!isCompetitionEngineV2Status(config.status) || !canGenerateTree(config.status)) {
-    return { error: "Reopen Competition Tree V2 for editing before generating it again.", ok: false };
+    return { error: "Reopen the competition structure for editing before creating it again.", ok: false };
   }
   const entryMode = config.entry_mode as CompetitionTreeEntryMode;
   if (entryMode !== "bye" && entryMode !== "preliminary" && entryMode !== "custom") {
-    return { error: "Competition Engine V2 entry mode is invalid.", ok: false };
+    return { error: "The knockout entry mode is invalid.", ok: false };
   }
 
   const existingNodes = (existingNodesResult.data ?? []).map((row) => nodeFromDatabase(row as Record<string, unknown>));
   if (existingNodes.length) {
     const existingValidation = validateCompetitionTree(existingNodes, config.entrant_count);
     if (!existingValidation.valid) {
-      return { error: `Existing Competition Tree V2 is invalid: ${existingValidation.errors[0]}`, ok: false };
+      return { error: `Existing competition structure is invalid: ${existingValidation.errors[0]}`, ok: false };
     }
     const expectedNodeCount = entryMode === "preliminary" && ![2, 4, 8, 16, 32, 64].includes(config.entrant_count)
       ? config.entrant_count - 1
       : config.bracket_capacity - 1;
     if (existingValidation.summary.nodeCount !== expectedNodeCount) {
-      return { error: "Existing Competition Tree V2 does not match the current configuration.", ok: false };
+      return { error: "Existing competition structure does not match the current configuration.", ok: false };
     }
     return { ok: true, summary: existingValidation.summary };
   }
@@ -373,13 +369,13 @@ export async function generateCompetitionTreeV2(competitionId: string): Promise<
     const insertResult = await verified.supabase.from("competition_bracket_nodes").insert(tree.nodes.map(nodeForInsert));
     if (insertResult.error) {
       console.error("competition tree v2 insert failed", insertResult.error);
-      return { error: "Could not save Competition Tree V2.", ok: false };
+      return { error: "Could not save the competition structure.", ok: false };
     }
     revalidatePath(`/admin/competitions/${competitionId}`);
     return { ok: true, summary: tree.summary };
   } catch (error) {
     console.error("competition tree v2 generation failed", error);
-    return { error: error instanceof Error ? error.message : "Could not generate Competition Tree V2.", ok: false };
+    return { error: error instanceof Error ? error.message : "Could not create the competition structure.", ok: false };
   }
 }
 
@@ -389,21 +385,21 @@ export async function reviewCompetitionTreeV2(competitionId: string): Promise<Co
 
   const workflowResult = await loadCompetitionEngineV2Workflow(verified.supabase, competitionId);
   if (workflowResult.error || !workflowResult.workflow || !workflowResult.config) {
-    return { error: workflowResult.error || "Competition Engine V2 configuration is missing.", ok: false };
+    return { error: workflowResult.error || "Knockout competition configuration is missing.", ok: false };
   }
   const status = workflowResult.workflow.status;
-  if (status !== "draft") return { error: "Only a draft Competition Tree V2 can be reviewed.", ok: false };
+  if (status !== "draft") return { error: "Only a draft competition structure can be reviewed.", ok: false };
   if (typeof workflowResult.config.entrant_count !== "number" || typeof workflowResult.config.bracket_capacity !== "number") {
-    return { error: "Competition Engine V2 configuration is incomplete.", ok: false };
+    return { error: "Knockout competition configuration is incomplete.", ok: false };
   }
   if (!workflowResult.workflow.hasValidTree) {
-    return { error: "Generate a valid Competition Tree V2 before reviewing it.", ok: false };
+    return { error: "Create a valid competition structure before reviewing it.", ok: false };
   }
 
   try {
     assertAllowedTransition(status, "reviewed");
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "Competition Engine V2 transition is invalid.", ok: false };
+    return { error: error instanceof Error ? error.message : "Competition workflow transition is invalid.", ok: false };
   }
 
   const updateResult = await verified.supabase
@@ -413,7 +409,7 @@ export async function reviewCompetitionTreeV2(competitionId: string): Promise<Co
     .eq("status", "draft");
   if (updateResult.error) {
     console.error("competition tree v2 review failed", updateResult.error);
-    return { error: "Could not review Competition Tree V2.", ok: false };
+    return { error: "Could not review the competition structure.", ok: false };
   }
 
   revalidatePath(`/admin/competitions/${competitionId}`);
@@ -433,16 +429,16 @@ export async function reopenCompetitionTreeV2(
 
   const workflowResult = await loadCompetitionEngineV2Workflow(verified.supabase, competitionId);
   if (workflowResult.error || !workflowResult.workflow) {
-    return { error: workflowResult.error || "Could not load Competition Engine V2 workflow.", ok: false };
+    return { error: workflowResult.error || "Could not load the knockout competition workflow.", ok: false };
   }
   if (workflowResult.workflow.status !== "reviewed") {
-    return { error: "Only a reviewed Competition Tree V2 can be reopened for editing.", ok: false };
+    return { error: "Only a reviewed competition structure can be reopened for editing.", ok: false };
   }
 
   try {
     assertAllowedTransition("reviewed", "draft");
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "Competition Engine V2 transition is invalid.", ok: false };
+    return { error: error instanceof Error ? error.message : "Competition workflow transition is invalid.", ok: false };
   }
 
   const updateResult = await verified.supabase
@@ -452,7 +448,7 @@ export async function reopenCompetitionTreeV2(
     .eq("status", "reviewed");
   if (updateResult.error) {
     console.error("competition tree v2 reopen failed", updateResult.error);
-    return { error: "Could not reopen Competition Tree V2 for editing.", ok: false };
+    return { error: "Could not reopen the competition structure for editing.", ok: false };
   }
 
   revalidatePath(`/admin/competitions/${competitionId}`);
@@ -506,7 +502,7 @@ async function loadCompetitionFixturesV2Context(
   ]);
 
   if (workflowResult.error || !workflowResult.config || !workflowResult.workflow) {
-    return { error: workflowResult.error || "Competition Engine V2 configuration is missing." };
+    return { error: workflowResult.error || "Knockout competition configuration is missing." };
   }
   if (groupsResult.error || participantsResult.error || groupMatchesResult.error) {
     console.error("competition fixture v2 context lookup failed", {
@@ -514,7 +510,7 @@ async function loadCompetitionFixturesV2Context(
       groups: groupsResult.error,
       participants: participantsResult.error,
     });
-    return { error: "Could not load Competition Tree V2 fixture inputs." };
+    return { error: "Could not load competition structure fixture inputs." };
   }
 
   const participants = participantsResult.data ?? [];
@@ -624,7 +620,7 @@ async function inspectCompetitionFixturesV2(
   const config = context.config;
   const treeValidation = validateCompetitionTree(context.nodes, config.entrant_count ?? 0);
   if (!treeValidation.valid) {
-    return { ...result, error: `Competition Tree V2 is invalid: ${treeValidation.errors[0]}`, ok: false };
+    return { ...result, error: `Competition structure is invalid: ${treeValidation.errors[0]}`, ok: false };
   }
 
   const nodesById = new Map(context.nodes.map((node) => [node.id, node as CompetitionTreeNode & { linkedMatchId?: string }]));
@@ -775,7 +771,7 @@ export async function createCompetitionFixturesV2(competitionId: string): Promis
     try {
       assertAllowedTransition("reviewed", "fixtures_created");
     } catch (error) {
-      return { ...inspected, error: error instanceof Error ? error.message : "Competition Engine V2 transition is invalid.", ok: false };
+      return { ...inspected, error: error instanceof Error ? error.message : "Competition workflow transition is invalid.", ok: false };
     }
     const statusResult = await verified.supabase
       .from("competition_knockout_configs")
@@ -837,12 +833,12 @@ export async function saveCompetitionEngineV2Config(
       config: existingConfigResult.error,
       nodes: existingNodesResult.error,
     });
-    return { error: "Could not verify Competition Engine V2 editing state.", ok: false };
+    return { error: "Could not verify the competition editing state.", ok: false };
   }
 
   const existingConfig = existingConfigResult.data;
   if (existingConfig && (!isCompetitionEngineV2Status(existingConfig.status) || !canEditQualification(existingConfig.status))) {
-    return { error: "Reopen Competition Tree V2 for editing before changing qualification settings.", ok: false };
+    return { error: "Reopen the competition structure for editing before changing qualification settings.", ok: false };
   }
 
   const groups = groupsResult.data ?? [];
@@ -877,7 +873,7 @@ export async function saveCompetitionEngineV2Config(
   );
   if (treeNeedsReset) {
     if (existingNodesResult.data?.some((node) => typeof node.linked_match_id === "string" && node.linked_match_id.length > 0)) {
-      return { error: "Competition Tree V2 has linked matches and cannot be reset in this workflow.", ok: false };
+      return { error: "The competition structure has linked matches and cannot be reset in this workflow.", ok: false };
     }
     const deleteResult = await verified.supabase
       .from("competition_bracket_nodes")
@@ -885,7 +881,7 @@ export async function saveCompetitionEngineV2Config(
       .eq("competition_id", payload.competitionId);
     if (deleteResult.error) {
       console.error("competition engine v2 stale tree reset failed", deleteResult.error);
-      return { error: "Could not reset the stale Competition Tree V2.", ok: false };
+      return { error: "Could not reset the stale competition structure.", ok: false };
     }
   }
 
@@ -908,7 +904,7 @@ export async function saveCompetitionEngineV2Config(
 
   if (result.error) {
     console.error("competition engine v2 config save failed", result.error);
-    return { error: "Could not save Competition Wizard V2 config.", ok: false };
+    return { error: "Could not save knockout qualification settings.", ok: false };
   }
 
   revalidatePath(`/admin/competitions/${payload.competitionId}`);

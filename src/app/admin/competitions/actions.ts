@@ -199,7 +199,10 @@ export async function createCompetition(
     return { ok: false, error };
   }
 
-  const initialPayload = coverFile ? { ...normalizedPayload, cover_image_url: null } : normalizedPayload;
+  const initialPayload = {
+    ...(coverFile ? { ...normalizedPayload, cover_image_url: null } : normalizedPayload),
+    competition_engine_version: normalizedPayload.competition_type === "cup" ? 2 : 1,
+  };
   const result = await supabase.from("leagues").insert(initialPayload).select("id").single();
 
   if (result.error) {

@@ -61,7 +61,7 @@ export function canCompleteCompetition(status: CompetitionEngineV2Status) {
 
 export function assertAllowedTransition(from: CompetitionEngineV2Status, to: CompetitionEngineV2Status) {
   if (!transitions[from].includes(to)) {
-    throw new Error(`Competition Engine V2 cannot transition from ${from} to ${to}.`);
+    throw new Error(`Knockout competition workflow cannot transition from ${from} to ${to}.`);
   }
 }
 
@@ -75,12 +75,12 @@ export function deriveCompetitionEngineV2Integrity(input: {
   const isEngineV2 = input.engineVersion === 2;
   let warning: string | null = null;
 
-  if (isEngineV2 && !input.hasConfig) warning = "ยังไม่มีการตั้งค่า Competition Engine V2";
+  if (isEngineV2 && !input.hasConfig) warning = "ยังไม่มีการตั้งค่ารอบน็อกเอาต์";
   if (isEngineV2 && input.status === "reviewed" && (!input.hasConfig || !input.hasValidTree)) {
-    warning = "สถานะตรวจสอบแล้วไม่สอดคล้องกับ configuration หรือโครงสร้างการแข่งขัน";
+    warning = "สถานะตรวจสอบแล้วไม่สอดคล้องกับการตั้งค่าหรือโครงสร้างการแข่งขัน";
   }
   if (isEngineV2 && input.status === "fixtures_created" && !input.hasLinkedMatches) {
-    warning = "สถานะสร้างโปรแกรมแล้ว แต่ยังไม่พบแมตช์ที่ผูกกับ Competition Tree V2";
+    warning = "สถานะสร้างโปรแกรมแล้ว แต่ยังไม่พบแมตช์ที่ผูกกับโครงสร้างการแข่งขัน";
   }
 
   return {
