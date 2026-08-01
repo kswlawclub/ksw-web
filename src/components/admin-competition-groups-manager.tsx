@@ -153,6 +153,8 @@ export function AdminCompetitionGroupsManager({
       { id: b.team_id, name: b.name },
     ),
   );
+  const [showAllUnassignedTeams, setShowAllUnassignedTeams] = useState(false);
+  const visibleUnassignedTeams = showAllUnassignedTeams ? unassignedTeams : unassignedTeams.slice(0, 16);
 
   function editGroup(group: AdminCompetitionGroup) {
     setForm({
@@ -405,6 +407,35 @@ export function AdminCompetitionGroupsManager({
     );
   }
 
+  function UnassignedTeamCard({ team }: { team: AdminCompetitionGroupTeam }) {
+    return (
+      <div className="grid min-w-0 gap-2 rounded-md border border-slate-100 bg-slate-50 p-2.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <TeamLogo
+            className="!size-8 shrink-0 bg-[#061426]"
+            initials={teamInitials(team)}
+            logoUrl={team.logo_url ?? ""}
+            teamName={team.name}
+          />
+          <p className="min-w-0 flex-1 break-words text-sm font-black leading-5 text-[#061426]">{team.name}</p>
+          {team.is_ksw ? <span className="shrink-0 rounded-full bg-[#fff7e6] px-2 py-1 text-[10px] font-black text-[#8a6418]">KSW</span> : null}
+        </div>
+        <label className="grid min-w-0 gap-1 text-[11px] font-black text-slate-600">
+          จัดเข้ากลุ่ม
+          <select
+            className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-[#061426] outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={assigningId === team.competition_team_id || !schemaReady}
+            onChange={(event) => void assignTeam(team, event.target.value)}
+            value={team.group_id ?? ""}
+          >
+            <option value="">ยังไม่จัดกลุ่ม</option>
+            {sortedGroups.map((group) => <option key={group.id} value={group.id}>{groupDisplayName(group)}</option>)}
+          </select>
+        </label>
+      </div>
+    );
+  }
+
   return (
     <section className="mx-auto w-full max-w-7xl scroll-mt-28 px-4 pb-10 sm:px-6 lg:px-10" id="groups-summary">
       <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10">
@@ -639,19 +670,24 @@ export function AdminCompetitionGroupsManager({
         </div>
 
         <section className="mt-6 rounded-lg border border-slate-200 bg-white p-4">
-          <h3 className="text-xl font-black">Unassigned Teams</h3>
-          <p className="mt-1 text-sm font-semibold text-slate-600">
-            Teams not yet placed in a cup group.
-          </p>
-          <div className="mt-4 grid gap-2">
+          <h3 className="text-xl font-black">ทีมที่ยังไม่จัดกลุ่ม</h3>
+          <div className="mt-3 rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-600">
+            ทีมที่ยังไม่จัดกลุ่ม <strong className="ml-2 text-[#061426]">{unassignedTeams.length}</strong>
+          </div>
+          <div className="mt-4 grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4">
             {unassignedTeams.length ? (
-              unassignedTeams.map((team) => <TeamAssignmentRow key={team.competition_team_id} team={team} />)
+              visibleUnassignedTeams.map((team) => <UnassignedTeamCard key={team.competition_team_id} team={team} />)
             ) : (
-              <p className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600">
-                All active teams are assigned to groups.
+              <p className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600 xl:col-span-4">
+                ทุกทีมถูกจัดกลุ่มแล้ว
               </p>
             )}
           </div>
+          {unassignedTeams.length > 16 ? (
+            <button className="mt-4 min-h-11 rounded-md border border-slate-200 px-4 py-2 text-sm font-black text-[#061426] hover:border-[#d8ad45]" onClick={() => setShowAllUnassignedTeams((current) => !current)} type="button">
+              {showAllUnassignedTeams ? "แสดงน้อยลง" : "แสดงทั้งหมด / Show all"}
+            </button>
+          ) : null}
         </section>
       </article>
     </section>
