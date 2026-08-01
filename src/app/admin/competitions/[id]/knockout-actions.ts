@@ -168,6 +168,27 @@ function matchWinnerSource(roundIndex: number, matchOrder: number): KnockoutSlot
   return { sourceMatchOrder: matchOrder, sourceRoundIndex: roundIndex, type: "match_winner" };
 }
 
+function expectedProgressionSource(roundIndex: number, matchOrder: number, side: "away" | "home") {
+  const sourceMatchOrder = side === "home" ? matchOrder * 2 - 1 : matchOrder * 2;
+  return matchWinnerSource(roundIndex - 1, sourceMatchOrder);
+}
+
+function sameWinnerSource(source: KnockoutSlotSource, expected: KnockoutSlotSource) {
+  return (
+    source.type === "match_winner" &&
+    source.sourceRoundIndex === expected.sourceRoundIndex &&
+    source.sourceMatchOrder === expected.sourceMatchOrder
+  );
+}
+
+function setupHasOutdatedProgression(match: KnockoutMatchSlot) {
+  if (match.roundIndex <= 1) return false;
+  return (
+    !sameWinnerSource(match.home, expectedProgressionSource(match.roundIndex, match.matchOrder, "home")) ||
+    !sameWinnerSource(match.away, expectedProgressionSource(match.roundIndex, match.matchOrder, "away"))
+  );
+}
+
 function sourceKey(source: KnockoutSlotSource) {
   if (source.type === "group_rank") return `group_rank:${source.groupId}:${source.rank}`;
   if (source.type === "manual_team") return `manual_team:${source.teamId}`;
@@ -964,6 +985,85 @@ export async function createKnockoutMatches(competitionId: string): Promise<Knoc
 
   revalidatePath(`/admin/competitions/${competitionId}`);
   return { ok: true, createdCount: result.createdCount, advancedByes: result.advancedByes };
+}
+
+export async function repairKnockoutProgressionMapping(
+  competitionId: string,
+): Promise<KnockoutActionResult & { repairedCount?: number }> {
+  const { supabase, error } = await getAdminClient();
+  if (!supabase) return { ok: false, error };
+
+  const competitionCheck = await verifyCupCompetition(supabase, competitionId);
+  if (competitionCheck.error) return { ok: false, error: competitionCheck.error };
+
+  const state = await loadKnockoutState(supabase, competitionId);
+  if (!state.ok) return { ok: false, error: state.error };
+
+  const setupMatches = state.setupMatches ?? [];
+  const realMatchesById = new Map((state.realMatches ?? []).map((match) => [match.id, match]));
+  const context = createKnockoutContext(
+    state.groups ?? [],
+    state.groupTeams ?? [],
+    state.matches ?? [],
+    setupMatches,
+    state.realMatches ?? [],
+  );
+  const repairs = setupMatches
+    .filter(setupHasOutdatedProgression)
+    .map((match) => ({
+      ...match,
+      away: expectedProgressionSource(match.roundIndex, match.matchOrder, "away"),
+      home: expectedProgressionSource(match.roundIndex, match.matchOrder, "home"),
+    }));
+
+  for (const repaired of repairs) {
+    const original = setupMatches.find(
+      (match) => match.roundIndex === repaired.roundIndex && match.matchOrder === repaired.matchOrder,
+    );
+    const realMatch = original?.matchId ? realMatchesById.get(original.matchId) : undefined;
+    if (!original || !realMatch || !matchHasStartedOrResult(realMatch)) continue;
+
+    const currentHome = resolveSlotSource(original.home, context);
+    const currentAway = resolveSlotSource(original.away, context);
+    const repairedHome = resolveSlotSource(repaired.home, context);
+    const repairedAway = resolveSlotSource(repaired.away, context);
+    const currentHomeTeamId = currentHome.type === "team" ? currentHome.teamId : "";
+    const currentAwayTeamId = currentAway.type === "team" ? currentAway.teamId : "";
+    const repairedHomeTeamId = repairedHome.type === "team" ? repairedHome.teamId : "";
+    const repairedAwayTeamId = repairedAway.type === "team" ? repairedAway.teamId : "";
+
+    if (
+      (currentHomeTeamId && repairedHomeTeamId && currentHomeTeamId !== repairedHomeTeamId) ||
+      (currentAwayTeamId && repairedAwayTeamId && currentAwayTeamId !== repairedAwayTeamId)
+    ) {
+      return {
+        ok: false,
+        error: `Round ${original.roundIndex} Match ${original.matchOrder} already has match data. Clear that downstream result before repairing bracket mapping.`,
+      };
+    }
+  }
+
+  if (!repairs.length) return { ok: true, repairedCount: 0 };
+
+  for (const match of repairs) {
+    const result = await supabase
+      .from("competition_knockout_matches")
+      .update({
+        ...sourceColumns(match.home, "home"),
+        ...sourceColumns(match.away, "away"),
+      })
+      .eq("competition_id", competitionId)
+      .eq("round_index", match.roundIndex)
+      .eq("match_order", match.matchOrder);
+
+    if (result.error) {
+      console.error("knockout progression repair failed", result.error);
+      return { ok: false, error: "Could not repair knockout bracket mapping." };
+    }
+  }
+
+  revalidatePath(`/admin/competitions/${competitionId}`);
+  return { ok: true, repairedCount: repairs.length };
 }
 
 async function protectDownstreamStartedMatches(

@@ -1,11 +1,12 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   createKnockoutMatches,
   previewBlankKnockout,
   previewSuggestedKnockout,
+  repairKnockoutProgressionMapping,
   saveKnockoutSetup,
   updateKnockoutMatchResult,
   type KnockoutMatchSlot,
@@ -58,6 +59,30 @@ function sourceKey(source: KnockoutSlotSource) {
   if (source.type === "manual_team") return `manual_team:${source.teamId}`;
   if (source.type === "match_winner") return `match_winner:${source.sourceRoundIndex}:${source.sourceMatchOrder}`;
   return source.type;
+}
+
+function expectedProgressionSource(roundIndex: number, matchOrder: number, side: "away" | "home") {
+  return {
+    sourceMatchOrder: side === "home" ? matchOrder * 2 - 1 : matchOrder * 2,
+    sourceRoundIndex: roundIndex - 1,
+    type: "match_winner" as const,
+  };
+}
+
+function sameWinnerSource(source: KnockoutSlotSource, expected: KnockoutSlotSource) {
+  return (
+    source.type === "match_winner" &&
+    source.sourceRoundIndex === expected.sourceRoundIndex &&
+    source.sourceMatchOrder === expected.sourceMatchOrder
+  );
+}
+
+function hasOutdatedProgression(match: KnockoutMatchSlot) {
+  if (match.roundIndex <= 1) return false;
+  return (
+    !sameWinnerSource(match.home, expectedProgressionSource(match.roundIndex, match.matchOrder, "home")) ||
+    !sameWinnerSource(match.away, expectedProgressionSource(match.roundIndex, match.matchOrder, "away"))
+  );
 }
 
 function sourceLabel(
@@ -213,6 +238,10 @@ function groupMatchesByRound(matches: KnockoutMatchSlot[]) {
   return Array.from(map.entries());
 }
 
+function knockoutCardId(competitionId: string, setup: KnockoutMatchSlot) {
+  return `knockout-match-${setup.id ?? `${competitionId}-${setup.roundIndex}-${setup.matchOrder}`}`;
+}
+
 export function AdminCompetitionKnockoutManager({
   competitionId,
   groups,
@@ -235,14 +264,17 @@ export function AdminCompetitionKnockoutManager({
   const [draftMatches, setDraftMatches] = useState<KnockoutMatchSlot[]>(initialMatches);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [cardErrors, setCardErrors] = useState<Record<string, string>>({});
   const [serverWarnings, setServerWarnings] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [repairingMapping, setRepairingMapping] = useState(false);
   const [creatingMatches, setCreatingMatches] = useState(false);
   const [savingResultId, setSavingResultId] = useState("");
   const [expandedRounds, setExpandedRounds] = useState<Record<string, boolean>>({});
   const [advancedDecisions, setAdvancedDecisions] = useState<Record<string, boolean>>({});
   const [specialDecisions, setSpecialDecisions] = useState<Record<string, boolean>>({});
   const [overwriteManualEdits, setOverwriteManualEdits] = useState(false);
+  const pendingRestoreCardId = useRef("");
   const knockoutMatches = useMemo(
     () => groupMatches.filter((match) => match.competition_stage === "knockout"),
     [groupMatches],
@@ -274,6 +306,10 @@ export function AdminCompetitionKnockoutManager({
   const groupedDraftMatches = useMemo(() => groupMatchesByRound(draftMatches), [draftMatches]);
   const groupedSavedMatches = useMemo(() => groupMatchesByRound(initialMatches), [initialMatches]);
   const clientWarnings = useMemo(() => (pairingMode === "edit" ? warningsForMatches(draftMatches) : []), [draftMatches, pairingMode]);
+  const staleProgressionMatches = useMemo(
+    () => initialMatches.filter(hasOutdatedProgression),
+    [initialMatches],
+  );
   const hasManualEdits = initialMatches.some((match) => match.isManualEdited);
   const hasAnyUnfinishedRound = groupedSavedMatches.some(([, roundMatches]) =>
     roundMatches.some((match) => {
@@ -281,6 +317,23 @@ export function AdminCompetitionKnockoutManager({
       return !realMatch || realMatch.status !== "finished";
     }),
   );
+
+  function restoreCard(cardId: string) {
+    const element = document.getElementById(cardId);
+    if (!element) return;
+    const rect = element.getBoundingClientRect();
+    const outsideViewport = rect.top < 0 || rect.bottom > window.innerHeight;
+    if (outsideViewport) {
+      element.scrollIntoView({ block: "center" });
+    }
+  }
+
+  useEffect(() => {
+    if (!pendingRestoreCardId.current) return;
+    const cardId = pendingRestoreCardId.current;
+    pendingRestoreCardId.current = "";
+    window.requestAnimationFrame(() => restoreCard(cardId));
+  }, [groupMatches, initialMatches]);
 
   async function loadSuggested() {
     setMessage("");
@@ -361,14 +414,41 @@ export function AdminCompetitionKnockoutManager({
     router.refresh();
   }
 
-  async function saveResult(event: FormEvent<HTMLFormElement>, match: AdminCompetitionMatch) {
+  async function repairSavedMapping() {
+    if (!window.confirm("Repair saved bracket mapping now? This only updates progression source references and keeps first-round pairing, match details, and results unchanged.")) {
+      return;
+    }
+
+    setRepairingMapping(true);
+    setMessage("");
+    setError("");
+    const result = await repairKnockoutProgressionMapping(competitionId);
+    setRepairingMapping(false);
+
+    if (!result.ok) {
+      setError(result.error ?? "Could not repair bracket mapping.");
+      return;
+    }
+
+    setMessage(
+      result.repairedCount
+        ? `Bracket mapping repaired: ${result.repairedCount} row${result.repairedCount === 1 ? "" : "s"} updated.`
+        : "Bracket mapping is already up to date.",
+    );
+    router.refresh();
+  }
+
+  async function saveResult(event: FormEvent<HTMLFormElement>, setup: KnockoutMatchSlot, match: AdminCompetitionMatch) {
     event.preventDefault();
     const form = resultForms[match.id];
     if (!form) return;
+    const cardId = knockoutCardId(competitionId, setup);
 
+    pendingRestoreCardId.current = cardId;
     setSavingResultId(match.id);
     setMessage("");
     setError("");
+    setCardErrors((current) => ({ ...current, [cardId]: "" }));
 
     const result = await updateKnockoutMatchResult(competitionId, {
       awayScore: form.status === "scheduled" ? null : scoreValue(form.awayScore),
@@ -384,7 +464,8 @@ export function AdminCompetitionKnockoutManager({
     setSavingResultId("");
 
     if (!result.ok) {
-      setError(result.error ?? "Could not update knockout result.");
+      setCardErrors((current) => ({ ...current, [cardId]: result.error ?? "Could not update knockout result." }));
+      restoreCard(cardId);
       return;
     }
 
@@ -615,6 +696,7 @@ export function AdminCompetitionKnockoutManager({
   }
 
   function KnockoutMatchCard({ setup }: { setup: KnockoutMatchSlot }) {
+    const cardId = knockoutCardId(competitionId, setup);
     const realMatch = setup.matchId ? knockoutMatchesById.get(setup.matchId) : undefined;
     const form = realMatch ? resultForms[realMatch.id] ?? knockoutFormFromMatch(realMatch) : undefined;
     const homeTeam = realMatch ? teamsById.get(realMatch.home_team_id) : undefined;
@@ -638,7 +720,7 @@ export function AdminCompetitionKnockoutManager({
 
     if (!realMatch) {
       return (
-        <article className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <article className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4" id={cardId}>
           <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a6418]">
             Match {setup.matchOrder}
           </p>
@@ -657,7 +739,16 @@ export function AdminCompetitionKnockoutManager({
     }
 
     return (
-      <article className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <article
+        className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4"
+        id={cardId}
+        onFocus={() => {
+          pendingRestoreCardId.current = cardId;
+        }}
+        onPointerDown={() => {
+          pendingRestoreCardId.current = cardId;
+        }}
+      >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a6418]">
@@ -701,7 +792,7 @@ export function AdminCompetitionKnockoutManager({
         </div>
 
         {form ? (
-          <form className="mt-4 grid min-w-0 gap-3 rounded-lg border border-white bg-white p-3" onSubmit={(event) => void saveResult(event, realMatch)}>
+          <form className="mt-4 grid min-w-0 gap-3 rounded-lg border border-white bg-white p-3" onSubmit={(event) => void saveResult(event, setup, realMatch)}>
             <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <label className="grid min-w-0 gap-1 text-xs font-black text-slate-600">
                 Date & Time
@@ -773,7 +864,7 @@ export function AdminCompetitionKnockoutManager({
             {normalScoresAreDrawn ? (
               <div className="grid min-w-0 gap-3 rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] p-3 sm:grid-cols-2">
                 <p className="min-w-0 break-words text-xs font-bold text-[#8a6418] sm:col-span-2">
-                  Drawn knockout matches require penalty scores or an advanced manual decision.
+                  Drawn knockout matches require penalty scores or a special decision.
                 </p>
                 {[
                   ["Home Penalties", "penaltyHomeScore"],
@@ -854,6 +945,11 @@ export function AdminCompetitionKnockoutManager({
                 {savingResultId === realMatch.id ? "Saving..." : "Save Match"}
               </button>
             </div>
+            {cardErrors[cardId] ? (
+              <p className="rounded-md border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-3 py-2 text-sm font-bold text-[#9b1c1f]">
+                {cardErrors[cardId]}
+              </p>
+            ) : null}
           </form>
         ) : null}
       </article>
@@ -949,6 +1045,24 @@ export function AdminCompetitionKnockoutManager({
         ) : null}
         {error ? <p className="mt-4 rounded-md border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-3 py-2 text-sm font-bold text-[#9b1c1f]">{error}</p> : null}
         {message ? <p className="mt-4 rounded-md border border-emerald-700/20 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">{message}</p> : null}
+        {staleProgressionMatches.length ? (
+          <div className="mt-4 flex flex-col gap-3 rounded-lg border border-[#d8ad45]/35 bg-[#fff7e6] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-black text-[#8a6418]">Saved bracket mapping is outdated</p>
+              <p className="mt-1 break-words text-xs font-bold text-[#8a6418]">
+                {staleProgressionMatches.length} downstream match source{staleProgressionMatches.length === 1 ? "" : "s"} need repair. First-round pairing and entered match details will be preserved.
+              </p>
+            </div>
+            <button
+              className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={repairingMapping}
+              onClick={() => void repairSavedMapping()}
+              type="button"
+            >
+              {repairingMapping ? "Repairing..." : "Repair Bracket Mapping"}
+            </button>
+          </div>
+        ) : null}
         {[...serverWarnings.map((warning, index) => ({ key: `server-${index}`, message: warning })), ...clientWarnings].length ? (
           <div className="mt-4 grid gap-2">
             {[...serverWarnings.map((warning, index) => ({ key: `server-${index}`, message: warning })), ...clientWarnings].map((warning) => (
