@@ -7,10 +7,10 @@ import { updateMatch } from "@/app/admin/matches/actions";
 import { approveCupQualification, reopenCupQualification, saveCupQualificationSettings } from "@/app/admin/competitions/[id]/qualification-actions";
 import { AdminCompetitionGroupsManager, type AdminCompetitionGroup, type AdminCompetitionGroupTeam } from "@/components/admin-competition-groups-manager";
 import { AdminCompetitionTreeEngineV2 } from "@/components/admin-competition-tree-engine-v2";
-import { AdminCompetitionWizardV2 } from "@/components/admin-competition-wizard-v2";
 import { TeamLogo } from "@/components/team-logo";
 import { calculateCupQualification } from "@/lib/cup-qualification";
 import { calculateCupCompetitionWorkflow, type CupCompetitionWorkflowStep } from "@/lib/cup-competition-workflow";
+import { calculateCompetitionStructure } from "@/lib/competition-structure";
 import { sortTeamsByName } from "@/lib/team-sort";
 import type { CompetitionEngineV2Config, CompetitionKnockoutMatchV2 } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
 import type { CompetitionEngineV2Integrity } from "@/lib/competition-engine-v2-state";
@@ -175,12 +175,17 @@ function CupQualificationPanel({ competitionId, config, groups, matches, teams }
   );
   const bestRanked = result.preview.filter((entry) => entry.type === "best_ranked");
   const configReady = config !== null;
+  const automaticQualifierCount = groups.reduce((total, group) => total + group.qualifiers_count, 0);
+  const totalKnockoutEntrants = automaticQualifierCount + (enabled ? Number(count) || 0 : 0);
+  const structurePreview = useMemo(() => {
+    try {
+      return calculateCompetitionStructure({ entrantCount: totalKnockoutEntrants, entryMode: "bye", groupCount: groups.length, groupStageEnabled: true, qualifiersPerGroup: null, totalParticipantCount: teams.length });
+    } catch {
+      return null;
+    }
+  }, [groups.length, teams.length, totalKnockoutEntrants]);
 
   function save() {
-    if (!configReady) {
-      setError("");
-      return;
-    }
     startTransition(async () => {
       const response = await saveCupQualificationSettings(competitionId, enabled, enabled ? Number(rank) : null, enabled ? Number(count) : 0);
       if (!response.ok) { setError(response.error ?? "บันทึกไม่สำเร็จ"); return; }
@@ -192,10 +197,6 @@ function CupQualificationPanel({ competitionId, config, groups, matches, teams }
   }
 
   function approve() {
-    if (!configReady) {
-      setError("");
-      return;
-    }
     startTransition(async () => {
       const response = await approveCupQualification(competitionId);
       if (!response.ok) { setError(response.error ?? "ยืนยันไม่สำเร็จ"); return; }
@@ -207,10 +208,6 @@ function CupQualificationPanel({ competitionId, config, groups, matches, teams }
   }
 
   function reopen() {
-    if (!configReady) {
-      setError("");
-      return;
-    }
     startTransition(async () => {
       const response = await reopenCupQualification(competitionId);
       if (!response.ok) { setError(response.error ?? "ยกเลิกการยืนยันไม่สำเร็จ"); return; }
@@ -239,6 +236,15 @@ function CupQualificationPanel({ competitionId, config, groups, matches, teams }
           <label className="grid gap-1 text-sm font-bold">อันดับเพิ่มเติม<input className="min-h-11 rounded-md border border-slate-200 px-3 disabled:bg-slate-100" disabled={!enabled || approved} min="1" onChange={(event) => setRank(event.target.value)} type="number" value={rank} /></label>
           <label className="grid gap-1 text-sm font-bold">จำนวนทีม<input className="min-h-11 rounded-md border border-slate-200 px-3 disabled:bg-slate-100" disabled={!enabled || approved} min="0" onChange={(event) => setCount(event.target.value)} type="number" value={count} /></label>
         </div>
+
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div><p className="text-sm font-black text-[#061426]">กติกาทีมผ่านเข้ารอบ</p><p className="mt-1 text-xs font-semibold text-slate-600">ทีมเข้ารอบต่อกลุ่มใช้ค่าที่กำหนดไว้ในแต่ละกลุ่ม รวม {automaticQualifierCount} ทีม</p></div>
+            {!approved ? <button className="min-h-11 rounded-md border border-slate-200 px-4 py-2 text-sm font-black text-[#061426] disabled:opacity-60" disabled={pending || !structurePreview} onClick={save} type="button">บันทึกกติกา</button> : null}
+          </div>
+        </div>
+
+        {structurePreview ? <section className="mt-4 min-w-0 rounded-md border border-slate-200 bg-slate-50 p-3"><h3 className="text-sm font-black text-[#061426]">สรุปรอบน็อกเอาต์</h3><div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4"><div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold"><span className="block text-xs text-slate-500">ทีมเข้ารอบทั้งหมด</span>{structurePreview.qualifiedTeams}</div><div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold"><span className="block text-xs text-slate-500">ขนาดสาย</span>{structurePreview.bracketCapacity}</div>{structurePreview.byeNeeded ? <div className="rounded-md border border-[#d8ad45]/35 bg-white px-3 py-2 text-sm font-bold text-[#8a6418]"><span className="block text-xs text-slate-500">Bye</span>{structurePreview.byeNeeded}</div> : null}{structurePreview.preliminaryNeeded ? <div className="rounded-md border border-blue-200 bg-white px-3 py-2 text-sm font-bold text-blue-800"><span className="block text-xs text-slate-500">Play-in</span>{structurePreview.preliminaryNeeded}</div> : null}<div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold"><span className="block text-xs text-slate-500">จำนวนรอบ</span>{structurePreview.roundCount}</div><div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold"><span className="block text-xs text-slate-500">จำนวนแมตช์</span>{structurePreview.totalMatches}</div></div></section> : <p className="mt-4 rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] px-3 py-2 text-sm font-bold text-[#8a6418]">กำหนดทีมผ่านเข้ารอบรวมอย่างน้อย 2 ทีมก่อนบันทึกกติกา</p>}
 
         {result.unevenGroups ? <p className="mt-3 rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] px-3 py-2 text-sm font-bold text-[#8a6418]">ขนาดกลุ่มไม่เท่ากัน จึงใช้คะแนนต่อเกมก่อนผลต่างประตูต่อเกม</p> : null}
         <div className="mt-5 grid gap-4">
@@ -279,7 +285,6 @@ function CupQualificationPanel({ competitionId, config, groups, matches, teams }
         {message ? <p className="mt-5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">{message}</p> : null}
 
         <div className="mt-5 flex flex-wrap gap-3 border-t border-slate-100 pt-5">
-          {!approved ? <button className="min-h-11 rounded-md border border-slate-200 px-4 py-2 text-sm font-black text-[#061426] disabled:opacity-60" disabled={pending || !configReady} onClick={save} type="button">บันทึกกติกา</button> : null}
           {approved ? <button className="min-h-11 rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black text-blue-800 disabled:opacity-60" disabled={pending || !configReady} onClick={reopen} type="button">ยกเลิกการยืนยันเพื่อแก้ไข</button> : <button className="min-h-11 rounded-md bg-[#061426] px-5 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={pending || !configReady || result.preview.some((entry) => entry.temporary)} onClick={approve} type="button">{pending ? "กำลังดำเนินการ..." : "ยืนยันทีมผ่านเข้ารอบ"}</button>}
         </div>
       </article>
@@ -393,7 +398,6 @@ export function AdminCupCompetitionWorkspace({
       </section>
       <AdminCompetitionGroupsManager competitionId={competitionId} groups={groups} matches={matches} onMatchesChange={(nextMatches) => setMatches(nextMatches as AdminCompetitionMatch[])} renderGroupProgram={(group) => <CupGroupProgram group={group} matches={matches} onSave={saveGroupMatch} teamsById={teamsById} />} schemaReady={groupDataReady} teams={groupTeams} />
       <CupQualificationPanel competitionId={competitionId} config={engineConfig} groups={groups} matches={matches} teams={groupTeams} />
-      <AdminCompetitionWizardV2 competitionId={competitionId} competitionType="cup" existingConfig={engineConfig} groupCount={groups.length} groups={groups} participantCount={groupTeams.length} workflow={engineWorkflow} />
       <AdminCompetitionTreeEngineV2 bracketCapacity={engineConfig?.bracketCapacity ?? null} competitionId={competitionId} configReady={Boolean(engineConfig)} initialMatches={matches.filter((match) => match.competition_stage === "knockout").map((match) => ({ ...match, manual_winner_team_id: match.manual_winner_team_id ?? null, penalty_away_score: match.penalty_away_score ?? null, penalty_home_score: match.penalty_home_score ?? null, winner_team_id: match.winner_team_id ?? null })) as CompetitionKnockoutMatchV2[]} initialSummary={engineSummary} nodes={nodes} qualificationApproved={engineConfig?.qualificationStatus === "approved"} teams={matchTeams.map(({ id, logo_url, name, short_name }) => ({ id, logo_url, name, short_name }))} workflow={engineWorkflow} />
     </>
   );
