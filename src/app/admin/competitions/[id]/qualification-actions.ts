@@ -7,6 +7,16 @@ import { isCupCompetition, normalizeCompetitionType } from "@/lib/competition-fo
 import { calculateCompetitionStructure } from "@/lib/competition-structure";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
+export type ApprovedQualificationSummary = {
+  bracketCapacity: number;
+  byeCount: number;
+  entrantCount: number;
+  extraQualifierCount: number;
+  knockoutMatchCount: number;
+  playInCount: number;
+  roundCount: number;
+};
+
 function qualificationLoadError(source: string, error?: { code?: string | null; message?: string | null } | null) {
   // Keep database details on the server while telling the admin which data set needs attention.
   console.error("cup qualification load failed", { code: error?.code, message: error?.message, source });
@@ -32,7 +42,7 @@ async function load(competitionId: string) {
   if (competition.error) return { error: qualificationLoadError("competition", competition.error), supabase: null };
   if (!competition.data || !isCupCompetition(normalizeCompetitionType(competition.data.competition_type))) return { error: "ไม่พบการแข่งขันแบบ Cup", supabase: null };
   const [config, groups, participants, matches] = await Promise.all([
-    supabase.from("competition_knockout_configs").select("entrant_count, extra_rank_enabled, extra_rank, extra_qualifier_count, qualification_status").eq("competition_id", competitionId).maybeSingle(),
+    supabase.from("competition_knockout_configs").select("entrant_count, bracket_capacity, entry_mode, extra_rank_enabled, extra_rank, extra_qualifier_count, qualification_status").eq("competition_id", competitionId).maybeSingle(),
     supabase.from("competition_groups").select("id, name, label, sort_order, qualifiers_count").eq("competition_id", competitionId),
     supabase.from("competition_teams").select("team_id, group_id, teams!inner(id, name, short_name, is_ksw)").eq("competition_id", competitionId).eq("is_active", true),
     supabase.from("matches").select("id, group_id, competition_stage, home_team_id, away_team_id, home_score, away_score, status").eq("league_id", competitionId),
@@ -50,10 +60,24 @@ export async function approveCupQualification(competitionId: string) {
   if (!data.supabase || !data.config) return { error: data.error, ok: false };
   const result = calculateCupQualification({ groups: data.groups, matches: data.matches, settings: { extraQualifierCount: data.config.extra_qualifier_count, extraRank: data.config.extra_rank, extraRankEnabled: data.config.extra_rank_enabled }, teams: data.teams });
   if (result.preview.some((entry) => entry.temporary) || result.confirmed.length !== (data.config.entrant_count ?? 0)) return { error: "รอผลการแข่งขันของทุกกลุ่มที่ใช้คัดเลือกก่อนยืนยัน", ok: false };
-  const update = await data.supabase.from("competition_knockout_configs").update({ qualification_approved_at: new Date().toISOString(), qualification_approved_by: null, qualification_approved_by_label: "Administrator session", qualification_snapshot: result.confirmed, qualification_status: "approved" }).eq("competition_id", competitionId);
+  const entrantCount = result.confirmed.length;
+  const bracketCapacity = typeof data.config.bracket_capacity === "number" ? data.config.bracket_capacity : 0;
+  const entryMode = data.config.entry_mode === "preliminary" ? "preliminary" : "bye";
+  const playInCount = entryMode === "preliminary" ? Math.max(entrantCount - bracketCapacity, 0) : 0;
+  const summary: ApprovedQualificationSummary = {
+    bracketCapacity,
+    byeCount: entryMode === "bye" ? Math.max(bracketCapacity - entrantCount, 0) : 0,
+    entrantCount,
+    extraQualifierCount: result.confirmed.filter((entry) => entry.type === "best_ranked").length,
+    knockoutMatchCount: Math.max(bracketCapacity - 1, 0) + playInCount,
+    playInCount,
+    roundCount: bracketCapacity > 0 ? Math.log2(bracketCapacity) : 0,
+  };
+  const snapshot = result.confirmed.map((entry) => ({ ...entry, approvalSummary: summary }));
+  const update = await data.supabase.from("competition_knockout_configs").update({ qualification_approved_at: new Date().toISOString(), qualification_approved_by: null, qualification_approved_by_label: "Administrator session", qualification_snapshot: snapshot, qualification_status: "approved" }).eq("competition_id", competitionId);
   if (update.error) return { error: "ไม่สามารถยืนยันทีมผ่านเข้ารอบ", ok: false };
   revalidatePath(`/admin/competitions/${competitionId}`);
-  return { ok: true };
+  return { ok: true, summary };
 }
 
 export async function saveCupQualificationSettings(competitionId: string, extraRankEnabled: boolean, extraRank: number | null, extraQualifierCount: number) {

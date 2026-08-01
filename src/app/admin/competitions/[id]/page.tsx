@@ -26,6 +26,7 @@ import {
   type CompetitionTreeSource,
   type CompetitionTreeSummary,
 } from "@/lib/competition-tree";
+import type { ApprovedQualificationSummary } from "@/app/admin/competitions/[id]/qualification-actions";
 
 type Row = Record<string, unknown>;
 
@@ -207,11 +208,27 @@ type CompetitionEngineV2Config = {
   qualificationApprovedAt: string | null;
   qualificationApprovedByLabel: string | null;
   qualificationSnapshot: CompetitionTreeSource[];
+  qualificationSnapshotSummary: ApprovedQualificationSummary | null;
   status: "active" | "completed" | "draft" | "fixtures_created" | "reviewed";
 };
 
 function asEngineV2Config(row: Row | undefined): CompetitionEngineV2Config | null {
   if (!row) return null;
+
+  const rawSnapshot = Array.isArray(row.qualification_snapshot) ? row.qualification_snapshot : [];
+  const rawSummary = rawSnapshot[0] && typeof rawSnapshot[0] === "object"
+    ? (rawSnapshot[0] as Row).approvalSummary
+    : null;
+  const qualificationSnapshotSummary = rawSummary && typeof rawSummary === "object"
+    && typeof (rawSummary as Row).entrantCount === "number"
+    && typeof (rawSummary as Row).bracketCapacity === "number"
+    && typeof (rawSummary as Row).byeCount === "number"
+    && typeof (rawSummary as Row).playInCount === "number"
+    && typeof (rawSummary as Row).roundCount === "number"
+    && typeof (rawSummary as Row).knockoutMatchCount === "number"
+    && typeof (rawSummary as Row).extraQualifierCount === "number"
+    ? rawSummary as ApprovedQualificationSummary
+    : null;
 
   return {
     bracketCapacity: typeof row.bracket_capacity === "number" ? row.bracket_capacity : null,
@@ -225,7 +242,7 @@ function asEngineV2Config(row: Row | undefined): CompetitionEngineV2Config | nul
     qualificationStatus: row.qualification_status === "approved" ? "approved" : "pending",
     qualificationApprovedAt: typeof row.qualification_approved_at === "string" ? row.qualification_approved_at : null,
     qualificationApprovedByLabel: typeof row.qualification_approved_by_label === "string" ? row.qualification_approved_by_label : null,
-    qualificationSnapshot: Array.isArray(row.qualification_snapshot) ? row.qualification_snapshot.map((entry) => {
+    qualificationSnapshot: rawSnapshot.map((entry) => {
       const value = entry as Row;
       return {
         bestOrder: typeof value.bestOrder === "number" ? value.bestOrder : undefined,
@@ -234,7 +251,8 @@ function asEngineV2Config(row: Row | undefined): CompetitionEngineV2Config | nul
         teamId: typeof value.teamId === "string" ? value.teamId : undefined,
         type: value.type === "best_ranked" ? "best_ranked" : "group_rank",
       };
-    }) : [],
+    }),
+    qualificationSnapshotSummary,
     status: text(row, ["status"], "draft") as CompetitionEngineV2Config["status"],
   };
 }

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState, useTransition } from "react";
 import { updateMatch } from "@/app/admin/matches/actions";
-import { approveCupQualification, reopenCupQualification, saveCupQualificationSettings } from "@/app/admin/competitions/[id]/qualification-actions";
+import { approveCupQualification, reopenCupQualification, saveCupQualificationSettings, type ApprovedQualificationSummary } from "@/app/admin/competitions/[id]/qualification-actions";
 import { AdminCompetitionGroupsManager, type AdminCompetitionGroup, type AdminCompetitionGroupTeam } from "@/components/admin-competition-groups-manager";
 import { AdminCompetitionTreeEngineV2 } from "@/components/admin-competition-tree-engine-v2";
 import { TeamLogo } from "@/components/team-logo";
@@ -168,6 +168,7 @@ function CupQualificationPanel({ competitionId, config, groups, matches, teams }
   const [error, setError] = useState("");
   const [workflowState, setWorkflowState] = useState<"approved" | "editing" | "pending">(config?.qualificationStatus === "approved" ? "approved" : "pending");
   const [detailsOpen, setDetailsOpen] = useState(config?.qualificationStatus !== "approved");
+  const [approvedSummary, setApprovedSummary] = useState<ApprovedQualificationSummary | null>(config?.qualificationSnapshotSummary ?? null);
   const [pending, startTransition] = useTransition();
   const result = useMemo(() => calculateCupQualification({ groups: groups as unknown as Record<string, unknown>[], matches: matches as unknown as Record<string, unknown>[], settings: { extraRankEnabled: enabled, extraRank: enabled ? Number(rank) : null, extraQualifierCount: enabled ? Number(count) : 0 }, teams: teams as unknown as Record<string, unknown>[] }), [count, enabled, groups, matches, rank, teams]);
   const approved = workflowState === "approved";
@@ -213,6 +214,7 @@ function CupQualificationPanel({ competitionId, config, groups, matches, teams }
       setError("");
       setMessage("ยืนยันทีมผ่านเข้ารอบแล้ว");
       setWorkflowState("approved");
+      setApprovedSummary(response.summary ?? null);
       setDetailsOpen(false);
       router.refresh();
     });
@@ -225,23 +227,27 @@ function CupQualificationPanel({ competitionId, config, groups, matches, teams }
       setError("");
       setMessage("เปิดให้แก้ไขรายชื่อทีมผ่านเข้ารอบแล้ว");
       setWorkflowState("editing");
+      setApprovedSummary(null);
       setDetailsOpen(true);
       router.refresh();
     });
   }
 
-  const approvedEntrants = config?.entrantCount ?? 0;
-  const approvedCapacity = config?.bracketCapacity ?? 0;
-  const approvedByeCount = config?.entryMode === "bye" ? Math.max(approvedCapacity - approvedEntrants, 0) : 0;
-  const approvedPlayInCount = config?.entryMode === "preliminary" ? Math.max(approvedEntrants - approvedCapacity, 0) : 0;
-  const approvedRoundCount = approvedCapacity > 0 ? Math.log2(approvedCapacity) : 0;
+  const snapshotSummary = approvedSummary ?? config?.qualificationSnapshotSummary ?? null;
+  const approvedEntrants = snapshotSummary?.entrantCount ?? 0;
+  const approvedCapacity = snapshotSummary?.bracketCapacity ?? 0;
+  const approvedByeCount = snapshotSummary?.byeCount ?? 0;
+  const approvedPlayInCount = snapshotSummary?.playInCount ?? 0;
+  const approvedRoundCount = snapshotSummary?.roundCount ?? 0;
+  const approvedExtraQualifierCount = snapshotSummary?.extraQualifierCount ?? 0;
+  const approvedMatchCount = snapshotSummary?.knockoutMatchCount ?? 0;
 
   if (approved && !detailsOpen) {
     return (
       <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
         <article className="min-w-0 rounded-lg border border-emerald-200 bg-emerald-50/40 p-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-black text-[#061426]">ทีมผ่านเข้ารอบ</h2><p className="mt-1 text-sm font-semibold text-emerald-900">อนุมัติแล้ว{config?.qualificationApprovedByLabel ? ` โดย ${config.qualificationApprovedByLabel}` : ""}{approvedAt ? ` · ${approvedAt}` : ""}</p></div><span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-800"><span aria-hidden="true">✓</span>อนุมัติแล้ว</span></div>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4"><div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-bold"><span className="block text-xs text-slate-500">ทีมผ่านเข้ารอบ</span>{approvedEntrants}</div><div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-bold"><span className="block text-xs text-slate-500">ทีมอันดับเพิ่มเติม</span>{config?.extraRankEnabled ? config.extraQualifierCount : 0}</div><div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-bold"><span className="block text-xs text-slate-500">ขนาดสาย</span>{approvedCapacity || "-"}</div><div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-bold"><span className="block text-xs text-slate-500">{approvedPlayInCount ? "Play-in" : "Bye"}</span>{approvedPlayInCount || approvedByeCount || "ไม่มี"}</div><div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-bold"><span className="block text-xs text-slate-500">จำนวนรอบน็อกเอาต์</span>{approvedRoundCount || "-"}</div></div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3"><div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-bold"><span className="block text-xs text-slate-500">ทีมผ่านเข้ารอบ</span>{approvedEntrants || "-"}</div><div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-bold"><span className="block text-xs text-slate-500">ทีมอันดับเพิ่มเติม</span>{approvedExtraQualifierCount}</div><div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-bold"><span className="block text-xs text-slate-500">ขนาดสาย</span>{approvedCapacity || "-"}</div><div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-bold"><span className="block text-xs text-slate-500">{approvedPlayInCount ? "Play-in" : "Bye"}</span>{approvedPlayInCount || approvedByeCount || "ไม่มี"}</div><div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-bold"><span className="block text-xs text-slate-500">จำนวนรอบน็อกเอาต์</span>{approvedRoundCount || "-"}</div><div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-bold"><span className="block text-xs text-slate-500">จำนวนแมตช์</span>{approvedMatchCount || "-"}</div></div>
           <div className="mt-4 flex flex-wrap gap-2"><button className="min-h-10 rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-black text-emerald-800" onClick={() => setDetailsOpen(true)} type="button">แสดงรายละเอียด</button><button className="min-h-10 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-black text-blue-800 disabled:opacity-60" disabled={pending || !configReady} onClick={reopen} type="button">ยกเลิกการยืนยันเพื่อแก้ไข</button></div>
         </article>
       </section>
