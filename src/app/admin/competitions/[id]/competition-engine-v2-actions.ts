@@ -198,9 +198,12 @@ function nodeFromDatabase(row: Record<string, unknown>): CompetitionTreeNode {
 }
 
 function nodeForInsert(node: CompetitionTreeNode) {
+  const awayGroupId = node.awaySource.type === "best_ranked" ? null : node.awaySource.groupId ?? null;
+  const homeGroupId = node.homeSource.type === "best_ranked" ? null : node.homeSource.groupId ?? null;
+
   return {
     away_source_best_order: node.awaySource.bestOrder ?? null,
-    away_source_group_id: node.awaySource.groupId ?? null,
+    away_source_group_id: awayGroupId,
     away_source_node_id: node.awaySource.nodeId ?? null,
     away_source_rank: node.awaySource.rank ?? null,
     away_source_team_id: node.awaySource.teamId ?? null,
@@ -208,7 +211,7 @@ function nodeForInsert(node: CompetitionTreeNode) {
     bracket_position: node.bracketPosition,
     competition_id: node.competitionId,
     home_source_best_order: node.homeSource.bestOrder ?? null,
-    home_source_group_id: node.homeSource.groupId ?? null,
+    home_source_group_id: homeGroupId,
     home_source_node_id: node.homeSource.nodeId ?? null,
     home_source_rank: node.homeSource.rank ?? null,
     home_source_team_id: node.homeSource.teamId ?? null,
@@ -218,6 +221,13 @@ function nodeForInsert(node: CompetitionTreeNode) {
     round_index: node.roundIndex,
     round_label: node.roundLabel,
   };
+}
+
+function treePersistenceError(error: { code?: string | null; details?: string | null; hint?: string | null; message?: string | null }) {
+  if (error.code === "23514") return "โครงสร้างคู่แข่งขันมีแหล่งทีมที่ไม่ตรงตามกติกาฐานข้อมูล กรุณาลองยืนยันการจัดสายอีกครั้ง";
+  if (error.code === "23503") return "ไม่พบข้อมูลกลุ่ม ทีม หรือคู่ต้นทางที่ใช้สร้างสายแข่งขัน";
+  if (error.code === "23505") return "มีโครงสร้างการแข่งขันนี้อยู่แล้ว ระบบจะใช้โครงสร้างเดิมแทน";
+  return `ไม่สามารถบันทึกโครงสร้างการแข่งขันได้${error.code ? ` (รหัส ${error.code})` : ""}`;
 }
 
 async function loadCompetitionEngineV2Workflow(
@@ -317,7 +327,7 @@ export async function generateCompetitionTreeV2(
       .order("display_order", { ascending: true }),
     verified.supabase
       .from("competition_bracket_nodes")
-      .select("id, competition_id, round_index, round_label, match_order, bracket_position, home_source_type, away_source_type, home_source_group_id, home_source_rank, home_source_team_id, home_source_node_id, home_source_best_order, away_source_group_id, away_source_rank, away_source_team_id, away_source_node_id, away_source_best_order")
+      .select("id, competition_id, round_index, round_label, match_order, bracket_position, linked_match_id, home_source_type, away_source_type, home_source_group_id, home_source_rank, home_source_team_id, home_source_node_id, home_source_best_order, away_source_group_id, away_source_rank, away_source_team_id, away_source_node_id, away_source_best_order")
       .eq("competition_id", competitionId),
   ]);
 
@@ -350,15 +360,33 @@ export async function generateCompetitionTreeV2(
   if (existingNodes.length) {
     const existingValidation = validateCompetitionTree(existingNodes, config.entrant_count);
     if (!existingValidation.valid) {
-      return { error: `Existing competition structure is invalid: ${existingValidation.errors[0]}`, ok: false };
+      if (existingNodes.some((node) => node.linkedMatchId)) {
+        return { error: "โครงสร้างเดิมไม่สมบูรณ์และมีแมตช์ที่เชื่อมอยู่ จึงไม่สามารถซ่อมอัตโนมัติได้", ok: false };
+      }
+      const removeStaleResult = await verified.supabase
+        .from("competition_bracket_nodes")
+        .delete()
+        .eq("competition_id", competitionId);
+      if (removeStaleResult.error) {
+        console.error("competition tree v2 stale draft removal failed", {
+          code: removeStaleResult.error.code,
+          constraint: removeStaleResult.error.details,
+          message: removeStaleResult.error.message,
+          table: "public.competition_bracket_nodes",
+        });
+        return { error: "ไม่สามารถซ่อมโครงสร้างฉบับร่างเดิมได้", ok: false };
+      }
+      console.info("competition tree v2 stale draft removed", { competitionId, reason: existingValidation.errors[0] });
     }
-    const expectedNodeCount = entryMode === "preliminary" && ![2, 4, 8, 16, 32, 64].includes(config.entrant_count)
-      ? config.entrant_count - 1
-      : config.bracket_capacity - 1;
-    if (existingValidation.summary.nodeCount !== expectedNodeCount) {
-      return { error: "Existing competition structure does not match the current configuration.", ok: false };
+    if (existingValidation.valid) {
+      const expectedNodeCount = entryMode === "preliminary" && ![2, 4, 8, 16, 32, 64].includes(config.entrant_count)
+        ? config.entrant_count - 1
+        : config.bracket_capacity - 1;
+      if (existingValidation.summary.nodeCount !== expectedNodeCount) {
+        return { error: "โครงสร้างเดิมไม่ตรงกับจำนวนทีมที่อนุมัติแล้ว", ok: false };
+      }
+      return { ok: true, summary: existingValidation.summary };
     }
-    return { ok: true, summary: existingValidation.summary };
   }
 
   const participants = participantsResult.data ?? [];
@@ -417,8 +445,15 @@ export async function generateCompetitionTreeV2(
     }
     const insertResult = await verified.supabase.from("competition_bracket_nodes").insert(tree.nodes.map(nodeForInsert));
     if (insertResult.error) {
-      console.error("competition tree v2 insert failed", insertResult.error);
-      return { error: "Could not save the competition structure.", ok: false };
+      console.error("competition tree v2 insert failed", {
+        code: insertResult.error.code,
+        constraint: insertResult.error.details,
+        hint: insertResult.error.hint,
+        message: insertResult.error.message,
+        nodeCount: tree.nodes.length,
+        table: "public.competition_bracket_nodes",
+      });
+      return { error: treePersistenceError(insertResult.error), ok: false };
     }
     revalidatePath(`/admin/competitions/${competitionId}`);
     return { ok: true, summary: tree.summary };
