@@ -47,6 +47,24 @@ type ResultForm = {
   venue: string;
 };
 
+type KnockoutRoundView = {
+  allMatchesReady: boolean;
+  complete: boolean;
+  label: string;
+  matches: CompetitionKnockoutMatchV2[];
+  nodes: CompetitionTreeNode[];
+  roundIndex: number;
+};
+
+function knockoutRoundTitle(label: string) {
+  if (label === "Final") return "รอบชิงชนะเลิศ";
+  if (label === "Semifinal") return "รอบรองชนะเลิศ";
+  if (label === "Quarterfinal") return "รอบ 8 ทีม";
+  if (label === "Preliminary") return "รอบคัดเลือก";
+  const roundOf = /^Round of (\d+)$/.exec(label);
+  return roundOf ? `รอบ ${roundOf[1]} ทีม` : label;
+}
+
 function dateValue(value: string | null) {
   if (!value) return "";
   const date = new Date(value);
@@ -201,17 +219,21 @@ function KnockoutMatchCard({
 }
 
 function KnockoutRoundMatches({
+  current,
   matches,
   onSave,
+  roundComplete,
   roundLabel,
   teamsById,
 }: {
+  current: boolean;
   matches: CompetitionKnockoutMatchV2[];
   onSave: (match: CompetitionKnockoutMatchV2, draft: ResultForm) => Promise<{ error?: string; ok: boolean }>;
+  roundComplete: boolean;
   roundLabel: string;
   teamsById: Map<string, { id: string; logo_url: string | null; name: string; short_name: string | null }>;
 }) {
-  const [finishedCollapsed, setFinishedCollapsed] = useState(false);
+  const [finishedCollapsed, setFinishedCollapsed] = useState(roundComplete);
   const [editingMatchId, setEditingMatchId] = useState("");
   const finishedMatches = matches.filter((match) => match.status === "finished");
   const displayedMatches = finishedCollapsed ? matches.filter((match) => match.status !== "finished") : matches;
@@ -219,7 +241,7 @@ function KnockoutRoundMatches({
 
   return (
     <section className="min-w-0 rounded-lg border border-slate-200 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-xl font-black text-[#061426]">{roundLabel}</h3><p className="mt-1 text-sm font-semibold text-slate-600">กำหนดวันเวลา สนาม และบันทึกผลของแต่ละคู่ได้ที่นี่</p></div>{finishedMatches.length ? <button className="min-h-10 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-black text-[#061426] disabled:opacity-50" disabled={Boolean(editingMatchId)} onClick={() => setFinishedCollapsed((current) => !current)} title={editingMatchId ? "ปิดการแก้ไขผลก่อนพับรายการ" : undefined} type="button">{finishedCollapsed ? "แสดงผลการแข่งขัน" : "พับผลการแข่งขัน"}</button> : null}</div>
+      <div className="flex flex-wrap items-center justify-between gap-2"><div><div className="flex flex-wrap items-center gap-2"><h3 className="text-xl font-black text-[#061426]">{roundLabel}</h3>{current ? <span className="rounded-full bg-[#fff7e6] px-2 py-1 text-xs font-black text-[#8a6418]">รอบปัจจุบัน</span> : null}</div><p className="mt-1 text-sm font-semibold text-slate-600">{roundComplete ? `จบแล้ว ${finishedMatches.length} คู่` : "กำหนดวันเวลา สนาม และบันทึกผลของแต่ละคู่ได้ที่นี่"}</p></div>{finishedMatches.length ? <button className="min-h-10 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-black text-[#061426] disabled:opacity-50" disabled={Boolean(editingMatchId)} onClick={() => setFinishedCollapsed((current) => !current)} title={editingMatchId ? "ปิดการแก้ไขผลก่อนพับรายการ" : undefined} type="button">{finishedCollapsed ? "แสดงผลการแข่งขัน" : "พับผลการแข่งขัน"}</button> : null}</div>
       {finishedCollapsed ? <p className="mt-2 text-xs font-bold text-slate-600">จบแล้ว {finishedMatches.length} นัด · รวม {finishedGoals} ประตู</p> : null}
       <div className="mt-4 grid gap-3">{displayedMatches.map((match) => <KnockoutMatchCard key={match.id} match={match} onEditingChange={(editing) => setEditingMatchId(editing ? match.id : "")} onSave={onSave} teamsById={teamsById} />)}</div>
     </section>
@@ -268,43 +290,28 @@ export function AdminCompetitionTreeEngineV2({
   const status = currentWorkflow?.status ?? "draft";
   const statusLabel = competitionEngineV2StatusLabel(status);
   const teamsById = useMemo(() => new Map(teams.map((team) => [team.id, team])), [teams]);
-  const nodeByMatchId = useMemo(
-    () => new Map(nodes.filter((node) => node.linkedMatchId).map((node) => [node.linkedMatchId as string, node])),
-    [nodes],
-  );
-  const matchesByRound = useMemo(() => {
-    const grouped = new Map<string, CompetitionKnockoutMatchV2[]>();
-    knockoutMatches.forEach((match) => {
-      const node = nodeByMatchId.get(match.id);
-      const label = node?.roundLabel || "รอบน็อกเอาต์";
-      grouped.set(label, [...(grouped.get(label) ?? []), match]);
-    });
-    return Array.from(grouped.entries()).sort(([, matchesA], [, matchesB]) =>
-      (nodeByMatchId.get(matchesA[0]?.id)?.roundIndex ?? 0) - (nodeByMatchId.get(matchesB[0]?.id)?.roundIndex ?? 0),
-    );
-  }, [knockoutMatches, nodeByMatchId]);
-  const pendingNodesByRound = useMemo(() => {
-    if (status !== "fixtures_created" || !nodes.some((node) => node.linkedMatchId)) return [];
-    const nodesById = new Map(nodes.map((node) => [node.id, node]));
-    const grouped = new Map<string, Array<{ id: string; reason: string }>>();
-    nodes.filter((node) => !node.linkedMatchId).forEach((node) => {
-      const waitingSources = [node.homeSource, node.awaySource]
-        .filter((source) => source.type === "node_winner" && source.nodeId)
-        .map((source) => {
-          const sourceNode = nodesById.get(source.nodeId!);
-          return sourceNode ? `รอผู้ชนะจากคู่ ${sourceNode.matchOrder}` : "รอผู้ชนะจากคู่ก่อนหน้า";
-        });
-      grouped.set(node.roundLabel, [...(grouped.get(node.roundLabel) ?? []), {
-        id: node.id,
-        reason: waitingSources.join(" / ") || "รอผลการแข่งขันรอบก่อนหน้า",
-      }]);
-    });
-    return Array.from(grouped.entries()).sort(([, nodesA], [, nodesB]) => {
-      const firstA = nodes.find((node) => node.id === nodesA[0]?.id);
-      const firstB = nodes.find((node) => node.id === nodesB[0]?.id);
-      return (firstA?.roundIndex ?? 0) - (firstB?.roundIndex ?? 0);
-    });
-  }, [nodes, status]);
+  const knockoutRounds = useMemo<KnockoutRoundView[]>(() => {
+    const matchesById = new Map(knockoutMatches.map((match) => [match.id, match]));
+    const grouped = new Map<number, CompetitionTreeNode[]>();
+    nodes.forEach((node) => grouped.set(node.roundIndex, [...(grouped.get(node.roundIndex) ?? []), node]));
+    return Array.from(grouped.entries())
+      .sort(([roundA], [roundB]) => roundA - roundB)
+      .map(([roundIndex, roundNodes]) => {
+        const matches = roundNodes.flatMap((node) => node.linkedMatchId ? [matchesById.get(node.linkedMatchId)].filter((match): match is CompetitionKnockoutMatchV2 => Boolean(match)) : []);
+        return {
+          allMatchesReady: matches.length === roundNodes.length,
+          complete: roundNodes.length > 0 && roundNodes.every((node) => {
+            const match = node.linkedMatchId ? matchesById.get(node.linkedMatchId) : undefined;
+            return match?.status === "finished" && Boolean(match.winner_team_id);
+          }),
+          label: knockoutRoundTitle(roundNodes[0]?.roundLabel ?? `Round ${roundIndex + 1}`),
+          matches,
+          nodes: roundNodes,
+          roundIndex,
+        };
+      });
+  }, [knockoutMatches, nodes]);
+  const currentRoundIndex = knockoutRounds.find((round) => !round.complete)?.roundIndex ?? null;
   const champion = useMemo(() => {
     const finalNode = [...nodes].sort((a, b) => b.roundIndex - a.roundIndex || b.matchOrder - a.matchOrder)[0];
     const finalMatch = finalNode?.linkedMatchId ? knockoutMatches.find((match) => match.id === finalNode.linkedMatchId) : undefined;
@@ -562,17 +569,29 @@ export function AdminCompetitionTreeEngineV2({
         {error ? <p className="mt-4 rounded-md border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-3 py-2 text-sm font-bold text-[#9b1c1f]">{error}</p> : null}
         {message ? <p className="mt-4 rounded-md border border-emerald-700/20 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">{message}</p> : null}
 
-        {matchesByRound.length ? (
+        {knockoutRounds.length ? (
           <div className="mt-6 grid gap-5">
-            {matchesByRound.map(([roundLabel, roundMatches]) => <KnockoutRoundMatches key={roundLabel} matches={roundMatches} onSave={saveMatch} roundLabel={roundLabel} teamsById={teamsById} />)}
+            {knockoutRounds.map((round, index) => {
+              const current = round.roundIndex === currentRoundIndex;
+              const previousRound = knockoutRounds[index - 1];
+              if (round.complete || (current && round.allMatchesReady)) {
+                return <KnockoutRoundMatches current={current} key={`${round.roundIndex}-${round.complete ? "complete" : "active"}`} matches={round.matches} onSave={saveMatch} roundComplete={round.complete} roundLabel={round.label} teamsById={teamsById} />;
+              }
+              return (
+                <section className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4" key={round.roundIndex}>
+                  <h3 className="text-xl font-black text-[#061426]">{round.label}</h3>
+                  <p className="mt-2 text-sm font-bold text-slate-600">
+                    {current
+                      ? "กำลังเตรียมโปรแกรมการแข่งขันของรอบนี้"
+                      : `รอผลการแข่งขัน${previousRound ? previousRound.label : "รอบก่อนหน้า"}`}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-slate-500">{round.nodes.length} คู่ รอผู้ชนะจากรอบก่อน</p>
+                </section>
+              );
+            })}
           </div>
         ) : summary ? (
           <p className="mt-5 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-600">เมื่อทีมผ่านเข้ารอบพร้อม ระบบจะแสดงคู่แข่งขันในส่วนนี้</p>
-        ) : null}
-        {pendingNodesByRound.length ? (
-          <div className="mt-5 grid gap-5">
-            {pendingNodesByRound.map(([roundLabel, roundNodes]) => <section className="min-w-0 rounded-lg border border-slate-200 p-4" key={roundLabel}><h3 className="text-xl font-black text-[#061426]">{roundLabel}</h3><div className="mt-3 grid gap-2">{roundNodes.map((node, index) => <article className="min-w-0 rounded-md border border-slate-200 bg-slate-50 px-3 py-3" key={node.id}><p className="text-xs font-black text-slate-500">คู่ที่ {index + 1}</p><p className="mt-1 break-words text-sm font-bold text-slate-700">{node.reason}</p></article>)}</div></section>)}
-          </div>
         ) : null}
         <section className="mt-6 rounded-lg border border-[#d8ad45]/35 bg-[#fff7e6] p-4">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a6418]">Champion</p>
