@@ -174,8 +174,13 @@ function CupQualificationPanel({ competitionId, config, groups, matches, teams }
     [groups],
   );
   const bestRanked = result.preview.filter((entry) => entry.type === "best_ranked");
+  const configReady = config !== null;
 
   function save() {
+    if (!configReady) {
+      setError("");
+      return;
+    }
     startTransition(async () => {
       const response = await saveCupQualificationSettings(competitionId, enabled, enabled ? Number(rank) : null, enabled ? Number(count) : 0);
       if (!response.ok) { setError(response.error ?? "บันทึกไม่สำเร็จ"); return; }
@@ -187,6 +192,10 @@ function CupQualificationPanel({ competitionId, config, groups, matches, teams }
   }
 
   function approve() {
+    if (!configReady) {
+      setError("");
+      return;
+    }
     startTransition(async () => {
       const response = await approveCupQualification(competitionId);
       if (!response.ok) { setError(response.error ?? "ยืนยันไม่สำเร็จ"); return; }
@@ -198,6 +207,10 @@ function CupQualificationPanel({ competitionId, config, groups, matches, teams }
   }
 
   function reopen() {
+    if (!configReady) {
+      setError("");
+      return;
+    }
     startTransition(async () => {
       const response = await reopenCupQualification(competitionId);
       if (!response.ok) { setError(response.error ?? "ยกเลิกการยืนยันไม่สำเร็จ"); return; }
@@ -266,8 +279,8 @@ function CupQualificationPanel({ competitionId, config, groups, matches, teams }
         {message ? <p className="mt-5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">{message}</p> : null}
 
         <div className="mt-5 flex flex-wrap gap-3 border-t border-slate-100 pt-5">
-          {!approved ? <button className="min-h-11 rounded-md border border-slate-200 px-4 py-2 text-sm font-black text-[#061426] disabled:opacity-60" disabled={pending} onClick={save} type="button">บันทึกกติกา</button> : null}
-          {approved ? <button className="min-h-11 rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black text-blue-800 disabled:opacity-60" disabled={pending} onClick={reopen} type="button">ยกเลิกการยืนยันเพื่อแก้ไข</button> : <button className="min-h-11 rounded-md bg-[#061426] px-5 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={pending || result.preview.some((entry) => entry.temporary)} onClick={approve} type="button">{pending ? "กำลังดำเนินการ..." : "ยืนยันทีมผ่านเข้ารอบ"}</button>}
+          {!approved ? <button className="min-h-11 rounded-md border border-slate-200 px-4 py-2 text-sm font-black text-[#061426] disabled:opacity-60" disabled={pending || !configReady} onClick={save} type="button">บันทึกกติกา</button> : null}
+          {approved ? <button className="min-h-11 rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black text-blue-800 disabled:opacity-60" disabled={pending || !configReady} onClick={reopen} type="button">ยกเลิกการยืนยันเพื่อแก้ไข</button> : <button className="min-h-11 rounded-md bg-[#061426] px-5 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={pending || !configReady || result.preview.some((entry) => entry.temporary)} onClick={approve} type="button">{pending ? "กำลังดำเนินการ..." : "ยืนยันทีมผ่านเข้ารอบ"}</button>}
         </div>
       </article>
     </section>
