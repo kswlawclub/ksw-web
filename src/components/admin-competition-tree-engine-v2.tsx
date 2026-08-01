@@ -78,6 +78,67 @@ function Stat({ label, value }: { label: string; value: number | string }) {
   );
 }
 
+function KnockoutMatchCard({
+  match,
+  onSave,
+  teamsById,
+}: {
+  match: CompetitionKnockoutMatchV2;
+  onSave: (match: CompetitionKnockoutMatchV2, draft: ResultForm) => Promise<{ error?: string; ok: boolean }>;
+  teamsById: Map<string, { id: string; logo_url: string | null; name: string; short_name: string | null }>;
+}) {
+  const [draft, setDraft] = useState(() => formFromMatch(match));
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const home = teamsById.get(match.home_team_id);
+  const away = teamsById.get(match.away_team_id);
+  const isDraw = draft.status === "finished" && draft.homeScore !== "" && draft.homeScore === draft.awayScore;
+
+  function updateDraft(patch: Partial<ResultForm>) {
+    setError("");
+    setSaved(false);
+    setDraft((current) => ({ ...current, ...patch }));
+  }
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    const result = await onSave(match, draft);
+    setSaving(false);
+    if (!result.ok) {
+      setError(result.error ?? "ไม่สามารถบันทึกผลการแข่งขันได้");
+      return;
+    }
+    setSaved(true);
+  }
+
+  return (
+    <form className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4" id={`knockout-match-${match.id}`} onSubmit={save}>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {[{ side: "home", team: home, value: draft.homeScore }, { side: "away", team: away, value: draft.awayScore }].map(({ side, team, value }) => (
+          <label className="flex min-w-0 items-center gap-3 rounded-md border border-slate-200 bg-white p-3 text-sm font-black" key={side}>
+            <TeamLogo className="!size-9 shrink-0 bg-[#061426]" initials={(team?.short_name || team?.name || "ทีม").slice(0, 3)} logoUrl={team?.logo_url ?? ""} teamName={team?.name ?? "รอผลรอบก่อน"} />
+            <span className="min-w-0 flex-1 break-words">{team?.name ?? "รอผลรอบก่อน"}</span>
+            <input className="min-h-11 w-16 shrink-0 rounded-md border border-slate-200 px-2 text-center" max="999" min="0" onChange={(event) => updateDraft(side === "home" ? { homeScore: event.target.value } : { awayScore: event.target.value })} step="1" type="number" value={value} />
+          </label>
+        ))}
+      </div>
+      <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2">
+        <label className="grid min-w-0 gap-1 text-xs font-black">วันและเวลา<input className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3" onChange={(event) => updateDraft({ matchDate: event.target.value })} type="datetime-local" value={draft.matchDate} /></label>
+        <label className="grid min-w-0 gap-1 text-xs font-black">สนาม<input className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3" onChange={(event) => updateDraft({ venue: event.target.value })} value={draft.venue} /></label>
+        <label className="grid min-w-0 gap-1 text-xs font-black">สถานะ<select className="min-h-11 w-full rounded-md border border-slate-200 px-3" onChange={(event) => updateDraft({ status: event.target.value as ResultForm["status"] })} value={draft.status}><option value="scheduled">รอแข่งขัน</option><option value="finished">จบการแข่งขัน</option></select></label>
+      </div>
+      {(draft.homeScore !== "" || draft.awayScore !== "") && draft.status !== "finished" ? <p className="mt-3 rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] px-3 py-2 text-xs font-bold text-[#8a6418]">มีสกอร์แล้ว แต่ยังไม่ยืนยันจบการแข่งขัน</p> : null}
+      {isDraw ? <div className="mt-3 grid gap-3 rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] p-3 sm:grid-cols-2"><label className="grid gap-1 text-xs font-black">จุดโทษ ทีมเหย้า<input className="min-h-11 rounded-md border border-slate-200 px-3" max="999" min="0" onChange={(event) => updateDraft({ penaltyHomeScore: event.target.value })} step="1" type="number" value={draft.penaltyHomeScore} /></label><label className="grid gap-1 text-xs font-black">จุดโทษ ทีมเยือน<input className="min-h-11 rounded-md border border-slate-200 px-3" max="999" min="0" onChange={(event) => updateDraft({ penaltyAwayScore: event.target.value })} step="1" type="number" value={draft.penaltyAwayScore} /></label><details className="sm:col-span-2"><summary className="cursor-pointer text-xs font-black">คำตัดสินพิเศษ</summary><select className="mt-2 min-h-11 w-full rounded-md border border-slate-200 px-3" onChange={(event) => updateDraft({ manualWinnerTeamId: event.target.value })} value={draft.manualWinnerTeamId}><option value="">เลือกเมื่อจำเป็น</option><option value={match.home_team_id}>{home?.name ?? "ทีมเหย้า"}</option><option value={match.away_team_id}>{away?.name ?? "ทีมเยือน"}</option></select></details></div> : null}
+      {error ? <p className="mt-3 rounded-md border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-3 py-2 text-sm font-bold text-[#9b1c1f]">{error}</p> : null}
+      {saved ? <p className="mt-3 rounded-md border border-emerald-700/20 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">{draft.status === "finished" ? "บันทึกแล้ว ผู้ชนะจะเข้าสู่รอบถัดไปเมื่อคู่แข่งขันพร้อม" : "บันทึกแล้ว"}</p> : null}
+      <div className="mt-4 flex justify-end"><button className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={saving} type="submit">{saving ? "กำลังบันทึก..." : saved ? "บันทึกแล้ว" : "บันทึกแมตช์"}</button></div>
+    </form>
+  );
+}
+
 export function AdminCompetitionTreeEngineV2({
   bracketCapacity,
   competitionId,
@@ -96,11 +157,6 @@ export function AdminCompetitionTreeEngineV2({
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
   const [knockoutMatches, setKnockoutMatches] = useState(initialMatches);
-  const [forms, setForms] = useState<Record<string, ResultForm>>(() =>
-    Object.fromEntries(initialMatches.map((match) => [match.id, formFromMatch(match)])),
-  );
-  const [feedbackMatchId, setFeedbackMatchId] = useState("");
-  const [savedMatchId, setSavedMatchId] = useState("");
   const [activeCardId, setActiveCardId] = useState("");
   const activeCardRef = useRef("");
   const summary = generatedSummary ?? initialSummary;
@@ -210,77 +266,27 @@ export function AdminCompetitionTreeEngineV2({
     });
   }
 
-  async function saveMatch(event: FormEvent<HTMLFormElement>, match: CompetitionKnockoutMatchV2) {
-    event.preventDefault();
+  async function saveMatch(match: CompetitionKnockoutMatchV2, form: ResultForm) {
     const cardId = `knockout-match-${match.id}`;
     activeCardRef.current = cardId;
     setActiveCardId(cardId);
-    setFeedbackMatchId(match.id);
-    const form = forms[match.id] ?? formFromMatch(match);
-    setError("");
-    setMessage("");
-    startTransition(async () => {
-      const result = await saveCompetitionKnockoutMatchV2({
-        awayScore: score(form.awayScore),
-        competitionId,
-        homeScore: score(form.homeScore),
-        manualWinnerTeamId: form.manualWinnerTeamId || null,
-        matchDate: form.matchDate ? new Date(`${form.matchDate}:00+07:00`).toISOString() : null,
-        matchId: match.id,
-        penaltyAwayScore: score(form.penaltyAwayScore),
-        penaltyHomeScore: score(form.penaltyHomeScore),
-        status: form.status,
-        venue: form.venue.trim() || null,
-      });
-      if (!result.ok || !result.matches) {
-        setError(result.error ?? "ไม่สามารถบันทึกผลการแข่งขันได้");
-        return;
-      }
-      setKnockoutMatches(result.matches);
-      setForms(Object.fromEntries(result.matches.map((item) => [item.id, formFromMatch(item)])));
-      setSavedMatchId(match.id);
-      setMessage(form.status === "finished" ? "บันทึกแล้ว ผู้ชนะจะเข้าสู่รอบถัดไปเมื่อคู่แข่งขันพร้อม" : "บันทึกแล้ว");
-      // The new downstream node is read from the current page only after its own match is created.
-      if (result.matches.length !== knockoutMatches.length) router.refresh();
+    const result = await saveCompetitionKnockoutMatchV2({
+      awayScore: score(form.awayScore),
+      competitionId,
+      homeScore: score(form.homeScore),
+      manualWinnerTeamId: form.manualWinnerTeamId || null,
+      matchDate: form.matchDate ? new Date(`${form.matchDate}:00+07:00`).toISOString() : null,
+      matchId: match.id,
+      penaltyAwayScore: score(form.penaltyAwayScore),
+      penaltyHomeScore: score(form.penaltyHomeScore),
+      status: form.status,
+      venue: form.venue.trim() || null,
     });
-  }
-
-  function MatchCard({ match }: { match: CompetitionKnockoutMatchV2 }) {
-    const form = forms[match.id] ?? formFromMatch(match);
-    const home = teamsById.get(match.home_team_id);
-    const away = teamsById.get(match.away_team_id);
-    const isDraw = form.status === "finished" && form.homeScore !== "" && form.homeScore === form.awayScore;
-    const setForm = (patch: Partial<ResultForm>) => {
-      setSavedMatchId((current) => current === match.id ? "" : current);
-      setError("");
-      setMessage("");
-      setForms((current) => ({ ...current, [match.id]: { ...form, ...patch } }));
-    };
-    return (
-      <form className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4" id={`knockout-match-${match.id}`} onSubmit={(event) => void saveMatch(event, match)}>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {[{ side: "home", team: home, value: form.homeScore }, { side: "away", team: away, value: form.awayScore }].map(({ side, team, value }) => (
-            <label className="flex min-w-0 items-center gap-3 rounded-md border border-slate-200 bg-white p-3 text-sm font-black" key={side}>
-              <TeamLogo className="!size-9 shrink-0 bg-[#061426]" initials={(team?.short_name || team?.name || "ทีม").slice(0, 3)} logoUrl={team?.logo_url ?? ""} teamName={team?.name ?? "รอผลรอบก่อน"} />
-              <span className="min-w-0 flex-1 break-words">{team?.name ?? "รอผลรอบก่อน"}</span>
-              <input className="min-h-11 w-16 shrink-0 rounded-md border border-slate-200 px-2 text-center" max="999" min="0" onChange={(event) => {
-                setForm(side === "home" ? { homeScore: event.target.value } : { awayScore: event.target.value });
-              }} step="1" type="number" value={value} />
-            </label>
-          ))}
-        </div>
-        <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2">
-          <label className="grid min-w-0 gap-1 text-xs font-black">วันและเวลา<input className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3" onChange={(event) => setForm({ matchDate: event.target.value })} type="datetime-local" value={form.matchDate} /></label>
-          <label className="grid min-w-0 gap-1 text-xs font-black">สนาม<input className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3" onChange={(event) => setForm({ venue: event.target.value })} value={form.venue} /></label>
-          <label className="grid min-w-0 gap-1 text-xs font-black">สถานะ<select className="min-h-11 w-full rounded-md border border-slate-200 px-3" onChange={(event) => setForm({ status: event.target.value as ResultForm["status"] })} value={form.status}><option value="scheduled">รอแข่งขัน</option><option value="finished">จบการแข่งขัน</option></select></label>
-        </div>
-        {(form.homeScore !== "" || form.awayScore !== "") && form.status !== "finished" ? <p className="mt-3 rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] px-3 py-2 text-xs font-bold text-[#8a6418]">มีสกอร์แล้ว แต่ยังไม่ยืนยันจบการแข่งขัน</p> : null}
-        {isDraw ? <div className="mt-3 grid gap-3 rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] p-3 sm:grid-cols-2"><label className="grid gap-1 text-xs font-black">จุดโทษ ทีมเหย้า<input className="min-h-11 rounded-md border border-slate-200 px-3" max="999" min="0" onChange={(event) => setForm({ penaltyHomeScore: event.target.value })} step="1" type="number" value={form.penaltyHomeScore} /></label><label className="grid gap-1 text-xs font-black">จุดโทษ ทีมเยือน<input className="min-h-11 rounded-md border border-slate-200 px-3" max="999" min="0" onChange={(event) => setForm({ penaltyAwayScore: event.target.value })} step="1" type="number" value={form.penaltyAwayScore} /></label><details className="sm:col-span-2"><summary className="cursor-pointer text-xs font-black">คำตัดสินพิเศษ</summary><select className="mt-2 min-h-11 w-full rounded-md border border-slate-200 px-3" onChange={(event) => setForm({ manualWinnerTeamId: event.target.value })} value={form.manualWinnerTeamId}><option value="">เลือกเมื่อจำเป็น</option><option value={match.home_team_id}>{home?.name ?? "ทีมเหย้า"}</option><option value={match.away_team_id}>{away?.name ?? "ทีมเยือน"}</option></select></details></div> : null}
-        {feedbackMatchId === match.id && error ? <p className="mt-3 rounded-md border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-3 py-2 text-sm font-bold text-[#9b1c1f]">{error}</p> : null}
-        {feedbackMatchId === match.id && message ? <p className="mt-3 rounded-md border border-emerald-700/20 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">{message}</p> : null}
-        <div className="mt-4 flex justify-end"><button className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={isPending} type="submit">{isPending ? "กำลังบันทึก..." : savedMatchId === match.id ? "บันทึกแล้ว" : "บันทึกแมตช์"}</button></div>
-      </form>
-    );
+    if (!result.ok || !result.matches) return { error: result.error ?? "ไม่สามารถบันทึกผลการแข่งขันได้", ok: false };
+    setKnockoutMatches(result.matches);
+    // The new downstream node is read from the current page only after its own match is created.
+    if (result.matches.length !== knockoutMatches.length) router.refresh();
+    return { ok: true };
   }
 
   return (
@@ -386,7 +392,7 @@ export function AdminCompetitionTreeEngineV2({
               <section className="min-w-0 rounded-lg border border-slate-200 p-4" key={roundLabel}>
                 <h3 className="text-xl font-black text-[#061426]">{roundLabel}</h3>
                 <p className="mt-1 text-sm font-semibold text-slate-600">กำหนดวันเวลา สนาม และบันทึกผลของแต่ละคู่ได้ที่นี่</p>
-                <div className="mt-4 grid gap-3">{roundMatches.map((match) => <MatchCard key={match.id} match={match} />)}</div>
+                <div className="mt-4 grid gap-3">{roundMatches.map((match) => <KnockoutMatchCard key={match.id} match={match} onSave={saveMatch} teamsById={teamsById} />)}</div>
               </section>
             ))}
           </div>
