@@ -85,6 +85,7 @@ export type CompetitionFixtureNodeV2 = {
   matchId?: string;
   nodeId: string;
   reason?: string;
+  roundIndex: number;
   roundLabel: string;
   state: "bye" | "eligible" | "incomplete" | "linked" | "waiting_winner";
 };
@@ -753,6 +754,7 @@ async function inspectCompetitionFixturesV2(
           homeTeamName: typeof linkedMatch.home_team_id === "string" ? resolverContext.teamNamesById.get(linkedMatch.home_team_id) : undefined,
           matchId,
           nodeId: node.id,
+          roundIndex: node.roundIndex,
           roundLabel: node.roundLabel,
           state: "linked",
         });
@@ -764,7 +766,7 @@ async function inspectCompetitionFixturesV2(
     const away = resolveCompetitionTreeSource(node.awaySource, resolverContext);
     if (home.state === "bye" || away.state === "bye") {
       result.pendingCount += 1;
-      result.nodes.push({ nodeId: node.id, reason: "Bye advancement is pending a later phase.", roundLabel: node.roundLabel, state: "bye" });
+      result.nodes.push({ nodeId: node.id, reason: "Bye advancement is pending a later phase.", roundIndex: node.roundIndex, roundLabel: node.roundLabel, state: "bye" });
       continue;
     }
     if (home.state !== "team" || away.state !== "team") {
@@ -778,6 +780,7 @@ async function inspectCompetitionFixturesV2(
       result.nodes.push({
         nodeId: node.id,
         reason: pendingReason,
+        roundIndex: node.roundIndex,
         roundLabel: node.roundLabel,
         state: waitingWinner ? "waiting_winner" : "incomplete",
       });
@@ -793,6 +796,7 @@ async function inspectCompetitionFixturesV2(
       homeTeamId: home.teamId,
       homeTeamName: resolverContext.teamNamesById.get(home.teamId),
       nodeId: node.id,
+      roundIndex: node.roundIndex,
       roundLabel: node.roundLabel,
       state: "eligible",
     });
@@ -808,9 +812,12 @@ export async function previewCompetitionFixturesV2(competitionId: string): Promi
   return inspectCompetitionFixturesV2(verified.supabase, competitionId);
 }
 
-export async function createCompetitionFixturesV2(competitionId: string): Promise<CompetitionFixturesV2Result> {
+export async function createCompetitionFixturesV2(competitionId: string, roundIndex: number): Promise<CompetitionFixturesV2Result> {
   const verified = await verifyCupCompetition(competitionId);
   if (verified.error || !verified.supabase) return { ...fixtureResultBase(), error: verified.error, ok: false };
+  if (!Number.isInteger(roundIndex) || roundIndex < 0) {
+    return { ...fixtureResultBase(), error: "รอบการแข่งขันไม่ถูกต้อง", ok: false };
+  }
 
   const inspected = await inspectCompetitionFixturesV2(verified.supabase, competitionId);
   if (!inspected.ok) return inspected;
@@ -818,7 +825,19 @@ export async function createCompetitionFixturesV2(competitionId: string): Promis
     return { ...inspected, error: "Competition fixtures can only be created after the tree is reviewed.", ok: false };
   }
 
-  for (const node of inspected.nodes.filter((item) => item.state === "eligible")) {
+  const targetNodes = inspected.nodes.filter((node) => node.roundIndex === roundIndex);
+  if (!targetNodes.length) return { ...inspected, error: "ไม่พบรอบการแข่งขันที่เลือก", ok: false };
+  const targetNeedsCreation = targetNodes.some((node) => node.state === "eligible");
+  if (targetNeedsCreation) {
+    const firstEligibleRound = Math.min(...inspected.nodes.filter((node) => node.state === "eligible").map((node) => node.roundIndex));
+    if (!Number.isFinite(firstEligibleRound) || roundIndex !== firstEligibleRound) {
+      return { ...inspected, error: "รอบนี้ยังไม่พร้อมสร้างโปรแกรมแข่งขัน", ok: false };
+    }
+  } else if (!targetNodes.every((node) => node.state === "linked")) {
+    return { ...inspected, error: "รอบนี้ยังไม่พร้อมสร้างโปรแกรมแข่งขัน", ok: false };
+  }
+
+  for (const node of targetNodes.filter((item) => item.state === "eligible")) {
     if (!node.homeTeamId || !node.awayTeamId) continue;
     const insertResult = await verified.supabase
       .from("matches")
@@ -1007,9 +1026,7 @@ export async function saveCompetitionKnockoutMatchV2(payload: {
     return { error: "ไม่สามารถบันทึกแมตช์รอบน็อกเอาต์ได้", ok: false };
   }
 
-  // Re-running only fills newly resolvable downstream nodes; linked fixtures are skipped.
-  const fixturesResult = await createCompetitionFixturesV2(payload.competitionId);
-  if (!fixturesResult.ok) return { error: fixturesResult.error ?? fixturesResult.errors[0], ok: false };
+  // The next round stays uncreated until the admin explicitly opens it.
   const matches = await loadKnockoutMatchesForClient(verified.supabase, payload.competitionId);
   if (matches.error) return { error: matches.error, ok: false };
   revalidatePath(`/admin/competitions/${payload.competitionId}`);

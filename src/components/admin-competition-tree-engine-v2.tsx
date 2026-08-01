@@ -12,7 +12,6 @@ import {
 } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
 import type { CompetitionFixturesV2Result, CompetitionKnockoutMatchV2 } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
 import {
-  canCreateFixtures,
   canGenerateTree,
   canReviewTree,
   competitionEngineV2StatusLabel,
@@ -288,7 +287,6 @@ export function AdminCompetitionTreeEngineV2({
   const activeCardRef = useRef("");
   const summary = generatedSummary ?? initialSummary;
   const status = currentWorkflow?.status ?? "draft";
-  const statusLabel = competitionEngineV2StatusLabel(status);
   const teamsById = useMemo(() => new Map(teams.map((team) => [team.id, team])), [teams]);
   const knockoutRounds = useMemo<KnockoutRoundView[]>(() => {
     const matchesById = new Map(knockoutMatches.map((match) => [match.id, match]));
@@ -312,6 +310,10 @@ export function AdminCompetitionTreeEngineV2({
       });
   }, [knockoutMatches, nodes]);
   const currentRoundIndex = knockoutRounds.find((round) => !round.complete)?.roundIndex ?? null;
+  const currentRound = knockoutRounds.find((round) => round.roundIndex === currentRoundIndex);
+  const statusLabel = status === "fixtures_created" && currentRound
+    ? { en: "Current round", th: currentRound.allMatchesReady ? `กำลังแข่งขัน${currentRound.label}` : `พร้อมสร้างโปรแกรม${currentRound.label}` }
+    : competitionEngineV2StatusLabel(status);
   const champion = useMemo(() => {
     const finalNode = [...nodes].sort((a, b) => b.roundIndex - a.roundIndex || b.matchOrder - a.matchOrder)[0];
     const finalMatch = finalNode?.linkedMatchId ? knockoutMatches.find((match) => match.id === finalNode.linkedMatchId) : undefined;
@@ -412,11 +414,11 @@ export function AdminCompetitionTreeEngineV2({
     });
   }
 
-  function createFixtures() {
+  function createFixtures(roundIndex: number, roundLabel: string) {
     setError("");
     setMessage("");
     startTransition(async () => {
-      const result = await createCompetitionFixturesV2(competitionId);
+      const result = await createCompetitionFixturesV2(competitionId, roundIndex);
       setFixtureResult(result);
       if (!result.ok) {
         setError(result.error ?? result.errors[0] ?? "Could not create knockout fixtures.");
@@ -424,7 +426,7 @@ export function AdminCompetitionTreeEngineV2({
       }
       if (result.matches) setKnockoutMatches(result.matches);
       setCurrentWorkflow((current) => current ? { ...current, hasLinkedMatches: result.linkedCount > 0, status: result.status ?? current.status } : current);
-      setMessage(`สร้าง ${result.createdCount} คู่, ข้าม ${result.skippedCount} คู่, รอ ${result.pendingCount} คู่`);
+      setMessage(result.createdCount ? `สร้างโปรแกรม${roundLabel} ${result.createdCount} คู่แล้ว` : `โปรแกรม${roundLabel} ถูกสร้างไว้แล้ว`);
       router.refresh();
     });
   }
@@ -552,16 +554,6 @@ export function AdminCompetitionTreeEngineV2({
               กลับไปแก้ไขโครงสร้าง
             </button>
           ) : null}
-          {canCreateFixtures(status) ? (
-            <button
-              className="min-h-11 rounded-md bg-[#061426] px-5 py-3 text-sm font-black text-[#f4d58a] disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={!qualificationApproved || isPending || fixtureResult?.nodes.filter((node) => node.state === "eligible").length === 0}
-              onClick={createFixtures}
-              type="button"
-            >
-              {isPending ? "กำลังสร้าง..." : "สร้างโปรแกรมรอบน็อกเอาต์"}
-            </button>
-          ) : null}
         </div>
 
         {fixtureResult?.errors.length ? <p className="mt-4 rounded-md border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-3 py-2 text-sm font-bold text-[#9b1c1f]">{fixtureResult.errors.join(" ")}</p> : null}
@@ -580,12 +572,7 @@ export function AdminCompetitionTreeEngineV2({
               return (
                 <section className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4" key={round.roundIndex}>
                   <h3 className="text-xl font-black text-[#061426]">{round.label}</h3>
-                  <p className="mt-2 text-sm font-bold text-slate-600">
-                    {current
-                      ? "กำลังเตรียมโปรแกรมการแข่งขันของรอบนี้"
-                      : `รอผลการแข่งขัน${previousRound ? previousRound.label : "รอบก่อนหน้า"}`}
-                  </p>
-                  <p className="mt-1 text-xs font-semibold text-slate-500">{round.nodes.length} คู่ รอผู้ชนะจากรอบก่อน</p>
+                  {current ? <><p className="mt-2 text-sm font-bold text-slate-600">ทีมในรอบนี้พร้อมแล้ว กรุณาสร้างโปรแกรมการแข่งขัน</p><button className="mt-3 min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:cursor-not-allowed disabled:opacity-60" disabled={isPending} onClick={() => createFixtures(round.roundIndex, round.label)} type="button">{isPending ? "กำลังสร้าง..." : `สร้างโปรแกรม${round.label}`}</button></> : <><p className="mt-2 text-sm font-bold text-slate-600">{`รอผลการแข่งขัน${previousRound ? previousRound.label : "รอบก่อนหน้า"}`}</p><p className="mt-1 text-xs font-semibold text-slate-500">{round.nodes.length} คู่ รอผู้ชนะจากรอบก่อน</p></>}
                 </section>
               );
             })}
