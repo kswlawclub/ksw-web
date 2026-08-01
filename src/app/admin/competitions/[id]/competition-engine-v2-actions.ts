@@ -94,6 +94,7 @@ export type CompetitionFixturesV2Result = {
   error?: string;
   errors: string[];
   linkedCount: number;
+  matches?: CompetitionKnockoutMatchV2[];
   nodes: CompetitionFixtureNodeV2[];
   ok: boolean;
   pendingCount: number;
@@ -888,6 +889,13 @@ export async function createCompetitionFixturesV2(competitionId: string): Promis
     }
     inspected.status = "fixtures_created";
   }
+
+  const matchesResult = await loadKnockoutMatchesForClient(verified.supabase, competitionId);
+  if (matchesResult.error) {
+    console.error("competition fixture v2 linked match reload failed", { competitionId, error: matchesResult.error });
+    return { ...inspected, error: matchesResult.error, ok: false };
+  }
+  inspected.matches = matchesResult.matches;
 
   revalidatePath(`/admin/competitions/${competitionId}`);
   return inspected;

@@ -272,6 +272,28 @@ export function AdminCompetitionTreeEngineV2({
       (nodeByMatchId.get(matchesA[0]?.id)?.roundIndex ?? 0) - (nodeByMatchId.get(matchesB[0]?.id)?.roundIndex ?? 0),
     );
   }, [knockoutMatches, nodeByMatchId]);
+  const pendingNodesByRound = useMemo(() => {
+    if (status !== "fixtures_created" || !nodes.some((node) => node.linkedMatchId)) return [];
+    const nodesById = new Map(nodes.map((node) => [node.id, node]));
+    const grouped = new Map<string, Array<{ id: string; reason: string }>>();
+    nodes.filter((node) => !node.linkedMatchId).forEach((node) => {
+      const waitingSources = [node.homeSource, node.awaySource]
+        .filter((source) => source.type === "node_winner" && source.nodeId)
+        .map((source) => {
+          const sourceNode = nodesById.get(source.nodeId!);
+          return sourceNode ? `รอผู้ชนะจากคู่ ${sourceNode.matchOrder}` : "รอผู้ชนะจากคู่ก่อนหน้า";
+        });
+      grouped.set(node.roundLabel, [...(grouped.get(node.roundLabel) ?? []), {
+        id: node.id,
+        reason: waitingSources.join(" / ") || "รอผลการแข่งขันรอบก่อนหน้า",
+      }]);
+    });
+    return Array.from(grouped.entries()).sort(([, nodesA], [, nodesB]) => {
+      const firstA = nodes.find((node) => node.id === nodesA[0]?.id);
+      const firstB = nodes.find((node) => node.id === nodesB[0]?.id);
+      return (firstA?.roundIndex ?? 0) - (firstB?.roundIndex ?? 0);
+    });
+  }, [nodes, status]);
   const champion = useMemo(() => {
     const finalNode = [...nodes].sort((a, b) => b.roundIndex - a.roundIndex || b.matchOrder - a.matchOrder)[0];
     const finalMatch = finalNode?.linkedMatchId ? knockoutMatches.find((match) => match.id === finalNode.linkedMatchId) : undefined;
@@ -382,6 +404,7 @@ export function AdminCompetitionTreeEngineV2({
         setError(result.error ?? result.errors[0] ?? "Could not create knockout fixtures.");
         return;
       }
+      if (result.matches) setKnockoutMatches(result.matches);
       setCurrentWorkflow((current) => current ? { ...current, hasLinkedMatches: result.linkedCount > 0, status: result.status ?? current.status } : current);
       setMessage(`สร้าง ${result.createdCount} คู่, ข้าม ${result.skippedCount} คู่, รอ ${result.pendingCount} คู่`);
       router.refresh();
@@ -535,6 +558,11 @@ export function AdminCompetitionTreeEngineV2({
           </div>
         ) : summary ? (
           <p className="mt-5 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-600">เมื่อทีมผ่านเข้ารอบพร้อม ระบบจะแสดงคู่แข่งขันในส่วนนี้</p>
+        ) : null}
+        {pendingNodesByRound.length ? (
+          <div className="mt-5 grid gap-5">
+            {pendingNodesByRound.map(([roundLabel, roundNodes]) => <section className="min-w-0 rounded-lg border border-slate-200 p-4" key={roundLabel}><h3 className="text-xl font-black text-[#061426]">{roundLabel}</h3><div className="mt-3 grid gap-2">{roundNodes.map((node, index) => <article className="min-w-0 rounded-md border border-slate-200 bg-slate-50 px-3 py-3" key={node.id}><p className="text-xs font-black text-slate-500">คู่ที่ {index + 1}</p><p className="mt-1 break-words text-sm font-bold text-slate-700">{node.reason}</p></article>)}</div></section>)}
+          </div>
         ) : null}
         <section className="mt-6 rounded-lg border border-[#d8ad45]/35 bg-[#fff7e6] p-4">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a6418]">Champion</p>
