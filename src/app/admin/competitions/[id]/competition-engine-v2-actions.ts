@@ -29,6 +29,7 @@ import { requireAdminSession } from "@/lib/admin-server-auth";
 import { isCupCompetition, normalizeCompetitionType } from "@/lib/competition-format";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { buildKswStandardPairing } from "@/lib/ksw-knockout-template";
+import type { ApprovedQualificationSummary } from "@/app/admin/competitions/[id]/qualification-actions";
 
 export type CompetitionEngineV2Config = {
   bracketCapacity: number | null;
@@ -43,6 +44,7 @@ export type CompetitionEngineV2Config = {
   qualificationApprovedAt: string | null;
   qualificationApprovedByLabel: string | null;
   qualificationSnapshot: CompetitionTreeSource[];
+  qualificationSnapshotSummary: ApprovedQualificationSummary | null;
   status: CompetitionEngineV2Status;
 };
 
@@ -1090,6 +1092,7 @@ export async function saveCompetitionEngineV2Config(
           qualificationApprovedAt: null,
           qualificationApprovedByLabel: null,
           qualificationSnapshot: [],
+          qualificationSnapshotSummary: null,
           status: result.data.status,
         }
       : undefined,

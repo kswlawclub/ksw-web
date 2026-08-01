@@ -27,6 +27,7 @@ import {
   type CompetitionTreeSummary,
 } from "@/lib/competition-tree";
 import type { ApprovedQualificationSummary } from "@/app/admin/competitions/[id]/qualification-actions";
+import type { CompetitionEngineV2Config } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
 
 type Row = Record<string, unknown>;
 
@@ -194,23 +195,6 @@ function asGroupTeam(row: Row, team: Row | undefined): AdminCompetitionGroupTeam
     team_id: text(row, ["team_id"], ""),
   };
 }
-
-type CompetitionEngineV2Config = {
-  bracketCapacity: number | null;
-  competitionId: string;
-  entrantCount: number | null;
-  entryMode: "bye" | "custom" | "preliminary";
-  groupStageEnabled: boolean;
-  extraRankEnabled: boolean;
-  extraRank: number | null;
-  extraQualifierCount: number;
-  qualificationStatus: "pending" | "approved";
-  qualificationApprovedAt: string | null;
-  qualificationApprovedByLabel: string | null;
-  qualificationSnapshot: CompetitionTreeSource[];
-  qualificationSnapshotSummary: ApprovedQualificationSummary | null;
-  status: "active" | "completed" | "draft" | "fixtures_created" | "reviewed";
-};
 
 function asEngineV2Config(row: Row | undefined): CompetitionEngineV2Config | null {
   if (!row) return null;
