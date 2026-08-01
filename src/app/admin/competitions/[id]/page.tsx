@@ -37,7 +37,7 @@ const teamColumns = "id, name, short_name, logo_url, is_ksw";
 const groupColumns = "id, competition_id, name, label, sort_order, qualifiers_count, created_at, updated_at";
 const competitionTeamGroupColumns = "id, competition_id, team_id, group_id, is_active, display_order";
 const engineV2ConfigColumns =
-  "competition_id, entrant_count, bracket_capacity, entry_mode, group_stage_enabled, status";
+  "competition_id, entrant_count, bracket_capacity, entry_mode, group_stage_enabled, status, extra_rank_enabled, extra_rank, extra_qualifier_count, qualification_status, qualification_approved_at, qualification_approved_by_label";
 const bracketNodeColumns =
   "id, competition_id, round_index, round_label, match_order, bracket_position, home_source_type, away_source_type, home_source_group_id, home_source_rank, home_source_team_id, home_source_node_id, away_source_group_id, away_source_rank, away_source_team_id, away_source_node_id, linked_match_id";
 
@@ -200,6 +200,12 @@ type CompetitionEngineV2Config = {
   entrantCount: number | null;
   entryMode: "bye" | "custom" | "preliminary";
   groupStageEnabled: boolean;
+  extraRankEnabled: boolean;
+  extraRank: number | null;
+  extraQualifierCount: number;
+  qualificationStatus: "pending" | "approved";
+  qualificationApprovedAt: string | null;
+  qualificationApprovedByLabel: string | null;
   status: "active" | "completed" | "draft" | "fixtures_created" | "reviewed";
 };
 
@@ -212,6 +218,12 @@ function asEngineV2Config(row: Row | undefined): CompetitionEngineV2Config | nul
     entrantCount: typeof row.entrant_count === "number" ? row.entrant_count : null,
     entryMode: text(row, ["entry_mode"], "bye") as CompetitionEngineV2Config["entryMode"],
     groupStageEnabled: row.group_stage_enabled === true,
+    extraRankEnabled: row.extra_rank_enabled === true,
+    extraRank: typeof row.extra_rank === "number" ? row.extra_rank : null,
+    extraQualifierCount: typeof row.extra_qualifier_count === "number" ? row.extra_qualifier_count : 0,
+    qualificationStatus: row.qualification_status === "approved" ? "approved" : "pending",
+    qualificationApprovedAt: typeof row.qualification_approved_at === "string" ? row.qualification_approved_at : null,
+    qualificationApprovedByLabel: typeof row.qualification_approved_by_label === "string" ? row.qualification_approved_by_label : null,
     status: text(row, ["status"], "draft") as CompetitionEngineV2Config["status"],
   };
 }

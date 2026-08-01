@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useMemo, useState, useTransition } from "react";
 import { updateMatch } from "@/app/admin/matches/actions";
+import { approveCupQualification, reopenCupQualification, saveCupQualificationSettings } from "@/app/admin/competitions/[id]/qualification-actions";
 import { AdminCompetitionGroupsManager, type AdminCompetitionGroup, type AdminCompetitionGroupTeam } from "@/components/admin-competition-groups-manager";
 import { AdminCompetitionTreeEngineV2 } from "@/components/admin-competition-tree-engine-v2";
 import { AdminCompetitionWizardV2 } from "@/components/admin-competition-wizard-v2";
 import { TeamLogo } from "@/components/team-logo";
-import { calculateCupGroupStandings } from "@/lib/cup-group-standings";
+import { calculateCupQualification } from "@/lib/cup-qualification";
 import { sortTeamsByName } from "@/lib/team-sort";
 import type { CompetitionEngineV2Config, CompetitionKnockoutMatchV2 } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
 import type { CompetitionEngineV2Integrity } from "@/lib/competition-engine-v2-state";
@@ -106,6 +107,19 @@ function CupGroupProgram({
   );
 }
 
+function CupQualificationPanel({ competitionId, config, groups, matches, teams }: { competitionId: string; config: CompetitionEngineV2Config | null; groups: AdminCompetitionGroup[]; matches: AdminCompetitionMatch[]; teams: AdminCompetitionGroupTeam[] }) {
+  const [enabled, setEnabled] = useState(config?.extraRankEnabled ?? false);
+  const [rank, setRank] = useState(String(config?.extraRank ?? 3));
+  const [count, setCount] = useState(String(config?.extraQualifierCount ?? 0));
+  const [message, setMessage] = useState(""); const [error, setError] = useState(""); const [pending, startTransition] = useTransition();
+  const result = useMemo(() => calculateCupQualification({ groups: groups as unknown as Record<string, unknown>[], matches: matches as unknown as Record<string, unknown>[], settings: { extraRankEnabled: enabled, extraRank: enabled ? Number(rank) : null, extraQualifierCount: enabled ? Number(count) : 0 }, teams: teams as unknown as Record<string, unknown>[] }), [count, enabled, groups, matches, rank, teams]);
+  const approved = config?.qualificationStatus === "approved";
+  function save() { startTransition(async () => { const response = await saveCupQualificationSettings(competitionId, enabled, enabled ? Number(rank) : null, enabled ? Number(count) : 0); if (!response.ok) { setError(response.error ?? "บันทึกไม่สำเร็จ"); return; } setError(""); setMessage("บันทึกกติกาแล้ว"); }); }
+  function approve() { startTransition(async () => { const response = await approveCupQualification(competitionId); if (!response.ok) { setError(response.error ?? "ยืนยันไม่สำเร็จ"); return; } setError(""); setMessage("ยืนยันทีมผ่านเข้ารอบแล้ว"); }); }
+  function reopen() { startTransition(async () => { const response = await reopenCupQualification(competitionId); if (!response.ok) { setError(response.error ?? "ยกเลิกการยืนยันไม่สำเร็จ"); return; } setError(""); setMessage("ยกเลิกการยืนยันแล้ว"); }); }
+  return <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10"><article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-sm"><h2 className="text-2xl font-black">ทีมผ่านเข้ารอบ</h2><p className="mt-1 text-sm font-semibold text-slate-600">{approved ? `ยืนยันแล้ว${config?.qualificationApprovedByLabel ? ` โดย ${config.qualificationApprovedByLabel}` : ""}` : "รอการตรวจสอบ"}</p><div className="mt-4 grid gap-3 sm:grid-cols-3"><label className="flex items-center gap-2 text-sm font-bold"><input checked={enabled} onChange={(event) => setEnabled(event.target.checked)} type="checkbox" />ใช้อันดับเพิ่มเติม</label><label className="grid gap-1 text-sm font-bold">อันดับเพิ่มเติม<input disabled={!enabled} min="1" onChange={(event) => setRank(event.target.value)} type="number" value={rank} /></label><label className="grid gap-1 text-sm font-bold">จำนวนทีม<input disabled={!enabled} min="0" onChange={(event) => setCount(event.target.value)} type="number" value={count} /></label></div>{result.unevenGroups ? <p className="mt-3 text-sm font-bold text-[#8a6418]">ขนาดกลุ่มไม่เท่ากัน ใช้คะแนนต่อเกมก่อนผลต่างประตูต่อเกม</p> : null}<div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{result.preview.map((entry) => <div className="rounded-md border border-slate-200 px-3 py-2 text-sm font-black" key={entry.teamId}><span className="block text-xs text-slate-500">{entry.label}{entry.temporary ? " · อันดับชั่วคราว" : ""}</span>{entry.teamName}</div>)}</div>{Array.from(result.groupComplete.entries()).map(([id, complete]) => <p className="mt-2 text-xs font-bold text-slate-600" key={id}>{groups.find((group) => group.id === id)?.label || "กลุ่ม"}: {complete ? "แข่งครบแล้ว" : "รอผลการแข่งขัน"}</p>)}{error ? <p className="mt-3 text-sm font-bold text-red-700">{error}</p> : null}{message ? <p className="mt-3 text-sm font-bold text-emerald-700">{message}</p> : null}<div className="mt-4 flex flex-wrap gap-2"><button disabled={pending || approved} onClick={save} type="button">บันทึกกติกา</button><button disabled={pending || approved || result.preview.some((entry) => entry.temporary)} onClick={approve} type="button">ยืนยันทีมผ่านเข้ารอบ</button>{approved ? <button disabled={pending} onClick={reopen} type="button">ยกเลิกการยืนยันเพื่อแก้ไข</button> : null}</div></article></section>;
+}
+
 export function AdminCupCompetitionWorkspace({
   competitionId,
   engineConfig,
@@ -133,8 +147,6 @@ export function AdminCupCompetitionWorkspace({
 }) {
   const [matches, setMatches] = useState(initialMatches);
   const teamsById = useMemo(() => new Map(matchTeams.map((team) => [team.id, team])), [matchTeams]);
-  const standings = useMemo(() => calculateCupGroupStandings({ groups, matches, teams: groupTeams }), [groups, matches, groupTeams]);
-  const qualifiers = useMemo(() => standings.flatMap((standing) => standing.rows.filter((row) => row.qualifies)), [standings]);
   const [showAllTeams, setShowAllTeams] = useState(false);
   const sortedTeams = useMemo(() => sortTeamsByName(teams), [teams]);
   const visibleTeams = showAllTeams ? sortedTeams : sortedTeams.slice(0, 16);
@@ -179,7 +191,7 @@ export function AdminCupCompetitionWorkspace({
         </article>
       </section>
       <AdminCompetitionGroupsManager competitionId={competitionId} groups={groups} matches={matches} onMatchesChange={(nextMatches) => setMatches(nextMatches as AdminCompetitionMatch[])} renderGroupProgram={(group) => <CupGroupProgram group={group} matches={matches} onSave={saveGroupMatch} teamsById={teamsById} />} schemaReady={groupDataReady} teams={groupTeams} />
-      <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10"><article className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm"><h2 className="text-2xl font-black">ทีมผ่านเข้ารอบ</h2><p className="mt-1 text-sm font-semibold text-slate-600">คำนวณจากตารางคะแนนและจำนวนทีมผ่านเข้ารอบของแต่ละกลุ่ม</p><div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{qualifiers.length ? qualifiers.map((row) => <div className="rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] px-3 py-2 text-sm font-black" key={row.team_id}>{row.team_name}</div>) : <p className="text-sm font-semibold text-slate-600">รอผลการแข่งขันรอบแบ่งกลุ่ม</p>}</div></article></section>
+      <CupQualificationPanel competitionId={competitionId} config={engineConfig} groups={groups} matches={matches} teams={groupTeams} />
       <AdminCompetitionWizardV2 competitionId={competitionId} competitionType="cup" existingConfig={engineConfig} groupCount={groups.length} groups={groups} participantCount={groupTeams.length} workflow={engineWorkflow} />
       <AdminCompetitionTreeEngineV2 bracketCapacity={engineConfig?.bracketCapacity ?? null} competitionId={competitionId} configReady={Boolean(engineConfig)} initialMatches={matches.filter((match) => match.competition_stage === "knockout").map((match) => ({ ...match, manual_winner_team_id: match.manual_winner_team_id ?? null, penalty_away_score: match.penalty_away_score ?? null, penalty_home_score: match.penalty_home_score ?? null, winner_team_id: match.winner_team_id ?? null })) as CompetitionKnockoutMatchV2[]} initialSummary={engineSummary} nodes={nodes} teams={matchTeams.map(({ id, logo_url, name, short_name }) => ({ id, logo_url, name, short_name }))} workflow={engineWorkflow} />
     </>

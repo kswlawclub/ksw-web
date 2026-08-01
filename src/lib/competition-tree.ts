@@ -1,7 +1,8 @@
 export type CompetitionTreeEntryMode = "bye" | "custom" | "preliminary";
-export type CompetitionTreeSourceType = "bye" | "group_rank" | "manual_team" | "node_winner" | "unassigned";
+export type CompetitionTreeSourceType = "best_ranked" | "bye" | "group_rank" | "manual_team" | "node_winner" | "unassigned";
 
 export type CompetitionTreeSource = {
+  bestOrder?: number;
   groupId?: string;
   nodeId?: string;
   rank?: number;
@@ -245,6 +246,7 @@ function sourceReferencesNode(source: CompetitionTreeSource) {
 
 function sourceIsValid(source: CompetitionTreeSource) {
   if (source.type === "group_rank") return Boolean(source.groupId && Number.isInteger(source.rank) && source.rank! >= 1);
+  if (source.type === "best_ranked") return Boolean(source.teamId && Number.isInteger(source.rank) && source.rank! >= 1 && Number.isInteger(source.bestOrder) && source.bestOrder! >= 1);
   if (source.type === "manual_team") return Boolean(source.teamId);
   if (source.type === "node_winner") return Boolean(source.nodeId);
   return source.type === "bye" || source.type === "unassigned";

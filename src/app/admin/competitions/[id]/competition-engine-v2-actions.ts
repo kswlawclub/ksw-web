@@ -35,6 +35,12 @@ export type CompetitionEngineV2Config = {
   entrantCount: number | null;
   entryMode: "bye" | "custom" | "preliminary";
   groupStageEnabled: boolean;
+  extraRankEnabled: boolean;
+  extraRank: number | null;
+  extraQualifierCount: number;
+  qualificationStatus: "pending" | "approved";
+  qualificationApprovedAt: string | null;
+  qualificationApprovedByLabel: string | null;
   status: CompetitionEngineV2Status;
 };
 
@@ -154,16 +160,18 @@ async function verifyCupCompetition(competitionId: string) {
 
 function sourceFromDatabase(row: Record<string, unknown>, side: "away" | "home"): CompetitionTreeSource {
   const type = row[`${side}_source_type`];
-  const sourceType = type === "bye" || type === "group_rank" || type === "manual_team" || type === "node_winner" || type === "unassigned"
+  const sourceType = type === "best_ranked" || type === "bye" || type === "group_rank" || type === "manual_team" || type === "node_winner" || type === "unassigned"
     ? type
     : "unassigned";
   const rank = row[`${side}_source_rank`];
   const groupId = row[`${side}_source_group_id`];
   const nodeId = row[`${side}_source_node_id`];
   const teamId = row[`${side}_source_team_id`];
+  const bestOrder = row[`${side}_source_best_order`];
 
   return {
     groupId: typeof groupId === "string" ? groupId : undefined,
+    bestOrder: typeof bestOrder === "number" ? bestOrder : undefined,
     nodeId: typeof nodeId === "string" ? nodeId : undefined,
     rank: typeof rank === "number" ? rank : undefined,
     teamId: typeof teamId === "string" ? teamId : undefined,
@@ -187,6 +195,7 @@ function nodeFromDatabase(row: Record<string, unknown>): CompetitionTreeNode {
 
 function nodeForInsert(node: CompetitionTreeNode) {
   return {
+    away_source_best_order: node.awaySource.bestOrder ?? null,
     away_source_group_id: node.awaySource.groupId ?? null,
     away_source_node_id: node.awaySource.nodeId ?? null,
     away_source_rank: node.awaySource.rank ?? null,
@@ -194,6 +203,7 @@ function nodeForInsert(node: CompetitionTreeNode) {
     away_source_type: node.awaySource.type,
     bracket_position: node.bracketPosition,
     competition_id: node.competitionId,
+    home_source_best_order: node.homeSource.bestOrder ?? null,
     home_source_group_id: node.homeSource.groupId ?? null,
     home_source_node_id: node.homeSource.nodeId ?? null,
     home_source_rank: node.homeSource.rank ?? null,
@@ -214,7 +224,7 @@ async function loadCompetitionEngineV2Workflow(
   const [configResult, nodesResult] = await Promise.all([
     supabase
       .from("competition_knockout_configs")
-      .select("entrant_count, bracket_capacity, entry_mode, group_stage_enabled, status")
+      .select("entrant_count, bracket_capacity, entry_mode, group_stage_enabled, status, qualification_status, qualification_snapshot")
       .eq("competition_id", competitionId)
       .limit(1)
       .maybeSingle(),
@@ -270,7 +280,7 @@ export async function generateCompetitionTreeV2(competitionId: string): Promise<
   const [configResult, groupsResult, participantsResult, existingNodesResult] = await Promise.all([
     verified.supabase
       .from("competition_knockout_configs")
-      .select("entrant_count, bracket_capacity, entry_mode, group_stage_enabled, status")
+      .select("entrant_count, bracket_capacity, entry_mode, group_stage_enabled, status, qualification_status, qualification_snapshot")
       .eq("competition_id", competitionId)
       .limit(1)
       .maybeSingle(),
@@ -288,7 +298,7 @@ export async function generateCompetitionTreeV2(competitionId: string): Promise<
       .order("display_order", { ascending: true }),
     verified.supabase
       .from("competition_bracket_nodes")
-      .select("id, competition_id, round_index, round_label, match_order, bracket_position, home_source_type, away_source_type, home_source_group_id, home_source_rank, home_source_team_id, home_source_node_id, away_source_group_id, away_source_rank, away_source_team_id, away_source_node_id")
+      .select("id, competition_id, round_index, round_label, match_order, bracket_position, home_source_type, away_source_type, home_source_group_id, home_source_rank, home_source_team_id, home_source_node_id, home_source_best_order, away_source_group_id, away_source_rank, away_source_team_id, away_source_node_id, away_source_best_order")
       .eq("competition_id", competitionId),
   ]);
 
@@ -333,35 +343,17 @@ export async function generateCompetitionTreeV2(competitionId: string): Promise<
   }
 
   const participants = participantsResult.data ?? [];
-  const groups = groupsResult.data ?? [];
   let entrants: CompetitionTreeSource[];
 
   if (config.group_stage_enabled) {
-    if (!groups.length) return { error: "Group Stage is enabled, but no competition groups exist.", ok: false };
-    const activeByGroup = new Map<string, number>();
-    participants.forEach((participant) => {
-      if (typeof participant.group_id === "string") {
-        activeByGroup.set(participant.group_id, (activeByGroup.get(participant.group_id) ?? 0) + 1);
-      }
-    });
-    entrants = groups.flatMap((group) => {
-      const qualifiers = typeof group.qualifiers_count === "number" ? group.qualifiers_count : 0;
-      return Array.from({ length: qualifiers }, (_, index) => ({
-        groupId: group.id,
-        rank: index + 1,
-        type: "group_rank" as const,
-      }));
-    });
-    const insufficientGroup = groups.find((group) => {
-      const qualifiers = typeof group.qualifiers_count === "number" ? group.qualifiers_count : 0;
-      return qualifiers > (activeByGroup.get(group.id) ?? 0);
-    });
-    if (insufficientGroup) {
-      return {
-        error: `Group ${insufficientGroup.name || insufficientGroup.id} has fewer active teams than its qualifier count.`,
-        ok: false,
-      };
-    }
+    if (config.qualification_status !== "approved" || !Array.isArray(config.qualification_snapshot)) return { error: "ยืนยันทีมผ่านเข้ารอบก่อนสร้างรอบน็อกเอาต์", ok: false };
+    entrants = config.qualification_snapshot.map((entry: Record<string, unknown>) => ({
+      bestOrder: typeof entry.bestOrder === "number" ? entry.bestOrder : undefined,
+      groupId: typeof entry.groupId === "string" ? entry.groupId : undefined,
+      rank: typeof entry.rank === "number" ? entry.rank : undefined,
+      teamId: typeof entry.teamId === "string" ? entry.teamId : undefined,
+      type: entry.type === "best_ranked" ? "best_ranked" as const : "group_rank" as const,
+    }));
   } else if (entryMode === "custom") {
     entrants = Array.from({ length: config.entrant_count }, () => ({ type: "unassigned" as const }));
   } else {
@@ -608,6 +600,10 @@ function resolveCompetitionTreeSource(
     if (!source.teamId || !context.activeParticipantIds.has(source.teamId)) {
       return { reason: "Manual team is not an active competition participant.", state: "pending" };
     }
+    return { state: "team", teamId: source.teamId };
+  }
+  if (source.type === "best_ranked") {
+    if (!source.teamId || !context.activeParticipantIds.has(source.teamId)) return { reason: "Waiting for an approved best-ranked team.", state: "pending" };
     return { state: "team", teamId: source.teamId };
   }
   if (source.type === "group_rank") {
@@ -1053,6 +1049,12 @@ export async function saveCompetitionEngineV2Config(
           entrantCount: typeof result.data.entrant_count === "number" ? result.data.entrant_count : null,
           entryMode: result.data.entry_mode,
           groupStageEnabled: result.data.group_stage_enabled === true,
+          extraRankEnabled: false,
+          extraRank: null,
+          extraQualifierCount: 0,
+          qualificationStatus: "pending",
+          qualificationApprovedAt: null,
+          qualificationApprovedByLabel: null,
           status: result.data.status,
         }
       : undefined,
