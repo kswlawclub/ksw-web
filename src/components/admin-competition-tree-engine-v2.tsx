@@ -99,6 +99,8 @@ export function AdminCompetitionTreeEngineV2({
   const [forms, setForms] = useState<Record<string, ResultForm>>(() =>
     Object.fromEntries(initialMatches.map((match) => [match.id, formFromMatch(match)])),
   );
+  const [feedbackMatchId, setFeedbackMatchId] = useState("");
+  const [savedMatchId, setSavedMatchId] = useState("");
   const [activeCardId, setActiveCardId] = useState("");
   const activeCardRef = useRef("");
   const summary = generatedSummary ?? initialSummary;
@@ -213,6 +215,7 @@ export function AdminCompetitionTreeEngineV2({
     const cardId = `knockout-match-${match.id}`;
     activeCardRef.current = cardId;
     setActiveCardId(cardId);
+    setFeedbackMatchId(match.id);
     const form = forms[match.id] ?? formFromMatch(match);
     setError("");
     setMessage("");
@@ -235,7 +238,8 @@ export function AdminCompetitionTreeEngineV2({
       }
       setKnockoutMatches(result.matches);
       setForms(Object.fromEntries(result.matches.map((item) => [item.id, formFromMatch(item)])));
-      setMessage("บันทึกแมตช์แล้ว ผู้ชนะจะเข้าสู่รอบถัดไปเมื่อคู่แข่งขันพร้อม");
+      setSavedMatchId(match.id);
+      setMessage(form.status === "finished" ? "บันทึกแล้ว ผู้ชนะจะเข้าสู่รอบถัดไปเมื่อคู่แข่งขันพร้อม" : "บันทึกแล้ว");
       // The new downstream node is read from the current page only after its own match is created.
       if (result.matches.length !== knockoutMatches.length) router.refresh();
     });
@@ -246,7 +250,12 @@ export function AdminCompetitionTreeEngineV2({
     const home = teamsById.get(match.home_team_id);
     const away = teamsById.get(match.away_team_id);
     const isDraw = form.status === "finished" && form.homeScore !== "" && form.homeScore === form.awayScore;
-    const setForm = (patch: Partial<ResultForm>) => setForms((current) => ({ ...current, [match.id]: { ...form, ...patch } }));
+    const setForm = (patch: Partial<ResultForm>) => {
+      setSavedMatchId((current) => current === match.id ? "" : current);
+      setError("");
+      setMessage("");
+      setForms((current) => ({ ...current, [match.id]: { ...form, ...patch } }));
+    };
     return (
       <form className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4" id={`knockout-match-${match.id}`} onSubmit={(event) => void saveMatch(event, match)}>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -255,7 +264,7 @@ export function AdminCompetitionTreeEngineV2({
               <TeamLogo className="!size-9 shrink-0 bg-[#061426]" initials={(team?.short_name || team?.name || "ทีม").slice(0, 3)} logoUrl={team?.logo_url ?? ""} teamName={team?.name ?? "รอผลรอบก่อน"} />
               <span className="min-w-0 flex-1 break-words">{team?.name ?? "รอผลรอบก่อน"}</span>
               <input className="min-h-11 w-16 shrink-0 rounded-md border border-slate-200 px-2 text-center" max="999" min="0" onChange={(event) => {
-                setForm(side === "home" ? { homeScore: event.target.value, status: event.target.value !== "" ? "finished" : form.status } : { awayScore: event.target.value, status: event.target.value !== "" ? "finished" : form.status });
+                setForm(side === "home" ? { homeScore: event.target.value } : { awayScore: event.target.value });
               }} step="1" type="number" value={value} />
             </label>
           ))}
@@ -263,10 +272,13 @@ export function AdminCompetitionTreeEngineV2({
         <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2">
           <label className="grid min-w-0 gap-1 text-xs font-black">วันและเวลา<input className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3" onChange={(event) => setForm({ matchDate: event.target.value })} type="datetime-local" value={form.matchDate} /></label>
           <label className="grid min-w-0 gap-1 text-xs font-black">สนาม<input className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3" onChange={(event) => setForm({ venue: event.target.value })} value={form.venue} /></label>
-          <label className="grid min-w-0 gap-1 text-xs font-black">สถานะ<select className="min-h-11 w-full rounded-md border border-slate-200 px-3" onChange={(event) => setForm({ status: event.target.value as ResultForm["status"], ...(event.target.value === "scheduled" ? { awayScore: "", homeScore: "", manualWinnerTeamId: "", penaltyAwayScore: "", penaltyHomeScore: "" } : {}) })} value={form.status}><option value="scheduled">รอแข่งขัน</option><option value="finished">จบการแข่งขัน</option></select></label>
+          <label className="grid min-w-0 gap-1 text-xs font-black">สถานะ<select className="min-h-11 w-full rounded-md border border-slate-200 px-3" onChange={(event) => setForm({ status: event.target.value as ResultForm["status"] })} value={form.status}><option value="scheduled">รอแข่งขัน</option><option value="finished">จบการแข่งขัน</option></select></label>
         </div>
+        {(form.homeScore !== "" || form.awayScore !== "") && form.status !== "finished" ? <p className="mt-3 rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] px-3 py-2 text-xs font-bold text-[#8a6418]">มีสกอร์แล้ว แต่ยังไม่ยืนยันจบการแข่งขัน</p> : null}
         {isDraw ? <div className="mt-3 grid gap-3 rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] p-3 sm:grid-cols-2"><label className="grid gap-1 text-xs font-black">จุดโทษ ทีมเหย้า<input className="min-h-11 rounded-md border border-slate-200 px-3" max="999" min="0" onChange={(event) => setForm({ penaltyHomeScore: event.target.value })} step="1" type="number" value={form.penaltyHomeScore} /></label><label className="grid gap-1 text-xs font-black">จุดโทษ ทีมเยือน<input className="min-h-11 rounded-md border border-slate-200 px-3" max="999" min="0" onChange={(event) => setForm({ penaltyAwayScore: event.target.value })} step="1" type="number" value={form.penaltyAwayScore} /></label><details className="sm:col-span-2"><summary className="cursor-pointer text-xs font-black">คำตัดสินพิเศษ</summary><select className="mt-2 min-h-11 w-full rounded-md border border-slate-200 px-3" onChange={(event) => setForm({ manualWinnerTeamId: event.target.value })} value={form.manualWinnerTeamId}><option value="">เลือกเมื่อจำเป็น</option><option value={match.home_team_id}>{home?.name ?? "ทีมเหย้า"}</option><option value={match.away_team_id}>{away?.name ?? "ทีมเยือน"}</option></select></details></div> : null}
-        <div className="mt-4 flex justify-end"><button className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={isPending} type="submit">{isPending ? "กำลังบันทึก..." : "บันทึกแมตช์"}</button></div>
+        {feedbackMatchId === match.id && error ? <p className="mt-3 rounded-md border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-3 py-2 text-sm font-bold text-[#9b1c1f]">{error}</p> : null}
+        {feedbackMatchId === match.id && message ? <p className="mt-3 rounded-md border border-emerald-700/20 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">{message}</p> : null}
+        <div className="mt-4 flex justify-end"><button className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={isPending} type="submit">{isPending ? "กำลังบันทึก..." : savedMatchId === match.id ? "บันทึกแล้ว" : "บันทึกแมตช์"}</button></div>
       </form>
     );
   }

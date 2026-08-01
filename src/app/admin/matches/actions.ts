@@ -326,15 +326,6 @@ function validateStatus(payloadStatus: string, existingStatus?: string) {
 }
 
 function normalizePayload(payload: MatchPayload): MatchPayload {
-  if (payload.status === "scheduled") {
-    return {
-      ...payload,
-      away_score: null,
-      home_score: null,
-      match_date: payload.match_date?.trim() || null,
-    };
-  }
-
   return {
     ...payload,
     match_date: payload.match_date?.trim() || null,

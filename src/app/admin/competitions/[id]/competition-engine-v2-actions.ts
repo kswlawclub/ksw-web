@@ -900,8 +900,8 @@ export async function saveCompetitionKnockoutMatchV2(payload: {
   const updateResult = await verified.supabase
     .from("matches")
     .update({
-      away_score: payload.status === "finished" ? payload.awayScore : null,
-      home_score: payload.status === "finished" ? payload.homeScore : null,
+      away_score: payload.awayScore,
+      home_score: payload.homeScore,
       manual_winner_team_id: payload.status === "finished" && payload.homeScore === payload.awayScore ? payload.manualWinnerTeamId : null,
       match_date: payload.matchDate,
       penalty_away_score: payload.status === "finished" && payload.homeScore === payload.awayScore ? payload.penaltyAwayScore : null,

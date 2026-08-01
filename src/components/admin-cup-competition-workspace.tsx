@@ -66,6 +66,7 @@ export function AdminCupCompetitionWorkspace({
   const [forms, setForms] = useState<Record<string, MatchForm>>(() => Object.fromEntries(initialMatches.map((match) => [match.id, formFromMatch(match)])));
   const [savingMatchId, setSavingMatchId] = useState("");
   const [feedbackMatchId, setFeedbackMatchId] = useState("");
+  const [savedMatchId, setSavedMatchId] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const teamsById = useMemo(() => new Map(matchTeams.map((team) => [team.id, team])), [matchTeams]);
@@ -83,9 +84,9 @@ export function AdminCupCompetitionWorkspace({
     setError("");
     setMessage("");
     const result = await updateMatch(match.id, {
-      away_score: form.status === "finished" ? number(form.awayScore) : null,
+      away_score: number(form.awayScore),
       away_team_id: match.away_team_id,
-      home_score: form.status === "finished" ? number(form.homeScore) : null,
+      home_score: number(form.homeScore),
       home_team_id: match.home_team_id,
       league_id: competitionId,
       match_date: form.matchDate ? new Date(`${form.matchDate}:00+07:00`).toISOString() : null,
@@ -96,14 +97,15 @@ export function AdminCupCompetitionWorkspace({
     if (!result.ok) { setError(result.error ?? "ไม่สามารถบันทึกแมตช์ได้"); return; }
     const updated: AdminCompetitionMatch = {
       ...match,
-      away_score: form.status === "finished" ? number(form.awayScore) : null,
-      home_score: form.status === "finished" ? number(form.homeScore) : null,
+      away_score: number(form.awayScore),
+      home_score: number(form.homeScore),
       match_date: form.matchDate ? new Date(`${form.matchDate}:00+07:00`).toISOString() : null,
       status: form.status,
       venue: form.venue.trim() || null,
     };
     setMatches((current) => current.map((item) => item.id === match.id ? updated : item));
-    setMessage("บันทึกผลแล้ว ตารางคะแนนและทีมผ่านเข้ารอบอัปเดตทันที");
+    setSavedMatchId(match.id);
+    setMessage(form.status === "finished" ? "บันทึกแล้ว ตารางคะแนนและทีมผ่านเข้ารอบอัปเดตทันที" : "บันทึกแล้ว");
   }
 
   function GroupProgram({ group }: { group: AdminCompetitionGroup }) {
@@ -111,16 +113,22 @@ export function AdminCupCompetitionWorkspace({
     return (
       <section className="mt-5 min-w-0 border-t border-slate-200 pt-5">
         <h4 className="text-lg font-black text-[#061426]">โปรแกรมการแข่งขัน</h4>
-        {feedbackMatchId && groupMatches.some((match) => match.id === feedbackMatchId) && error ? <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-800">{error}</p> : null}
-        {feedbackMatchId && groupMatches.some((match) => match.id === feedbackMatchId) && message ? <p className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">{message}</p> : null}
         <div className="mt-3 grid gap-3">
           {groupMatches.length ? groupMatches.map((match) => {
             const form = forms[match.id] ?? formFromMatch(match); const home = teamsById.get(match.home_team_id); const away = teamsById.get(match.away_team_id);
-            const setForm = (patch: Partial<MatchForm>) => setForms((current) => ({ ...current, [match.id]: { ...form, ...patch } }));
+            const setForm = (patch: Partial<MatchForm>) => {
+              setSavedMatchId((current) => current === match.id ? "" : current);
+              setError("");
+              setMessage("");
+              setForms((current) => ({ ...current, [match.id]: { ...form, ...patch } }));
+            };
             return <form className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-3" id={`group-match-${match.id}`} key={match.id} onSubmit={(event) => void saveGroupMatch(event, match)}>
-              <div className="grid gap-3 sm:grid-cols-2">{[{ key: "homeScore", team: home }, { key: "awayScore", team: away }].map(({ key, team }) => <label className="flex min-w-0 items-center gap-3 rounded-md border border-slate-200 bg-white p-3 text-sm font-black" key={key}><TeamLogo className="!size-9 shrink-0 bg-[#061426]" initials={(team?.short_name || team?.name || "ทีม").slice(0, 3)} logoUrl={team?.logo_url ?? ""} teamName={team?.name ?? "ทีม"} /><span className="min-w-0 flex-1 break-words">{team?.name ?? "ทีม"}</span><input className="min-h-11 w-16 shrink-0 rounded-md border border-slate-200 px-2 text-center" max="999" min="0" onChange={(event) => setForm({ [key]: event.target.value, ...(event.target.value !== "" ? { status: "finished" } : {}) })} step="1" type="number" value={form[key as "homeScore" | "awayScore"]} /></label>)}</div>
-              <div className="mt-3 grid gap-3 sm:grid-cols-3"><label className="grid min-w-0 gap-1 text-xs font-black">วันและเวลา<input className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3" onChange={(event) => setForm({ matchDate: event.target.value })} type="datetime-local" value={form.matchDate} /></label><label className="grid min-w-0 gap-1 text-xs font-black">สนาม<input className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3" onChange={(event) => setForm({ venue: event.target.value })} value={form.venue} /></label><label className="grid min-w-0 gap-1 text-xs font-black">สถานะ<select className="min-h-11 w-full rounded-md border border-slate-200 px-3" onChange={(event) => setForm({ status: event.target.value as MatchForm["status"], ...(event.target.value === "scheduled" ? { awayScore: "", homeScore: "" } : {}) })} value={form.status}><option value="scheduled">รอแข่งขัน</option><option value="finished">จบการแข่งขัน</option></select></label></div>
-              <div className="mt-3 flex justify-end"><button className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={savingMatchId === match.id} type="submit">{savingMatchId === match.id ? "กำลังบันทึก..." : "บันทึกแมตช์"}</button></div>
+              <div className="grid gap-3 sm:grid-cols-2">{[{ key: "homeScore", team: home }, { key: "awayScore", team: away }].map(({ key, team }) => <label className="flex min-w-0 items-center gap-3 rounded-md border border-slate-200 bg-white p-3 text-sm font-black" key={key}><TeamLogo className="!size-9 shrink-0 bg-[#061426]" initials={(team?.short_name || team?.name || "ทีม").slice(0, 3)} logoUrl={team?.logo_url ?? ""} teamName={team?.name ?? "ทีม"} /><span className="min-w-0 flex-1 break-words">{team?.name ?? "ทีม"}</span><input className="min-h-11 w-16 shrink-0 rounded-md border border-slate-200 px-2 text-center" max="999" min="0" onChange={(event) => setForm({ [key]: event.target.value })} step="1" type="number" value={form[key as "homeScore" | "awayScore"]} /></label>)}</div>
+              {(form.homeScore !== "" || form.awayScore !== "") && form.status !== "finished" ? <p className="mt-3 rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] px-3 py-2 text-xs font-bold text-[#8a6418]">มีสกอร์แล้ว แต่ยังไม่ยืนยันจบการแข่งขัน</p> : null}
+              <div className="mt-3 grid gap-3 sm:grid-cols-3"><label className="grid min-w-0 gap-1 text-xs font-black">วันและเวลา<input className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3" onChange={(event) => setForm({ matchDate: event.target.value })} type="datetime-local" value={form.matchDate} /></label><label className="grid min-w-0 gap-1 text-xs font-black">สนาม<input className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3" onChange={(event) => setForm({ venue: event.target.value })} value={form.venue} /></label><label className="grid min-w-0 gap-1 text-xs font-black">สถานะ<select className="min-h-11 w-full rounded-md border border-slate-200 px-3" onChange={(event) => setForm({ status: event.target.value as MatchForm["status"] })} value={form.status}><option value="scheduled">รอแข่งขัน</option><option value="finished">จบการแข่งขัน</option></select></label></div>
+              {feedbackMatchId === match.id && error ? <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-800">{error}</p> : null}
+              {feedbackMatchId === match.id && message ? <p className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">{message}</p> : null}
+              <div className="mt-3 flex justify-end"><button className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={savingMatchId === match.id} type="submit">{savingMatchId === match.id ? "กำลังบันทึก..." : savedMatchId === match.id ? "บันทึกแล้ว" : "บันทึกแมตช์"}</button></div>
             </form>;
           }) : <p className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600">ยังไม่มีโปรแกรมของกลุ่มนี้ กด “สร้างโปรแกรมการแข่งขัน” ด้านบน</p>}
         </div>
