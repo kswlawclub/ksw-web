@@ -6,12 +6,10 @@ import {
   type AdminCompetitionMatchTeam,
 } from "@/components/admin-competition-match-manager";
 import {
-  AdminCompetitionGroupsManager,
   type AdminCompetitionGroup,
   type AdminCompetitionGroupTeam,
 } from "@/components/admin-competition-groups-manager";
-import { AdminCompetitionTreeEngineV2 } from "@/components/admin-competition-tree-engine-v2";
-import { AdminCompetitionWizardV2 } from "@/components/admin-competition-wizard-v2";
+import { AdminCupCompetitionWorkspace } from "@/components/admin-cup-competition-workspace";
 import { CopyPublicLinkButton } from "@/components/copy-public-link-button";
 import { TeamLogo } from "@/components/team-logo";
 import { loadCompetitionParticipants } from "@/lib/competition-participants";
@@ -550,16 +548,20 @@ export default async function AdminCompetitionWorkspacePage({
       </section>
 
       {isCup ? (
-        <AdminCompetitionGroupsManager
+        <AdminCupCompetitionWorkspace
           competitionId={id}
+          engineConfig={engineV2Config}
+          engineSummary={engineV2TreeSummary}
+          engineWorkflow={engineV2Workflow}
+          groupDataReady={groupDataReady}
+          groupTeams={groupTeams}
           groups={groups}
-          matches={workspaceMatches}
-          schemaReady={groupDataReady}
-          teams={groupTeams}
+          initialMatches={workspaceMatches}
+          matchTeams={workspaceMatchTeams}
+          nodes={engineV2TreeNodes}
         />
-      ) : null}
-
-      <AdminCompetitionMatchManager
+      ) : (
+        <AdminCompetitionMatchManager
           competition={{
             id,
             name: competitionName,
@@ -574,64 +576,8 @@ export default async function AdminCompetitionWorkspacePage({
           groupTeams={groupTeams}
           initialMatches={workspaceMatches}
           initialTeams={workspaceMatchTeams}
-      />
-
-      {isCup ? (
-        <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
-          <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-2xl font-black text-[#061426]">ทีมผ่านเข้ารอบ</h2>
-            <p className="mt-1 text-sm font-semibold text-slate-600">
-              Preview จากจำนวนทีมผ่านเข้ารอบที่กำหนดในแต่ละกลุ่ม
-            </p>
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <StatCard label="ทีมผ่านเข้ารอบ" value={engineV2Config?.entrantCount ?? 0} />
-              <StatCard label="ความจุสาย" value={engineV2Config?.bracketCapacity ?? "—"} />
-              <StatCard label="กลุ่ม" value={groups.length} />
-              <StatCard label="สถานะ" value={engineV2Workflow?.status ?? "ยังไม่ยืนยัน"} />
-            </div>
-          </article>
-        </section>
-      ) : null}
-
-      {isCup ? (
-        <AdminCompetitionWizardV2
-          competitionId={id}
-          competitionType="cup"
-          existingConfig={engineV2Config}
-          groupCount={groups.length}
-          groups={groups}
-          participantCount={teams.length}
-          workflow={engineV2Workflow}
         />
-      ) : null}
-
-      {isCup ? (
-        <AdminCompetitionTreeEngineV2
-          bracketCapacity={engineV2Config?.bracketCapacity ?? null}
-          competitionId={id}
-          configReady={Boolean(engineV2Config)}
-          initialMatches={workspaceMatches
-            .filter((match) => match.competition_stage === "knockout")
-            .map((match) => ({
-              away_score: match.away_score,
-              away_team_id: match.away_team_id,
-              home_score: match.home_score,
-              home_team_id: match.home_team_id,
-              id: match.id,
-              manual_winner_team_id: match.manual_winner_team_id ?? null,
-              match_date: match.match_date,
-              penalty_away_score: match.penalty_away_score ?? null,
-              penalty_home_score: match.penalty_home_score ?? null,
-              status: match.status,
-              venue: match.venue,
-              winner_team_id: match.winner_team_id ?? null,
-            }))}
-          initialSummary={engineV2TreeSummary}
-          nodes={engineV2TreeNodes}
-          teams={workspaceMatchTeams.map((team) => ({ id: team.id, logo_url: team.logo_url, name: team.name, short_name: team.short_name }))}
-          workflow={engineV2Workflow}
-        />
-      ) : null}
+      )}
 
       <section className="mx-auto grid w-full max-w-7xl scroll-mt-28 gap-4 px-4 pb-8 sm:px-6 lg:grid-cols-3 lg:px-10" id="publishing-summary">
         <DetailCard items={detailItems} title="Competition Details" />
