@@ -207,6 +207,22 @@ function CupQualificationPanel({ competitionId, config, groups, matches, teams }
     });
   }
 
+  if (!config) {
+    return (
+      <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
+        <article className="min-w-0 rounded-lg border border-[#d8ad45]/40 bg-[#fff7e6] p-5 shadow-sm">
+          <div className="flex items-start gap-3">
+            <span aria-hidden="true" className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-full border border-[#d8ad45]/40 bg-white text-sm font-black text-[#8a6418]">i</span>
+            <div className="min-w-0">
+              <h2 className="text-xl font-black text-[#061426]">ยังไม่ได้ตั้งค่ารอบน็อกเอาต์</h2>
+              <p className="mt-1 text-sm font-semibold leading-6 text-slate-700">หลังจากยืนยันทีมผ่านเข้ารอบ ระบบจะเปิดขั้นตอนถัดไปอัตโนมัติ</p>
+            </div>
+          </div>
+        </article>
+      </section>
+    );
+  }
+
   return (
     <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
       <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
