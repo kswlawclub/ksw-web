@@ -11,7 +11,9 @@ import {
   type AdminCompetitionGroupTeam,
 } from "@/components/admin-competition-groups-manager";
 import { AdminCompetitionKnockoutManager } from "@/components/admin-competition-knockout-manager";
+import { AdminCompetitionWizardV2 } from "@/components/admin-competition-wizard-v2";
 import type {
+  CompetitionKnockoutConfigV2,
   KnockoutMatchSlot,
   KnockoutSlotSource,
   KnockoutSourceType,
@@ -34,6 +36,8 @@ const groupColumns = "id, competition_id, name, label, sort_order, qualifiers_co
 const competitionTeamGroupColumns = "id, competition_id, team_id, group_id, is_active, display_order";
 const knockoutColumns =
   "id, competition_id, bracket_size, round_index, round_key, round_label, match_order, match_id, home_source_type, home_group_id, home_group_rank, home_team_id, home_source_round_index, home_source_match_order, away_source_type, away_group_id, away_group_rank, away_team_id, away_source_round_index, away_source_match_order, is_manual_edited, created_at, updated_at";
+const engineV2ConfigColumns =
+  "competition_id, entrant_count, bracket_capacity, entry_mode, group_stage_enabled, status";
 
 function text(row: Row | undefined, keys: string[], fallback = "") {
   if (!row) return fallback;
@@ -247,6 +251,24 @@ function asKnockoutMatch(row: Row): KnockoutMatchSlot {
   };
 }
 
+type CompetitionEngineV2Config = Pick<
+  CompetitionKnockoutConfigV2,
+  "bracketCapacity" | "competitionId" | "entrantCount" | "entryMode" | "groupStageEnabled" | "status"
+>;
+
+function asEngineV2Config(row: Row | undefined): CompetitionEngineV2Config | null {
+  if (!row) return null;
+
+  return {
+    bracketCapacity: typeof row.bracket_capacity === "number" ? row.bracket_capacity : null,
+    competitionId: text(row, ["competition_id"], ""),
+    entrantCount: typeof row.entrant_count === "number" ? row.entrant_count : null,
+    entryMode: text(row, ["entry_mode"], "bye") as CompetitionEngineV2Config["entryMode"],
+    groupStageEnabled: row.group_stage_enabled === true,
+    status: text(row, ["status"], "draft") as CompetitionEngineV2Config["status"],
+  };
+}
+
 function mergeMatchTeams(activeTeams: Row[], matchTeams: Row[]) {
   const merged = new Map<string, AdminCompetitionMatchTeam>();
 
@@ -313,6 +335,7 @@ async function loadWorkspaceData(id: string) {
       groupDataReady: false,
       groupTeams: [] as AdminCompetitionGroupTeam[],
       groups: [] as AdminCompetitionGroup[],
+      engineV2Config: null as CompetitionEngineV2Config | null,
       knockoutDataReady: false,
       knockoutMatches: [] as KnockoutMatchSlot[],
       matchTeams: [] as Row[],
@@ -333,6 +356,7 @@ async function loadWorkspaceData(id: string) {
       groupDataReady: false,
       groupTeams: [] as AdminCompetitionGroupTeam[],
       groups: [] as AdminCompetitionGroup[],
+      engineV2Config: null as CompetitionEngineV2Config | null,
       knockoutDataReady: false,
       knockoutMatches: [] as KnockoutMatchSlot[],
       matchTeams: [] as Row[],
@@ -344,7 +368,7 @@ async function loadWorkspaceData(id: string) {
   const competitionType = normalizeCompetitionType(competition.competition_type);
   const isCup = isCupCompetition(competitionType);
 
-  const [teams, matches, groupResult, competitionTeamResult, knockoutResult] = await Promise.all([
+  const [teams, matches, groupResult, competitionTeamResult, engineV2ConfigResult, knockoutResult] = await Promise.all([
     loadCompetitionParticipants(supabase, id, {
       includeInactiveParticipants: false,
     }),
@@ -367,6 +391,16 @@ async function loadWorkspaceData(id: string) {
             .eq("competition_id", id)
             .eq("is_active", true)
             .order("display_order", { ascending: true }),
+        )
+      : Promise.resolve({ data: [] as Row[], ok: true }),
+    isCup
+      ? runQueryStatus<Row>(
+          "workspace_competition_engine_v2_config",
+          supabase
+            .from("competition_knockout_configs")
+            .select(engineV2ConfigColumns)
+            .eq("competition_id", id)
+            .limit(1),
         )
       : Promise.resolve({ data: [] as Row[], ok: true }),
     isCup
@@ -406,6 +440,7 @@ async function loadWorkspaceData(id: string) {
     groupDataReady: groupResult.ok && competitionTeamResult.ok,
     groupTeams,
     groups,
+    engineV2Config: asEngineV2Config(engineV2ConfigResult.data[0]),
     knockoutDataReady: knockoutResult.ok,
     knockoutMatches: knockoutResult.data.map(asKnockoutMatch).filter((match) => match.roundIndex && match.matchOrder),
     matchTeams,
@@ -455,7 +490,7 @@ export default async function AdminCompetitionWorkspacePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { competition, groupDataReady, groupTeams, groups, knockoutDataReady, knockoutMatches, matchTeams, matches, teams } = await loadWorkspaceData(id);
+  const { competition, engineV2Config, groupDataReady, groupTeams, groups, knockoutDataReady, knockoutMatches, matchTeams, matches, teams } = await loadWorkspaceData(id);
 
   if (!competition) {
     notFound();
@@ -583,6 +618,7 @@ export default async function AdminCompetitionWorkspacePage({
             {[
               ["Overview", "#overview-summary"],
               ["Teams", "#teams-summary"],
+              ...(isCup ? ([["Wizard V2", "#competition-wizard-v2"]] as Array<[string, string]>) : []),
               ...(isCup ? ([["Groups", "#groups-summary"]] as Array<[string, string]>) : []),
               ...(isCup ? ([["Knockout", "#knockout-summary"]] as Array<[string, string]>) : []),
               ["Matches", "#matches-summary"],
@@ -728,6 +764,21 @@ export default async function AdminCompetitionWorkspacePage({
           </div>
         </article>
       </section>
+
+      {isCup ? (
+        <AdminCompetitionWizardV2
+          competitionId={id}
+          competitionType={competitionType}
+          existingConfig={engineV2Config}
+          groupCount={groups.length}
+          groups={groups.map((group) => ({
+            id: group.id,
+            name: group.name || group.label,
+            qualifiers_count: group.qualifiers_count,
+          }))}
+          participantCount={teams.length}
+        />
+      ) : null}
 
       {isCup ? (
         <AdminCompetitionGroupsManager
