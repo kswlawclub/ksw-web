@@ -91,6 +91,27 @@ export type CompetitionFixturesV2Result = {
   status?: CompetitionEngineV2Status;
 };
 
+export type CompetitionKnockoutMatchV2 = {
+  away_score: number | null;
+  away_team_id: string;
+  home_score: number | null;
+  home_team_id: string;
+  id: string;
+  manual_winner_team_id: string | null;
+  match_date: string | null;
+  penalty_away_score: number | null;
+  penalty_home_score: number | null;
+  status: string;
+  venue: string | null;
+  winner_team_id: string | null;
+};
+
+export type SaveCompetitionKnockoutMatchV2Result = {
+  error?: string;
+  matches?: CompetitionKnockoutMatchV2[];
+  ok: boolean;
+};
+
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 async function verifyCupCompetition(competitionId: string) {
@@ -712,7 +733,6 @@ export async function createCompetitionFixturesV2(competitionId: string): Promis
   if (inspected.status !== "reviewed" && inspected.status !== "fixtures_created") {
     return { ...inspected, error: "Competition fixtures can only be created after the tree is reviewed.", ok: false };
   }
-  if (inspected.status === "fixtures_created") return inspected;
 
   for (const node of inspected.nodes.filter((item) => item.state === "eligible")) {
     if (!node.homeTeamId || !node.awayTeamId) continue;
@@ -767,7 +787,7 @@ export async function createCompetitionFixturesV2(competitionId: string): Promis
     return inspected;
   }
 
-  if (inspected.createdCount > 0 || inspected.linkedCount > 0) {
+  if (inspected.status === "reviewed" && (inspected.createdCount > 0 || inspected.linkedCount > 0)) {
     try {
       assertAllowedTransition("reviewed", "fixtures_created");
     } catch (error) {
@@ -788,6 +808,122 @@ export async function createCompetitionFixturesV2(competitionId: string): Promis
 
   revalidatePath(`/admin/competitions/${competitionId}`);
   return inspected;
+}
+
+function validScore(value: number | null) {
+  return value === null || (Number.isInteger(value) && value >= 0 && value <= 999);
+}
+
+async function loadKnockoutMatchesForClient(supabase: SupabaseClient, competitionId: string) {
+  const nodesResult = await supabase
+    .from("competition_bracket_nodes")
+    .select("linked_match_id")
+    .eq("competition_id", competitionId)
+    .not("linked_match_id", "is", null);
+  if (nodesResult.error) {
+    console.error("competition knockout v2 node lookup failed", nodesResult.error);
+    return { error: "Could not load knockout matches.", matches: [] as CompetitionKnockoutMatchV2[] };
+  }
+  const matchIds = (nodesResult.data ?? [])
+    .map((node) => node.linked_match_id)
+    .filter((matchId): matchId is string => typeof matchId === "string");
+  if (!matchIds.length) return { error: "", matches: [] as CompetitionKnockoutMatchV2[] };
+  const matchesResult = await supabase
+    .from("matches")
+    .select("id, match_date, home_team_id, away_team_id, home_score, away_score, penalty_home_score, penalty_away_score, manual_winner_team_id, winner_team_id, venue, status")
+    .in("id", matchIds);
+  if (matchesResult.error) {
+    console.error("competition knockout v2 match lookup failed", matchesResult.error);
+    return { error: "Could not load knockout matches.", matches: [] as CompetitionKnockoutMatchV2[] };
+  }
+  return { error: "", matches: (matchesResult.data ?? []) as CompetitionKnockoutMatchV2[] };
+}
+
+export async function saveCompetitionKnockoutMatchV2(payload: {
+  awayScore: number | null;
+  competitionId: string;
+  homeScore: number | null;
+  manualWinnerTeamId: string | null;
+  matchDate: string | null;
+  matchId: string;
+  penaltyAwayScore: number | null;
+  penaltyHomeScore: number | null;
+  status: "finished" | "scheduled";
+  venue: string | null;
+}): Promise<SaveCompetitionKnockoutMatchV2Result> {
+  const verified = await verifyCupCompetition(payload.competitionId);
+  if (verified.error || !verified.supabase) return { error: verified.error, ok: false };
+  if (!uuidPattern.test(payload.matchId)) return { error: "Match id is invalid.", ok: false };
+  if (![payload.homeScore, payload.awayScore, payload.penaltyHomeScore, payload.penaltyAwayScore].every(validScore)) {
+    return { error: "คะแนนต้องเป็นจำนวนเต็มตั้งแต่ 0 ถึง 999", ok: false };
+  }
+
+  const nodeResult = await verified.supabase
+    .from("competition_bracket_nodes")
+    .select("id")
+    .eq("competition_id", payload.competitionId)
+    .eq("linked_match_id", payload.matchId)
+    .maybeSingle();
+  if (nodeResult.error || !nodeResult.data) {
+    if (nodeResult.error) console.error("competition knockout v2 match ownership lookup failed", nodeResult.error);
+    return { error: "ไม่พบแมตช์รอบน็อกเอาต์ของรายการนี้", ok: false };
+  }
+
+  const matchResult = await verified.supabase
+    .from("matches")
+    .select("id, league_id, home_team_id, away_team_id")
+    .eq("id", payload.matchId)
+    .eq("league_id", payload.competitionId)
+    .eq("competition_stage", "knockout")
+    .maybeSingle();
+  if (matchResult.error || !matchResult.data) {
+    if (matchResult.error) console.error("competition knockout v2 match verification failed", matchResult.error);
+    return { error: "ไม่พบแมตช์รอบน็อกเอาต์", ok: false };
+  }
+
+  let winnerTeamId: string | null = null;
+  if (payload.status === "finished") {
+    if (payload.homeScore === null || payload.awayScore === null) {
+      return { error: "กรุณากรอกคะแนนทั้งสองทีมก่อนบันทึกผล", ok: false };
+    }
+    if (payload.homeScore !== payload.awayScore) {
+      winnerTeamId = payload.homeScore > payload.awayScore ? matchResult.data.home_team_id : matchResult.data.away_team_id;
+    } else if (payload.penaltyHomeScore !== null && payload.penaltyAwayScore !== null && payload.penaltyHomeScore !== payload.penaltyAwayScore) {
+      winnerTeamId = payload.penaltyHomeScore > payload.penaltyAwayScore ? matchResult.data.home_team_id : matchResult.data.away_team_id;
+    } else if (payload.manualWinnerTeamId === matchResult.data.home_team_id || payload.manualWinnerTeamId === matchResult.data.away_team_id) {
+      winnerTeamId = payload.manualWinnerTeamId;
+    } else {
+      return { error: "ผลเสมอต้องระบุผลจุดโทษหรือคำตัดสินพิเศษ", ok: false };
+    }
+  }
+
+  const updateResult = await verified.supabase
+    .from("matches")
+    .update({
+      away_score: payload.status === "finished" ? payload.awayScore : null,
+      home_score: payload.status === "finished" ? payload.homeScore : null,
+      manual_winner_team_id: payload.status === "finished" && payload.homeScore === payload.awayScore ? payload.manualWinnerTeamId : null,
+      match_date: payload.matchDate,
+      penalty_away_score: payload.status === "finished" && payload.homeScore === payload.awayScore ? payload.penaltyAwayScore : null,
+      penalty_home_score: payload.status === "finished" && payload.homeScore === payload.awayScore ? payload.penaltyHomeScore : null,
+      status: payload.status,
+      venue: payload.venue,
+      winner_team_id: winnerTeamId,
+    })
+    .eq("id", payload.matchId)
+    .eq("league_id", payload.competitionId);
+  if (updateResult.error) {
+    console.error("competition knockout v2 match save failed", updateResult.error);
+    return { error: "ไม่สามารถบันทึกแมตช์รอบน็อกเอาต์ได้", ok: false };
+  }
+
+  // Re-running only fills newly resolvable downstream nodes; linked fixtures are skipped.
+  const fixturesResult = await createCompetitionFixturesV2(payload.competitionId);
+  if (!fixturesResult.ok) return { error: fixturesResult.error ?? fixturesResult.errors[0], ok: false };
+  const matches = await loadKnockoutMatchesForClient(verified.supabase, payload.competitionId);
+  if (matches.error) return { error: matches.error, ok: false };
+  revalidatePath(`/admin/competitions/${payload.competitionId}`);
+  return { matches: matches.matches, ok: true };
 }
 
 export async function saveCompetitionEngineV2Config(

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   generateCompetitionTreeV2,
@@ -8,8 +8,9 @@ import {
   previewCompetitionFixturesV2,
   reopenCompetitionTreeV2,
   reviewCompetitionTreeV2,
+  saveCompetitionKnockoutMatchV2,
 } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
-import type { CompetitionFixturesV2Result } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
+import type { CompetitionFixturesV2Result, CompetitionKnockoutMatchV2 } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
 import {
   canCreateFixtures,
   canGenerateTree,
@@ -17,15 +18,56 @@ import {
   competitionEngineV2StatusLabel,
   type CompetitionEngineV2Integrity,
 } from "@/lib/competition-engine-v2-state";
-import type { CompetitionTreeSummary } from "@/lib/competition-tree";
+import type { CompetitionTreeNode, CompetitionTreeSummary } from "@/lib/competition-tree";
+import { TeamLogo } from "@/components/team-logo";
 
 type AdminCompetitionTreeEngineV2Props = {
   bracketCapacity: number | null;
   competitionId: string;
   configReady: boolean;
   initialSummary: CompetitionTreeSummary | null;
+  initialMatches: CompetitionKnockoutMatchV2[];
+  nodes: CompetitionTreeNode[];
+  teams: Array<{ id: string; logo_url: string | null; name: string; short_name: string | null }>;
   workflow: CompetitionEngineV2Integrity | null;
 };
+
+type ResultForm = {
+  awayScore: string;
+  homeScore: string;
+  manualWinnerTeamId: string;
+  matchDate: string;
+  penaltyAwayScore: string;
+  penaltyHomeScore: string;
+  status: "finished" | "scheduled";
+  venue: string;
+};
+
+function dateValue(value: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-CA", { dateStyle: "short", hour: "2-digit", hour12: false, minute: "2-digit", timeZone: "Asia/Bangkok" }).formatToParts(date);
+  const valueByType = new Map(parts.map((part) => [part.type, part.value]));
+  return `${valueByType.get("year")}-${valueByType.get("month")}-${valueByType.get("day")}T${valueByType.get("hour")}:${valueByType.get("minute")}`;
+}
+
+function formFromMatch(match: CompetitionKnockoutMatchV2): ResultForm {
+  return {
+    awayScore: match.away_score === null ? "" : String(match.away_score),
+    homeScore: match.home_score === null ? "" : String(match.home_score),
+    manualWinnerTeamId: match.manual_winner_team_id ?? "",
+    matchDate: dateValue(match.match_date),
+    penaltyAwayScore: match.penalty_away_score === null ? "" : String(match.penalty_away_score),
+    penaltyHomeScore: match.penalty_home_score === null ? "" : String(match.penalty_home_score),
+    status: match.status === "finished" ? "finished" : "scheduled",
+    venue: match.venue ?? "",
+  };
+}
+
+function score(value: string) {
+  return value.trim() === "" ? null : Number(value);
+}
 
 function Stat({ label, value }: { label: string; value: number | string }) {
   return (
@@ -40,7 +82,10 @@ export function AdminCompetitionTreeEngineV2({
   bracketCapacity,
   competitionId,
   configReady,
+  initialMatches,
   initialSummary,
+  nodes,
+  teams,
   workflow,
 }: AdminCompetitionTreeEngineV2Props) {
   const router = useRouter();
@@ -50,9 +95,44 @@ export function AdminCompetitionTreeEngineV2({
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
+  const [knockoutMatches, setKnockoutMatches] = useState(initialMatches);
+  const [forms, setForms] = useState<Record<string, ResultForm>>(() =>
+    Object.fromEntries(initialMatches.map((match) => [match.id, formFromMatch(match)])),
+  );
+  const [activeCardId, setActiveCardId] = useState("");
+  const activeCardRef = useRef("");
   const summary = generatedSummary ?? initialSummary;
   const status = currentWorkflow?.status ?? "draft";
   const statusLabel = competitionEngineV2StatusLabel(status);
+  const teamsById = useMemo(() => new Map(teams.map((team) => [team.id, team])), [teams]);
+  const nodeByMatchId = useMemo(
+    () => new Map(nodes.filter((node) => node.linkedMatchId).map((node) => [node.linkedMatchId as string, node])),
+    [nodes],
+  );
+  const matchesByRound = useMemo(() => {
+    const grouped = new Map<string, CompetitionKnockoutMatchV2[]>();
+    knockoutMatches.forEach((match) => {
+      const node = nodeByMatchId.get(match.id);
+      const label = node?.roundLabel || "รอบน็อกเอาต์";
+      grouped.set(label, [...(grouped.get(label) ?? []), match]);
+    });
+    return Array.from(grouped.entries()).sort(([, matchesA], [, matchesB]) =>
+      (nodeByMatchId.get(matchesA[0]?.id)?.roundIndex ?? 0) - (nodeByMatchId.get(matchesB[0]?.id)?.roundIndex ?? 0),
+    );
+  }, [knockoutMatches, nodeByMatchId]);
+  const champion = useMemo(() => {
+    const finalNode = [...nodes].sort((a, b) => b.roundIndex - a.roundIndex || b.matchOrder - a.matchOrder)[0];
+    const finalMatch = finalNode?.linkedMatchId ? knockoutMatches.find((match) => match.id === finalNode.linkedMatchId) : undefined;
+    return finalMatch?.status === "finished" && finalMatch.winner_team_id ? teamsById.get(finalMatch.winner_team_id) : undefined;
+  }, [knockoutMatches, nodes, teamsById]);
+
+  useEffect(() => {
+    if (!activeCardId) return;
+    const element = document.getElementById(activeCardId);
+    if (!element) return;
+    const rect = element.getBoundingClientRect();
+    if (rect.top < 0 || rect.bottom > window.innerHeight) element.scrollIntoView({ block: "center" });
+  }, [activeCardId, knockoutMatches]);
 
   useEffect(() => {
     if (!configReady || (status !== "reviewed" && status !== "fixtures_created")) return;
@@ -128,6 +208,69 @@ export function AdminCompetitionTreeEngineV2({
     });
   }
 
+  async function saveMatch(event: FormEvent<HTMLFormElement>, match: CompetitionKnockoutMatchV2) {
+    event.preventDefault();
+    const cardId = `knockout-match-${match.id}`;
+    activeCardRef.current = cardId;
+    setActiveCardId(cardId);
+    const form = forms[match.id] ?? formFromMatch(match);
+    setError("");
+    setMessage("");
+    startTransition(async () => {
+      const result = await saveCompetitionKnockoutMatchV2({
+        awayScore: score(form.awayScore),
+        competitionId,
+        homeScore: score(form.homeScore),
+        manualWinnerTeamId: form.manualWinnerTeamId || null,
+        matchDate: form.matchDate ? new Date(`${form.matchDate}:00+07:00`).toISOString() : null,
+        matchId: match.id,
+        penaltyAwayScore: score(form.penaltyAwayScore),
+        penaltyHomeScore: score(form.penaltyHomeScore),
+        status: form.status,
+        venue: form.venue.trim() || null,
+      });
+      if (!result.ok || !result.matches) {
+        setError(result.error ?? "ไม่สามารถบันทึกผลการแข่งขันได้");
+        return;
+      }
+      setKnockoutMatches(result.matches);
+      setForms(Object.fromEntries(result.matches.map((item) => [item.id, formFromMatch(item)])));
+      setMessage("บันทึกแมตช์แล้ว ผู้ชนะจะเข้าสู่รอบถัดไปเมื่อคู่แข่งขันพร้อม");
+      // The new downstream node is read from the current page only after its own match is created.
+      if (result.matches.length !== knockoutMatches.length) router.refresh();
+    });
+  }
+
+  function MatchCard({ match }: { match: CompetitionKnockoutMatchV2 }) {
+    const form = forms[match.id] ?? formFromMatch(match);
+    const home = teamsById.get(match.home_team_id);
+    const away = teamsById.get(match.away_team_id);
+    const isDraw = form.status === "finished" && form.homeScore !== "" && form.homeScore === form.awayScore;
+    const setForm = (patch: Partial<ResultForm>) => setForms((current) => ({ ...current, [match.id]: { ...form, ...patch } }));
+    return (
+      <form className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4" id={`knockout-match-${match.id}`} onSubmit={(event) => void saveMatch(event, match)}>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {[{ side: "home", team: home, value: form.homeScore }, { side: "away", team: away, value: form.awayScore }].map(({ side, team, value }) => (
+            <label className="flex min-w-0 items-center gap-3 rounded-md border border-slate-200 bg-white p-3 text-sm font-black" key={side}>
+              <TeamLogo className="!size-9 shrink-0 bg-[#061426]" initials={(team?.short_name || team?.name || "ทีม").slice(0, 3)} logoUrl={team?.logo_url ?? ""} teamName={team?.name ?? "รอผลรอบก่อน"} />
+              <span className="min-w-0 flex-1 break-words">{team?.name ?? "รอผลรอบก่อน"}</span>
+              <input className="min-h-11 w-16 shrink-0 rounded-md border border-slate-200 px-2 text-center" max="999" min="0" onChange={(event) => {
+                setForm(side === "home" ? { homeScore: event.target.value, status: event.target.value !== "" ? "finished" : form.status } : { awayScore: event.target.value, status: event.target.value !== "" ? "finished" : form.status });
+              }} step="1" type="number" value={value} />
+            </label>
+          ))}
+        </div>
+        <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2">
+          <label className="grid min-w-0 gap-1 text-xs font-black">วันและเวลา<input className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3" onChange={(event) => setForm({ matchDate: event.target.value })} type="datetime-local" value={form.matchDate} /></label>
+          <label className="grid min-w-0 gap-1 text-xs font-black">สนาม<input className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3" onChange={(event) => setForm({ venue: event.target.value })} value={form.venue} /></label>
+          <label className="grid min-w-0 gap-1 text-xs font-black">สถานะ<select className="min-h-11 w-full rounded-md border border-slate-200 px-3" onChange={(event) => setForm({ status: event.target.value as ResultForm["status"], ...(event.target.value === "scheduled" ? { awayScore: "", homeScore: "", manualWinnerTeamId: "", penaltyAwayScore: "", penaltyHomeScore: "" } : {}) })} value={form.status}><option value="scheduled">รอแข่งขัน</option><option value="finished">จบการแข่งขัน</option></select></label>
+        </div>
+        {isDraw ? <div className="mt-3 grid gap-3 rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] p-3 sm:grid-cols-2"><label className="grid gap-1 text-xs font-black">จุดโทษ ทีมเหย้า<input className="min-h-11 rounded-md border border-slate-200 px-3" max="999" min="0" onChange={(event) => setForm({ penaltyHomeScore: event.target.value })} step="1" type="number" value={form.penaltyHomeScore} /></label><label className="grid gap-1 text-xs font-black">จุดโทษ ทีมเยือน<input className="min-h-11 rounded-md border border-slate-200 px-3" max="999" min="0" onChange={(event) => setForm({ penaltyAwayScore: event.target.value })} step="1" type="number" value={form.penaltyAwayScore} /></label><details className="sm:col-span-2"><summary className="cursor-pointer text-xs font-black">คำตัดสินพิเศษ</summary><select className="mt-2 min-h-11 w-full rounded-md border border-slate-200 px-3" onChange={(event) => setForm({ manualWinnerTeamId: event.target.value })} value={form.manualWinnerTeamId}><option value="">เลือกเมื่อจำเป็น</option><option value={match.home_team_id}>{home?.name ?? "ทีมเหย้า"}</option><option value={match.away_team_id}>{away?.name ?? "ทีมเยือน"}</option></select></details></div> : null}
+        <div className="mt-4 flex justify-end"><button className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={isPending} type="submit">{isPending ? "กำลังบันทึก..." : "บันทึกแมตช์"}</button></div>
+      </form>
+    );
+  }
+
   return (
     <section className="mx-auto w-full max-w-7xl scroll-mt-28 px-4 pb-10 sm:px-6 lg:px-10" id="competition-tree-v2">
       <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10">
@@ -162,21 +305,11 @@ export function AdminCompetitionTreeEngineV2({
         ) : null}
 
         {summary ? (
-          <details className="mt-5 min-w-0 rounded-md border border-slate-200 bg-slate-50 p-4">
-            <summary className="cursor-pointer text-sm font-black text-[#061426]">ข้อมูลทางเทคนิคสำหรับผู้ดูแล</summary>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Stat label="Rounds" value={summary.roundCount} />
-              <Stat label="Nodes" value={summary.nodeCount} />
-              <Stat label="Leaves" value={summary.leafNodeCount} />
-              <Stat label="Roots" value={summary.rootNodeId ? 1 : 0} />
-              <Stat label="Entrants" value={summary.entrantCount} />
-              <Stat label="Capacity" value={bracketCapacity ?? "Not set"} />
-              <Stat label="Bye Sources" value={summary.byeNodeCount} />
-              <Stat label="Preliminary Nodes" value={summary.preliminaryNodeCount} />
-              <Stat label="Root Node" value={summary.rootNodeId ? "Valid" : "Missing"} />
-            </div>
-            <p className="mt-4 break-words text-sm font-bold text-slate-600">{summary.roundLabels.join(" → ")}</p>
-          </details>
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <Stat label="ทีมเข้ารอบ" value={summary.entrantCount} />
+            <Stat label="จำนวนรอบ" value={summary.roundCount} />
+            <Stat label="ความจุสาย" value={bracketCapacity ?? "—"} />
+          </div>
         ) : (
           <p className="mt-5 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-600">
             ยังไม่ได้สร้างโครงสร้างการแข่งขัน
@@ -230,32 +363,28 @@ export function AdminCompetitionTreeEngineV2({
           ) : null}
         </div>
 
-        {fixtureResult ? (
-          <details className="mt-5 min-w-0 rounded-md border border-slate-200 bg-slate-50 p-4">
-            <summary className="cursor-pointer text-sm font-black text-[#061426]">ข้อมูลทางเทคนิคสำหรับผู้ดูแล</summary>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Stat label="Ready" value={fixtureResult.nodes.filter((node) => node.state === "eligible").length} />
-              <Stat label="Waiting" value={fixtureResult.nodes.filter((node) => node.state === "waiting_winner").length} />
-              <Stat label="Bye" value={fixtureResult.nodes.filter((node) => node.state === "bye").length} />
-              <Stat label="Incomplete" value={fixtureResult.nodes.filter((node) => node.state === "incomplete").length} />
-              <Stat label="Created" value={fixtureResult.createdCount} />
-              <Stat label="Skipped" value={fixtureResult.skippedCount} />
-              <Stat label="Pending" value={fixtureResult.pendingCount} />
-              <Stat label="Linked" value={fixtureResult.linkedCount} />
-            </div>
-            <div className="mt-4 grid gap-2">
-              {fixtureResult.nodes.filter((node) => node.state === "linked").map((node) => (
-                <p className="break-words rounded-md border border-emerald-700/20 bg-white px-3 py-2 text-sm font-bold text-emerald-800" key={node.nodeId}>
-                  {node.roundLabel}: {node.homeTeamName ?? node.homeTeamId ?? "?"} vs {node.awayTeamName ?? node.awayTeamId ?? "?"} · Match {node.matchId}
-                </p>
-              ))}
-            </div>
-            {fixtureResult.errors.length ? <p className="mt-3 text-sm font-bold text-[#9b1c1f]">{fixtureResult.errors.join(" ")}</p> : null}
-          </details>
-        ) : null}
+        {fixtureResult?.errors.length ? <p className="mt-4 rounded-md border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-3 py-2 text-sm font-bold text-[#9b1c1f]">{fixtureResult.errors.join(" ")}</p> : null}
 
         {error ? <p className="mt-4 rounded-md border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-3 py-2 text-sm font-bold text-[#9b1c1f]">{error}</p> : null}
         {message ? <p className="mt-4 rounded-md border border-emerald-700/20 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">{message}</p> : null}
+
+        {matchesByRound.length ? (
+          <div className="mt-6 grid gap-5">
+            {matchesByRound.map(([roundLabel, roundMatches]) => (
+              <section className="min-w-0 rounded-lg border border-slate-200 p-4" key={roundLabel}>
+                <h3 className="text-xl font-black text-[#061426]">{roundLabel}</h3>
+                <p className="mt-1 text-sm font-semibold text-slate-600">กำหนดวันเวลา สนาม และบันทึกผลของแต่ละคู่ได้ที่นี่</p>
+                <div className="mt-4 grid gap-3">{roundMatches.map((match) => <MatchCard key={match.id} match={match} />)}</div>
+              </section>
+            ))}
+          </div>
+        ) : summary ? (
+          <p className="mt-5 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-600">เมื่อทีมผ่านเข้ารอบพร้อม ระบบจะแสดงคู่แข่งขันในส่วนนี้</p>
+        ) : null}
+        <section className="mt-6 rounded-lg border border-[#d8ad45]/35 bg-[#fff7e6] p-4">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a6418]">Champion</p>
+          <p className="mt-1 text-xl font-black text-[#061426]">{champion?.name ?? "รอผลการแข่งขันรอบชิงชนะเลิศ"}</p>
+        </section>
       </article>
     </section>
   );

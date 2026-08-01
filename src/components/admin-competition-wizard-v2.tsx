@@ -176,13 +176,13 @@ export function AdminCompetitionWizardV2({
         <div className="flex flex-col gap-2">
           <h2 className="text-2xl font-black text-[#061426]">ตั้งค่าทีมเข้ารอบน็อกเอาต์</h2>
           <p className="text-sm font-semibold text-slate-600">
-            ตั้งค่าโครงสร้าง Cup ล่วงหน้าเท่านั้น ยังไม่สร้าง Bracket หรือ Match
+            กำหนดทีมที่ผ่านเข้ารอบน็อกเอาต์จากข้อมูลรายการแข่งขัน
           </p>
         </div>
 
         <div className="mt-6 grid gap-5">
           <section className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4">
-            <p className="text-sm font-black text-[#061426]">Step 1 · ประเภทการแข่งขัน (Competition Type)</p>
+            <p className="text-sm font-black text-[#061426]">รูปแบบการแข่งขัน</p>
             <div className="mt-3 grid gap-2 sm:grid-cols-4">
               {competitionTypes.map((type) => (
                 <label
@@ -207,7 +207,7 @@ export function AdminCompetitionWizardV2({
           {selectedType === "cup" ? (
             <>
               <section className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-black text-[#061426]">Step 2 · รอบแบ่งกลุ่ม (Group Stage?)</p>
+                <p className="text-sm font-black text-[#061426]">รอบแบ่งกลุ่ม</p>
                 <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                   {[
                     { label: "Yes", value: true },
@@ -231,7 +231,7 @@ export function AdminCompetitionWizardV2({
 
               <section className="grid min-w-0 gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
                 <div className="grid min-w-0 gap-2 text-sm font-black text-[#061426]">
-                  <span>Step 3 · ทีมทั้งหมดในรายการ / Total Participants</span>
+                  <span>ทีมทั้งหมดในรายการ / Total Participants</span>
                   <div className="min-h-11 rounded-md border border-slate-200 bg-white px-3 py-2 text-base font-black">
                     {participantCount || "Not set"}
                   </div>
@@ -241,7 +241,7 @@ export function AdminCompetitionWizardV2({
                 {groupStageEnabled ? (
                   hasExistingGroups ? (
                     <div className="grid min-w-0 gap-2 text-sm font-black text-[#061426]">
-                      <span>Step 4 · จำนวนกลุ่ม (Groups)</span>
+                      <span>จำนวนกลุ่ม (Groups)</span>
                       <div className="min-h-11 rounded-md border border-slate-200 bg-white px-3 py-2 text-base font-black">
                         {groups.length}
                       </div>
@@ -249,7 +249,7 @@ export function AdminCompetitionWizardV2({
                     </div>
                   ) : (
                     <label className="grid min-w-0 gap-2 text-sm font-black text-[#061426]">
-                      Step 4 · จำนวนกลุ่ม (Groups)
+                      จำนวนกลุ่ม (Groups)
                       <input
                         className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 bg-white px-3 py-2 text-base font-black"
                         inputMode="numeric"
@@ -280,7 +280,7 @@ export function AdminCompetitionWizardV2({
 
               {groupStageEnabled ? (
                 <section className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-sm font-black text-[#061426]">Step 5 · ทีมเข้ารอบ (Qualification)</p>
+                  <p className="text-sm font-black text-[#061426]">ทีมเข้ารอบ (Qualification)</p>
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
                     {hasExistingGroups ? (
                       <div className="grid min-w-0 gap-2 text-sm font-black text-[#061426]">
@@ -320,7 +320,7 @@ export function AdminCompetitionWizardV2({
               ) : null}
 
               <section className="min-w-0 rounded-lg border border-[#d8ad45]/35 bg-[#fff7e6] p-4">
-                <p className="text-sm font-black text-[#8a6418]">Step 6 · Preview</p>
+                <p className="text-sm font-black text-[#8a6418]">สรุปก่อนยืนยัน</p>
                 {preview.value ? (
                   <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <PreviewStat label="Knockout Entrants" value={preview.value.qualifiedTeams} />
@@ -341,9 +341,9 @@ export function AdminCompetitionWizardV2({
 
               <section className="flex min-w-0 flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                  <p className="text-sm font-black text-[#061426]">Step 7 · Confirm</p>
+                  <p className="text-sm font-black text-[#061426]">ยืนยันทีมเข้ารอบ</p>
                   <p className="mt-1 text-xs font-bold text-slate-600">
-                    บันทึกเฉพาะ configuration เท่านั้น ไม่สร้าง Bracket Node หรือ Match
+                    บันทึกจำนวนทีมเข้ารอบก่อนเริ่มจัดโปรแกรมรอบน็อกเอาต์
                   </p>
                 </div>
                 <button

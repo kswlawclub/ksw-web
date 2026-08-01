@@ -10,6 +10,8 @@ import {
   type AdminCompetitionGroup,
   type AdminCompetitionGroupTeam,
 } from "@/components/admin-competition-groups-manager";
+import { AdminCompetitionTreeEngineV2 } from "@/components/admin-competition-tree-engine-v2";
+import { AdminCompetitionWizardV2 } from "@/components/admin-competition-wizard-v2";
 import { CopyPublicLinkButton } from "@/components/copy-public-link-button";
 import { TeamLogo } from "@/components/team-logo";
 import { loadCompetitionParticipants } from "@/lib/competition-participants";
@@ -395,6 +397,7 @@ async function loadWorkspaceData(id: string) {
     groupTeams,
     groups,
     engineV2Config,
+    engineV2TreeNodes,
     engineV2TreeSummary,
     engineV2Workflow,
     matchTeams,
@@ -435,7 +438,7 @@ export default async function AdminCompetitionWorkspacePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { competition, engineV2Config, engineV2TreeSummary, engineV2Workflow, groupDataReady, groupTeams, groups, matchTeams, matches, teams } = await loadWorkspaceData(id);
+  const { competition, engineV2Config, engineV2TreeNodes, engineV2TreeSummary, engineV2Workflow, groupDataReady, groupTeams, groups, matchTeams, matches, teams } = await loadWorkspaceData(id);
 
   if (!competition) {
     notFound();
@@ -557,20 +560,20 @@ export default async function AdminCompetitionWorkspacePage({
       ) : null}
 
       <AdminCompetitionMatchManager
-        competition={{
-          id,
-          name: competitionName,
-          season,
-          status: seasonStatus,
-          type: competitionType,
-        }}
-        cupGroupCount={groups.length}
-        cupGroupsReady={groupDataReady}
-        cupUnassignedTeamCount={unassignedGroupTeamCount}
-        groups={groups}
-        groupTeams={groupTeams}
-        initialMatches={workspaceMatches}
-        initialTeams={workspaceMatchTeams}
+          competition={{
+            id,
+            name: competitionName,
+            season,
+            status: seasonStatus,
+            type: competitionType,
+          }}
+          cupGroupCount={groups.length}
+          cupGroupsReady={groupDataReady}
+          cupUnassignedTeamCount={unassignedGroupTeamCount}
+          groups={groups}
+          groupTeams={groupTeams}
+          initialMatches={workspaceMatches}
+          initialTeams={workspaceMatchTeams}
       />
 
       {isCup ? (
@@ -591,25 +594,43 @@ export default async function AdminCompetitionWorkspacePage({
       ) : null}
 
       {isCup ? (
-        <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
-          <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-2xl font-black text-[#061426]">รอบน็อกเอาต์</h2>
-            <p className="mt-1 text-sm font-semibold text-slate-600">
-              Quarterfinal · Semifinal · Final จะปรากฏตามข้อมูลโปรแกรมการแข่งขันที่มีอยู่
-            </p>
-            <div className="mt-4 grid gap-3">
-              {engineV2TreeSummary ? (
-                <p className="rounded-md border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
-                  มีโครงสร้างการแข่งขัน {engineV2TreeSummary.roundCount} รอบ และยังใช้ข้อมูลเดิมทั้งหมด
-                </p>
-              ) : (
-                <p className="rounded-md border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
-                  ยังไม่มีโปรแกรมรอบน็อกเอาต์
-                </p>
-              )}
-            </div>
-          </article>
-        </section>
+        <AdminCompetitionWizardV2
+          competitionId={id}
+          competitionType="cup"
+          existingConfig={engineV2Config}
+          groupCount={groups.length}
+          groups={groups}
+          participantCount={teams.length}
+          workflow={engineV2Workflow}
+        />
+      ) : null}
+
+      {isCup ? (
+        <AdminCompetitionTreeEngineV2
+          bracketCapacity={engineV2Config?.bracketCapacity ?? null}
+          competitionId={id}
+          configReady={Boolean(engineV2Config)}
+          initialMatches={workspaceMatches
+            .filter((match) => match.competition_stage === "knockout")
+            .map((match) => ({
+              away_score: match.away_score,
+              away_team_id: match.away_team_id,
+              home_score: match.home_score,
+              home_team_id: match.home_team_id,
+              id: match.id,
+              manual_winner_team_id: match.manual_winner_team_id ?? null,
+              match_date: match.match_date,
+              penalty_away_score: match.penalty_away_score ?? null,
+              penalty_home_score: match.penalty_home_score ?? null,
+              status: match.status,
+              venue: match.venue,
+              winner_team_id: match.winner_team_id ?? null,
+            }))}
+          initialSummary={engineV2TreeSummary}
+          nodes={engineV2TreeNodes}
+          teams={workspaceMatchTeams.map((team) => ({ id: team.id, logo_url: team.logo_url, name: team.name, short_name: team.short_name }))}
+          workflow={engineV2Workflow}
+        />
       ) : null}
 
       <section className="mx-auto grid w-full max-w-7xl scroll-mt-28 gap-4 px-4 pb-8 sm:px-6 lg:grid-cols-3 lg:px-10" id="publishing-summary">

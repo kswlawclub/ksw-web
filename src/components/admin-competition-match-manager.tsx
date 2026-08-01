@@ -657,9 +657,9 @@ export function AdminCompetitionMatchManager({
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a6418]">
-              Matches Workspace
+              {isCup ? "โปรแกรมรอบแบ่งกลุ่ม" : "Matches Workspace"}
             </p>
-            <h2 className="mt-2 text-2xl font-black">{competition.name}</h2>
+            <h2 className="mt-2 text-2xl font-black">{isCup ? "โปรแกรมแข่งขันและผลการแข่งขัน" : competition.name}</h2>
             <p className="mt-1 text-sm font-semibold text-slate-600">
               {[competition.season, competition.status].filter(Boolean).join(" - ")}
             </p>
@@ -670,7 +670,7 @@ export function AdminCompetitionMatchManager({
             onClick={startNewMatch}
             type="button"
           >
-            Add Match
+            {isCup ? "เพิ่มแมตช์รอบแบ่งกลุ่ม" : "Add Match"}
           </button>
         </div>
 
