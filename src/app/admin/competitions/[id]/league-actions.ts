@@ -10,7 +10,7 @@ import { applyLeagueFixtureOverrides, type LeagueFixtureOverride } from "@/lib/l
 import { generateRoundRobinFixtures } from "@/lib/league-template/round-robin";
 import { calculateStandardLeagueStandings, type StandardLeagueMatch } from "@/lib/league-template/standings";
 import { getLeagueStandingsPolicy } from "@/lib/league-template/standings-policies";
-import { STANDARD_LEAGUE_TEMPLATE_KEY, type LeagueFixturePlan, type StandardLeagueConfig } from "@/lib/league-template/types";
+import { STANDARD_LEAGUE_TEMPLATE_KEY, type LeagueFixturePlan, type StandardLeagueConfig, type StandardLeagueMatchweek } from "@/lib/league-template/types";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { sortTeamsByName } from "@/lib/team-sort";
 
@@ -37,8 +37,22 @@ export type LeagueMatchSaveResult = LeagueConfigActionResult & {
   champion?: { championAt: string | null; championTeamId: string | null };
 };
 
+export type LeagueMatchweekActionResult = LeagueConfigActionResult & {
+  matchweekState?: StandardLeagueMatchweek;
+  matches?: LeagueMatchweekDraftMatch[];
+};
+
+export type LeagueMatchweekDraftMatch = {
+  awayTeamId: string;
+  homeTeamId: string;
+  matchDate: string | null;
+  matchId: string;
+  venue: string | null;
+};
+
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const configColumns = "competition_id, template_key, legs, win_points, draw_points, loss_points, standings_policy_key, fixture_status, fixture_version, confirmed_at, confirmed_by, confirmed_by_label, champion_team_id, champion_at";
+const matchweekColumns = "matchweek, status, confirmed_at, confirmed_by_label, updated_at";
 
 function text(row: Row | null | undefined, key: string) {
   return typeof row?.[key] === "string" ? row[key] as string : "";
@@ -67,6 +81,19 @@ function configFromRow(row: Row | null | undefined): StandardLeagueConfig | null
     standingsPolicyKey: policy === "legacy_season6" ? "legacy_season6" : "standard_league_v1",
     templateKey: STANDARD_LEAGUE_TEMPLATE_KEY,
     winPoints: integer(row, "win_points", 3),
+  };
+}
+
+function matchweekFromRow(row: Row | null | undefined): StandardLeagueMatchweek | null {
+  if (!row) return null;
+  const status = text(row, "status");
+  if (!Number.isInteger(row.matchweek) || !["unconfigured", "draft", "confirmed", "completed"].includes(status)) return null;
+  return {
+    confirmedAt: text(row, "confirmed_at") || null,
+    confirmedBy: text(row, "confirmed_by_label") || null,
+    matchweek: row.matchweek as number,
+    status: status as StandardLeagueMatchweek["status"],
+    updatedAt: text(row, "updated_at") || null,
   };
 }
 
@@ -114,6 +141,27 @@ async function loadConfigRow(supabase: NonNullable<ReturnType<typeof getSupabase
     return { error: "ไม่สามารถโหลดการตั้งค่าลีกได้", row: null };
   }
   return { error: "", row: result.data as Row | null };
+}
+
+async function loadMatchweekState(supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>, competitionId: string, fixtureVersion: number) {
+  const result = await supabase.from("competition_league_matchweeks").select(matchweekColumns).eq("competition_id", competitionId).eq("fixture_version", fixtureVersion).order("matchweek");
+  if (result.error) {
+    console.error("standard league matchweek state lookup failed", result.error);
+    return { error: "ไม่สามารถโหลดสถานะ Matchweek ได้", states: [] as StandardLeagueMatchweek[] };
+  }
+  return { error: "", states: (result.data ?? []).map((row) => matchweekFromRow(row as Row)).filter((row): row is StandardLeagueMatchweek => Boolean(row)) };
+}
+
+async function completeMatchweekIfFinished(supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>, competitionId: string, fixtureVersion: number, matchweek: number) {
+  const matches = await supabase.from("matches").select("status").eq("league_id", competitionId).eq("league_fixture_version", fixtureVersion).eq("matchweek", matchweek);
+  if (matches.error || !matches.data?.length || matches.data.some((match) => !["finished", "completed"].includes(match.status))) return;
+  const completed = await supabase.from("competition_league_matchweeks").upsert({ competition_id: competitionId, fixture_version: fixtureVersion, matchweek, status: "completed", updated_at: new Date().toISOString() }, { onConflict: "competition_id,fixture_version,matchweek" });
+  if (completed.error) console.error("standard league matchweek completion persistence failed", completed.error);
+}
+
+async function markMatchweekDraft(supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>, competitionId: string, fixtureVersion: number, matchweek: number) {
+  const drafted = await supabase.from("competition_league_matchweeks").upsert({ competition_id: competitionId, fixture_version: fixtureVersion, matchweek, status: "draft", confirmed_at: null, confirmed_by: null, confirmed_by_label: null, updated_at: new Date().toISOString() }, { onConflict: "competition_id,fixture_version,matchweek" });
+  if (drafted.error) console.error("standard league matchweek draft persistence failed", drafted.error);
 }
 
 async function buildFixturePlan(supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>, competitionId: string) {
@@ -330,7 +378,7 @@ export async function saveStandardLeagueMatch(competitionId: string, payload: {
   if (loaded.error || !config || config.fixtureStatus !== "confirmed") return { error: loaded.error || "ยังไม่ได้ยืนยันโปรแกรมลีก", ok: false };
   const match = await verified.supabase
     .from("matches")
-    .select("id, league_fixture_version, home_team_id, away_team_id")
+    .select("id, league_fixture_version, matchweek, home_team_id, away_team_id, match_date, venue")
     .eq("id", payload.matchId)
     .eq("league_id", competitionId)
     .maybeSingle();
@@ -339,6 +387,12 @@ export async function saveStandardLeagueMatch(competitionId: string, payload: {
     return { error: "ไม่พบคู่แข่งขันลีกนี้", ok: false };
   }
   if (match.data.league_fixture_version !== config.fixtureVersion) return { error: "คู่นี้ไม่ได้อยู่ในชุดโปรแกรมลีกที่ยืนยันไว้", ok: false };
+  if (!Number.isInteger(match.data.matchweek)) return { error: "คู่นี้ไม่มี Matchweek ที่ยืนยันได้", ok: false };
+  const matchweek = match.data.matchweek;
+  const matchweeks = await loadMatchweekState(verified.supabase, competitionId, config.fixtureVersion);
+  if (matchweeks.error) return { error: matchweeks.error, ok: false };
+  const matchweekState = matchweeks.states.find((state) => state.matchweek === matchweek);
+  if (payload.status === "finished" && matchweekState?.status !== "confirmed") return { error: "ต้องยืนยันโปรแกรม Matchweek นี้ก่อนจึงจะบันทึกผลจบการแข่งขันได้", ok: false };
   const saved = await updateMatch(payload.matchId, {
     away_score: payload.awayScore,
     away_team_id: match.data.away_team_id,
@@ -350,10 +404,56 @@ export async function saveStandardLeagueMatch(competitionId: string, payload: {
     venue: payload.venue,
   });
   if (!saved.ok) return { error: saved.error || "ไม่สามารถบันทึกผลการแข่งขันได้", ok: false };
+  if (payload.status !== "finished" && (match.data.match_date !== payload.matchDate || (match.data.venue ?? null) !== (payload.venue?.trim() || null))) {
+    await markMatchweekDraft(verified.supabase, competitionId, config.fixtureVersion, matchweek);
+  }
+  await completeMatchweekIfFinished(verified.supabase, competitionId, config.fixtureVersion, matchweek);
   const persisted = await persistLeagueChampion(verified.supabase, competitionId, config);
   if (persisted.error) return { error: persisted.error, ok: false };
   revalidatePath(`/admin/competitions/${competitionId}`);
   return { champion: { championAt: persisted.config.championAt, championTeamId: persisted.config.championTeamId }, config: persisted.config, ok: true };
+}
+
+export async function saveStandardLeagueMatchweekDraft(competitionId: string, matchweek: number, updates: LeagueMatchweekDraftMatch[]): Promise<LeagueMatchweekActionResult> {
+  const verified = await verifyLeagueCompetition(competitionId);
+  if (verified.error || !verified.supabase) return { error: verified.error, ok: false };
+  const loaded = await loadConfigRow(verified.supabase, competitionId);
+  const config = configFromRow(loaded.row);
+  if (loaded.error || !config || config.fixtureStatus !== "confirmed") return { error: loaded.error || "ยังไม่ได้ยืนยันโครงสร้างการแข่งขัน", ok: false };
+  const saved = await verified.supabase.rpc("save_standard_league_matchweek_draft_v1", {
+    p_competition_id: competitionId,
+    p_fixture_version: config.fixtureVersion,
+    p_matchweek: matchweek,
+    p_updates: updates.map((update) => ({ awayTeamId: update.awayTeamId, homeTeamId: update.homeTeamId, matchDate: update.matchDate, matchId: update.matchId, venue: update.venue?.trim() || null })),
+  });
+  if (saved.error) {
+    console.error("standard league matchweek draft save failed", saved.error);
+    return { error: "ไม่สามารถบันทึกร่าง Matchweek นี้ได้", ok: false };
+  }
+  const [state, matches] = await Promise.all([
+    loadMatchweekState(verified.supabase, competitionId, config.fixtureVersion),
+    verified.supabase.from("matches").select("id, home_team_id, away_team_id, match_date, venue").eq("league_id", competitionId).eq("league_fixture_version", config.fixtureVersion).eq("matchweek", matchweek),
+  ]);
+  if (state.error || matches.error) return { error: state.error || "ไม่สามารถโหลดร่างที่บันทึกแล้ว", ok: false };
+  revalidatePath(`/admin/competitions/${competitionId}`);
+  return { config, matches: (matches.data ?? []).map((match) => ({ awayTeamId: match.away_team_id, homeTeamId: match.home_team_id, matchDate: match.match_date, matchId: match.id, venue: match.venue })), matchweekState: state.states.find((item) => item.matchweek === matchweek), ok: true };
+}
+
+export async function confirmStandardLeagueMatchweek(competitionId: string, matchweek: number): Promise<LeagueMatchweekActionResult> {
+  const verified = await verifyLeagueCompetition(competitionId);
+  if (verified.error || !verified.supabase) return { error: verified.error, ok: false };
+  const loaded = await loadConfigRow(verified.supabase, competitionId);
+  const config = configFromRow(loaded.row);
+  if (loaded.error || !config || config.fixtureStatus !== "confirmed") return { error: loaded.error || "ยังไม่ได้ยืนยันโครงสร้างการแข่งขัน", ok: false };
+  const confirmed = await verified.supabase.rpc("confirm_standard_league_matchweek_v1", { p_competition_id: competitionId, p_confirmed_by_label: "Administrator session", p_fixture_version: config.fixtureVersion, p_matchweek: matchweek });
+  if (confirmed.error) {
+    console.error("standard league matchweek confirmation failed", confirmed.error);
+    return { error: "Matchweek นี้ยังมีคู่ที่ขาดวัน เวลา สนาม หรือข้อมูลการแข่งขันไม่พร้อม", ok: false };
+  }
+  const state = await loadMatchweekState(verified.supabase, competitionId, config.fixtureVersion);
+  if (state.error) return { error: state.error, ok: false };
+  revalidatePath(`/admin/competitions/${competitionId}`);
+  return { config, matchweekState: state.states.find((item) => item.matchweek === matchweek), ok: true };
 }
 
 export async function swapStandardLeagueMatchSides(competitionId: string, matchId: string): Promise<LeagueMatchSaveResult> {

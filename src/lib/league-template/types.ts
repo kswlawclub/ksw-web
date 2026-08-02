@@ -2,6 +2,7 @@ export const STANDARD_LEAGUE_TEMPLATE_KEY = "standard_league" as const;
 
 export type LeagueTemplateKey = typeof STANDARD_LEAGUE_TEMPLATE_KEY;
 export type LeagueFixtureStatus = "confirmed" | "draft";
+export type LeagueMatchweekStatus = "completed" | "confirmed" | "draft" | "unconfigured";
 export type LeagueStandingsPolicyKey = "legacy_season6" | "standard_league_v1";
 export type LeagueTieBreakSupport = "deferred" | "supported" | "technical_fallback";
 
@@ -20,6 +21,14 @@ export type StandardLeagueConfig = {
   standingsPolicyKey: LeagueStandingsPolicyKey;
   templateKey: LeagueTemplateKey;
   winPoints: number;
+};
+
+export type StandardLeagueMatchweek = {
+  confirmedAt: string | null;
+  confirmedBy: string | null;
+  matchweek: number;
+  status: LeagueMatchweekStatus;
+  updatedAt: string | null;
 };
 
 export type LeagueEntrant = {

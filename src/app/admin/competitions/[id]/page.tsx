@@ -30,7 +30,7 @@ import {
 import type { ApprovedQualificationSummary } from "@/app/admin/competitions/[id]/qualification-actions";
 import type { CompetitionEngineV2Config } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
 import type { CouncilWorkflowPartition } from "@/lib/cup-competition-workflow";
-import type { StandardLeagueConfig } from "@/lib/league-template/types";
+import type { StandardLeagueConfig, StandardLeagueMatchweek } from "@/lib/league-template/types";
 
 type Row = Record<string, unknown>;
 
@@ -333,6 +333,7 @@ async function loadWorkspaceData(id: string) {
       groups: [] as AdminCompetitionGroup[],
       engineV2Config: null as CompetitionEngineV2Config | null,
       leagueConfig: null as StandardLeagueConfig | null,
+      leagueMatchweeks: [] as StandardLeagueMatchweek[],
       engineV2TreeSummary: null as CompetitionTreeSummary | null,
       engineV2Workflow: null as CompetitionEngineV2Integrity | null,
       councilWorkflowPartitions: [] as CouncilWorkflowPartition[],
@@ -356,6 +357,7 @@ async function loadWorkspaceData(id: string) {
       groups: [] as AdminCompetitionGroup[],
       engineV2Config: null as CompetitionEngineV2Config | null,
       leagueConfig: null as StandardLeagueConfig | null,
+      leagueMatchweeks: [] as StandardLeagueMatchweek[],
       engineV2TreeSummary: null as CompetitionTreeSummary | null,
       engineV2Workflow: null as CompetitionEngineV2Integrity | null,
       councilWorkflowPartitions: [] as CouncilWorkflowPartition[],
@@ -449,6 +451,38 @@ async function loadWorkspaceData(id: string) {
   const groups = groupResult.data.map(asCompetitionGroup).filter((group) => group.id);
   const engineV2Config = asEngineV2Config(engineV2ConfigResult.data[0]);
   const leagueConfig = asStandardLeagueConfig(leagueConfigResult.data[0]);
+  const leagueFixtureWeeks = leagueConfig?.fixtureStatus === "confirmed"
+    ? Array.from(new Set(matches.map((match) => number(match, ["matchweek"])).filter((matchweek) => matchweek > 0))).sort((a, b) => a - b)
+    : [];
+  if (leagueConfig && leagueFixtureWeeks.length) {
+    const ensured = await supabase
+      .from("competition_league_matchweeks")
+      .upsert(leagueFixtureWeeks.map((matchweek) => ({ competition_id: id, fixture_version: leagueConfig.fixtureVersion, matchweek, status: "unconfigured" })), { onConflict: "competition_id,fixture_version,matchweek", ignoreDuplicates: true });
+    if (ensured.error) console.error("standard league matchweek initialization failed", ensured.error);
+    const completedWeeks = leagueFixtureWeeks.filter((matchweek) => {
+      const fixtures = matches.filter((match) => number(match, ["matchweek"]) === matchweek);
+      return fixtures.length > 0 && fixtures.every((match) => ["finished", "completed"].includes(text(match, ["status"])));
+    });
+    if (completedWeeks.length) {
+      const completed = await supabase
+        .from("competition_league_matchweeks")
+        .upsert(completedWeeks.map((matchweek) => ({ competition_id: id, fixture_version: leagueConfig.fixtureVersion, matchweek, status: "completed" })), { onConflict: "competition_id,fixture_version,matchweek" });
+      if (completed.error) console.error("standard league completed matchweek derivation failed", completed.error);
+    }
+  }
+  const leagueMatchweekResult = leagueConfig?.fixtureStatus === "confirmed"
+    ? await runQueryStatus<Row>("workspace_standard_league_matchweeks", supabase.from("competition_league_matchweeks").select("matchweek, status, confirmed_at, confirmed_by_label, updated_at").eq("competition_id", id).eq("fixture_version", leagueConfig.fixtureVersion).order("matchweek"))
+    : { data: [] as Row[], ok: true };
+  const leagueMatchweeks = leagueMatchweekResult.data.map((row) => {
+    const status = text(row, ["status"]);
+    return {
+      confirmedAt: text(row, ["confirmed_at"]) || null,
+      confirmedBy: text(row, ["confirmed_by_label"]) || null,
+      matchweek: number(row, ["matchweek"]),
+      status: (status === "draft" || status === "confirmed" || status === "completed" ? status : "unconfigured") as StandardLeagueMatchweek["status"],
+      updatedAt: text(row, ["updated_at"]) || null,
+    };
+  });
   const engineV2TreeNodes = engineV2TreeResult.data.map(asCompetitionTreeNode).filter((node) => node.id);
   const councilWorkflowPartitions = (["division_1", "division_2"] as const).map((partitionKey) => {
     const partition = councilPartitionsResult.data.find((row) => text(row, ["partition_key"]) === partitionKey);
@@ -492,6 +526,7 @@ async function loadWorkspaceData(id: string) {
     groupDataReady: groupResult.ok && competitionTeamResult.ok,
     groupTeams,
     leagueConfig,
+    leagueMatchweeks,
     groups,
     engineV2Config,
     councilWorkflowPartitions,
@@ -536,7 +571,7 @@ export default async function AdminCompetitionWorkspacePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { competition, councilWorkflowPartitions, engineV2Config, engineV2TreeNodes, engineV2TreeSummary, engineV2Workflow, groupDataReady, groupTeams, groups, leagueConfig, matchTeams, matches, teams } = await loadWorkspaceData(id);
+  const { competition, councilWorkflowPartitions, engineV2Config, engineV2TreeNodes, engineV2TreeSummary, engineV2Workflow, groupDataReady, groupTeams, groups, leagueConfig, leagueMatchweeks, matchTeams, matches, teams } = await loadWorkspaceData(id);
 
   if (!competition) {
     notFound();
@@ -665,6 +700,7 @@ export default async function AdminCompetitionWorkspacePage({
           competitionStatus={seasonStatus}
           initialConfig={leagueConfig}
           initialMatches={workspaceMatches}
+          initialMatchweeks={leagueMatchweeks}
           key={`standard-league-${leagueConfig?.fixtureVersion ?? "draft"}-${workspaceMatches.map((match) => `${match.id}:${match.status}:${match.home_score}:${match.away_score}`).join("|")}`}
           teams={teams.map((team) => asMatchTeam(team, true))}
         />
