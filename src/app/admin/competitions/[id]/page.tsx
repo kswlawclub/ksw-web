@@ -30,14 +30,18 @@ import {
 import type { ApprovedQualificationSummary } from "@/app/admin/competitions/[id]/qualification-actions";
 import type { CompetitionEngineV2Config } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
 import type { CouncilWorkflowPartition } from "@/lib/cup-competition-workflow";
-import type { StandardLeagueConfig, StandardLeagueMatchweek } from "@/lib/league-template/types";
+import type {
+  StandardLeagueConfig,
+  StandardLeagueMatchweek,
+  StandardLeagueRescheduleHistory,
+} from "@/lib/league-template/types";
 
 type Row = Record<string, unknown>;
 
 const competitionColumns =
   "id, name, season, slug, short_description, description, cover_image_url, edition_number, start_date, end_date, location, display_order, competition_type, competition_engine_version, season_status, is_active, is_featured, is_published, created_at";
 const matchColumns =
-  "id, league_id, group_id, competition_stage, fixture_source, knockout_partition_key, league_leg, matchweek, league_fixture_version, league_fixture_key, match_date, home_team_id, away_team_id, home_score, away_score, penalty_home_score, penalty_away_score, manual_winner_team_id, winner_team_id, venue, status";
+  "id, league_id, group_id, competition_stage, fixture_source, knockout_partition_key, league_leg, matchweek, scheduled_matchweek, reschedule_reason, rescheduled_at, rescheduled_by, league_fixture_version, league_fixture_key, match_date, home_team_id, away_team_id, home_score, away_score, penalty_home_score, penalty_away_score, manual_winner_team_id, winner_team_id, venue, status";
 const teamColumns = "id, name, short_name, logo_url, is_ksw";
 const groupColumns = "id, competition_id, name, label, sort_order, qualifiers_count, created_at, updated_at";
 const competitionTeamGroupColumns = "id, competition_id, team_id, group_id, is_active, display_order";
@@ -160,6 +164,12 @@ function asMatch(row: Row): AdminCompetitionMatch {
     manual_winner_team_id: text(row, ["manual_winner_team_id"], "") || null,
     match_date: text(row, ["match_date"], "") || null,
     matchweek: typeof row.matchweek === "number" ? row.matchweek : null,
+    originalMatchweek: typeof row.matchweek === "number" ? row.matchweek : null,
+    scheduledMatchweek: typeof row.scheduled_matchweek === "number" ? row.scheduled_matchweek : null,
+    effectiveMatchweek: typeof row.scheduled_matchweek === "number" ? row.scheduled_matchweek : typeof row.matchweek === "number" ? row.matchweek : null,
+    rescheduleReason: text(row, ["reschedule_reason"], "") || null,
+    rescheduledAt: text(row, ["rescheduled_at"], "") || null,
+    rescheduledBy: text(row, ["rescheduled_by"], "") || null,
     penalty_away_score: typeof row.penalty_away_score === "number" ? row.penalty_away_score : null,
     penalty_home_score: typeof row.penalty_home_score === "number" ? row.penalty_home_score : null,
     status: text(row, ["status"], ""),
@@ -334,6 +344,7 @@ async function loadWorkspaceData(id: string) {
       engineV2Config: null as CompetitionEngineV2Config | null,
       leagueConfig: null as StandardLeagueConfig | null,
       leagueMatchweeks: [] as StandardLeagueMatchweek[],
+      rescheduleHistory: [] as StandardLeagueRescheduleHistory[],
       engineV2TreeSummary: null as CompetitionTreeSummary | null,
       engineV2Workflow: null as CompetitionEngineV2Integrity | null,
       councilWorkflowPartitions: [] as CouncilWorkflowPartition[],
@@ -358,6 +369,7 @@ async function loadWorkspaceData(id: string) {
       engineV2Config: null as CompetitionEngineV2Config | null,
       leagueConfig: null as StandardLeagueConfig | null,
       leagueMatchweeks: [] as StandardLeagueMatchweek[],
+      rescheduleHistory: [] as StandardLeagueRescheduleHistory[],
       engineV2TreeSummary: null as CompetitionTreeSummary | null,
       engineV2Workflow: null as CompetitionEngineV2Integrity | null,
       councilWorkflowPartitions: [] as CouncilWorkflowPartition[],
@@ -369,7 +381,7 @@ async function loadWorkspaceData(id: string) {
 
   const competitionType = normalizeCompetitionType(competition.competition_type);
   const isCup = isCupCompetition(competitionType);
-  const [teams, matches, groupResult, competitionTeamResult, engineV2ConfigResult, engineV2TreeResult, councilPartitionsResult, leagueConfigResult] = await Promise.all([
+  const [teams, matches, groupResult, competitionTeamResult, engineV2ConfigResult, engineV2TreeResult, councilPartitionsResult, leagueConfigResult, rescheduleHistoryResult] = await Promise.all([
     loadCompetitionParticipants(supabase, id, {
       includeInactiveParticipants: false,
     }),
@@ -435,6 +447,16 @@ async function loadWorkspaceData(id: string) {
             .limit(1),
         )
       : Promise.resolve({ data: [] as Row[], ok: true }),
+    competitionType === "league"
+      ? runQueryStatus<Row>(
+          "workspace_standard_league_reschedule_history",
+          supabase
+            .from("competition_league_match_reschedules")
+            .select("id, match_id, original_matchweek, from_scheduled_matchweek, to_scheduled_matchweek, reason, changed_at, changed_by, changed_by_label")
+            .eq("competition_id", id)
+            .order("changed_at", { ascending: false }),
+        )
+      : Promise.resolve({ data: [] as Row[], ok: true }),
   ]);
   const teamIds = matchTeamIds(matches);
   const groupTeamIds = competitionTeamResult.data.map((row) => text(row, ["team_id"], "")).filter(Boolean);
@@ -483,6 +505,32 @@ async function loadWorkspaceData(id: string) {
       updatedAt: text(row, ["updated_at"]) || null,
     };
   });
+  const rescheduleHistory = rescheduleHistoryResult.data.flatMap((row) => {
+    const id = text(row, ["id"]);
+    const matchId = text(row, ["match_id"]);
+    const originalMatchweek = number(row, ["original_matchweek"]);
+    const fromMatchweek = number(row, ["from_scheduled_matchweek"]);
+    const toMatchweek = number(row, ["to_scheduled_matchweek"]);
+    const reason = text(row, ["reason"]);
+    const changedAt = text(row, ["changed_at"]);
+
+    if (!id || !matchId || !originalMatchweek || !fromMatchweek || !toMatchweek || !reason || !changedAt) {
+      console.error("invalid standard league reschedule history row", row);
+      return [];
+    }
+
+    return [{
+      changedAt,
+      changedBy: text(row, ["changed_by"]) || null,
+      changedByLabel: text(row, ["changed_by_label"]) || null,
+      fromMatchweek,
+      id,
+      matchId,
+      originalMatchweek,
+      reason,
+      toMatchweek,
+    } satisfies StandardLeagueRescheduleHistory];
+  });
   const engineV2TreeNodes = engineV2TreeResult.data.map(asCompetitionTreeNode).filter((node) => node.id);
   const councilWorkflowPartitions = (["division_1", "division_2"] as const).map((partitionKey) => {
     const partition = councilPartitionsResult.data.find((row) => text(row, ["partition_key"]) === partitionKey);
@@ -527,6 +575,7 @@ async function loadWorkspaceData(id: string) {
     groupTeams,
     leagueConfig,
     leagueMatchweeks,
+    rescheduleHistory,
     groups,
     engineV2Config,
     councilWorkflowPartitions,
@@ -571,7 +620,7 @@ export default async function AdminCompetitionWorkspacePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { competition, councilWorkflowPartitions, engineV2Config, engineV2TreeNodes, engineV2TreeSummary, engineV2Workflow, groupDataReady, groupTeams, groups, leagueConfig, leagueMatchweeks, matchTeams, matches, teams } = await loadWorkspaceData(id);
+  const { competition, councilWorkflowPartitions, engineV2Config, engineV2TreeNodes, engineV2TreeSummary, engineV2Workflow, groupDataReady, groupTeams, groups, leagueConfig, leagueMatchweeks, matchTeams, matches, rescheduleHistory, teams } = await loadWorkspaceData(id);
 
   if (!competition) {
     notFound();
@@ -702,6 +751,7 @@ export default async function AdminCompetitionWorkspacePage({
           initialMatches={workspaceMatches}
           initialMatchweeks={leagueMatchweeks}
           key={`standard-league-${leagueConfig?.fixtureVersion ?? "draft"}-${workspaceMatches.map((match) => `${match.id}:${match.status}:${match.home_score}:${match.away_score}`).join("|")}`}
+          rescheduleHistory={rescheduleHistory}
           teams={teams.map((team) => asMatchTeam(team, true))}
         />
       ) : (

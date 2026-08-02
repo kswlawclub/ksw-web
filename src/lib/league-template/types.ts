@@ -41,6 +41,72 @@ export type StandardLeagueScheduledMatch = {
   scheduledMatchweek: number | null;
 };
 
+export type StandardLeagueRescheduleHistory = {
+  changedAt: string;
+  changedBy: string | null;
+  changedByLabel: string | null;
+  fromMatchweek: number;
+  id: string;
+  matchId: string;
+  originalMatchweek: number;
+  reason: string;
+  toMatchweek: number;
+};
+
+export type StandardLeagueRescheduledMatch = {
+  away_score: number | null;
+  away_team_id: string;
+  competition_stage: string | null;
+  effectiveMatchweek: number | null;
+  fixture_source: string | null;
+  group_id: string | null;
+  home_score: number | null;
+  home_team_id: string;
+  id: string;
+  league_fixture_key: string | null;
+  league_fixture_version: number | null;
+  league_id: string | null;
+  league_leg: number | null;
+  match_date: string | null;
+  matchweek: number | null;
+  originalMatchweek: number | null;
+  rescheduleReason: string | null;
+  rescheduledAt: string | null;
+  rescheduledBy: string | null;
+  scheduledMatchweek: number | null;
+  status: string;
+  venue: string | null;
+};
+
+export type StandardLeagueRescheduleConflict = {
+  awayTeamId: string | null;
+  homeTeamId: string | null;
+  matchId: string;
+};
+
+export type StandardLeagueRescheduleActionResult =
+  | {
+      history: StandardLeagueRescheduleHistory;
+      newEffectiveMatchweek: number;
+      originalMatchweek: number;
+      previousEffectiveMatchweek: number;
+      sourceMatchweekState: StandardLeagueMatchweek | null;
+      success: true;
+      targetMatchweekState: StandardLeagueMatchweek | null;
+      updatedMatch: StandardLeagueRescheduledMatch;
+    }
+  | {
+      conflict: true;
+      conflicts: StandardLeagueRescheduleConflict[];
+      error: string;
+      success: false;
+    }
+  | {
+      conflict?: false;
+      error: string;
+      success: false;
+    };
+
 export type LeagueEntrant = {
   id: string;
   name: string;

@@ -10,7 +10,18 @@ import { applyLeagueFixtureOverrides, type LeagueFixtureOverride } from "@/lib/l
 import { generateRoundRobinFixtures } from "@/lib/league-template/round-robin";
 import { calculateStandardLeagueStandings, type StandardLeagueMatch } from "@/lib/league-template/standings";
 import { getLeagueStandingsPolicy } from "@/lib/league-template/standings-policies";
-import { STANDARD_LEAGUE_TEMPLATE_KEY, type LeagueFixturePlan, type StandardLeagueConfig, type StandardLeagueMatchweek } from "@/lib/league-template/types";
+import {
+  STANDARD_LEAGUE_TEMPLATE_KEY,
+  type LeagueFixturePlan,
+  type StandardLeagueConfig,
+  type StandardLeagueMatchweek,
+  type StandardLeagueRescheduleActionResult,
+} from "@/lib/league-template/types";
+import {
+  mapStandardLeagueRescheduledMatch,
+  parseStandardLeagueRescheduleRpcResult,
+  validateStandardLeagueRescheduleInput,
+} from "@/lib/league-template/reschedule-action-contract";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { sortTeamsByName } from "@/lib/team-sort";
 
@@ -53,6 +64,7 @@ export type LeagueMatchweekDraftMatch = {
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const configColumns = "competition_id, template_key, legs, win_points, draw_points, loss_points, standings_policy_key, fixture_status, fixture_version, confirmed_at, confirmed_by, confirmed_by_label, champion_team_id, champion_at";
 const matchweekColumns = "matchweek, status, confirmed_at, confirmed_by_label, updated_at";
+const rescheduledMatchColumns = "id, league_id, league_fixture_key, league_fixture_version, league_leg, matchweek, scheduled_matchweek, reschedule_reason, rescheduled_at, rescheduled_by, group_id, competition_stage, fixture_source, match_date, home_team_id, away_team_id, home_score, away_score, venue, status";
 
 function text(row: Row | null | undefined, key: string) {
   return typeof row?.[key] === "string" ? row[key] as string : "";
@@ -447,6 +459,99 @@ export async function confirmStandardLeagueMatchweek(competitionId: string, matc
   if (state.error) return { error: state.error, ok: false };
   revalidatePath(`/admin/competitions/${competitionId}`);
   return { config, matchweekState: state.states.find((item) => item.matchweek === matchweek), ok: true };
+}
+
+function rescheduleRpcErrorMessage(message: string) {
+  if (message.includes("competition_completed")) return "การแข่งขันปิดแล้ว ต้องเปิดการแข่งขันเพื่อแก้ไขก่อน";
+  if (message.includes("fixture_not_confirmed")) return "ยังไม่ได้ยืนยันโครงสร้างการแข่งขันลีก";
+  if (message.includes("match_not_in_fixture_set")) return "คู่นี้ไม่ได้อยู่ในชุดโปรแกรมลีกที่ยืนยันไว้";
+  if (message.includes("match_finished")) return "การแข่งขันคู่นี้จบแล้ว จึงไม่สามารถเลื่อนได้";
+  if (message.includes("invalid_reschedule_request")) return "ข้อมูลการเลื่อนการแข่งขันไม่ถูกต้อง";
+  if (message.includes("invalid_standard_league")) return "รายการนี้ไม่ใช่ลีกมาตรฐานที่รองรับการเลื่อนการแข่งขัน";
+  return "ไม่สามารถเลื่อนการแข่งขันได้";
+}
+
+export async function rescheduleStandardLeagueMatch(input: {
+  acknowledgeConflict: boolean;
+  competitionId: string;
+  matchId: string;
+  reason: string;
+  targetMatchweek: number;
+}): Promise<StandardLeagueRescheduleActionResult> {
+  const validationError = validateStandardLeagueRescheduleInput(input);
+  if (validationError) return { error: validationError, success: false };
+  const verified = await verifyLeagueCompetition(input.competitionId);
+  if (verified.error || !verified.supabase) return { error: verified.error, success: false };
+  if (!uuidPattern.test(input.matchId)) return { error: "รหัสคู่แข่งขันไม่ถูกต้อง", success: false };
+
+  const loaded = await loadConfigRow(verified.supabase, input.competitionId);
+  const config = configFromRow(loaded.row);
+  if (loaded.error || !config || config.fixtureStatus !== "confirmed") {
+    return { error: loaded.error || "ยังไม่ได้ยืนยันโครงสร้างการแข่งขันลีก", success: false };
+  }
+
+  const rescheduled = await verified.supabase.rpc("reschedule_standard_league_match_v1", {
+    p_acknowledge_conflict: input.acknowledgeConflict,
+    p_changed_by: null,
+    p_changed_by_label: "Administrator session",
+    p_competition_id: input.competitionId,
+    p_match_id: input.matchId,
+    p_reason: input.reason.trim(),
+    p_target_matchweek: input.targetMatchweek,
+  });
+  if (rescheduled.error) {
+    console.error("standard league reschedule RPC failed", {
+      code: rescheduled.error.code,
+      details: rescheduled.error.details,
+      hint: rescheduled.error.hint,
+      message: rescheduled.error.message,
+    });
+    return { error: rescheduleRpcErrorMessage(rescheduled.error.message), success: false };
+  }
+
+  const rpcResult = parseStandardLeagueRescheduleRpcResult(rescheduled.data);
+  if (rpcResult.kind === "conflict") {
+    return {
+      conflict: true,
+      conflicts: rpcResult.conflicts,
+      error: "พบทีมที่มีโปรแกรมแข่งขันซ้ำใน Matchweek ปลายทาง",
+      success: false,
+    };
+  }
+  if (rpcResult.kind === "error") return { error: rpcResult.error, success: false };
+
+  const [updatedMatchResult, matchweekStates] = await Promise.all([
+    verified.supabase
+      .from("matches")
+      .select(rescheduledMatchColumns)
+      .eq("id", input.matchId)
+      .eq("league_id", input.competitionId)
+      .eq("league_fixture_version", config.fixtureVersion)
+      .maybeSingle(),
+    loadMatchweekState(verified.supabase, input.competitionId, config.fixtureVersion),
+  ]);
+  if (updatedMatchResult.error || !updatedMatchResult.data) {
+    console.error("standard league reschedule match reload failed", updatedMatchResult.error);
+    return { error: "เลื่อนการแข่งขันแล้ว แต่ไม่สามารถโหลดข้อมูลคู่แข่งขันล่าสุดได้", success: false };
+  }
+  if (matchweekStates.error) return { error: matchweekStates.error, success: false };
+  const updatedMatch = mapStandardLeagueRescheduledMatch(updatedMatchResult.data);
+  if (!updatedMatch) {
+    console.error("standard league reschedule match mapping failed", updatedMatchResult.data);
+    return { error: "ข้อมูลคู่แข่งขันล่าสุดไม่สมบูรณ์", success: false };
+  }
+
+  revalidatePath(`/admin/competitions/${input.competitionId}`);
+  return {
+    history: rpcResult.history,
+    newEffectiveMatchweek: rpcResult.newEffectiveMatchweek,
+    originalMatchweek: rpcResult.originalMatchweek,
+    previousEffectiveMatchweek: rpcResult.previousEffectiveMatchweek,
+    sourceMatchweekState: matchweekStates.states.find((state) => state.matchweek === rpcResult.previousEffectiveMatchweek) ?? null,
+    success: true,
+    targetMatchweekState: matchweekStates.states.find((state) => state.matchweek === rpcResult.newEffectiveMatchweek) ?? null,
+    updatedMatch,
+  };
 }
 
 export async function swapStandardLeagueMatchSides(competitionId: string, matchId: string): Promise<LeagueMatchSaveResult> {

@@ -23,6 +23,12 @@ export type AdminCompetitionMatch = {
   league_fixture_version?: number | null;
   league_leg?: number | null;
   matchweek?: number | null;
+  originalMatchweek: number | null;
+  scheduledMatchweek: number | null;
+  effectiveMatchweek: number | null;
+  rescheduleReason: string | null;
+  rescheduledAt: string | null;
+  rescheduledBy: string | null;
   group_id?: string | null;
   competition_stage?: string | null;
   fixture_source?: string | null;
