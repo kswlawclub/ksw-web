@@ -159,11 +159,6 @@ async function completeMatchweekIfFinished(supabase: NonNullable<ReturnType<type
   if (completed.error) console.error("standard league matchweek completion persistence failed", completed.error);
 }
 
-async function markMatchweekDraft(supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>, competitionId: string, fixtureVersion: number, matchweek: number) {
-  const drafted = await supabase.from("competition_league_matchweeks").upsert({ competition_id: competitionId, fixture_version: fixtureVersion, matchweek, status: "draft", confirmed_at: null, confirmed_by: null, confirmed_by_label: null, updated_at: new Date().toISOString() }, { onConflict: "competition_id,fixture_version,matchweek" });
-  if (drafted.error) console.error("standard league matchweek draft persistence failed", drafted.error);
-}
-
 async function buildFixturePlan(supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>, competitionId: string) {
   const participants = await loadCompetitionParticipants(supabase, competitionId, { includeInactiveParticipants: false });
   const teams = sortTeamsByName(participants)
@@ -392,7 +387,8 @@ export async function saveStandardLeagueMatch(competitionId: string, payload: {
   const matchweeks = await loadMatchweekState(verified.supabase, competitionId, config.fixtureVersion);
   if (matchweeks.error) return { error: matchweeks.error, ok: false };
   const matchweekState = matchweeks.states.find((state) => state.matchweek === matchweek);
-  if (payload.status === "finished" && matchweekState?.status !== "confirmed") return { error: "ต้องยืนยันโปรแกรม Matchweek นี้ก่อนจึงจะบันทึกผลจบการแข่งขันได้", ok: false };
+  if (payload.status === "finished" && matchweekState?.status !== "confirmed") return { error: "ต้องยืนยันคู่แข่งขัน Matchweek นี้ก่อนจึงจะบันทึกผลจบการแข่งขันได้", ok: false };
+  if (payload.status === "finished" && (!payload.matchDate || !payload.venue?.trim())) return { error: "ต้องกำหนดวัน เวลา และสนามของคู่นี้ก่อนจึงจะบันทึกผลจบการแข่งขันได้", ok: false };
   const saved = await updateMatch(payload.matchId, {
     away_score: payload.awayScore,
     away_team_id: match.data.away_team_id,
@@ -404,9 +400,6 @@ export async function saveStandardLeagueMatch(competitionId: string, payload: {
     venue: payload.venue,
   });
   if (!saved.ok) return { error: saved.error || "ไม่สามารถบันทึกผลการแข่งขันได้", ok: false };
-  if (payload.status !== "finished" && (match.data.match_date !== payload.matchDate || (match.data.venue ?? null) !== (payload.venue?.trim() || null))) {
-    await markMatchweekDraft(verified.supabase, competitionId, config.fixtureVersion, matchweek);
-  }
   await completeMatchweekIfFinished(verified.supabase, competitionId, config.fixtureVersion, matchweek);
   const persisted = await persistLeagueChampion(verified.supabase, competitionId, config);
   if (persisted.error) return { error: persisted.error, ok: false };
