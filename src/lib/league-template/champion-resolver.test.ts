@@ -38,4 +38,5 @@ test("never picks a champion through a technical fallback", () => {
     ],
   });
   assert.equal(result.status, "needs_admin_resolution");
+  if (result.status === "needs_admin_resolution") assert.deepEqual(result.candidateTeamIds, ["a", "b"]);
 });

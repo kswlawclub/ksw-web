@@ -4,7 +4,7 @@ import type { StandardLeagueMatch, StandardLeagueStanding } from "@/lib/league-t
 
 export type LeagueCompetitionWorkflowStep = {
   description: string;
-  id: "teams" | "settings" | "preview" | "confirm" | "matchweeks" | "matches" | "standings" | "champion" | "completed";
+  id: "teams" | "settings" | "confirm" | "matchweeks" | "matches" | "standings" | "champion" | "completed";
   label: string;
   state: "complete" | "current" | "locked" | "upcoming";
 };
@@ -42,7 +42,6 @@ export function calculateLeagueCompetitionWorkflow(input: LeagueCompetitionWorkf
   const definitions = [
     { complete: input.teamCount >= 2, description: "เพิ่มทีมที่จะเข้าร่วมการแข่งขัน", id: "teams" as const, label: "ทีมที่เข้าแข่งขัน" },
     { complete: Boolean(input.config), description: "กำหนดจำนวนเลกและกติกาคะแนน", id: "settings" as const, label: "ตั้งค่าลีก" },
-    { complete: fixturesConfirmed, description: "ตรวจสอบคู่แข่งขันที่ระบบคำนวณ", id: "preview" as const, label: "ตรวจสอบโปรแกรม" },
     { complete: fixturesConfirmed, description: "ยืนยันคู่แข่งขันและ Matchweek ทั้งฤดูกาล", id: "confirm" as const, label: "ยืนยันโครงสร้าง" },
     { complete: Boolean(matchweeksComplete), description: "กำหนดและยืนยันวัน เวลา สนามราย Matchweek", id: "matchweeks" as const, label: "จัดการโปรแกรมราย Matchweek" },
     { complete: matchesComplete, description: "บันทึกผลการแข่งขันให้ครบทุกคู่", id: "matches" as const, label: "แข่งขันและบันทึกผล" },

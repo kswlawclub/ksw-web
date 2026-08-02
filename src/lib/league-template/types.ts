@@ -8,6 +8,9 @@ export type LeagueTieBreakSupport = "deferred" | "supported" | "technical_fallba
 
 export type StandardLeagueConfig = {
   championAt: string | null;
+  championConfirmedBy: string | null;
+  championConfirmedByLabel: string | null;
+  championResolutionReason: string | null;
   championTeamId: string | null;
   competitionId: string;
   confirmedAt: string | null;
@@ -166,5 +169,5 @@ export type LeagueStandingCandidate = {
 export type LeagueChampionResolution =
   | { reason: string; status: "pending" }
   | { championTeamId: string; status: "champion" }
-  | { reason: string; status: "needs_admin_resolution" }
+  | { candidateTeamIds: string[]; reason: string; status: "needs_admin_resolution" }
   | { reason: string; status: "invalid_fixture_set" };

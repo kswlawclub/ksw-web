@@ -36,7 +36,7 @@ export function resolveStandardLeagueChampion(input: {
   const runnerUp = ranked[1];
   if (!leader) return { reason: "ยังไม่มีอันดับหนึ่ง", status: "pending" };
   if (runnerUp && compareSportingRules(leader, runnerUp) === 0) {
-    return { reason: "อันดับหนึ่งยังเสมอในเกณฑ์ที่ระบบรองรับ ต้องให้ผู้จัดตัดสิน", status: "needs_admin_resolution" };
+    return { candidateTeamIds: ranked.filter((team) => compareSportingRules(leader, team) === 0).map((team) => team.teamId), reason: "อันดับหนึ่งยังเสมอในเกณฑ์ที่ระบบรองรับ ต้องให้ผู้จัดตัดสิน", status: "needs_admin_resolution" };
   }
   return { championTeamId: leader.teamId, status: "champion" };
 }

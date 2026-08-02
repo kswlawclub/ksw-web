@@ -70,7 +70,7 @@ export type LeagueMatchweekConfirmationFixture = {
 };
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const configColumns = "competition_id, template_key, legs, win_points, draw_points, loss_points, standings_policy_key, fixture_status, fixture_version, confirmed_at, confirmed_by, confirmed_by_label, champion_team_id, champion_at";
+const configColumns = "competition_id, template_key, legs, win_points, draw_points, loss_points, standings_policy_key, fixture_status, fixture_version, confirmed_at, confirmed_by, confirmed_by_label, champion_team_id, champion_at, champion_confirmed_by, champion_confirmed_by_label, champion_resolution_reason";
 const matchweekColumns = "matchweek, status, confirmed_at, confirmed_by_label, updated_at";
 const rescheduledMatchColumns = "id, league_id, league_fixture_key, league_fixture_version, league_leg, matchweek, scheduled_matchweek, reschedule_reason, rescheduled_at, rescheduled_by, group_id, competition_stage, fixture_source, match_date, home_team_id, away_team_id, home_score, away_score, venue, status";
 
@@ -88,6 +88,9 @@ function configFromRow(row: Row | null | undefined): StandardLeagueConfig | null
   const policy = text(row, "standings_policy_key");
   return {
     championAt: text(row, "champion_at") || null,
+    championConfirmedBy: text(row, "champion_confirmed_by") || null,
+    championConfirmedByLabel: text(row, "champion_confirmed_by_label") || null,
+    championResolutionReason: text(row, "champion_resolution_reason") || null,
     championTeamId: text(row, "champion_team_id") || null,
     competitionId: text(row, "competition_id"),
     confirmedAt: text(row, "confirmed_at") || null,
@@ -386,25 +389,6 @@ async function loadConfirmedLeagueState(supabase: NonNullable<ReturnType<typeof 
   };
 }
 
-async function persistLeagueChampion(supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>, competitionId: string, config: StandardLeagueConfig) {
-  const state = await loadConfirmedLeagueState(supabase, competitionId, config);
-  if (state.error || !state.resolution) return { config, error: state.error };
-  const championTeamId = state.resolution.status === "champion" ? state.resolution.championTeamId : null;
-  if (config.championTeamId === championTeamId) return { config, error: "" };
-  const championAt = championTeamId ? new Date().toISOString() : null;
-  const updated = await supabase
-    .from("competition_league_configs")
-    .update({ champion_at: championAt, champion_team_id: championTeamId, updated_at: new Date().toISOString() })
-    .eq("competition_id", competitionId)
-    .select(configColumns)
-    .single();
-  if (updated.error) {
-    console.error("standard league champion persistence failed", updated.error);
-    return { config, error: "ไม่สามารถบันทึกแชมป์ลีกได้" };
-  }
-  return { config: configFromRow(updated.data as Row) ?? config, error: "" };
-}
-
 export async function saveStandardLeagueMatch(competitionId: string, payload: {
   awayScore: number | null;
   homeScore: number | null;
@@ -449,14 +433,12 @@ export async function saveStandardLeagueMatch(competitionId: string, payload: {
   if (!saved.ok) return { error: saved.error || "ไม่สามารถบันทึกผลการแข่งขันได้", ok: false };
   const completion = await reconcileMatchweekCompletion(verified.supabase, competitionId, config.fixtureVersion, effectiveMatchweek);
   if (completion.error) return { error: completion.error, ok: false };
-  const persisted = await persistLeagueChampion(verified.supabase, competitionId, config);
-  if (persisted.error) return { error: persisted.error, ok: false };
   revalidatePath(`/admin/competitions/${competitionId}`);
   const latestMatchweeks = await loadMatchweekState(verified.supabase, competitionId, config.fixtureVersion);
   if (latestMatchweeks.error) return { error: latestMatchweeks.error, ok: false };
   return {
-    champion: { championAt: persisted.config.championAt, championTeamId: persisted.config.championTeamId },
-    config: persisted.config,
+    champion: { championAt: config.championAt, championTeamId: config.championTeamId },
+    config,
     matchweekState: completion.state ?? latestMatchweeks.states.find((state) => state.matchweek === effectiveMatchweek),
     ok: true,
   };
@@ -661,18 +643,53 @@ export async function completeStandardLeagueCompetition(competitionId: string): 
   const loaded = await loadConfigRow(verified.supabase, competitionId);
   const config = configFromRow(loaded.row);
   if (loaded.error || !config || config.fixtureStatus !== "confirmed") return { error: loaded.error || "ยังไม่ได้ยืนยันโปรแกรมลีก", ok: false };
-  const persisted = await persistLeagueChampion(verified.supabase, competitionId, config);
-  if (persisted.error) return { error: persisted.error, ok: false };
-  if (!persisted.config.championTeamId) return { error: "ยังไม่สามารถปิดการแข่งขันได้จนกว่าจะได้แชมป์ที่ชัดเจน", ok: false };
-  const completed = await verified.supabase
-    .from("leagues")
-    .update({ season_status: "completed" })
-    .eq("id", competitionId);
+  if (!config.championTeamId || !config.championAt || !config.championConfirmedByLabel) return { error: "ยังไม่ได้ยืนยันแชมป์ จึงไม่สามารถปิดฤดูกาลได้", ok: false };
+  const state = await loadConfirmedLeagueState(verified.supabase, competitionId, config);
+  if (state.error || !state.resolution) return { error: state.error || "ไม่สามารถตรวจสอบตารางคะแนนได้", ok: false };
+  const allowed = state.resolution.status === "champion"
+    ? [state.resolution.championTeamId]
+    : state.resolution.status === "needs_admin_resolution"
+      ? state.resolution.candidateTeamIds
+      : [];
+  if (!allowed.includes(config.championTeamId)) return { error: "ผลการแข่งขันเปลี่ยนแปลงหลังยืนยันแชมป์ กรุณาตรวจสอบและยืนยันใหม่", ok: false };
+  if (state.resolution.status === "needs_admin_resolution" && !config.championResolutionReason) return { error: "ยังไม่มีเหตุผลการตัดสินแชมป์ที่เสมอกัน", ok: false };
+  const completed = await verified.supabase.rpc("complete_standard_league_season_v1", {
+    p_champion_team_id: config.championTeamId,
+    p_completed_by: null,
+    p_completed_by_label: "Administrator session",
+    p_competition_id: competitionId,
+  });
   if (completed.error) {
     console.error("standard league completion failed", completed.error);
-    return { error: "ไม่สามารถปิดการแข่งขันได้", ok: false };
+    return { error: "ไม่สามารถปิดฤดูกาลได้: ข้อมูลผลการแข่งขันยังไม่ครบหรือมีการเปลี่ยนแปลง", ok: false };
   }
   revalidatePath(`/admin/competitions/${competitionId}`);
-  revalidatePath("/competitions");
-  return { config: persisted.config, ok: true };
+  return { config, ok: true };
+}
+
+export async function confirmStandardLeagueChampion(competitionId: string, championTeamId: string, reason = ""): Promise<LeagueConfigActionResult> {
+  const verified = await verifyLeagueCompetition(competitionId);
+  if (verified.error || !verified.supabase) return { error: verified.error, ok: false };
+  if (!uuidPattern.test(championTeamId)) return { error: "กรุณาเลือกทีมแชมป์ที่ถูกต้อง", ok: false };
+  const loaded = await loadConfigRow(verified.supabase, competitionId);
+  const config = configFromRow(loaded.row);
+  if (loaded.error || !config || config.fixtureStatus !== "confirmed") return { error: loaded.error || "ยังไม่ได้ยืนยันโปรแกรมลีก", ok: false };
+  const state = await loadConfirmedLeagueState(verified.supabase, competitionId, config);
+  if (state.error || !state.resolution) return { error: state.error || "ไม่สามารถตรวจสอบตารางคะแนนได้", ok: false };
+  const allowed = state.resolution.status === "champion"
+    ? [state.resolution.championTeamId]
+    : state.resolution.status === "needs_admin_resolution"
+      ? state.resolution.candidateTeamIds
+      : [];
+  if (!allowed.includes(championTeamId)) return { error: state.resolution.status === "champion" ? "กรุณาเลือกทีมแชมป์ที่ระบบคำนวณได้" : "ยังไม่พร้อมยืนยันแชมป์", ok: false };
+  if (state.resolution.status === "needs_admin_resolution" && !reason.trim()) return { error: "กรุณาระบุเหตุผลการตัดสินแชมป์", ok: false };
+  const updated = await verified.supabase.from("competition_league_configs")
+    .update({ champion_at: new Date().toISOString(), champion_confirmed_by: null, champion_confirmed_by_label: "Administrator session", champion_resolution_reason: reason.trim() || null, champion_team_id: championTeamId, updated_at: new Date().toISOString() })
+    .eq("competition_id", competitionId).select(configColumns).single();
+  if (updated.error || !updated.data) {
+    console.error("standard league champion confirmation failed", updated.error);
+    return { error: "ไม่สามารถยืนยันแชมป์ได้", ok: false };
+  }
+  revalidatePath(`/admin/competitions/${competitionId}`);
+  return { config: configFromRow(updated.data as Row) ?? config, ok: true };
 }

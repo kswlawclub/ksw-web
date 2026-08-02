@@ -182,6 +182,9 @@ function asStandardLeagueConfig(row: Row | undefined): StandardLeagueConfig | nu
   if (!row || text(row, ["template_key"]) !== "standard_league") return null;
   return {
     championAt: text(row, ["champion_at"]) || null,
+    championConfirmedBy: text(row, ["champion_confirmed_by"]) || null,
+    championConfirmedByLabel: text(row, ["champion_confirmed_by_label"]) || null,
+    championResolutionReason: text(row, ["champion_resolution_reason"]) || null,
     championTeamId: text(row, ["champion_team_id"]) || null,
     competitionId: text(row, ["competition_id"]),
     confirmedAt: text(row, ["confirmed_at"]) || null,
@@ -442,7 +445,7 @@ async function loadWorkspaceData(id: string) {
           "workspace_standard_league_config",
           supabase
             .from("competition_league_configs")
-            .select("competition_id, template_key, legs, win_points, draw_points, loss_points, standings_policy_key, fixture_status, fixture_version, confirmed_at, confirmed_by, confirmed_by_label, champion_team_id, champion_at")
+            .select("competition_id, template_key, legs, win_points, draw_points, loss_points, standings_policy_key, fixture_status, fixture_version, confirmed_at, confirmed_by, confirmed_by_label, champion_team_id, champion_at, champion_confirmed_by, champion_confirmed_by_label, champion_resolution_reason")
             .eq("competition_id", id)
             .limit(1),
         )
