@@ -10,6 +10,12 @@ export function hasCompleteEffectiveMatchPayload<T extends EffectiveMatchweekMat
 export function editableEffectiveMatchIds<T extends EffectiveMatchweekMatch & { status: string }>(matches: T[], week: number) { return matches.filter((match) => effectiveMatchweek(match) === week && !["finished", "completed"].includes(match.status)).map((match) => match.id).sort(); }
 export function hasCompleteEditableFixturePayload<T extends EffectiveMatchweekMatch & { status: string }>(matches: T[], week: number, payloadMatchIds: string[]) { const expected = editableEffectiveMatchIds(matches, week); const actual = [...payloadMatchIds].sort(); return expected.length === actual.length && expected.every((matchId, index) => matchId === actual[index]); }
 export function allEffectiveMatchesFinished<T extends EffectiveMatchweekMatch & { status: string }>(matches: T[], week: number) { const fixtures = matches.filter((match) => effectiveMatchweek(match) === week); return fixtures.length > 0 && fixtures.every((match) => ["finished", "completed"].includes(match.status)); }
+export function reconcileEffectiveMatchweekStatus<T extends EffectiveMatchweekMatch & { status: string }>(currentStatus: "unconfigured" | "draft" | "confirmed" | "completed", matches: T[], week: number) {
+  if (allEffectiveMatchesFinished(matches, week)) return "completed" as const;
+  return currentStatus === "completed" ? "confirmed" as const : currentStatus;
+}
+export function canEditFinishedLeagueMatch(competitionStatus: string) { return competitionStatus !== "completed"; }
+export function isEditingFinishedLeagueMatch(matchId: string, editingMatchId: string) { return matchId === editingMatchId; }
 export function canRescheduleMatch(status: string, competitionStatus: string) { return competitionStatus !== "completed" && !["finished", "completed"].includes(status); }
 export function validateRescheduleDraft(currentWeek: number, targetWeek: number, reason: string) { if (!Number.isInteger(targetWeek) || targetWeek < 1 || targetWeek > 99) return "Matchweek ปลายทางต้องเป็นจำนวนเต็มระหว่าง 1 ถึง 99"; if (targetWeek === currentWeek) return "กรุณาเลือก Matchweek ปลายทางที่ต่างจาก Matchweek ปัจจุบัน"; if (!reason.trim()) return "กรุณาระบุเหตุผลการเลื่อนการแข่งขัน"; return ""; }
 export function sortRescheduleHistory<T extends { changedAt: string }>(history: T[]) { return [...history].sort((left, right) => right.changedAt.localeCompare(left.changedAt)); }
