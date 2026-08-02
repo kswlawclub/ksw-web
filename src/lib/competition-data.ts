@@ -182,7 +182,7 @@ export async function loadLegacySeasonCompetition() {
   const supabase = getSupabase();
   if (!supabase) return undefined;
 
-  const bySlug = await loadCompetitionBySlug(legacySeasonSlug, false);
+  const bySlug = await loadCompetitionBySlug(legacySeasonSlug);
   if (bySlug) return bySlug;
 
   const byName = await runSupabaseQuery(
@@ -192,6 +192,7 @@ export async function loadLegacySeasonCompetition() {
       .select(competitionColumns)
       .eq("name", "Thai Lawyers League Season 6")
       .eq("competition_type", "league")
+      .eq("is_published", true)
       .order("created_at", { ascending: false })
       .limit(1),
   );
@@ -204,6 +205,7 @@ export async function loadLegacySeasonCompetition() {
       .select(competitionColumns)
       .eq("season", "Season 6")
       .eq("competition_type", "league")
+      .eq("is_published", true)
       .order("created_at", { ascending: false })
       .limit(1),
   );

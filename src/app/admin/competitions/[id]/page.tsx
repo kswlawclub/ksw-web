@@ -10,6 +10,7 @@ import {
   type AdminCompetitionGroupTeam,
 } from "@/components/admin-competition-groups-manager";
 import { AdminCupCompetitionWorkspace } from "@/components/admin-cup-competition-workspace";
+import { AdminCompetitionPublicationControl } from "@/components/admin-competition-publication-control";
 import { AdminLeagueCompetitionWorkspace } from "@/components/admin-league-competition-workspace";
 import { CopyPublicLinkButton } from "@/components/copy-public-link-button";
 import { TeamLogo } from "@/components/team-logo";
@@ -728,6 +729,8 @@ export default async function AdminCompetitionWorkspacePage({
           </div>
         </article>
       </section> : null}
+
+      <AdminCompetitionPublicationControl competitionId={id} initiallyPublished={competition.is_published === true} seasonStatus={seasonStatus} />
 
       {isCup ? (
         <AdminCupCompetitionWorkspace

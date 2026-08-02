@@ -6,8 +6,10 @@ import { getSupabase } from "@/lib/supabase";
 import {
   createCompetition,
   deleteCompetitionById,
+  setCompetitionPublication,
   updateCompetition,
 } from "./actions";
+import { ActionButton, useActionFeedback } from "@/components/admin-action-feedback";
 import {
   COMPETITION_TYPES,
   getCompetitionTypeLabel,
@@ -81,7 +83,7 @@ const emptyForm: CompetitionForm = {
   seasonStatus: "active",
   isActive: true,
   isFeatured: false,
-  isPublished: true,
+  isPublished: false,
 };
 
 const maxCoverImageSize = 6 * 1024 * 1024;
@@ -275,6 +277,7 @@ function nullableNumber(value: string) {
 }
 
 export default function AdminCompetitionsPage() {
+  const { runAction } = useActionFeedback();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [competitions, setCompetitions] = useState<Competition[]>([]);
@@ -288,6 +291,7 @@ export default function AdminCompetitionsPage() {
   const [slugEditedManually, setSlugEditedManually] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [publicationFilter, setPublicationFilter] = useState<"all" | "hidden" | "published">("all");
   const formRef = useRef<HTMLFormElement>(null);
   const firstFieldRef = useRef<HTMLInputElement>(null);
   const coverObjectUrlRef = useRef("");
@@ -339,6 +343,18 @@ export default function AdminCompetitionsPage() {
     }
 
     setLoading(false);
+  }
+
+  async function setPublication(competition: Competition, published: boolean) {
+    if (!published && competition.is_published && !window.confirm(`ต้องการซ่อน “${competition.name}” จากเว็บไซต์ใช่หรือไม่`)) return;
+    const result = await runAction({
+      errorMessage: (value) => !value.ok ? value.error ?? "ไม่สามารถอัปเดตสถานะการเผยแพร่ได้" : null,
+      id: `competition-publication:${competition.id}`,
+      loadingMessage: published ? "กำลังเผยแพร่…" : "กำลังซ่อน…",
+      successMessage: published ? "เผยแพร่แล้ว" : "ซ่อนแล้ว",
+    }, () => setCompetitionPublication(competition.id, published));
+    if (!result?.ok) { setError(result?.error ?? "ไม่สามารถอัปเดตสถานะการเผยแพร่ได้"); return; }
+    setCompetitions((current) => current.map((item) => item.id === competition.id ? { ...item, is_published: published } : item));
   }
 
   function resetForm() {
@@ -617,6 +633,8 @@ export default function AdminCompetitionsPage() {
     { length: daysInMonth(endDateParts.month, endDateParts.buddhistYear) },
     (_, index) => String(index + 1),
   );
+
+  const visibleCompetitions = competitions.filter((competition) => publicationFilter === "all" || (publicationFilter === "published" ? competition.is_published : !competition.is_published));
 
   return (
     <main className="min-h-screen bg-[#f6f2ea] text-[#061426]">
@@ -1046,9 +1064,7 @@ export default function AdminCompetitionsPage() {
               <div className="mb-3 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
               <h2 className="text-2xl font-black">Competition List</h2>
             </div>
-            <p className="break-words text-sm font-bold text-slate-500">
-              {competitions.length} competitions
-            </p>
+            <div className="flex flex-wrap items-center gap-2"><div className="flex rounded border p-0.5 text-xs font-bold">{([['all', 'ทั้งหมด'], ['published', 'เผยแพร่แล้ว'], ['hidden', 'ซ่อนอยู่']] as const).map(([value, label]) => <button className={`rounded px-2 py-1 ${publicationFilter === value ? "bg-[#061426] text-[#f4d58a]" : "text-slate-600"}`} key={value} onClick={() => setPublicationFilter(value)} type="button">{label}</button>)}</div><p className="break-words text-sm font-bold text-slate-500">{visibleCompetitions.length} competitions</p></div>
           </div>
 
           {loading ? (
@@ -1066,14 +1082,14 @@ export default function AdminCompetitionsPage() {
                     <th className="px-4 py-3 text-center">Display Order</th>
                     <th className="px-4 py-3">Type</th>
                     <th className="px-4 py-3">Season Status</th>
-                    <th className="px-4 py-3">Active</th>
-                    <th className="px-4 py-3">Published</th>
+                    <th className="px-4 py-3">Competition</th>
+                    <th className="px-4 py-3">Public</th>
                     <th className="px-4 py-3">Created At</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {competitions.map((competition) => (
+                  {visibleCompetitions.map((competition) => (
                     <tr
                       className="border-b border-slate-100 last:border-b-0 hover:bg-[#f8f3e7]"
                       key={competition.id}
@@ -1102,8 +1118,8 @@ export default function AdminCompetitionsPage() {
                           {competition.season_status}
                         </span>
                       </td>
-                      <td className="px-4 py-3">{competition.is_active ? "Yes" : "No"}</td>
-                      <td className="px-4 py-3">{competition.is_published ? "Yes" : "No"}</td>
+                      <td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-xs font-black ${competition.season_status === "completed" ? "bg-emerald-100 text-emerald-800" : competition.season_status === "upcoming" ? "bg-amber-100 text-amber-900" : "bg-blue-100 text-blue-800"}`}>{competition.season_status === "completed" ? "Completed" : competition.season_status === "upcoming" ? "Upcoming" : "Ongoing"}</span></td>
+                      <td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-xs font-black ${competition.is_published ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>{competition.is_published ? "Published" : competition.season_status === "completed" ? "Completed · Hidden" : "Hidden"}</span></td>
                       <td className="px-4 py-3">{formatDate(competition.created_at)}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex flex-wrap justify-end gap-2">
@@ -1120,6 +1136,7 @@ export default function AdminCompetitionsPage() {
                           >
                             Edit
                           </button>
+                          <ActionButton actionId={`competition-publication:${competition.id}`} className={`rounded-md border px-3 py-2 text-xs font-black ${competition.is_published ? "border-amber-300 text-amber-950" : "border-emerald-300 text-emerald-800"}`} loadingLabel={competition.is_published ? "กำลังซ่อน…" : "กำลังเผยแพร่…"} onClick={() => void setPublication(competition, !competition.is_published)} successLabel={competition.is_published ? "ซ่อนแล้ว" : "เผยแพร่แล้ว"} type="button">{competition.is_published ? "ซ่อนจากเว็บไซต์" : "เผยแพร่สู่เว็บไซต์"}</ActionButton>
                           <button
                             className="rounded-md border border-[#9b1c1f]/30 px-3 py-2 text-xs font-black text-[#9b1c1f] hover:bg-[#9b1c1f]/10"
                             disabled={deletingCompetitionId === competition.id}
@@ -1134,7 +1151,7 @@ export default function AdminCompetitionsPage() {
                   ))}
                 </tbody>
               </table>
-              {competitions.length === 0 ? (
+              {visibleCompetitions.length === 0 ? (
                 <p className="p-5 text-sm font-bold text-slate-600">
                   No competitions found.
                 </p>

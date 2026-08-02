@@ -2,6 +2,7 @@ import "server-only";
 
 import { loadCompetitionParticipants } from "@/lib/competition-participants";
 import { normalizeCompetitionType, supportsLeagueStandings } from "@/lib/competition-format";
+import { isPublicCompetition } from "@/lib/competition-publication";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export type HomeRow = Record<string, unknown>;
@@ -219,7 +220,7 @@ function completedCompetitionSort(a: HomeRow, b: HomeRow) {
 }
 
 export function selectHomeCompetition(rows: HomeRow[], now = new Date().getTime()): HomeCompetitionSelection {
-  const publishedRows = rows.filter((row) => row.is_published === true);
+  const publishedRows = rows.filter((row) => isPublicCompetition(row));
   const activeRows = publishedRows.filter((row) => homeText(row, ["season_status"], "active").toLowerCase() === "active");
   const upcomingRows = publishedRows.filter((row) => homeText(row, ["season_status"], "").toLowerCase() === "upcoming");
   const completedRows = publishedRows.filter((row) => homeText(row, ["season_status"], "").toLowerCase() === "completed");

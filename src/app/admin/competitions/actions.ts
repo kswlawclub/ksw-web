@@ -326,6 +326,38 @@ export async function updateCompetition(
   return { ok: true };
 }
 
+export async function setCompetitionPublication(id: string, published: boolean): Promise<ActionResult> {
+  await requireAdminSession();
+  if (!id) return { ok: false, error: "ไม่พบรายการแข่งขันที่ต้องการอัปเดต" };
+  const { supabase, error } = getAdminClient();
+  if (!supabase) return { ok: false, error };
+  const competition = await supabase.from("leagues").select("id, name, slug").eq("id", id).maybeSingle();
+  if (competition.error || !competition.data) {
+    console.error("competition publication lookup failed", competition.error);
+    return { ok: false, error: "ไม่พบรายการแข่งขันที่ต้องการอัปเดต" };
+  }
+  if (published) {
+    if (!competition.data.name?.trim() || !competition.data.slug?.trim()) return { ok: false, error: "ต้องมีชื่อรายการและ slug ก่อนเผยแพร่สู่เว็บไซต์" };
+    const participants = await supabase.from("competition_teams").select("id", { count: "exact", head: true }).eq("competition_id", id).eq("is_active", true);
+    if (participants.error) {
+      console.error("competition publication readiness lookup failed", participants.error);
+      return { ok: false, error: "ไม่สามารถตรวจสอบทีมที่เข้าร่วมการแข่งขันได้" };
+    }
+    if ((participants.count ?? 0) < 1) return { ok: false, error: "ต้องมีทีมเข้าร่วมอย่างน้อย 1 ทีมก่อนเผยแพร่" };
+  }
+  const updated = await supabase.from("leagues").update({ is_published: published }).eq("id", id).select("id").maybeSingle();
+  if (updated.error || !updated.data) {
+    console.error("competition publication update failed", updated.error);
+    return { ok: false, error: "ไม่สามารถอัปเดตสถานะการเผยแพร่ได้" };
+  }
+  revalidatePath("/");
+  revalidatePath("/competitions");
+  revalidatePath(`/competitions/${competition.data.slug}`);
+  revalidatePath("/admin/competitions");
+  revalidatePath(`/admin/competitions/${id}`);
+  return { id, ok: true };
+}
+
 export async function deleteCompetitionById(id: string): Promise<ActionResult> {
   await requireAdminSession();
 
