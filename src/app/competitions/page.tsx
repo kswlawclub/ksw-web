@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { loadPublishedCompetitions, Row, text } from "@/lib/competition-data";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import {
   getCompetitionTypeEnglishLabel,
   isCupCompetition,
@@ -85,6 +86,56 @@ function sortCompetitions(rows: Row[]) {
   });
 }
 
+async function withCompletedCupChampions(competitions: Row[]) {
+  const completedCupIds = competitions
+    .filter((competition) => normalizeCompetitionType(competition.competition_type) === "cup" && text(competition, ["season_status"], "") === "completed")
+    .map((competition) => text(competition, ["id"], ""))
+    .filter(Boolean);
+  const admin = getSupabaseAdmin();
+  if (!admin || completedCupIds.length === 0) return competitions;
+
+  const nodesResult = await admin
+    .from("competition_bracket_nodes")
+    .select("competition_id, round_index, linked_match_id")
+    .in("competition_id", completedCupIds)
+    .not("linked_match_id", "is", null);
+  if (nodesResult.error) {
+    console.error("completed cup champion node lookup failed", nodesResult.error);
+    return competitions;
+  }
+
+  const finalNodeByCompetition = new Map<string, Record<string, unknown>>();
+  ((nodesResult.data ?? []) as Record<string, unknown>[]).forEach((node) => {
+    const competitionId = text(node, ["competition_id"], "");
+    const current = finalNodeByCompetition.get(competitionId);
+    if (!current || Number(node.round_index ?? -1) > Number(current.round_index ?? -1)) finalNodeByCompetition.set(competitionId, node);
+  });
+  const finalMatchIds = Array.from(finalNodeByCompetition.values()).map((node) => text(node, ["linked_match_id"], "")).filter(Boolean);
+  if (!finalMatchIds.length) return competitions;
+
+  const matchesResult = await admin.from("matches").select("id, winner_team_id").in("id", finalMatchIds);
+  if (matchesResult.error) {
+    console.error("completed cup champion match lookup failed", matchesResult.error);
+    return competitions;
+  }
+  const winnerByMatchId = new Map(((matchesResult.data ?? []) as Record<string, unknown>[]).map((match) => [text(match, ["id"], ""), text(match, ["winner_team_id"], "")]));
+  const winnerIds = Array.from(winnerByMatchId.values()).filter(Boolean);
+  if (!winnerIds.length) return competitions;
+
+  const teamsResult = await admin.from("teams").select("id, name").in("id", winnerIds);
+  if (teamsResult.error) {
+    console.error("completed cup champion team lookup failed", teamsResult.error);
+    return competitions;
+  }
+  const teamNames = new Map(((teamsResult.data ?? []) as Record<string, unknown>[]).map((team) => [text(team, ["id"], ""), text(team, ["name"], "")]));
+
+  return competitions.map((competition) => {
+    const finalNode = finalNodeByCompetition.get(text(competition, ["id"], ""));
+    const winnerId = finalNode ? winnerByMatchId.get(text(finalNode, ["linked_match_id"], "")) : "";
+    return winnerId && teamNames.get(winnerId) ? { ...competition, champion_name: teamNames.get(winnerId) } : competition;
+  });
+}
+
 function CompetitionCard({ competition }: { competition: Row }) {
   const slug = text(competition, ["slug"], "");
   const coverImageUrl = text(competition, ["cover_image_url"], "");
@@ -100,6 +151,8 @@ function CompetitionCard({ competition }: { competition: Row }) {
     dateLabel(competition),
     text(competition, ["location"], ""),
   ].filter(Boolean);
+  const completed = text(competition, ["season_status"], "active") === "completed";
+  const champion = text(competition, ["champion_name"], "");
 
   const cardContent = (
     <>
@@ -120,7 +173,7 @@ function CompetitionCard({ competition }: { competition: Row }) {
             {typeLabel(competitionType)}
           </span>
           <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-white">
-            {text(competition, ["season_status"], "active")}
+            {completed ? "Completed / จบการแข่งขัน" : text(competition, ["season_status"], "active")}
           </span>
         </div>
       </div>
@@ -131,10 +184,11 @@ function CompetitionCard({ competition }: { competition: Row }) {
             <p className="mt-2 text-sm font-bold text-slate-500">{metadata.join(" • ")}</p>
           ) : null}
           <p className="mt-3 text-sm leading-6 text-slate-600">{description}</p>
+          {completed && champion ? <p className="mt-3 text-sm font-black text-[#8a6418]">แชมป์: {champion}</p> : null}
         </div>
         {slug ? (
           <span className="inline-flex items-center justify-center rounded-md bg-[#061426] px-4 py-2.5 text-sm font-black text-[#f4d58a] shadow-lg shadow-slate-900/10 transition-colors group-hover:bg-[#0b2745]">
-            View Archive
+            {completed ? "ดูผลการแข่งขัน" : "View Archive"}
           </span>
         ) : (
           <p className="rounded-md border border-slate-200 bg-slate-50 px-4 py-2.5 text-center text-sm font-black text-slate-500">
@@ -184,12 +238,18 @@ function CompetitionSection({ items, showAccent = true, title }: { items: Row[];
 }
 
 export default async function CompetitionsPage() {
-  const competitions = sortCompetitions(await loadPublishedCompetitions());
-  const currentOrFeatured = competitions.filter(
-    (competition) => competition.is_featured === true || text(competition, ["season_status"], "active") === "active",
+  const competitions = sortCompetitions(await withCompletedCupChampions(await loadPublishedCompetitions()));
+  const completedCups = competitions.filter((competition) =>
+    isCupCompetition(normalizeCompetitionType(text(competition, ["competition_type"], "")))
+    && text(competition, ["season_status"], "active") === "completed",
   );
+  const currentOrFeatured = competitions.filter((competition) => {
+    const status = text(competition, ["season_status"], "active");
+    return status !== "completed" && (competition.is_featured === true || status === "active" || status === "upcoming" || status === "in_progress");
+  });
   const featuredIds = new Set(currentOrFeatured.map((competition) => text(competition, ["id"], "")).filter(Boolean));
-  const categoryCompetitions = competitions.filter((competition) => !featuredIds.has(text(competition, ["id"], "")));
+  const completedCupIds = new Set(completedCups.map((competition) => text(competition, ["id"], "")).filter(Boolean));
+  const categoryCompetitions = competitions.filter((competition) => !featuredIds.has(text(competition, ["id"], "")) && !completedCupIds.has(text(competition, ["id"], "")));
   const leagues = categoryCompetitions.filter((competition) =>
     isLeagueCompetition(normalizeCompetitionType(text(competition, ["competition_type"], ""))),
   );
@@ -220,6 +280,7 @@ export default async function CompetitionsPage() {
       {competitions.length ? (
         <>
           <CompetitionSection items={currentOrFeatured} showAccent={false} title="Current / Featured" />
+          <CompetitionSection items={completedCups} title="Cup Archives / Completed Competitions" />
           <CompetitionSection items={leagues} title="League Seasons" />
           <CompetitionSection items={cups} title="Cups" />
           <CompetitionSection items={smallTournaments} title="Small Tournaments" />

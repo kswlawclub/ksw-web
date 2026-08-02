@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import {
   imagePathFromPublicUrl,
   safeImageSlug,
@@ -31,9 +32,19 @@ type CompetitionPayload = {
 };
 
 type ActionResult = {
+  deletedCount?: number;
   ok: boolean;
   error?: string;
   id?: string;
+};
+
+type CompetitionDeletionReport = {
+  code?: string;
+  competition_id?: string;
+  competition_name?: string;
+  deleted?: Record<string, number>;
+  dry_run?: boolean;
+  success?: boolean;
 };
 
 const bucketName = "gallery-images";
@@ -123,6 +134,12 @@ function competitionErrorMessage(message: string) {
   }
 
   return message;
+}
+
+function competitionDeletionErrorMessage(error: { code?: string | null; message?: string | null }) {
+  if (error.code === "23503") return "ลบรายการไม่ได้ เพราะพบข้อมูลอื่นที่ยังอ้างอิงอยู่ ระบบยังไม่ได้ลบข้อมูลใด ๆ";
+  if (error.code === "42883") return "ระบบลบรายการยังไม่พร้อมใช้งาน กรุณา apply migration สำหรับการลบรายการแข่งขันก่อน";
+  return error.message || "ไม่สามารถลบรายการแข่งขันได้ ระบบยังไม่ได้ลบข้อมูลใด ๆ";
 }
 
 function coverFileFromFormData(formData?: FormData | null) {
@@ -318,19 +335,66 @@ export async function deleteCompetitionById(id: string): Promise<ActionResult> {
     return { ok: false, error };
   }
 
-  const current = await supabase.from("leagues").select("cover_image_url").eq("id", id).single();
+  const current = await supabase.from("leagues").select("cover_image_url").eq("id", id).maybeSingle();
   const oldCoverUrl =
     !current.error && typeof current.data?.cover_image_url === "string"
       ? current.data.cover_image_url
       : null;
-  const result = await supabase.from("leagues").delete().eq("id", id);
+  const result = await supabase.rpc("delete_competition_cascade_v1", {
+    p_competition_id: id,
+    p_dry_run: false,
+  });
 
   if (result.error) {
-    console.error("admin competition delete failed", result.error);
-    return { ok: false, error: result.error.message };
+    console.error("admin competition transactional delete failed", {
+      code: result.error.code,
+      details: result.error.details,
+      hint: result.error.hint,
+      message: result.error.message,
+      competitionId: id,
+    });
+    return { ok: false, error: competitionDeletionErrorMessage(result.error) };
+  }
+
+  const report = result.data as CompetitionDeletionReport | null;
+  if (!report?.success) {
+    return {
+      ok: false,
+      error: report?.code === "not_found" ? "ไม่พบรายการที่ต้องการลบ หรือรายการถูกลบไปแล้ว" : "ไม่สามารถลบรายการแข่งขันได้ ระบบยังไม่ได้ลบข้อมูลใด ๆ",
+      deletedCount: 0,
+    };
   }
 
   await removeCompetitionCover(oldCoverUrl);
 
-  return { ok: true };
+  revalidatePath("/admin/competitions");
+  revalidatePath("/competitions");
+
+  return { ok: true, deletedCount: report.deleted?.leagues ?? 0 };
+}
+
+export async function previewCompetitionDeletion(id: string): Promise<ActionResult & { report?: CompetitionDeletionReport }> {
+  await requireAdminSession();
+
+  const { supabase, error } = getAdminClient();
+  if (!supabase) return { ok: false, error };
+
+  const result = await supabase.rpc("delete_competition_cascade_v1", {
+    p_competition_id: id,
+    p_dry_run: true,
+  });
+  if (result.error) {
+    console.error("admin competition deletion preview failed", {
+      code: result.error.code,
+      details: result.error.details,
+      hint: result.error.hint,
+      message: result.error.message,
+      competitionId: id,
+    });
+    return { ok: false, error: competitionDeletionErrorMessage(result.error) };
+  }
+
+  const report = result.data as CompetitionDeletionReport | null;
+  if (!report?.success) return { ok: false, error: "ไม่พบรายการที่ต้องการลบ", report: report ?? undefined };
+  return { ok: true, report };
 }

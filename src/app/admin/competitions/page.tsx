@@ -278,6 +278,7 @@ export default function AdminCompetitionsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [competitions, setCompetitions] = useState<Competition[]>([]);
+  const [deletingCompetitionId, setDeletingCompetitionId] = useState("");
   const [form, setForm] = useState<CompetitionForm>(emptyForm);
   const [startDateParts, setStartDateParts] = useState<ThaiDateParts>(emptyThaiDateParts);
   const [endDateParts, setEndDateParts] = useState<ThaiDateParts>(emptyThaiDateParts);
@@ -580,13 +581,22 @@ export default function AdminCompetitionsPage() {
   }
 
   async function deleteCompetition(competition: Competition) {
-    const confirmed = window.confirm(`Delete ${competition.name}?`);
+    const confirmed = window.confirm(`ลบรายการ “${competition.name}” พร้อมโปรแกรมแข่งขัน กลุ่ม และข้อมูลจัดสายทั้งหมดหรือไม่? การดำเนินการนี้ไม่สามารถย้อนกลับได้`);
 
     if (!confirmed) {
       return;
     }
 
-    const result = await deleteCompetitionById(competition.id);
+    setDeletingCompetitionId(competition.id);
+    let result: Awaited<ReturnType<typeof deleteCompetitionById>>;
+    try {
+      result = await deleteCompetitionById(competition.id);
+    } catch {
+      setError("ไม่สามารถลบรายการแข่งขันได้ ระบบยังไม่ได้ลบข้อมูลใด ๆ");
+      return;
+    } finally {
+      setDeletingCompetitionId("");
+    }
 
     if (!result.ok) {
       setError(result.error ?? "Could not delete competition.");
@@ -1112,10 +1122,11 @@ export default function AdminCompetitionsPage() {
                           </button>
                           <button
                             className="rounded-md border border-[#9b1c1f]/30 px-3 py-2 text-xs font-black text-[#9b1c1f] hover:bg-[#9b1c1f]/10"
+                            disabled={deletingCompetitionId === competition.id}
                             onClick={() => void deleteCompetition(competition)}
                             type="button"
                           >
-                            Delete
+                            {deletingCompetitionId === competition.id ? "Deleting..." : "Delete"}
                           </button>
                         </div>
                       </td>

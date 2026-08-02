@@ -318,6 +318,7 @@ export async function loadPublishedCompetitions() {
       .from("leagues")
       .select(competitionColumns)
       .eq("is_published", true)
+      .eq("is_active", true)
       .order("created_at", { ascending: false }),
   );
 }
