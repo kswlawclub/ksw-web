@@ -16,6 +16,17 @@ export type KnockoutTemplatePair = {
   reason: string;
 };
 
+export type KnockoutTemplateDiagram =
+  | {
+    mode: "linear";
+    steps: string[];
+  }
+  | {
+    branches: Array<{ championLabel: string; label: string }>;
+    mode: "split";
+    steps: [string, string];
+  };
+
 export type KnockoutTemplatePreview = {
   error?: string;
   partitions: Array<{
@@ -34,13 +45,16 @@ export type KnockoutTemplateDefinition = {
   championCount: number;
   completionMode: "all_partitions_complete" | "single_champion";
   description: string;
+  diagram: KnockoutTemplateDiagram;
   enabled: boolean;
+  featureBullets: string[];
   key: KnockoutTemplateKey;
   name: string;
   partitionCount: number;
   partitions: KnockoutTemplatePartition[];
   pairExplanation: (home: CompetitionTreeSource, away: CompetitionTreeSource) => string;
   qualificationMode: "approved_snapshot";
+  statusLabel: string;
   sourceLabel: (source: CompetitionTreeSource) => string;
   supportsManualPairing: boolean;
   supportsMultipleBrackets: boolean;

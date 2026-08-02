@@ -20,7 +20,7 @@ import {
 } from "@/lib/competition-engine-v2-state";
 import { buildCompetitionTree, type CompetitionTreeEntryMode, type CompetitionTreeNode, type CompetitionTreeSource, type CompetitionTreeSummary } from "@/lib/competition-tree";
 import { buildKnockoutTemplatePreview, getDefaultKnockoutTemplate, getKnockoutTemplate, listKnockoutTemplates } from "@/lib/knockout-templates/registry";
-import type { KnockoutTemplateKey } from "@/lib/knockout-templates/types";
+import type { KnockoutTemplateDiagram, KnockoutTemplateKey } from "@/lib/knockout-templates/types";
 import type { KswQualificationSource } from "@/lib/ksw-knockout-template";
 import { TeamLogo } from "@/components/team-logo";
 
@@ -105,6 +105,30 @@ function Stat({ label, value }: { label: string; value: number | string }) {
     <div className="min-w-0 rounded-md border border-slate-200 bg-slate-50 px-3 py-3">
       <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">{label}</p>
       <p className="mt-1 break-words text-xl font-black text-[#061426]">{value}</p>
+    </div>
+  );
+}
+
+function TemplateMiniDiagram({ diagram }: { diagram: KnockoutTemplateDiagram }) {
+  if (diagram.mode === "linear") {
+    return (
+      <div aria-label="ลำดับรูปแบบการแข่งขัน" className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-3">
+        <div className="flex flex-col items-center gap-1.5 text-center text-xs font-black text-slate-700">
+          {diagram.steps.map((step, index) => <div className="contents" key={step}><span className="w-full rounded border border-slate-200 bg-white px-2 py-1.5">{step}</span>{index < diagram.steps.length - 1 ? <span aria-hidden="true" className="leading-none text-[#8a6418]">↓</span> : null}</div>)}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div aria-label="ลำดับรูปแบบการแข่งขัน" className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-3">
+      <div className="flex flex-col items-center gap-1.5 text-center text-xs font-black text-slate-700">
+        {diagram.steps.map((step, index) => <div className="contents" key={step}><span className="w-full rounded border border-slate-200 bg-white px-2 py-1.5">{step}</span>{index < diagram.steps.length - 1 ? <span aria-hidden="true" className="leading-none text-[#8a6418]">↓</span> : null}</div>)}
+        <div aria-hidden="true" className="grid w-full grid-cols-2 gap-2 text-[#8a6418]"><span>↙</span><span>↘</span></div>
+        <div className="grid w-full grid-cols-2 gap-2">
+          {diagram.branches.map((branch) => <div className="min-w-0" key={branch.label}><span className="block rounded border border-slate-200 bg-white px-2 py-1.5 break-words">{branch.label}</span><span aria-hidden="true" className="my-1 block leading-none text-[#8a6418]">↓</span><span className="block rounded border border-[#d8ad45]/35 bg-[#fffdf7] px-2 py-1.5 break-words text-[#8a6418]">{branch.championLabel}</span></div>)}
+        </div>
+      </div>
     </div>
   );
 }
@@ -571,8 +595,8 @@ export function AdminCompetitionTreeEngineV2({
               <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2">
                 {listKnockoutTemplates().map((template) => {
                   const selected = selectedTemplate === template.key;
-                  const className = `min-w-0 rounded-md border p-4 text-left ${template.enabled ? "transition" : "border-dashed text-slate-500"} ${selected ? "border-[#d8ad45] bg-[#fffdf7] ring-1 ring-[#d8ad45]/30" : "border-slate-200 bg-white"}`;
-                  const content = <><div className="flex flex-wrap items-start justify-between gap-2"><span className="text-base font-black text-[#061426]">{template.name}</span><span className={`rounded-full border px-2 py-1 text-[11px] font-black ${template.enabled ? "border-[#d8ad45]/40 bg-white text-[#8a6418]" : "border-slate-200 bg-white text-slate-500"}`}>{template.enabled ? "ค่าเริ่มต้น" : "เร็ว ๆ นี้"}</span></div><p className="mt-2 text-sm font-semibold text-slate-600">{template.description}</p><p className="mt-3 text-xs font-black text-slate-500">{template.championCount} แชมป์ · {template.partitionCount} สายการแข่งขัน</p></>;
+                  const className = `min-w-0 rounded-md border p-4 text-left ${template.enabled ? "transition" : "border-dashed opacity-75"} ${selected ? "border-[#d8ad45] bg-[#fffdf7] ring-1 ring-[#d8ad45]/30" : "border-slate-200 bg-white"}`;
+                  const content = <><div className="flex flex-wrap items-start justify-between gap-2"><span className="text-base font-black text-[#061426]">{template.name}</span><span className={`rounded-full border px-2 py-1 text-[11px] font-black ${template.enabled ? "border-[#d8ad45]/40 bg-white text-[#8a6418]" : "border-slate-200 bg-white text-slate-600"}`}>{template.statusLabel}</span></div><p className="mt-2 text-sm font-semibold text-slate-600">{template.description}</p><div className="mt-3 flex flex-wrap gap-1.5">{template.featureBullets.map((feature) => <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-black text-slate-600" key={feature}>{feature}</span>)}</div><TemplateMiniDiagram diagram={template.diagram} /></>;
                   return template.enabled ? <button aria-pressed={selected} className={className} key={template.key} onClick={() => chooseTemplate(template.key)} type="button">{content}</button> : <article className={className} data-disabled="true" key={template.key}>{content}</article>;
                 })}
               </div>
@@ -582,6 +606,7 @@ export function AdminCompetitionTreeEngineV2({
               <div><h3 className="font-black text-[#061426]">ตัวอย่างการจัดสาย: {selectedTemplateDefinition.name}</h3><p className="mt-1 text-sm font-semibold text-slate-600">{selectedTemplateDefinition.description}</p></div>
               <div className="flex flex-wrap gap-2"><button className="min-h-10 rounded-md border border-[#d8ad45] bg-white px-3 py-2 text-sm font-black text-[#8a6418]" onClick={() => setDraftSources(defaultPairing.sources)} type="button">ใช้การจัดสายอัตโนมัติ</button><button className="min-h-10 rounded-md border border-[#d8ad45] bg-white px-3 py-2 text-sm font-black text-[#8a6418]" onClick={() => setEditingPairing((current) => !current)} type="button">{editingPairing ? "ดูตัวอย่างคู่" : "แก้ไขคู่ก่อนยืนยัน"}</button></div>
             </div>
+            <TemplateMiniDiagram diagram={selectedTemplateDefinition.diagram} />
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               {previewMatches.map((match, index) => (
                 <div className="min-w-0 rounded-md border border-slate-200 bg-white p-3" key={`${match.roundIndex}-${match.matchOrder}`}>
