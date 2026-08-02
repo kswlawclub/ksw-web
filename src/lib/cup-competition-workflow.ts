@@ -3,9 +3,19 @@ import type { CupGroupRow } from "@/lib/cup-group-standings";
 
 export type CupCompetitionWorkflowStep = {
   description: string;
-  id: "teams" | "groups" | "group_matches" | "qualification" | "knockout_setup" | "knockout_matches" | "champion";
+  id: "teams" | "groups" | "group_matches" | "qualification" | "knockout_setup" | "knockout_matches" | "champion" | "completed";
   label: string;
   state: "complete" | "current" | "locked" | "upcoming";
+  subStatus?: string;
+};
+
+export type CouncilWorkflowPartition = {
+  approvalStatus: string | null;
+  bracketConfirmed: boolean;
+  championTeamId: string | null;
+  finalFinished: boolean;
+  partitionKey: "division_1" | "division_2";
+  status: string | null;
 };
 
 function text(row: CupGroupRow | undefined, key: string) {
@@ -13,12 +23,14 @@ function text(row: CupGroupRow | undefined, key: string) {
 }
 
 export function calculateCupCompetitionWorkflow(input: {
+  councilPartitions: CouncilWorkflowPartition[];
   groups: CupGroupRow[];
   matches: CupGroupRow[];
-  nodes: Array<{ linkedMatchId?: string; roundIndex: number }>;
+  nodes: Array<{ linkedMatchId?: string; partitionKey?: string; roundIndex: number }>;
   competitionStatus: string | null;
   qualificationStatus: "approved" | "pending" | null;
   knockoutStatus: string | null;
+  templateKey: string | null;
   teams: CupGroupRow[];
 }) {
   const activeTeams = input.teams.filter((team) => team.is_active !== false);
@@ -33,26 +45,49 @@ export function calculateCupCompetitionWorkflow(input: {
   });
   const groupMatchesComplete = groupsReady && input.groups.length > 0 && input.groups.every((group) => qualification.groupComplete.get(text(group, "id")) === true);
   const qualificationApproved = input.qualificationStatus === "approved";
-  const knockoutSetupComplete = ["reviewed", "fixtures_created", "active", "completed"].includes(input.knockoutStatus ?? "");
-  const finalNode = [...input.nodes].sort((a, b) => b.roundIndex - a.roundIndex)[0];
+  const mainNodes = input.nodes.filter((node) => !node.partitionKey || node.partitionKey === "main");
+  const finalNode = [...mainNodes].sort((a, b) => b.roundIndex - a.roundIndex)[0];
   const finalMatch = finalNode?.linkedMatchId ? input.matches.find((match) => text(match, "id") === finalNode.linkedMatchId) : undefined;
-  const knockoutMatchesComplete = text(finalMatch, "status") === "finished";
-  const championReady = knockoutMatchesComplete && Boolean(text(finalMatch, "winner_team_id"));
-  const championComplete = championReady && input.competitionStatus === "completed";
+  const isCouncil = input.templateKey === "council_two_division";
+  const councilPartitions = ["division_1", "division_2"].map((partitionKey) => input.councilPartitions.find((partition) => partition.partitionKey === partitionKey));
+  const councilDivisionApproved = councilPartitions.every((partition) => partition?.approvalStatus === "approved");
+  const councilSetupComplete = councilDivisionApproved && councilPartitions.every((partition) => partition?.bracketConfirmed === true);
+  const councilMatchesComplete = councilPartitions.every((partition) => partition?.finalFinished === true);
+  const councilChampionReady = councilPartitions.every((partition) => Boolean(partition?.championTeamId));
+  const kswSetupComplete = ["reviewed", "fixtures_created", "active", "completed"].includes(input.knockoutStatus ?? "");
+  const kswMatchesComplete = text(finalMatch, "status") === "finished";
+  const kswChampionReady = kswMatchesComplete && Boolean(text(finalMatch, "winner_team_id"));
+  const knockoutSetupComplete = isCouncil ? councilSetupComplete : kswSetupComplete;
+  const knockoutMatchesComplete = isCouncil ? councilMatchesComplete : kswMatchesComplete;
+  const championReady = isCouncil ? councilChampionReady : kswChampionReady;
+  const competitionCompleted = input.competitionStatus === "completed";
+
+  const divisionLabel = (partition: CouncilWorkflowPartition | undefined) => {
+    const label = partition?.partitionKey === "division_1" ? "D1" : "D2";
+    if (!partition?.bracketConfirmed) return `${label} รอจัดสาย`;
+    if (partition.finalFinished) return `${label} ✓`;
+    if (partition.status === "reviewed") return `${label} พร้อมสร้างโปรแกรม`;
+    return `${label} กำลังแข่งขัน`;
+  };
+  const knockoutSubStatus = isCouncil ? councilPartitions.map(divisionLabel).join(" · ") : undefined;
+  const championSubStatus = isCouncil
+    ? councilPartitions.map((partition) => `${partition?.partitionKey === "division_1" ? "D1" : "D2"} ${partition?.championTeamId ? "✓" : "รอผล"}`).join(" · ")
+    : undefined;
   const definitions = [
     { complete: teamsReady, description: "เพิ่มทีมที่จะเข้าร่วมการแข่งขัน", id: "teams" as const, label: "ทีมที่เข้าแข่งขัน" },
     { complete: groupsReady, description: "จัดทีมทุกทีมเข้าสู่กลุ่ม", id: "groups" as const, label: "แบ่งกลุ่ม" },
     { complete: groupMatchesComplete, description: "บันทึกผลให้ครบทุกคู่ของทุกกลุ่ม", id: "group_matches" as const, label: "แข่งขันรอบแบ่งกลุ่ม" },
     { complete: qualificationApproved, description: "ตรวจสอบและยืนยันทีมผ่านเข้ารอบ", id: "qualification" as const, label: "ยืนยันทีมผ่านเข้ารอบ" },
     { complete: knockoutSetupComplete, description: "ตั้งค่าและยืนยันโครงสร้างรอบน็อกเอาต์", id: "knockout_setup" as const, label: "ตั้งค่ารอบน็อกเอาต์" },
-    { complete: knockoutMatchesComplete, description: "แข่งขันจนถึงรอบชิงชนะเลิศ", id: "knockout_matches" as const, label: "แข่งขันรอบน็อกเอาต์" },
-    { complete: championComplete, description: "สรุปผู้ชนะการแข่งขัน", id: "champion" as const, label: "Champion" },
+    { complete: knockoutMatchesComplete, description: "แข่งขันจนถึงรอบชิงชนะเลิศ", id: "knockout_matches" as const, label: "แข่งขันรอบน็อกเอาต์", subStatus: knockoutSubStatus },
+    { complete: championReady, description: "สรุปผู้ชนะการแข่งขัน", id: "champion" as const, label: "Champion", subStatus: championSubStatus },
+    { complete: competitionCompleted, description: "ตรวจสอบผลและปิดการแข่งขัน", id: "completed" as const, label: "Completed" },
   ];
 
   const currentIndex = definitions.findIndex((step) => !step.complete);
 
   return definitions.map((step, index): CupCompetitionWorkflowStep => {
-    const state = step.complete
+    const state = competitionCompleted || step.complete
       ? "complete"
       : index === currentIndex
         ? "current"
@@ -64,6 +99,7 @@ export function calculateCupCompetitionWorkflow(input: {
       id: step.id,
       label: step.label,
       state,
+      subStatus: step.subStatus,
     };
   });
 }

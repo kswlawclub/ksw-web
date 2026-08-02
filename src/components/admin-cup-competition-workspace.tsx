@@ -9,7 +9,7 @@ import { AdminCompetitionGroupsManager, type AdminCompetitionGroup, type AdminCo
 import { AdminCompetitionTreeEngineV2 } from "@/components/admin-competition-tree-engine-v2";
 import { TeamLogo } from "@/components/team-logo";
 import { calculateCupQualification } from "@/lib/cup-qualification";
-import { calculateCupCompetitionWorkflow, type CupCompetitionWorkflowStep } from "@/lib/cup-competition-workflow";
+import { calculateCupCompetitionWorkflow, type CouncilWorkflowPartition, type CupCompetitionWorkflowStep } from "@/lib/cup-competition-workflow";
 import { calculateCompetitionStructure } from "@/lib/competition-structure";
 import { sortTeamsByName } from "@/lib/team-sort";
 import type { CompetitionEngineV2Config, CompetitionKnockoutMatchV2 } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
@@ -341,11 +341,11 @@ function CupCompetitionProgress({ steps }: { steps: CupCompetitionWorkflowStep[]
     <section className="mx-auto w-full max-w-7xl px-4 pb-7 sm:px-6 lg:px-10">
       <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <h2 className="text-lg font-black text-[#061426]">ลำดับการจัดการแข่งขัน</h2>
-        <ol className="mt-3 grid gap-2 lg:grid-cols-7">
+        <ol className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
           {steps.map((step) => {
             const style = presentation[step.state];
             const isOpen = openStep === step.id;
-            return <li className="min-w-0" key={step.id}><button aria-current={step.state === "current" ? "step" : undefined} aria-expanded={isOpen} className={`group min-h-12 w-full rounded-md border px-3 py-2 text-left text-sm font-black ${style.className}`} onClick={() => setOpenStep((current) => current === step.id ? null : step.id)} title={step.description} type="button"><span className="flex min-w-0 items-center gap-2"><span aria-hidden="true" className="shrink-0">{style.icon}</span><span className="min-w-0 break-words">{step.label}</span></span>{isOpen ? <span className="mt-2 block border-t border-current/15 pt-2 text-xs font-semibold leading-5">{step.description}</span> : null}</button></li>;
+            return <li className="min-w-0" key={step.id}><button aria-current={step.state === "current" ? "step" : undefined} aria-expanded={isOpen} className={`group min-h-12 w-full rounded-md border px-3 py-2 text-left text-sm font-black ${style.className}`} onClick={() => setOpenStep((current) => current === step.id ? null : step.id)} title={step.description} type="button"><span className="flex min-w-0 items-center gap-2"><span aria-hidden="true" className="shrink-0">{style.icon}</span><span className="min-w-0 break-words">{step.label}</span></span>{step.subStatus ? <span className="mt-1 block break-words text-[10px] font-bold leading-4 opacity-80">{step.subStatus}</span> : null}{isOpen ? <span className="mt-2 block border-t border-current/15 pt-2 text-xs font-semibold leading-5">{step.description}</span> : null}</button></li>;
           })}
         </ol>
       </article>
@@ -394,6 +394,7 @@ function CupWorkspaceNavigation({ steps, templateKey }: { steps: CupCompetitionW
 export function AdminCupCompetitionWorkspace({
   competitionId,
   competitionStatus,
+  councilWorkflowPartitions,
   engineConfig,
   engineSummary,
   engineWorkflow,
@@ -407,6 +408,7 @@ export function AdminCupCompetitionWorkspace({
 }: {
   competitionId: string;
   competitionStatus: string | null;
+  councilWorkflowPartitions: CouncilWorkflowPartition[];
   engineConfig: CompetitionEngineV2Config | null;
   engineSummary: CompetitionTreeSummary | null;
   engineWorkflow: CompetitionEngineV2Integrity | null;
@@ -425,13 +427,15 @@ export function AdminCupCompetitionWorkspace({
   const visibleTeams = showAllTeams ? sortedTeams : sortedTeams.slice(0, 16);
   const workflowSteps = useMemo(() => calculateCupCompetitionWorkflow({
     competitionStatus,
+    councilPartitions: councilWorkflowPartitions,
     groups: groups as unknown as Record<string, unknown>[],
     matches: matches as unknown as Record<string, unknown>[],
     nodes,
     qualificationStatus: engineConfig?.qualificationStatus ?? null,
     knockoutStatus: engineConfig?.status ?? null,
+    templateKey: engineConfig?.templateKey ?? null,
     teams: groupTeams as unknown as Record<string, unknown>[],
-  }), [competitionStatus, engineConfig?.qualificationStatus, engineConfig?.status, groupTeams, groups, matches, nodes]);
+  }), [competitionStatus, councilWorkflowPartitions, engineConfig?.qualificationStatus, engineConfig?.status, engineConfig?.templateKey, groupTeams, groups, matches, nodes]);
 
   async function saveGroupMatch(match: AdminCompetitionMatch, form: MatchForm) {
     const result = await updateMatch(match.id, {

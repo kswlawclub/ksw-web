@@ -28,20 +28,21 @@ import {
 } from "@/lib/competition-tree";
 import type { ApprovedQualificationSummary } from "@/app/admin/competitions/[id]/qualification-actions";
 import type { CompetitionEngineV2Config } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
+import type { CouncilWorkflowPartition } from "@/lib/cup-competition-workflow";
 
 type Row = Record<string, unknown>;
 
 const competitionColumns =
   "id, name, season, slug, short_description, description, cover_image_url, edition_number, start_date, end_date, location, display_order, competition_type, competition_engine_version, season_status, is_active, is_featured, is_published, created_at";
 const matchColumns =
-  "id, group_id, competition_stage, fixture_source, match_date, home_team_id, away_team_id, home_score, away_score, penalty_home_score, penalty_away_score, manual_winner_team_id, winner_team_id, venue, status";
+  "id, group_id, competition_stage, fixture_source, knockout_partition_key, match_date, home_team_id, away_team_id, home_score, away_score, penalty_home_score, penalty_away_score, manual_winner_team_id, winner_team_id, venue, status";
 const teamColumns = "id, name, short_name, logo_url, is_ksw";
 const groupColumns = "id, competition_id, name, label, sort_order, qualifiers_count, created_at, updated_at";
 const competitionTeamGroupColumns = "id, competition_id, team_id, group_id, is_active, display_order";
 const engineV2ConfigColumns =
   "competition_id, entrant_count, bracket_capacity, entry_mode, group_stage_enabled, status, template_key, extra_rank_enabled, extra_rank, extra_qualifier_count, qualification_status, qualification_approved_at, qualification_approved_by_label, qualification_snapshot";
 const bracketNodeColumns =
-  "id, competition_id, round_index, round_label, match_order, bracket_position, home_source_type, away_source_type, home_source_group_id, home_source_rank, home_source_team_id, home_source_node_id, away_source_group_id, away_source_rank, away_source_team_id, away_source_node_id, linked_match_id";
+  "id, competition_id, partition_key, round_index, round_label, match_order, bracket_position, home_source_type, away_source_type, home_source_group_id, home_source_rank, home_source_team_id, home_source_node_id, away_source_group_id, away_source_rank, away_source_team_id, away_source_node_id, linked_match_id";
 
 function text(row: Row | undefined, keys: string[], fallback = "") {
   if (!row) return fallback;
@@ -266,6 +267,7 @@ function asCompetitionTreeNode(row: Row): CompetitionTreeNode {
     id: text(row, ["id"]),
     linkedMatchId: text(row, ["linked_match_id"]) || undefined,
     matchOrder: number(row, ["match_order"]),
+    partitionKey: text(row, ["partition_key"]) || undefined,
     roundIndex: number(row, ["round_index"]),
     roundLabel: text(row, ["round_label"]),
   };
@@ -305,6 +307,7 @@ async function loadWorkspaceData(id: string) {
       engineV2Config: null as CompetitionEngineV2Config | null,
       engineV2TreeSummary: null as CompetitionTreeSummary | null,
       engineV2Workflow: null as CompetitionEngineV2Integrity | null,
+      councilWorkflowPartitions: [] as CouncilWorkflowPartition[],
       matchTeams: [] as Row[],
       matches: [] as Row[],
       teams: [] as Row[],
@@ -326,6 +329,7 @@ async function loadWorkspaceData(id: string) {
       engineV2Config: null as CompetitionEngineV2Config | null,
       engineV2TreeSummary: null as CompetitionTreeSummary | null,
       engineV2Workflow: null as CompetitionEngineV2Integrity | null,
+      councilWorkflowPartitions: [] as CouncilWorkflowPartition[],
       matchTeams: [] as Row[],
       matches: [] as Row[],
       teams: [] as Row[],
@@ -334,7 +338,7 @@ async function loadWorkspaceData(id: string) {
 
   const competitionType = normalizeCompetitionType(competition.competition_type);
   const isCup = isCupCompetition(competitionType);
-  const [teams, matches, groupResult, competitionTeamResult, engineV2ConfigResult, engineV2TreeResult] = await Promise.all([
+  const [teams, matches, groupResult, competitionTeamResult, engineV2ConfigResult, engineV2TreeResult, councilPartitionsResult] = await Promise.all([
     loadCompetitionParticipants(supabase, id, {
       includeInactiveParticipants: false,
     }),
@@ -380,6 +384,16 @@ async function loadWorkspaceData(id: string) {
             .order("match_order", { ascending: true }),
         )
       : Promise.resolve({ data: [] as Row[], ok: true }),
+    isCup
+      ? runQueryStatus<Row>(
+          "workspace_council_partitions",
+          supabase
+            .from("competition_knockout_partitions")
+            .select("partition_key, approval_status, status, champion_team_id")
+            .eq("competition_id", id)
+            .in("partition_key", ["division_1", "division_2"]),
+        )
+      : Promise.resolve({ data: [] as Row[], ok: true }),
   ]);
   const teamIds = matchTeamIds(matches);
   const groupTeamIds = competitionTeamResult.data.map((row) => text(row, ["team_id"], "")).filter(Boolean);
@@ -396,6 +410,23 @@ async function loadWorkspaceData(id: string) {
   const groups = groupResult.data.map(asCompetitionGroup).filter((group) => group.id);
   const engineV2Config = asEngineV2Config(engineV2ConfigResult.data[0]);
   const engineV2TreeNodes = engineV2TreeResult.data.map(asCompetitionTreeNode).filter((node) => node.id);
+  const councilWorkflowPartitions = (["division_1", "division_2"] as const).map((partitionKey) => {
+    const partition = councilPartitionsResult.data.find((row) => text(row, ["partition_key"]) === partitionKey);
+    const partitionNodes = engineV2TreeNodes.filter((node) => node.partitionKey === partitionKey);
+    const finalNode = [...partitionNodes].sort((a, b) => b.roundIndex - a.roundIndex || b.matchOrder - a.matchOrder)[0];
+    const finalMatch = finalNode?.linkedMatchId
+      ? matches.find((match) => text(match, ["id"]) === finalNode.linkedMatchId)
+      : undefined;
+    const status = text(partition, ["status"]) || null;
+    return {
+      approvalStatus: text(partition, ["approval_status"]) || null,
+      bracketConfirmed: ["reviewed", "fixtures_created", "active", "completed"].includes(status ?? ""),
+      championTeamId: text(partition, ["champion_team_id"]) || null,
+      finalFinished: text(finalMatch, ["status"]) === "finished",
+      partitionKey,
+      status,
+    };
+  });
   const engineV2TreeValidation = engineV2TreeResult.ok && engineV2Config && engineV2TreeNodes.length
     ? validateCompetitionTree(engineV2TreeNodes, engineV2Config.entrantCount ?? 0)
     : null;
@@ -422,6 +453,7 @@ async function loadWorkspaceData(id: string) {
     groupTeams,
     groups,
     engineV2Config,
+    councilWorkflowPartitions,
     engineV2TreeNodes,
     engineV2TreeSummary,
     engineV2Workflow,
@@ -463,7 +495,7 @@ export default async function AdminCompetitionWorkspacePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { competition, engineV2Config, engineV2TreeNodes, engineV2TreeSummary, engineV2Workflow, groupDataReady, groupTeams, groups, matchTeams, matches, teams } = await loadWorkspaceData(id);
+  const { competition, councilWorkflowPartitions, engineV2Config, engineV2TreeNodes, engineV2TreeSummary, engineV2Workflow, groupDataReady, groupTeams, groups, matchTeams, matches, teams } = await loadWorkspaceData(id);
 
   if (!competition) {
     notFound();
@@ -572,6 +604,7 @@ export default async function AdminCompetitionWorkspacePage({
         <AdminCupCompetitionWorkspace
           competitionId={id}
           competitionStatus={seasonStatus}
+          councilWorkflowPartitions={councilWorkflowPartitions}
           engineConfig={engineV2Config}
           engineSummary={engineV2TreeSummary}
           engineWorkflow={engineV2Workflow}
