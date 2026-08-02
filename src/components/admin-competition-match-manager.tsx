@@ -18,6 +18,11 @@ type MatchStatusFilter = "all" | "scheduled" | "finished" | "other";
 
 export type AdminCompetitionMatch = {
   id: string;
+  league_id?: string | null;
+  league_fixture_key?: string | null;
+  league_fixture_version?: number | null;
+  league_leg?: number | null;
+  matchweek?: number | null;
   group_id?: string | null;
   competition_stage?: string | null;
   fixture_source?: string | null;

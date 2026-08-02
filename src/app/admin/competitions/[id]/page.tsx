@@ -10,6 +10,7 @@ import {
   type AdminCompetitionGroupTeam,
 } from "@/components/admin-competition-groups-manager";
 import { AdminCupCompetitionWorkspace } from "@/components/admin-cup-competition-workspace";
+import { AdminLeagueCompetitionWorkspace } from "@/components/admin-league-competition-workspace";
 import { CopyPublicLinkButton } from "@/components/copy-public-link-button";
 import { TeamLogo } from "@/components/team-logo";
 import { loadCompetitionParticipants } from "@/lib/competition-participants";
@@ -29,13 +30,14 @@ import {
 import type { ApprovedQualificationSummary } from "@/app/admin/competitions/[id]/qualification-actions";
 import type { CompetitionEngineV2Config } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
 import type { CouncilWorkflowPartition } from "@/lib/cup-competition-workflow";
+import type { StandardLeagueConfig } from "@/lib/league-template/types";
 
 type Row = Record<string, unknown>;
 
 const competitionColumns =
   "id, name, season, slug, short_description, description, cover_image_url, edition_number, start_date, end_date, location, display_order, competition_type, competition_engine_version, season_status, is_active, is_featured, is_published, created_at";
 const matchColumns =
-  "id, group_id, competition_stage, fixture_source, knockout_partition_key, match_date, home_team_id, away_team_id, home_score, away_score, penalty_home_score, penalty_away_score, manual_winner_team_id, winner_team_id, venue, status";
+  "id, league_id, group_id, competition_stage, fixture_source, knockout_partition_key, league_leg, matchweek, league_fixture_version, league_fixture_key, match_date, home_team_id, away_team_id, home_score, away_score, penalty_home_score, penalty_away_score, manual_winner_team_id, winner_team_id, venue, status";
 const teamColumns = "id, name, short_name, logo_url, is_ksw";
 const groupColumns = "id, competition_id, name, label, sort_order, qualifiers_count, created_at, updated_at";
 const competitionTeamGroupColumns = "id, competition_id, team_id, group_id, is_active, display_order";
@@ -151,13 +153,38 @@ function asMatch(row: Row): AdminCompetitionMatch {
     home_score: typeof row.home_score === "number" ? row.home_score : null,
     home_team_id: text(row, ["home_team_id"], ""),
     id: text(row, ["id"], ""),
+    league_fixture_key: text(row, ["league_fixture_key"], "") || null,
+    league_fixture_version: typeof row.league_fixture_version === "number" ? row.league_fixture_version : null,
+    league_id: text(row, ["league_id"], "") || null,
+    league_leg: typeof row.league_leg === "number" ? row.league_leg : null,
     manual_winner_team_id: text(row, ["manual_winner_team_id"], "") || null,
     match_date: text(row, ["match_date"], "") || null,
+    matchweek: typeof row.matchweek === "number" ? row.matchweek : null,
     penalty_away_score: typeof row.penalty_away_score === "number" ? row.penalty_away_score : null,
     penalty_home_score: typeof row.penalty_home_score === "number" ? row.penalty_home_score : null,
     status: text(row, ["status"], ""),
     venue: text(row, ["venue"], "") || null,
     winner_team_id: text(row, ["winner_team_id"], "") || null,
+  };
+}
+
+function asStandardLeagueConfig(row: Row | undefined): StandardLeagueConfig | null {
+  if (!row || text(row, ["template_key"]) !== "standard_league") return null;
+  return {
+    championAt: text(row, ["champion_at"]) || null,
+    championTeamId: text(row, ["champion_team_id"]) || null,
+    competitionId: text(row, ["competition_id"]),
+    confirmedAt: text(row, ["confirmed_at"]) || null,
+    confirmedBy: text(row, ["confirmed_by"]) || null,
+    confirmedByLabel: text(row, ["confirmed_by_label"]) || null,
+    drawPoints: typeof row.draw_points === "number" ? row.draw_points : 1,
+    fixtureStatus: text(row, ["fixture_status"]) === "confirmed" ? "confirmed" : "draft",
+    fixtureVersion: number(row, ["fixture_version"]),
+    legs: number(row, ["legs"]) === 2 ? 2 : 1,
+    lossPoints: number(row, ["loss_points"]),
+    standingsPolicyKey: "standard_league_v1",
+    templateKey: "standard_league",
+    winPoints: typeof row.win_points === "number" ? row.win_points : 3,
   };
 }
 
@@ -305,6 +332,7 @@ async function loadWorkspaceData(id: string) {
       groupTeams: [] as AdminCompetitionGroupTeam[],
       groups: [] as AdminCompetitionGroup[],
       engineV2Config: null as CompetitionEngineV2Config | null,
+      leagueConfig: null as StandardLeagueConfig | null,
       engineV2TreeSummary: null as CompetitionTreeSummary | null,
       engineV2Workflow: null as CompetitionEngineV2Integrity | null,
       councilWorkflowPartitions: [] as CouncilWorkflowPartition[],
@@ -327,6 +355,7 @@ async function loadWorkspaceData(id: string) {
       groupTeams: [] as AdminCompetitionGroupTeam[],
       groups: [] as AdminCompetitionGroup[],
       engineV2Config: null as CompetitionEngineV2Config | null,
+      leagueConfig: null as StandardLeagueConfig | null,
       engineV2TreeSummary: null as CompetitionTreeSummary | null,
       engineV2Workflow: null as CompetitionEngineV2Integrity | null,
       councilWorkflowPartitions: [] as CouncilWorkflowPartition[],
@@ -338,7 +367,7 @@ async function loadWorkspaceData(id: string) {
 
   const competitionType = normalizeCompetitionType(competition.competition_type);
   const isCup = isCupCompetition(competitionType);
-  const [teams, matches, groupResult, competitionTeamResult, engineV2ConfigResult, engineV2TreeResult, councilPartitionsResult] = await Promise.all([
+  const [teams, matches, groupResult, competitionTeamResult, engineV2ConfigResult, engineV2TreeResult, councilPartitionsResult, leagueConfigResult] = await Promise.all([
     loadCompetitionParticipants(supabase, id, {
       includeInactiveParticipants: false,
     }),
@@ -394,6 +423,16 @@ async function loadWorkspaceData(id: string) {
             .in("partition_key", ["division_1", "division_2"]),
         )
       : Promise.resolve({ data: [] as Row[], ok: true }),
+    competitionType === "league"
+      ? runQueryStatus<Row>(
+          "workspace_standard_league_config",
+          supabase
+            .from("competition_league_configs")
+            .select("competition_id, template_key, legs, win_points, draw_points, loss_points, standings_policy_key, fixture_status, fixture_version, confirmed_at, confirmed_by, confirmed_by_label, champion_team_id, champion_at")
+            .eq("competition_id", id)
+            .limit(1),
+        )
+      : Promise.resolve({ data: [] as Row[], ok: true }),
   ]);
   const teamIds = matchTeamIds(matches);
   const groupTeamIds = competitionTeamResult.data.map((row) => text(row, ["team_id"], "")).filter(Boolean);
@@ -409,6 +448,7 @@ async function loadWorkspaceData(id: string) {
     .filter((team) => team.competition_team_id && team.team_id && team.is_active);
   const groups = groupResult.data.map(asCompetitionGroup).filter((group) => group.id);
   const engineV2Config = asEngineV2Config(engineV2ConfigResult.data[0]);
+  const leagueConfig = asStandardLeagueConfig(leagueConfigResult.data[0]);
   const engineV2TreeNodes = engineV2TreeResult.data.map(asCompetitionTreeNode).filter((node) => node.id);
   const councilWorkflowPartitions = (["division_1", "division_2"] as const).map((partitionKey) => {
     const partition = councilPartitionsResult.data.find((row) => text(row, ["partition_key"]) === partitionKey);
@@ -451,6 +491,7 @@ async function loadWorkspaceData(id: string) {
     competition,
     groupDataReady: groupResult.ok && competitionTeamResult.ok,
     groupTeams,
+    leagueConfig,
     groups,
     engineV2Config,
     councilWorkflowPartitions,
@@ -495,7 +536,7 @@ export default async function AdminCompetitionWorkspacePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { competition, councilWorkflowPartitions, engineV2Config, engineV2TreeNodes, engineV2TreeSummary, engineV2Workflow, groupDataReady, groupTeams, groups, matchTeams, matches, teams } = await loadWorkspaceData(id);
+  const { competition, councilWorkflowPartitions, engineV2Config, engineV2TreeNodes, engineV2TreeSummary, engineV2Workflow, groupDataReady, groupTeams, groups, leagueConfig, matchTeams, matches, teams } = await loadWorkspaceData(id);
 
   if (!competition) {
     notFound();
@@ -517,6 +558,7 @@ export default async function AdminCompetitionWorkspacePage({
   const kswTeamCount = teams.filter((team) => team.is_ksw === true).length;
   const workspaceMatches = matches.map(asMatch);
   const workspaceMatchTeams = mergeMatchTeams(teams, matchTeams);
+  const isStandardLeague = competitionType === "league" && (leagueConfig !== null || workspaceMatches.length === 0);
   const groupedTeamCount = groupTeams.filter((team) => team.group_id).length;
   const unassignedGroupTeamCount = Math.max(groupTeams.length - groupedTeamCount, 0);
   const publicPath = slug && isPublished ? `/competitions/${slug}` : "";
@@ -544,7 +586,7 @@ export default async function AdminCompetitionWorkspacePage({
   ];
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#f6f2ea] text-[#061426]">
-      <section className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-10">
+      {!isStandardLeague ? <section className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-10">
         <details className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <summary className="cursor-pointer text-xl font-black text-[#061426]">ข้อมูลรายการแข่งขัน</summary>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -553,9 +595,9 @@ export default async function AdminCompetitionWorkspacePage({
             <StatCard label="สถานะ" value={seasonStatus} />
           </div>
         </details>
-      </section>
+      </section> : null}
 
-      {!isCup ? <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
+      {!isCup && !isStandardLeague ? <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
         <article className="min-w-0 scroll-mt-28 rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10" id="teams-summary">
           <div className="mb-4 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -616,6 +658,16 @@ export default async function AdminCompetitionWorkspacePage({
           nodes={engineV2TreeNodes}
           teams={teams.map((team) => asMatchTeam(team))}
         />
+      ) : isStandardLeague ? (
+        <AdminLeagueCompetitionWorkspace
+          competitionId={id}
+          competitionName={competitionName}
+          competitionStatus={seasonStatus}
+          initialConfig={leagueConfig}
+          initialMatches={workspaceMatches}
+          key={`standard-league-${leagueConfig?.fixtureVersion ?? "draft"}-${workspaceMatches.map((match) => `${match.id}:${match.status}:${match.home_score}:${match.away_score}`).join("|")}`}
+          teams={teams.map((team) => asMatchTeam(team, true))}
+        />
       ) : (
         <AdminCompetitionMatchManager
           competition={{
@@ -635,7 +687,7 @@ export default async function AdminCompetitionWorkspacePage({
         />
       )}
 
-      {!isCup ? <>
+      {!isCup && !isStandardLeague ? <>
         <section className="mx-auto grid w-full max-w-7xl scroll-mt-28 gap-4 px-4 pb-8 sm:px-6 lg:grid-cols-3 lg:px-10" id="publishing-summary">
           <DetailCard items={detailItems} title="Competition Details" />
           <DetailCard items={publishingItems} title="Publishing" />

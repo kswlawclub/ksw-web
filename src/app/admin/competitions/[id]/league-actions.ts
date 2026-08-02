@@ -4,7 +4,10 @@ import { revalidatePath } from "next/cache";
 import { requireAdminSession } from "@/lib/admin-server-auth";
 import { isLeagueCompetition, normalizeCompetitionType } from "@/lib/competition-format";
 import { loadCompetitionParticipants } from "@/lib/competition-participants";
+import { updateMatch } from "@/app/admin/matches/actions";
+import { resolveStandardLeagueChampion } from "@/lib/league-template/champion-resolver";
 import { generateRoundRobinFixtures } from "@/lib/league-template/round-robin";
+import { calculateStandardLeagueStandings, type StandardLeagueMatch } from "@/lib/league-template/standings";
 import { getLeagueStandingsPolicy } from "@/lib/league-template/standings-policies";
 import { STANDARD_LEAGUE_TEMPLATE_KEY, type LeagueFixturePlan, type StandardLeagueConfig } from "@/lib/league-template/types";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
@@ -27,6 +30,10 @@ export type LeagueFixtureConfirmationResult = LeagueConfigActionResult & {
   createdCount?: number;
   fixtureVersion?: number;
   existingCount?: number;
+};
+
+export type LeagueMatchSaveResult = LeagueConfigActionResult & {
+  champion?: { championAt: string | null; championTeamId: string | null };
 };
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -235,4 +242,130 @@ export async function confirmStandardLeagueFixtures(competitionId: string): Prom
     fixtureVersion: typeof report?.fixture_version === "number" ? report.fixture_version : fixtureVersion,
     ok: true,
   };
+}
+
+async function loadConfirmedLeagueState(supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>, competitionId: string, config: StandardLeagueConfig) {
+  const [participants, matchesResult] = await Promise.all([
+    loadCompetitionParticipants(supabase, competitionId, { includeInactiveParticipants: false }),
+    supabase
+      .from("matches")
+      .select("id, league_fixture_key, home_team_id, away_team_id, home_score, away_score, status")
+      .eq("league_id", competitionId)
+      .eq("league_fixture_version", config.fixtureVersion),
+  ]);
+  if (matchesResult.error) {
+    console.error("standard league state match lookup failed", matchesResult.error);
+    return { error: "ไม่สามารถโหลดผลการแข่งขันลีกได้", resolution: null, standings: null };
+  }
+  const teams = sortTeamsByName(participants)
+    .filter((team) => team.participant_is_active !== false)
+    .map((team) => ({ id: team.id, name: team.name }));
+  let plan: LeagueFixturePlan;
+  try {
+    plan = generateRoundRobinFixtures(teams, config.legs);
+  } catch (error) {
+    console.error("standard league state fixture plan failed", error);
+    return { error: "ไม่สามารถตรวจสอบชุดโปรแกรมลีกได้", resolution: null, standings: null };
+  }
+  const matches: StandardLeagueMatch[] = (matchesResult.data ?? []).map((match) => ({
+    awayScore: match.away_score,
+    awayTeamId: match.away_team_id,
+    fixtureKey: match.league_fixture_key,
+    homeScore: match.home_score,
+    homeTeamId: match.home_team_id,
+    status: match.status,
+  }));
+  const standings = calculateStandardLeagueStandings({ config, matches, teams });
+  return {
+    error: "",
+    resolution: resolveStandardLeagueChampion({
+      config,
+      expectedFixtureCount: plan.summary.fixtureCount,
+      matches,
+      standings: standings.rows,
+    }),
+    standings,
+  };
+}
+
+async function persistLeagueChampion(supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>, competitionId: string, config: StandardLeagueConfig) {
+  const state = await loadConfirmedLeagueState(supabase, competitionId, config);
+  if (state.error || !state.resolution) return { config, error: state.error };
+  const championTeamId = state.resolution.status === "champion" ? state.resolution.championTeamId : null;
+  if (config.championTeamId === championTeamId) return { config, error: "" };
+  const championAt = championTeamId ? new Date().toISOString() : null;
+  const updated = await supabase
+    .from("competition_league_configs")
+    .update({ champion_at: championAt, champion_team_id: championTeamId, updated_at: new Date().toISOString() })
+    .eq("competition_id", competitionId)
+    .select(configColumns)
+    .single();
+  if (updated.error) {
+    console.error("standard league champion persistence failed", updated.error);
+    return { config, error: "ไม่สามารถบันทึกแชมป์ลีกได้" };
+  }
+  return { config: configFromRow(updated.data as Row) ?? config, error: "" };
+}
+
+export async function saveStandardLeagueMatch(competitionId: string, payload: {
+  awayScore: number | null;
+  homeScore: number | null;
+  matchDate: string | null;
+  matchId: string;
+  status: "scheduled" | "finished";
+  venue: string | null;
+}): Promise<LeagueMatchSaveResult> {
+  const verified = await verifyLeagueCompetition(competitionId);
+  if (verified.error || !verified.supabase) return { error: verified.error, ok: false };
+  const loaded = await loadConfigRow(verified.supabase, competitionId);
+  const config = configFromRow(loaded.row);
+  if (loaded.error || !config || config.fixtureStatus !== "confirmed") return { error: loaded.error || "ยังไม่ได้ยืนยันโปรแกรมลีก", ok: false };
+  const match = await verified.supabase
+    .from("matches")
+    .select("id, league_fixture_version, home_team_id, away_team_id")
+    .eq("id", payload.matchId)
+    .eq("league_id", competitionId)
+    .maybeSingle();
+  if (match.error || !match.data) {
+    console.error("standard league match scope lookup failed", match.error);
+    return { error: "ไม่พบคู่แข่งขันลีกนี้", ok: false };
+  }
+  if (match.data.league_fixture_version !== config.fixtureVersion) return { error: "คู่นี้ไม่ได้อยู่ในชุดโปรแกรมลีกที่ยืนยันไว้", ok: false };
+  const saved = await updateMatch(payload.matchId, {
+    away_score: payload.awayScore,
+    away_team_id: match.data.away_team_id,
+    home_score: payload.homeScore,
+    home_team_id: match.data.home_team_id,
+    league_id: competitionId,
+    match_date: payload.matchDate,
+    status: payload.status,
+    venue: payload.venue,
+  });
+  if (!saved.ok) return { error: saved.error || "ไม่สามารถบันทึกผลการแข่งขันได้", ok: false };
+  const persisted = await persistLeagueChampion(verified.supabase, competitionId, config);
+  if (persisted.error) return { error: persisted.error, ok: false };
+  revalidatePath(`/admin/competitions/${competitionId}`);
+  return { champion: { championAt: persisted.config.championAt, championTeamId: persisted.config.championTeamId }, config: persisted.config, ok: true };
+}
+
+export async function completeStandardLeagueCompetition(competitionId: string): Promise<LeagueConfigActionResult> {
+  const verified = await verifyLeagueCompetition(competitionId);
+  if (verified.error || !verified.supabase) return { error: verified.error, ok: false };
+  const loaded = await loadConfigRow(verified.supabase, competitionId);
+  const config = configFromRow(loaded.row);
+  if (loaded.error || !config || config.fixtureStatus !== "confirmed") return { error: loaded.error || "ยังไม่ได้ยืนยันโปรแกรมลีก", ok: false };
+  const persisted = await persistLeagueChampion(verified.supabase, competitionId, config);
+  if (persisted.error) return { error: persisted.error, ok: false };
+  if (!persisted.config.championTeamId) return { error: "ยังไม่สามารถปิดการแข่งขันได้จนกว่าจะได้แชมป์ที่ชัดเจน", ok: false };
+  const completed = await verified.supabase
+    .from("leagues")
+    .update({ season_status: "completed" })
+    .eq("id", competitionId);
+  if (completed.error) {
+    console.error("standard league completion failed", completed.error);
+    return { error: "ไม่สามารถปิดการแข่งขันได้", ok: false };
+  }
+  revalidatePath(`/admin/competitions/${competitionId}`);
+  revalidatePath("/competitions");
+  return { config: persisted.config, ok: true };
 }
