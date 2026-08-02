@@ -358,7 +358,12 @@ function CupWorkspaceNavigation({ steps, templateKey }: { steps: CupCompetitionW
     { id: "teams", label: "ทีม", target: "cup-teams" },
     { id: "group_matches", label: "รอบแบ่งกลุ่ม", target: "cup-group-stage" },
     { id: "qualification", label: "ทีมผ่านเข้ารอบ", target: "cup-qualification" },
-    templateKey === "council_two_division" ? { id: "knockout_setup", label: "แบ่งดิวิชั่น", target: "cup-division-approval" } : { id: "knockout_matches", label: "รอบน็อกเอาต์", target: "cup-knockout" },
+    ...(templateKey === "council_two_division" ? [
+      { id: "knockout_setup", label: "Division 1", target: "cup-division-1" },
+      { id: "knockout_setup", label: "Division 2", target: "cup-division-2" },
+      { id: "knockout_matches", label: "Knockout D1", target: "cup-knockout-d1" },
+      { id: "knockout_matches", label: "Knockout D2", target: "cup-knockout-d2" },
+    ] : [{ id: "knockout_matches", label: "รอบน็อกเอาต์", target: "cup-knockout" }]),
     { id: "champion", label: "แชมป์", target: "cup-champion" },
   ] as const;
   const statusLabels = { complete: "เสร็จแล้ว", current: "กำลังดำเนินการ", locked: "ล็อก", upcoming: "รอดำเนินการ" } as const;
