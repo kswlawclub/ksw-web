@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { TeamLogo } from "@/components/team-logo";
 import {
   assignCompetitionTeamToGroup,
+  createCompetitionGroups,
   createCompetitionGroup,
   deleteCompetitionGroup,
   generateCupGroupFixtures,
@@ -12,6 +13,7 @@ import {
   updateCompetitionGroupQualifiers,
   type CupGroupFixturePreviewPair,
 } from "@/app/admin/competitions/[id]/group-actions";
+import { nextAvailableCompetitionGroupNames } from "@/lib/competition-group-names";
 import {
   calculateCupGroupStandings,
   type CupGroupRow,
@@ -112,6 +114,8 @@ export function AdminCompetitionGroupsManager({
 }) {
   const router = useRouter();
   const [form, setForm] = useState<GroupForm>(emptyForm);
+  const [groupCount, setGroupCount] = useState("0");
+  const [createdGroups, setCreatedGroups] = useState<AdminCompetitionGroup[]>([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -120,10 +124,14 @@ export function AdminCompetitionGroupsManager({
   const [fixturePreviewByGroup, setFixturePreviewByGroup] = useState<Record<string, CupGroupFixturePreviewPair[]>>({});
   const [qualifierActionGroupId, setQualifierActionGroupId] = useState("");
   const [groupOverrides, setGroupOverrides] = useState<Record<string, string | null>>({});
-  const sortedGroups = useMemo(() => unassignedFirst(groups), [groups]);
+  const localGroups = useMemo(() => {
+    const groupIds = new Set(groups.map((group) => group.id));
+    return unassignedFirst([...groups, ...createdGroups.filter((group) => !groupIds.has(group.id))]);
+  }, [createdGroups, groups]);
+  const sortedGroups = useMemo(() => unassignedFirst(localGroups), [localGroups]);
   const groupStandings = useMemo(
-    () => calculateCupGroupStandings({ groups, matches, teams }),
-    [groups, matches, teams],
+    () => calculateCupGroupStandings({ groups: localGroups, matches, teams }),
+    [localGroups, matches, teams],
   );
   const standingsByGroup = useMemo(
     () => new Map(groupStandings.map((standing) => [standing.group_id, standing])),
@@ -168,6 +176,10 @@ export function AdminCompetitionGroupsManager({
   );
   const [showAllUnassignedTeams, setShowAllUnassignedTeams] = useState(false);
   const visibleUnassignedTeams = showAllUnassignedTeams ? unassignedTeams : unassignedTeams.slice(0, 16);
+  const requestedGroupCount = Number(groupCount);
+  const groupsToAdd = Number.isInteger(requestedGroupCount) && requestedGroupCount > localGroups.length
+    ? nextAvailableCompetitionGroupNames(localGroups.map((group) => group.name), requestedGroupCount - localGroups.length)
+    : [];
 
   function editGroup(group: AdminCompetitionGroup) {
     setForm({
@@ -213,6 +225,29 @@ export function AdminCompetitionGroupsManager({
     router.refresh();
   }
 
+  async function createGroups(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setMessage("");
+    setError("");
+    const result = await createCompetitionGroups(competitionId, groupCount);
+    setSaving(false);
+
+    if (!result.ok) {
+      setError(result.error ?? "ไม่สามารถสร้างกลุ่มได้");
+      return;
+    }
+
+    const createdGroups = result.groups ?? [];
+    if (createdGroups.length) {
+      setCreatedGroups((current) => [...current, ...createdGroups]);
+      setMessage(`สร้าง ${createdGroups.length} กลุ่มแล้ว: ${createdGroups.map((group) => group.name).join(", ")}`);
+    } else {
+      setMessage(`มีครบ ${result.targetCount ?? requestedGroupCount} กลุ่มแล้ว`);
+    }
+    router.refresh();
+  }
+
   async function removeGroup(group: AdminCompetitionGroup) {
     const confirmed = window.confirm(
       `Delete ${groupDisplayName(group)}? Teams in this group will stay in the competition and return to unassigned.`,
@@ -230,6 +265,7 @@ export function AdminCompetitionGroupsManager({
     }
 
     setMessage("Group deleted. Assigned teams are now unassigned.");
+    setCreatedGroups((current) => current.filter((currentGroup) => currentGroup.id !== group.id));
     if (form.id === group.id) setForm(emptyForm);
     router.refresh();
   }
@@ -455,7 +491,7 @@ export function AdminCompetitionGroupsManager({
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
               <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Groups</p>
-              <p className="text-xl font-black">{groups.length}</p>
+              <p className="text-xl font-black">{localGroups.length}</p>
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
               <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Assigned</p>
@@ -476,14 +512,14 @@ export function AdminCompetitionGroupsManager({
 
         <ol className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           <WorkflowStep label="1. เพิ่มทีม" status={teams.length ? "done" : "available"} />
-          <WorkflowStep label="2. สร้างกลุ่ม" status={groups.length ? "done" : "available"} />
+          <WorkflowStep label="2. สร้างกลุ่ม" status={localGroups.length ? "done" : "available"} />
           <WorkflowStep label="3. จัดทีมลงกลุ่ม" status={assignedCount ? "done" : "available"} />
           <WorkflowStep label="4. สร้างการแข่งขันรอบแบ่งกลุ่ม" status={assignedCount ? "available" : "coming"} />
           <WorkflowStep label="5. ตารางคะแนนและทีมเข้ารอบ" status="coming" />
           <WorkflowStep label="6. Knockout bracket" status="coming" />
         </ol>
 
-        <form className="mt-6 grid gap-3 rounded-lg border border-[#d8ad45]/30 bg-[#fffaf0] p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_140px_auto] lg:items-end" onSubmit={saveGroup}>
+        {form.id ? <form className="mt-6 grid gap-3 rounded-lg border border-[#d8ad45]/30 bg-[#fffaf0] p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_140px_auto] lg:items-end" onSubmit={saveGroup}>
           <label className="grid min-w-0 gap-2 text-sm font-black">
             Group Name
             <input
@@ -530,7 +566,13 @@ export function AdminCompetitionGroupsManager({
               </button>
             ) : null}
           </div>
-        </form>
+        </form> : <form className="mt-6 grid min-w-0 gap-3 rounded-lg border border-[#d8ad45]/30 bg-[#fffaf0] p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end" onSubmit={createGroups}>
+          <label className="grid min-w-0 gap-2 text-sm font-black">จำนวนกลุ่ม
+            <input className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20" disabled={!schemaReady || saving} max="64" min="1" onChange={(event) => setGroupCount(event.target.value)} placeholder="8" required step="1" type="number" value={groupCount} />
+          </label>
+          <button className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] hover:bg-[#091f39] disabled:cursor-not-allowed disabled:opacity-60" disabled={saving || !schemaReady} type="submit">{saving ? "กำลังสร้าง..." : "สร้างกลุ่ม"}</button>
+          <p className="text-sm font-bold text-slate-600 sm:col-span-2">มีอยู่แล้ว {localGroups.length} กลุ่ม{groupsToAdd.length ? ` · จะเพิ่ม ${groupsToAdd.length} กลุ่ม: Group ${groupsToAdd[0]} ถึง Group ${groupsToAdd[groupsToAdd.length - 1]}` : requestedGroupCount === localGroups.length && requestedGroupCount > 0 ? ` · มีครบ ${requestedGroupCount} กลุ่มแล้ว` : requestedGroupCount > 0 && requestedGroupCount < localGroups.length ? ` · มีกลุ่มมากกว่าจำนวนที่ระบุ ระบบจะไม่ลบกลุ่มอัตโนมัติ` : ""}</p>
+        </form>}
 
         {error ? (
           <p className="mt-4 rounded-md border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-3 py-2 text-sm font-bold text-[#9b1c1f]">

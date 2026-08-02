@@ -3,11 +3,19 @@
 import { revalidatePath } from "next/cache";
 import { requireAdminSession } from "@/lib/admin-server-auth";
 import { isCupCompetition, normalizeCompetitionType } from "@/lib/competition-format";
+import { competitionGroupLabel, nextAvailableCompetitionGroupNames } from "@/lib/competition-group-names";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 type ActionResult = {
   ok: boolean;
   error?: string;
+};
+
+export type BulkCompetitionGroupsResult = ActionResult & {
+  createdCount?: number;
+  existingCount?: number;
+  groups?: Array<{ id: string; label: string; name: string; qualifiers_count: number; sort_order: number }>;
+  targetCount?: number;
 };
 
 export type CupGroupFixturePreviewPair = {
@@ -54,6 +62,79 @@ function normalizeName(value: string) {
 function normalizeLabel(value: string | null | undefined, name: string) {
   const label = value?.trim().replace(/\s+/g, " ");
   return label || `Group ${name}`;
+}
+
+export async function createCompetitionGroups(
+  competitionId: string,
+  targetCount: number | string,
+): Promise<BulkCompetitionGroupsResult> {
+  const { supabase, error } = await getAdminClient();
+  if (!supabase) return { ok: false, error };
+
+  const requestedCount = Number(targetCount);
+  if (!Number.isInteger(requestedCount) || requestedCount < 1 || requestedCount > 64) {
+    return { ok: false, error: "จำนวนกลุ่มต้องเป็นจำนวนเต็มระหว่าง 1 ถึง 64" };
+  }
+
+  const competitionCheck = await getCupCompetition(supabase, competitionId);
+  if (competitionCheck.error) return { ok: false, error: competitionCheck.error };
+
+  const existingResult = await supabase
+    .from("competition_groups")
+    .select("id, name, label, sort_order, qualifiers_count")
+    .eq("competition_id", competitionId)
+    .order("sort_order", { ascending: true })
+    .order("name", { ascending: true });
+  if (existingResult.error) {
+    console.error("competition bulk group lookup failed", existingResult.error);
+    return { ok: false, error: "ไม่สามารถตรวจสอบกลุ่มที่มีอยู่ได้" };
+  }
+
+  const existingGroups = (existingResult.data ?? []) as Array<{ id: string; label: string | null; name: string; qualifiers_count: number; sort_order: number }>;
+  const existingCount = existingGroups.length;
+  if (existingCount > requestedCount) {
+    return { ok: false, error: `มีอยู่แล้ว ${existingCount} กลุ่ม ซึ่งมากกว่าจำนวน ${requestedCount} ที่ระบุ`, existingCount, targetCount: requestedCount };
+  }
+  if (existingCount === requestedCount) {
+    return { ok: true, createdCount: 0, existingCount, groups: [], targetCount: requestedCount };
+  }
+
+  const names = nextAvailableCompetitionGroupNames(existingGroups.map((group) => group.name), requestedCount - existingCount);
+  const nextSortOrder = existingGroups.reduce((maximum, group) => Math.max(maximum, group.sort_order), -1) + 1;
+  const insertResult = await supabase
+    .from("competition_groups")
+    .insert(names.map((name, index) => ({
+      competition_id: competitionId,
+      label: competitionGroupLabel(name),
+      name,
+      sort_order: nextSortOrder + index,
+    })))
+    .select("id, label, name, qualifiers_count, sort_order");
+
+  if (insertResult.error) {
+    console.error("competition bulk group create failed", insertResult.error);
+    if (insertResult.error.code === "23505") {
+      const refreshed = await supabase
+        .from("competition_groups")
+        .select("name")
+        .eq("competition_id", competitionId);
+      const refreshedNames = new Set((refreshed.data ?? []).map((group) => normalizeName(String(group.name ?? "")).toUpperCase()));
+      if (!refreshed.error && names.every((name) => refreshedNames.has(name))) {
+        revalidatePath(`/admin/competitions/${competitionId}`);
+        return { ok: true, createdCount: 0, existingCount: refreshedNames.size, groups: [], targetCount: requestedCount };
+      }
+    }
+    return { ok: false, error: friendlyGroupError(insertResult.error.message), existingCount, targetCount: requestedCount };
+  }
+
+  revalidatePath(`/admin/competitions/${competitionId}`);
+  return {
+    createdCount: insertResult.data?.length ?? 0,
+    existingCount,
+    groups: (insertResult.data ?? []) as Array<{ id: string; label: string; name: string; qualifiers_count: number; sort_order: number }>,
+    ok: true,
+    targetCount: requestedCount,
+  };
 }
 
 function normalizeSortOrder(value: number | string | null | undefined) {
