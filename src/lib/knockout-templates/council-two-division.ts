@@ -2,10 +2,10 @@ import type { KnockoutTemplateDefinition } from "@/lib/knockout-templates/types"
 
 export const councilTwoDivisionTemplate: KnockoutTemplateDefinition = {
   buildPreview: () => ({
-    error: "Council Cup – Two Division ยังไม่พร้อมใช้งาน",
+    error: "",
     partitions: [],
     sources: [],
-    supported: false,
+    supported: true,
     templateKey: "council_two_division",
   }),
   championCount: 2,
@@ -28,7 +28,7 @@ export const councilTwoDivisionTemplate: KnockoutTemplateDefinition = {
     { championLabel: "แชมป์ดิวิชั่น 1", key: "division_1", label: "Division 1" },
     { championLabel: "แชมป์ดิวิชั่น 2", key: "division_2", label: "Division 2" },
   ],
-  pairExplanation: () => "ยังไม่พร้อมใช้งาน",
+  pairExplanation: () => "จัดคู่ข้ามกลุ่มจาก Division Snapshot ที่อนุมัติแล้ว",
   qualificationMode: "approved_snapshot",
   statusLabel: "พร้อมตั้งค่า",
   sourceLabel: (source) => source.type === "best_ranked" ? `อันดับเพิ่มเติม #${source.bestOrder ?? "?"}` : `${source.groupId ?? "?"}${source.rank ?? "?"}`,
