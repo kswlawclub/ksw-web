@@ -235,7 +235,7 @@ function MatchweekSection({
     const value = scores[match.id] ?? { away: match.away_score?.toString() ?? "", home: match.home_score?.toString() ?? "", status: match.status === "finished" ? "finished" : "scheduled" };
     const result = await runAction({ errorMessage: (saved) => !saved.ok ? saved.error ?? "บันทึกผลไม่สำเร็จ" : null, id: `league-match-save:${match.id}`, loadingMessage: "กำลังบันทึกผล...", successMessage: "บันทึกผลการแข่งขันแล้ว" }, () => saveStandardLeagueMatch(competitionId, { awayScore: value.away === "" ? null : Number(value.away), homeScore: value.home === "" ? null : Number(value.home), matchDate: toIso(drafts[match.id].matchDate), matchId: match.id, status: value.status, venue: drafts[match.id].venue.trim() || null }));
     if (!result?.ok) { setError(result?.error ?? "บันทึกผลไม่สำเร็จ"); return; }
-    onPersisted(initialMatches.map((item) => item.id === match.id ? { ...item, away_score: value.away === "" ? null : Number(value.away), home_score: value.home === "" ? null : Number(value.home), status: value.status } : item), state); router.refresh();
+    onPersisted(initialMatches.map((item) => item.id === match.id ? { ...item, away_score: value.away === "" ? null : Number(value.away), home_score: value.home === "" ? null : Number(value.home), status: value.status } : item), result.matchweekState ?? state); router.refresh();
   };
   const readiness = calculateLeagueMatchweekReadiness(initialMatches.map((match) => ({ matchDate: match.match_date, venue: match.venue })));
   const totalGoals = initialMatches.reduce((sum, match) => sum + (match.home_score ?? 0) + (match.away_score ?? 0), 0);
