@@ -225,7 +225,8 @@ function MatchweekSection({
   };
   const confirm = async () => {
     setSaving(true); setError("");
-    const result = await runAction({ errorMessage: (value) => !value.ok ? value.error ?? "Matchweek นี้ยังไม่พร้อมยืนยันคู่แข่งขัน" : null, id: `league-matchweek-confirm:${competitionId}:${state.matchweek}`, loadingMessage: "กำลังยืนยัน Matchweek...", successMessage: `ยืนยัน Matchweek ${state.matchweek} แล้ว` }, () => confirmStandardLeagueMatchweek(competitionId, state.matchweek));
+    const editableFixtures = initialMatches.filter((match) => !["finished", "completed"].includes(match.status)).map((match) => ({ awayTeamId: drafts[match.id].awayTeamId, homeTeamId: drafts[match.id].homeTeamId, matchId: match.id }));
+    const result = await runAction({ errorMessage: (value) => !value.ok ? value.error ?? "Matchweek นี้ยังไม่พร้อมยืนยันคู่แข่งขัน" : null, id: `league-matchweek-confirm:${competitionId}:${state.matchweek}`, loadingMessage: "กำลังยืนยัน Matchweek...", successMessage: `ยืนยัน Matchweek ${state.matchweek} แล้ว` }, () => confirmStandardLeagueMatchweek(competitionId, state.matchweek, editableFixtures));
     setSaving(false);
     if (!result?.ok || !result.matchweekState) { setError(result?.error?.includes("ขาดวัน เวลา สนาม") ? "ไม่สามารถยืนยันคู่แข่งขันได้ กรุณาตรวจสอบคู่แข่งขันใน Matchweek นี้" : result?.error ?? "ไม่สามารถยืนยันคู่แข่งขัน Matchweek นี้ได้"); return; }
     onPersisted(initialMatches, result.matchweekState); router.refresh();

@@ -62,6 +62,12 @@ export type LeagueMatchweekDraftMatch = {
   venue: string | null;
 };
 
+export type LeagueMatchweekConfirmationFixture = {
+  awayTeamId: string;
+  homeTeamId: string;
+  matchId: string;
+};
+
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const configColumns = "competition_id, template_key, legs, win_points, draw_points, loss_points, standings_policy_key, fixture_status, fixture_version, confirmed_at, confirmed_by, confirmed_by_label, champion_team_id, champion_at";
 const matchweekColumns = "matchweek, status, confirmed_at, confirmed_by_label, updated_at";
@@ -446,13 +452,19 @@ export async function saveStandardLeagueMatchweekDraft(competitionId: string, ma
   return { config, matches: (matches.data ?? []).map((match) => ({ awayTeamId: match.away_team_id, homeTeamId: match.home_team_id, matchDate: match.match_date, matchId: match.id, venue: match.venue })), matchweekState: state.states.find((item) => item.matchweek === matchweek), ok: true };
 }
 
-export async function confirmStandardLeagueMatchweek(competitionId: string, matchweek: number): Promise<LeagueMatchweekActionResult> {
+export async function confirmStandardLeagueMatchweek(competitionId: string, matchweek: number, editableFixtures: LeagueMatchweekConfirmationFixture[]): Promise<LeagueMatchweekActionResult> {
   const verified = await verifyLeagueCompetition(competitionId);
   if (verified.error || !verified.supabase) return { error: verified.error, ok: false };
   const loaded = await loadConfigRow(verified.supabase, competitionId);
   const config = configFromRow(loaded.row);
   if (loaded.error || !config || config.fixtureStatus !== "confirmed") return { error: loaded.error || "ยังไม่ได้ยืนยันโครงสร้างการแข่งขัน", ok: false };
-  const confirmed = await verified.supabase.rpc("confirm_standard_league_matchweek_v1", { p_competition_id: competitionId, p_confirmed_by_label: "Administrator session", p_fixture_version: config.fixtureVersion, p_matchweek: matchweek });
+  const confirmed = await verified.supabase.rpc("confirm_standard_league_matchweek_v1", {
+    p_competition_id: competitionId,
+    p_confirmed_by_label: "Administrator session",
+    p_editable_fixtures: editableFixtures,
+    p_fixture_version: config.fixtureVersion,
+    p_matchweek: matchweek,
+  });
   if (confirmed.error) {
     console.error("standard league matchweek confirmation failed", {
       code: confirmed.error.code,
@@ -481,7 +493,9 @@ function rescheduleRpcErrorMessage(message: string) {
 function matchweekConfirmationErrorMessage(message: string) {
   if (message.includes("matchweek_empty")) return "Matchweek นี้ไม่มีคู่แข่งขันในโปรแกรมปัจจุบัน";
   if (message.includes("matchweek_duplicate_pairing")) return "มีคู่แข่งขันซ้ำใน Matchweek นี้";
-  if (message.includes("matchweek_pairing_invalid")) return "มีคู่แข่งขันใน Matchweek นี้ที่ยังไม่ถูกต้อง";
+  if (message.includes("editable_fixture_missing")) return "ข้อมูลคู่แข่งขันที่ยังแก้ไขได้ไม่ครบ กรุณาลองใหม่อีกครั้ง";
+  if (message.includes("finished_fixture_modified")) return "ไม่สามารถแก้ไขคู่ที่จบการแข่งขันแล้วได้";
+  if (message.includes("fixture_set_invalid")) return "ชุดคู่แข่งขันใน Matchweek นี้ไม่ถูกต้อง";
   if (message.includes("invalid_matchweek")) return "Matchweek ที่เลือกไม่ถูกต้อง";
   if (message.includes("invalid_standard_league_fixture_version")) return "ชุดโปรแกรมลีกนี้ไม่ตรงกับโครงสร้างที่ยืนยันไว้";
   if (message.includes("invalid_league_confirmation")) return "ไม่สามารถยืนยัน Matchweek ของรายการนี้ได้";
