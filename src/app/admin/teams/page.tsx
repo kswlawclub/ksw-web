@@ -11,6 +11,7 @@ import {
   updateTeam,
   uploadTeamLogo,
 } from "./actions";
+import { sortTeamsByName } from "@/lib/team-sort";
 
 type Competition = {
   id: string;
@@ -42,6 +43,8 @@ type TeamForm = {
   isKsw: boolean;
   isActive: boolean;
 };
+
+type AvailableTeamFilter = "all" | "general" | "ksw" | "unselected";
 
 const emptyForm: TeamForm = {
   id: "",
@@ -153,6 +156,9 @@ export default function AdminTeamsPage() {
   const [logoPreview, setLogoPreview] = useState("");
   const [contextCompetitionId, setContextCompetitionId] = useState<string | null>(null);
   const [selectedAssignTeamIds, setSelectedAssignTeamIds] = useState<string[]>([]);
+  const [availableTeamSearch, setAvailableTeamSearch] = useState("");
+  const [availableTeamFilter, setAvailableTeamFilter] = useState<AvailableTeamFilter>("all");
+  const [lastSelectedAssignTeamId, setLastSelectedAssignTeamId] = useState<string | null>(null);
   const [relationshipWarning, setRelationshipWarning] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -171,6 +177,18 @@ export default function AdminTeamsPage() {
     !contextIsInvalid &&
     (!isContextMode || Boolean(form.id)) &&
     Boolean(form.name.trim() && form.shortName.trim());
+  const sortedAvailableTeams = useMemo(() => sortTeamsByName(unassignedTeams), [unassignedTeams]);
+  const searchMatchedAvailableTeams = useMemo(() => {
+    const query = availableTeamSearch.trim().toLocaleLowerCase();
+    if (!query) return sortedAvailableTeams;
+    return sortedAvailableTeams.filter((team) => `${team.name} ${team.short_name ?? ""}`.toLocaleLowerCase().includes(query));
+  }, [availableTeamSearch, sortedAvailableTeams]);
+  const visibleAvailableTeams = useMemo(() => searchMatchedAvailableTeams.filter((team) => {
+    if (availableTeamFilter === "ksw") return team.is_ksw;
+    if (availableTeamFilter === "general") return !team.is_ksw;
+    if (availableTeamFilter === "unselected") return !selectedAssignTeamIds.includes(team.id);
+    return true;
+  }), [availableTeamFilter, searchMatchedAvailableTeams, selectedAssignTeamIds]);
 
   useEffect(() => {
     function syncCompetitionParam() {
@@ -237,6 +255,7 @@ export default function AdminTeamsPage() {
       setRelationshipWarning("");
     }
     setSelectedAssignTeamIds([]);
+    setLastSelectedAssignTeamId(null);
     setLogoFile(null);
     setForm(emptyForm);
 
@@ -547,12 +566,29 @@ export default function AdminTeamsPage() {
     }
   }
 
-  function toggleAssignTeam(teamId: string) {
-    setSelectedAssignTeamIds((current) =>
-      current.includes(teamId)
-        ? current.filter((id) => id !== teamId)
-        : [...current, teamId],
-    );
+  function toggleAssignTeam(teamId: string, shiftKey: boolean) {
+    if (shiftKey && lastSelectedAssignTeamId) {
+      const start = visibleAvailableTeams.findIndex((team) => team.id === lastSelectedAssignTeamId);
+      const end = visibleAvailableTeams.findIndex((team) => team.id === teamId);
+      if (start >= 0 && end >= 0) {
+        const rangeIds = visibleAvailableTeams.slice(Math.min(start, end), Math.max(start, end) + 1).map((team) => team.id);
+        setSelectedAssignTeamIds((current) => Array.from(new Set([...current, ...rangeIds])));
+        setLastSelectedAssignTeamId(teamId);
+        return;
+      }
+    }
+
+    setSelectedAssignTeamIds((current) => current.includes(teamId) ? current.filter((id) => id !== teamId) : [...current, teamId]);
+    setLastSelectedAssignTeamId(teamId);
+  }
+
+  function selectAvailableTeams(teamIds: string[]) {
+    setSelectedAssignTeamIds((current) => Array.from(new Set([...current, ...teamIds])));
+  }
+
+  function clearSelectedTeams() {
+    setSelectedAssignTeamIds([]);
+    setLastSelectedAssignTeamId(null);
   }
 
   return (
@@ -913,17 +949,30 @@ export default function AdminTeamsPage() {
                   Assign Selected Teams
                 </button>
               </div>
-              <div className="grid gap-2 p-5">
-                {unassignedTeams.length ? (
-                  unassignedTeams.map((team) => (
+              <div className="border-b border-slate-100 p-5">
+                <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                  <label className="grid min-w-0 gap-1 text-sm font-black text-[#061426]">ค้นหาชื่อทีม<input className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20" onChange={(event) => setAvailableTeamSearch(event.target.value)} placeholder="ค้นหาทีม" type="search" value={availableTeamSearch} /></label>
+                  <label className="grid min-w-0 gap-1 text-sm font-black text-[#061426]">ตัวกรอง<select className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20" onChange={(event) => setAvailableTeamFilter(event.target.value as AvailableTeamFilter)} value={availableTeamFilter}><option value="all">ทุกทีม</option><option value="ksw">ทีม KSW</option><option value="general">ทีมทั่วไป</option><option value="unselected">ทีมที่ยังไม่ถูกเลือก</option></select></label>
+                </div>
+                <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
+                  <span className="mr-auto text-sm font-black text-[#061426]">เลือกแล้ว {selectedAssignTeamIds.length} ทีม</span>
+                  <button className="min-h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-black text-[#061426] disabled:opacity-50" disabled={!visibleAvailableTeams.length} onClick={() => selectAvailableTeams(visibleAvailableTeams.map((team) => team.id))} type="button">เลือกทั้งหมด</button>
+                  <button className="min-h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-black text-[#061426] disabled:opacity-50" disabled={!searchMatchedAvailableTeams.length} onClick={() => selectAvailableTeams(searchMatchedAvailableTeams.map((team) => team.id))} type="button">เลือกทั้งหมดจากผลการค้นหา</button>
+                  <button className="min-h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-black text-[#061426] disabled:opacity-50" disabled={!selectedAssignTeamIds.length} onClick={clearSelectedTeams} type="button">ยกเลิกทั้งหมด</button>
+                </div>
+                <p className="mt-2 text-xs font-semibold text-slate-500">เลือกทั้งหมดจะเลือกเฉพาะ {visibleAvailableTeams.length} ทีมจากผลลัพธ์ปัจจุบัน · กด Shift พร้อมเลือกทีมปลายทางเพื่อเลือกทั้งช่วง</p>
+              </div>
+              <div className="grid min-w-0 gap-2 p-5">
+                {visibleAvailableTeams.length ? (
+                  visibleAvailableTeams.map((team) => (
                     <label
-                      className="flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm font-bold"
+                      className="flex min-w-0 items-center gap-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm font-bold"
                       key={team.id}
                     >
                       <input
                         checked={selectedAssignTeamIds.includes(team.id)}
                         className="size-4 accent-[#d8ad45]"
-                        onChange={() => toggleAssignTeam(team.id)}
+                        onChange={(event) => toggleAssignTeam(team.id, (event.nativeEvent as MouseEvent).shiftKey)}
                         type="checkbox"
                       />
                       <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#d8ad45]/50 bg-[#061426] text-[10px] font-black text-[#f4d58a]">
@@ -943,7 +992,7 @@ export default function AdminTeamsPage() {
                   ))
                 ) : (
                   <p className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
-                    No available teams for this competition.
+                    {unassignedTeams.length ? "ไม่พบทีมตามคำค้นหาหรือตัวกรองนี้" : "No available teams for this competition."}
                   </p>
                 )}
               </div>
