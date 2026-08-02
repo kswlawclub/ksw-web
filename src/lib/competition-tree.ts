@@ -18,6 +18,7 @@ export type CompetitionTreeNode = {
   id: string;
   linkedMatchId?: string;
   matchOrder: number;
+  partitionKey?: string;
   roundIndex: number;
   roundLabel: string;
 };
@@ -29,6 +30,7 @@ export type CompetitionTreeBuildInput = {
   entryMode: CompetitionTreeEntryMode;
   entrants: CompetitionTreeSource[];
   idFactory: () => string;
+  partitionKey?: string;
 };
 
 export type CompetitionTreeSummary = {
@@ -100,6 +102,7 @@ function createNode(
     homeSource,
     id: input.idFactory(),
     matchOrder,
+    partitionKey: input.partitionKey ?? "main",
     roundIndex,
     roundLabel: label,
   };
@@ -262,7 +265,7 @@ export function validateCompetitionTree(nodes: CompetitionTreeNode[], entrantCou
   for (const node of nodes) {
     if (!node.id || nodeById.has(node.id)) errors.push(`Duplicate node id ${node.id || "(empty)"}.`);
     nodeById.set(node.id, node);
-    const positionKey = `${node.competitionId}:${node.roundIndex}:${node.matchOrder}`;
+    const positionKey = `${node.competitionId}:${node.partitionKey ?? "main"}:${node.roundIndex}:${node.matchOrder}`;
     if (positionKeys.has(positionKey)) errors.push(`Duplicate node position ${positionKey}.`);
     positionKeys.add(positionKey);
     if (!sourceIsValid(node.homeSource) || !sourceIsValid(node.awaySource)) {
@@ -280,6 +283,7 @@ export function validateCompetitionTree(nodes: CompetitionTreeNode[], entrantCou
         continue;
       }
       if (child.competitionId !== node.competitionId) errors.push(`Node ${node.id} references a cross-competition source.`);
+      if ((child.partitionKey ?? "main") !== (node.partitionKey ?? "main")) errors.push(`Node ${node.id} references a cross-partition source.`);
       if (child.id === node.id || child.roundIndex >= node.roundIndex) {
         errors.push(`Node ${node.id} has a loop or non-descending source.`);
       }

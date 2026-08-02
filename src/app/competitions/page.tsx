@@ -94,6 +94,15 @@ async function withCompletedCupChampions(competitions: Row[]) {
   const admin = getSupabaseAdmin();
   if (!admin || completedCupIds.length === 0) return competitions;
 
+  const partitionsResult = await admin
+    .from("competition_knockout_partitions")
+    .select("competition_id, partition_key, champion_team_id")
+    .in("competition_id", completedCupIds)
+    .in("partition_key", ["division_1", "division_2"]);
+  if (partitionsResult.error) {
+    console.error("completed council cup champion lookup failed", partitionsResult.error);
+  }
+
   const nodesResult = await admin
     .from("competition_bracket_nodes")
     .select("competition_id, round_index, linked_match_id")
@@ -111,15 +120,17 @@ async function withCompletedCupChampions(competitions: Row[]) {
     if (!current || Number(node.round_index ?? -1) > Number(current.round_index ?? -1)) finalNodeByCompetition.set(competitionId, node);
   });
   const finalMatchIds = Array.from(finalNodeByCompetition.values()).map((node) => text(node, ["linked_match_id"], "")).filter(Boolean);
-  if (!finalMatchIds.length) return competitions;
-
-  const matchesResult = await admin.from("matches").select("id, winner_team_id").in("id", finalMatchIds);
+  const matchesResult = finalMatchIds.length
+    ? await admin.from("matches").select("id, winner_team_id").in("id", finalMatchIds)
+    : { data: [] as Record<string, unknown>[], error: null };
   if (matchesResult.error) {
     console.error("completed cup champion match lookup failed", matchesResult.error);
-    return competitions;
   }
   const winnerByMatchId = new Map(((matchesResult.data ?? []) as Record<string, unknown>[]).map((match) => [text(match, ["id"], ""), text(match, ["winner_team_id"], "")]));
-  const winnerIds = Array.from(winnerByMatchId.values()).filter(Boolean);
+  const partitionChampionIds = ((partitionsResult.data ?? []) as Record<string, unknown>[])
+    .map((partition) => text(partition, ["champion_team_id"], ""))
+    .filter(Boolean);
+  const winnerIds = Array.from(new Set([...winnerByMatchId.values(), ...partitionChampionIds].filter(Boolean)));
   if (!winnerIds.length) return competitions;
 
   const teamsResult = await admin.from("teams").select("id, name").in("id", winnerIds);
@@ -128,10 +139,21 @@ async function withCompletedCupChampions(competitions: Row[]) {
     return competitions;
   }
   const teamNames = new Map(((teamsResult.data ?? []) as Record<string, unknown>[]).map((team) => [text(team, ["id"], ""), text(team, ["name"], "")]));
+  const divisionChampions = new Map<string, { division_1?: string; division_2?: string }>();
+  ((partitionsResult.data ?? []) as Record<string, unknown>[]).forEach((partition) => {
+    const competitionId = text(partition, ["competition_id"], "");
+    const partitionKey = text(partition, ["partition_key"], "");
+    const championName = teamNames.get(text(partition, ["champion_team_id"], ""));
+    if (!competitionId || !championName || (partitionKey !== "division_1" && partitionKey !== "division_2")) return;
+    divisionChampions.set(competitionId, { ...divisionChampions.get(competitionId), [partitionKey]: championName });
+  });
 
   return competitions.map((competition) => {
-    const finalNode = finalNodeByCompetition.get(text(competition, ["id"], ""));
+    const competitionId = text(competition, ["id"], "");
+    const finalNode = finalNodeByCompetition.get(competitionId);
     const winnerId = finalNode ? winnerByMatchId.get(text(finalNode, ["linked_match_id"], "")) : "";
+    const champions = divisionChampions.get(competitionId);
+    if (champions?.division_1 && champions.division_2) return { ...competition, champion_division_1: champions.division_1, champion_division_2: champions.division_2 };
     return winnerId && teamNames.get(winnerId) ? { ...competition, champion_name: teamNames.get(winnerId) } : competition;
   });
 }
@@ -153,6 +175,8 @@ function CompetitionCard({ competition }: { competition: Row }) {
   ].filter(Boolean);
   const completed = text(competition, ["season_status"], "active") === "completed";
   const champion = text(competition, ["champion_name"], "");
+  const division1Champion = text(competition, ["champion_division_1"], "");
+  const division2Champion = text(competition, ["champion_division_2"], "");
 
   const cardContent = (
     <>
@@ -184,6 +208,7 @@ function CompetitionCard({ competition }: { competition: Row }) {
             <p className="mt-2 text-sm font-bold text-slate-500">{metadata.join(" • ")}</p>
           ) : null}
           <p className="mt-3 text-sm leading-6 text-slate-600">{description}</p>
+          {completed && division1Champion && division2Champion ? <div className="mt-3 text-sm font-black text-[#8a6418]"><p>2 Champions</p><p>Division 1: {division1Champion}</p><p>Division 2: {division2Champion}</p></div> : null}
           {completed && champion ? <p className="mt-3 text-sm font-black text-[#8a6418]">แชมป์: {champion}</p> : null}
         </div>
         {slug ? (

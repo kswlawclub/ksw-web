@@ -60,7 +60,6 @@ async function loadCouncilData(competitionId: string) {
     return { error: "ไม่สามารถโหลดข้อมูลการแบ่งดิวิชั่นได้" as const, supabase: null };
   }
   if (!competitionResult.data || !isCupCompetition(normalizeCompetitionType(competitionResult.data.competition_type))) return { error: "ไม่พบการแข่งขันแบบ Cup" as const, supabase: null };
-  if (competitionResult.data.season_status === "completed") return { error: "การแข่งขันปิดแล้ว ต้องเปิดการแข่งขันเพื่อแก้ไขก่อน" as const, supabase: null };
   if (!configResult.data || configResult.data.qualification_status !== "approved" || !Array.isArray(configResult.data.qualification_snapshot)) return { error: "ยืนยันทีมผ่านเข้ารอบก่อนเลือกคัพสภา" as const, supabase: null };
   return { competition: competitionResult.data, config: configResult.data, groups: groupsResult.data ?? [], matches: matchesResult.data ?? [], participants: participantsResult.data ?? [], partitions: partitionsResult.data ?? [], supabase };
 }
@@ -155,6 +154,7 @@ export async function selectKnockoutTemplateV2(competitionId: string, templateKe
   if (!template) return { error: "ไม่พบรูปแบบการแข่งขันที่เลือก", ok: false };
   const data = await loadCouncilData(competitionId);
   if (!data.supabase) return { error: data.error, ok: false };
+  if (data.competition.season_status === "completed") return { error: "การแข่งขันปิดแล้ว ต้องเปิดการแข่งขันเพื่อแก้ไขก่อน", ok: false };
   if (templateKey === councilTemplateKey) {
     const state = buildState(data);
     if (state.division1.error || state.division2.error) return { error: state.division1.error ?? state.division2.error, ok: false };
@@ -186,6 +186,7 @@ export async function getCouncilDivisionStateV2(competitionId: string) {
 async function persistCouncilDivisions(competitionId: string, extraTeamIds: string[], approvalStatus: "approved" | "draft") {
   const data = await loadCouncilData(competitionId);
   if (!data.supabase) return { error: data.error, ok: false };
+  if (data.competition.season_status === "completed") return { error: "การแข่งขันปิดแล้ว ต้องเปิดการแข่งขันเพื่อแก้ไขก่อน", ok: false };
   if (data.config.template_key !== councilTemplateKey) return { error: "กรุณาเลือกคัพสภา – สองดิวิชั่นก่อน", ok: false };
   if (data.partitions.some((partition) => partition.approval_status === "approved")) return { error: "เปิดการแบ่งดิวิชั่นเพื่อแก้ไขก่อนเปลี่ยนข้อมูลที่อนุมัติแล้ว", ok: false };
   const state = buildState(data, extraTeamIds);
@@ -214,6 +215,7 @@ export async function approveCouncilDivisionsV2(competitionId: string, extraTeam
 export async function reopenCouncilDivisionsV2(competitionId: string) {
   const data = await loadCouncilData(competitionId);
   if (!data.supabase) return { error: data.error, ok: false };
+  if (data.competition.season_status === "completed") return { error: "การแข่งขันปิดแล้ว ต้องเปิดการแข่งขันเพื่อแก้ไขก่อน", ok: false };
   if (data.config.template_key !== councilTemplateKey) return { error: "ยังไม่ได้เลือกคัพสภา – สองดิวิชั่น", ok: false };
   const result = await data.supabase.rpc("reopen_council_division_partitions_v1", { p_competition_id: competitionId });
   if (result.error) return { error: "เปิดการแบ่งดิวิชั่นเพื่อแก้ไขไม่ได้ เพราะมีสายหรือแมตช์เริ่มแล้ว", ok: false };
