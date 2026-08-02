@@ -454,8 +454,13 @@ export async function confirmStandardLeagueMatchweek(competitionId: string, matc
   if (loaded.error || !config || config.fixtureStatus !== "confirmed") return { error: loaded.error || "ยังไม่ได้ยืนยันโครงสร้างการแข่งขัน", ok: false };
   const confirmed = await verified.supabase.rpc("confirm_standard_league_matchweek_v1", { p_competition_id: competitionId, p_confirmed_by_label: "Administrator session", p_fixture_version: config.fixtureVersion, p_matchweek: matchweek });
   if (confirmed.error) {
-    console.error("standard league matchweek confirmation failed", confirmed.error);
-    return { error: "Matchweek นี้ยังมีคู่ที่ขาดวัน เวลา สนาม หรือข้อมูลการแข่งขันไม่พร้อม", ok: false };
+    console.error("standard league matchweek confirmation failed", {
+      code: confirmed.error.code,
+      details: confirmed.error.details,
+      hint: confirmed.error.hint,
+      message: confirmed.error.message,
+    });
+    return { error: matchweekConfirmationErrorMessage(confirmed.error.message), ok: false };
   }
   const state = await loadMatchweekState(verified.supabase, competitionId, config.fixtureVersion);
   if (state.error) return { error: state.error, ok: false };
@@ -471,6 +476,16 @@ function rescheduleRpcErrorMessage(message: string) {
   if (message.includes("invalid_reschedule_request")) return "ข้อมูลการเลื่อนการแข่งขันไม่ถูกต้อง";
   if (message.includes("invalid_standard_league")) return "รายการนี้ไม่ใช่ลีกมาตรฐานที่รองรับการเลื่อนการแข่งขัน";
   return "ไม่สามารถเลื่อนการแข่งขันได้";
+}
+
+function matchweekConfirmationErrorMessage(message: string) {
+  if (message.includes("matchweek_empty")) return "Matchweek นี้ไม่มีคู่แข่งขันในโปรแกรมปัจจุบัน";
+  if (message.includes("matchweek_duplicate_pairing")) return "มีคู่แข่งขันซ้ำใน Matchweek นี้";
+  if (message.includes("matchweek_pairing_invalid")) return "มีคู่แข่งขันใน Matchweek นี้ที่ยังไม่ถูกต้อง";
+  if (message.includes("invalid_matchweek")) return "Matchweek ที่เลือกไม่ถูกต้อง";
+  if (message.includes("invalid_standard_league_fixture_version")) return "ชุดโปรแกรมลีกนี้ไม่ตรงกับโครงสร้างที่ยืนยันไว้";
+  if (message.includes("invalid_league_confirmation")) return "ไม่สามารถยืนยัน Matchweek ของรายการนี้ได้";
+  return "ไม่สามารถยืนยันคู่แข่งขัน Matchweek นี้ได้";
 }
 
 export async function rescheduleStandardLeagueMatch(input: {
