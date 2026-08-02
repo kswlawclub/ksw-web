@@ -289,6 +289,7 @@ export function AdminCompetitionTreeEngineV2({
   }, [groupNames, qualificationSnapshot, teams]);
   const defaultPairing = useMemo(() => buildKswStandardPairing(qualifiedSources), [qualifiedSources]);
   const [draftSources, setDraftSources] = useState<KswQualificationSource[]>(() => defaultPairing.sources);
+  const [selectedTemplate, setSelectedTemplate] = useState<"ksw-standard">("ksw-standard");
   const [editingPairing, setEditingPairing] = useState(false);
   const activeCardRef = useRef("");
   const summary = generatedSummary ?? initialSummary;
@@ -385,6 +386,14 @@ export function AdminCompetitionTreeEngineV2({
       setMessage(initialSummary ? "โครงสร้างการแข่งขันถูกต้องและไม่มีการเปลี่ยนแปลง" : "บันทึกโครงสร้างการแข่งขันแล้ว ยังไม่ได้สร้างโปรแกรมแข่งขัน");
       router.refresh();
     });
+  }
+
+  function chooseKswStandardTemplate() {
+    setSelectedTemplate("ksw-standard");
+    setDraftSources(defaultPairing.sources);
+    setEditingPairing(false);
+    setError("");
+    setMessage("เลือก KSW Standard แล้ว ตรวจสอบตัวอย่างคู่แข่งขันก่อนยืนยันการจัดสาย");
   }
 
   function sourceKey(source: CompetitionTreeSource) {
@@ -548,9 +557,28 @@ export function AdminCompetitionTreeEngineV2({
         ) : null}
 
         {qualificationApproved && !summary && qualifiedSources.length ? (
-          <section className="mt-5 min-w-0 rounded-md border border-[#d8ad45]/40 bg-[#fffdf7] p-4">
+          <>
+            <section className="mt-5 min-w-0 rounded-md border border-slate-200 bg-white p-4">
+              <div>
+                <h3 className="font-black text-[#061426]">เลือกรูปแบบการแข่งขันรอบน็อกเอาต์</h3>
+                <p className="mt-1 text-sm font-semibold text-slate-600">เลือกรูปแบบก่อนตรวจสอบตัวอย่างและยืนยันการจัดสาย</p>
+              </div>
+              <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2">
+                <button aria-pressed={selectedTemplate === "ksw-standard"} className={`min-w-0 rounded-md border p-4 text-left transition ${selectedTemplate === "ksw-standard" ? "border-[#d8ad45] bg-[#fffdf7] ring-1 ring-[#d8ad45]/30" : "border-slate-200 bg-white"}`} onClick={chooseKswStandardTemplate} type="button">
+                  <div className="flex flex-wrap items-start justify-between gap-2"><span className="text-base font-black text-[#061426]">KSW Standard</span><span className="rounded-full border border-[#d8ad45]/40 bg-white px-2 py-1 text-[11px] font-black text-[#8a6418]">ค่าเริ่มต้น</span></div>
+                  <p className="mt-2 text-sm font-semibold text-slate-600">แชมป์กลุ่มเป็นทีมวาง จับคู่ข้ามกลุ่ม และให้ Wild Card พบแชมป์กลุ่มก่อน</p>
+                  <div className="mt-3 flex items-center gap-2 text-xs font-black text-[#8a6418]"><span className="grid size-8 grid-cols-2 gap-0.5 rounded border border-[#d8ad45]/35 bg-white p-1" aria-hidden="true"><i className="bg-[#d8ad45]/70" /><i className="bg-slate-300" /><i className="bg-slate-300" /><i className="bg-[#d8ad45]/70" /></span><span>จัดสายตามอันดับและกลุ่ม</span></div>
+                </button>
+                <article className="min-w-0 rounded-md border border-dashed border-slate-300 bg-slate-50 p-4 text-slate-500">
+                  <div className="flex flex-wrap items-start justify-between gap-2"><h4 className="text-base font-black text-slate-700">Council Cup</h4><span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] font-black text-slate-500">เร็ว ๆ นี้</span></div>
+                  <p className="mt-2 text-sm font-semibold">Two Division template จะเปิดให้เลือกเมื่อพัฒนาพร้อมใช้งาน</p>
+                  <div className="mt-3 flex items-center gap-2 text-xs font-black"><span className="grid size-8 grid-cols-2 gap-0.5 rounded border border-slate-200 bg-white p-1" aria-hidden="true"><i className="bg-slate-300" /><i className="bg-slate-200" /><i className="bg-slate-200" /><i className="bg-slate-300" /></span><span>ยังไม่พร้อมใช้งาน</span></div>
+                </article>
+              </div>
+            </section>
+            <section className="mt-5 min-w-0 rounded-md border border-[#d8ad45]/40 bg-[#fffdf7] p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div><h3 className="font-black text-[#061426]">รูปแบบการจัดสาย: KSW Standard</h3><p className="mt-1 text-sm font-semibold text-slate-600">แชมป์กลุ่มเป็นทีมวาง และไม่พบทีมจากกลุ่มเดียวกันในรอบแรก</p></div>
+              <div><h3 className="font-black text-[#061426]">ตัวอย่างการจัดสาย: KSW Standard</h3><p className="mt-1 text-sm font-semibold text-slate-600">แชมป์กลุ่มเป็นทีมวาง และไม่พบทีมจากกลุ่มเดียวกันในรอบแรก</p></div>
               <div className="flex flex-wrap gap-2"><button className="min-h-10 rounded-md border border-[#d8ad45] bg-white px-3 py-2 text-sm font-black text-[#8a6418]" onClick={() => setDraftSources(defaultPairing.sources)} type="button">ใช้การจัดสายอัตโนมัติ</button><button className="min-h-10 rounded-md border border-[#d8ad45] bg-white px-3 py-2 text-sm font-black text-[#8a6418]" onClick={() => setEditingPairing((current) => !current)} type="button">{editingPairing ? "ดูตัวอย่างคู่" : "แก้ไขคู่ก่อนยืนยัน"}</button></div>
             </div>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -561,7 +589,8 @@ export function AdminCompetitionTreeEngineV2({
                 </div>
               ))}
             </div>
-          </section>
+            </section>
+          </>
         ) : null}
 
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
