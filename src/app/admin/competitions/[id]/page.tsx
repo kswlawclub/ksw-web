@@ -39,7 +39,7 @@ const teamColumns = "id, name, short_name, logo_url, is_ksw";
 const groupColumns = "id, competition_id, name, label, sort_order, qualifiers_count, created_at, updated_at";
 const competitionTeamGroupColumns = "id, competition_id, team_id, group_id, is_active, display_order";
 const engineV2ConfigColumns =
-  "competition_id, entrant_count, bracket_capacity, entry_mode, group_stage_enabled, status, extra_rank_enabled, extra_rank, extra_qualifier_count, qualification_status, qualification_approved_at, qualification_approved_by_label, qualification_snapshot";
+  "competition_id, entrant_count, bracket_capacity, entry_mode, group_stage_enabled, status, template_key, extra_rank_enabled, extra_rank, extra_qualifier_count, qualification_status, qualification_approved_at, qualification_approved_by_label, qualification_snapshot";
 const bracketNodeColumns =
   "id, competition_id, round_index, round_label, match_order, bracket_position, home_source_type, away_source_type, home_source_group_id, home_source_rank, home_source_team_id, home_source_node_id, away_source_group_id, away_source_rank, away_source_team_id, away_source_node_id, linked_match_id";
 
@@ -238,6 +238,7 @@ function asEngineV2Config(row: Row | undefined): CompetitionEngineV2Config | nul
     }),
     qualificationSnapshotSummary,
     status: text(row, ["status"], "draft") as CompetitionEngineV2Config["status"],
+    templateKey: row.template_key === "council_two_division" ? "council_two_division" : "ksw_standard",
   };
 }
 

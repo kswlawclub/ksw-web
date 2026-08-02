@@ -30,6 +30,7 @@ export const kswStandardTemplate: KnockoutTemplateDefinition = {
   qualificationMode: "approved_snapshot",
   statusLabel: "พร้อมใช้งาน",
   sourceLabel: kswSourceLabel,
+  supportedEntrantCounts: [2, 4, 8, 16, 32, 64],
   supportsManualPairing: true,
   supportsMultipleBrackets: false,
   validateSources: () => ({ errors: [], valid: true }),

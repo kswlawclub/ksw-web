@@ -29,6 +29,7 @@ import { requireAdminSession } from "@/lib/admin-server-auth";
 import { isCupCompetition, normalizeCompetitionType } from "@/lib/competition-format";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { buildKnockoutTemplatePreview } from "@/lib/knockout-templates/registry";
+import type { KnockoutTemplateKey } from "@/lib/knockout-templates/types";
 import type { ApprovedQualificationSummary } from "@/app/admin/competitions/[id]/qualification-actions";
 
 export type CompetitionEngineV2Config = {
@@ -46,6 +47,7 @@ export type CompetitionEngineV2Config = {
   qualificationSnapshot: CompetitionTreeSource[];
   qualificationSnapshotSummary: ApprovedQualificationSummary | null;
   status: CompetitionEngineV2Status;
+  templateKey: KnockoutTemplateKey;
 };
 
 export type CompetitionEngineV2WizardPayload = {
@@ -314,7 +316,7 @@ async function loadCompetitionEngineV2Workflow(
   const [configResult, nodesResult] = await Promise.all([
     supabase
       .from("competition_knockout_configs")
-      .select("entrant_count, bracket_capacity, entry_mode, group_stage_enabled, status, qualification_status, qualification_snapshot")
+      .select("entrant_count, bracket_capacity, entry_mode, group_stage_enabled, status, template_key, qualification_status, qualification_snapshot")
       .eq("competition_id", competitionId)
       .limit(1)
       .maybeSingle(),
@@ -385,7 +387,7 @@ export async function generateCompetitionTreeV2(
   const [configResult, groupsResult, participantsResult, existingNodesResult] = await Promise.all([
     verified.supabase
       .from("competition_knockout_configs")
-      .select("entrant_count, bracket_capacity, entry_mode, group_stage_enabled, status, qualification_status, qualification_snapshot")
+      .select("entrant_count, bracket_capacity, entry_mode, group_stage_enabled, status, template_key, qualification_status, qualification_snapshot")
       .eq("competition_id", competitionId)
       .limit(1)
       .maybeSingle(),
@@ -423,6 +425,9 @@ export async function generateCompetitionTreeV2(
   const config = configResult.data;
   if (!config || typeof config.entrant_count !== "number" || typeof config.bracket_capacity !== "number") {
     return { error: "Confirm qualification settings before creating the competition structure.", ok: false };
+  }
+  if (config.template_key === "council_two_division") {
+    return { error: "คัพสภา – สองดิวิชั่นยังอยู่ขั้นตรวจสอบและแบ่งดิวิชั่น จึงยังสร้างสายแข่งขันไม่ได้", ok: false };
   }
   if (!isCompetitionEngineV2Status(config.status) || !canGenerateTree(config.status)) {
     return { error: "Reopen the competition structure for editing before creating it again.", ok: false };
@@ -1232,6 +1237,7 @@ export async function saveCompetitionEngineV2Config(
           qualificationSnapshot: [],
           qualificationSnapshotSummary: null,
           status: result.data.status,
+          templateKey: "ksw_standard",
         }
       : undefined,
     ok: true,

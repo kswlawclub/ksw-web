@@ -353,12 +353,12 @@ function CupCompetitionProgress({ steps }: { steps: CupCompetitionWorkflowStep[]
   );
 }
 
-function CupWorkspaceNavigation({ steps }: { steps: CupCompetitionWorkflowStep[] }) {
+function CupWorkspaceNavigation({ steps, templateKey }: { steps: CupCompetitionWorkflowStep[]; templateKey: CompetitionEngineV2Config["templateKey"] | null }) {
   const shortcuts = [
     { id: "teams", label: "ทีม", target: "cup-teams" },
     { id: "group_matches", label: "รอบแบ่งกลุ่ม", target: "cup-group-stage" },
     { id: "qualification", label: "ทีมผ่านเข้ารอบ", target: "cup-qualification" },
-    { id: "knockout_matches", label: "รอบน็อกเอาต์", target: "cup-knockout" },
+    templateKey === "council_two_division" ? { id: "knockout_setup", label: "แบ่งดิวิชั่น", target: "cup-division-approval" } : { id: "knockout_matches", label: "รอบน็อกเอาต์", target: "cup-knockout" },
     { id: "champion", label: "แชมป์", target: "cup-champion" },
   ] as const;
   const statusLabels = { complete: "เสร็จแล้ว", current: "กำลังดำเนินการ", locked: "ล็อก", upcoming: "รอดำเนินการ" } as const;
@@ -455,7 +455,7 @@ export function AdminCupCompetitionWorkspace({
   return (
     <>
       <CupCompetitionProgress steps={workflowSteps} />
-      <CupWorkspaceNavigation steps={workflowSteps} />
+      <CupWorkspaceNavigation steps={workflowSteps} templateKey={engineConfig?.templateKey ?? null} />
       {competitionStatus === "completed" ? <section className="mx-auto w-full max-w-7xl px-4 pb-7 sm:px-6 lg:px-10"><p className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-900">การแข่งขันเสร็จสิ้นแล้ว หากต้องแก้ไขผล ต้องเปิดการแข่งขันเพื่อแก้ไขก่อน เพราะอาจกระทบแชมป์</p></section> : null}
       <section className="mx-auto w-full max-w-7xl scroll-mt-28 px-4 pb-7 sm:px-6 lg:px-10" id="cup-teams">
         <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
@@ -472,7 +472,7 @@ export function AdminCupCompetitionWorkspace({
       </section>
       <div className="scroll-mt-28" id="cup-group-stage"><AdminCompetitionGroupsManager competitionId={competitionId} groups={groups} matches={matches} onMatchesChange={(nextMatches) => setMatches(nextMatches as AdminCompetitionMatch[])} renderGroupProgram={(group) => <CupGroupProgram group={group} matches={matches} onSave={saveGroupMatch} teamsById={teamsById} />} schemaReady={groupDataReady} teams={groupTeams} /></div>
       <CupQualificationPanel competitionId={competitionId} config={engineConfig} groups={groups} matches={matches} teams={groupTeams} />
-      <AdminCompetitionTreeEngineV2 bracketCapacity={engineConfig?.bracketCapacity ?? null} competitionId={competitionId} competitionStatus={competitionStatus} configReady={Boolean(engineConfig)} entryMode={engineConfig?.entryMode ?? "bye"} groupNames={groups.map(({ id, name }) => ({ id, name }))} initialMatches={matches.filter((match) => match.competition_stage === "knockout").map((match) => ({ ...match, manual_winner_team_id: match.manual_winner_team_id ?? null, penalty_away_score: match.penalty_away_score ?? null, penalty_home_score: match.penalty_home_score ?? null, winner_team_id: match.winner_team_id ?? null })) as CompetitionKnockoutMatchV2[]} initialSummary={engineSummary} key={engineConfig?.qualificationApprovedAt ?? "qualification-pending"} nodes={nodes} qualificationApproved={engineConfig?.qualificationStatus === "approved"} qualificationSnapshot={engineConfig?.qualificationSnapshot ?? []} teams={matchTeams.map(({ id, logo_url, name, short_name }) => ({ id, logo_url, name, short_name }))} workflow={engineWorkflow} />
+      <AdminCompetitionTreeEngineV2 bracketCapacity={engineConfig?.bracketCapacity ?? null} competitionId={competitionId} competitionStatus={competitionStatus} configReady={Boolean(engineConfig)} entryMode={engineConfig?.entryMode ?? "bye"} groupNames={groups.map(({ id, name }) => ({ id, name }))} initialMatches={matches.filter((match) => match.competition_stage === "knockout").map((match) => ({ ...match, manual_winner_team_id: match.manual_winner_team_id ?? null, penalty_away_score: match.penalty_away_score ?? null, penalty_home_score: match.penalty_home_score ?? null, winner_team_id: match.winner_team_id ?? null })) as CompetitionKnockoutMatchV2[]} initialSummary={engineSummary} key={engineConfig?.qualificationApprovedAt ?? "qualification-pending"} nodes={nodes} qualificationApproved={engineConfig?.qualificationStatus === "approved"} qualificationSnapshot={engineConfig?.qualificationSnapshot ?? []} teams={matchTeams.map(({ id, logo_url, name, short_name }) => ({ id, logo_url, name, short_name }))} templateKey={engineConfig?.templateKey ?? "ksw_standard"} workflow={engineWorkflow} />
     </>
   );
 }

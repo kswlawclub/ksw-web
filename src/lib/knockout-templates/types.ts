@@ -56,6 +56,7 @@ export type KnockoutTemplateDefinition = {
   qualificationMode: "approved_snapshot";
   statusLabel: string;
   sourceLabel: (source: CompetitionTreeSource) => string;
+  supportedEntrantCounts: number[];
   supportsManualPairing: boolean;
   supportsMultipleBrackets: boolean;
   validateSources: (sources: CompetitionTreeSource[]) => { errors: string[]; valid: boolean };
