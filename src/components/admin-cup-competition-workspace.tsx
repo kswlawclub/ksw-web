@@ -8,6 +8,7 @@ import { approveCupQualification, reopenCupQualification, saveCupQualificationSe
 import { AdminCompetitionGroupsManager, type AdminCompetitionGroup, type AdminCompetitionGroupTeam } from "@/components/admin-competition-groups-manager";
 import { AdminCompetitionTreeEngineV2 } from "@/components/admin-competition-tree-engine-v2";
 import { TeamLogo } from "@/components/team-logo";
+import { useActionFeedback } from "@/components/admin-action-feedback";
 import { calculateCupQualification } from "@/lib/cup-qualification";
 import { calculateCupCompetitionWorkflow, type CouncilWorkflowPartition, type CupCompetitionWorkflowStep } from "@/lib/cup-competition-workflow";
 import { calculateCompetitionStructure } from "@/lib/competition-structure";
@@ -161,6 +162,7 @@ function CupGroupProgram({
 
 function CupQualificationPanel({ competitionId, config, groups, matches, teams }: { competitionId: string; config: CompetitionEngineV2Config | null; groups: AdminCompetitionGroup[]; matches: AdminCompetitionMatch[]; teams: AdminCompetitionGroupTeam[] }) {
   const router = useRouter();
+  const { runAction } = useActionFeedback();
   const [enabled, setEnabled] = useState(config?.extraRankEnabled ?? false);
   const [rank, setRank] = useState(String(config?.extraRank ?? 3));
   const [count, setCount] = useState(String(config?.extraQualifierCount ?? 0));
@@ -198,8 +200,8 @@ function CupQualificationPanel({ competitionId, config, groups, matches, teams }
 
   function save() {
     startTransition(async () => {
-      const response = await saveCupQualificationSettings(competitionId, enabled, enabled ? Number(rank) : null, enabled ? Number(count) : 0);
-      if (!response.ok) { setError(response.error ?? "บันทึกไม่สำเร็จ"); return; }
+      const response = await runAction({ errorMessage: (value) => !value.ok ? value.error ?? "บันทึกกติกาไม่สำเร็จ" : null, id: `cup-qualification-settings:${competitionId}`, loadingMessage: "กำลังบันทึกกติกา...", successMessage: "บันทึกกติกาทีมผ่านเข้ารอบแล้ว" }, () => saveCupQualificationSettings(competitionId, enabled, enabled ? Number(rank) : null, enabled ? Number(count) : 0));
+      if (!response?.ok) { setError(response?.error ?? "บันทึกไม่สำเร็จ"); return; }
       setError("");
       setMessage("บันทึกกติกาแล้ว");
       setWorkflowState("pending");
@@ -209,8 +211,8 @@ function CupQualificationPanel({ competitionId, config, groups, matches, teams }
 
   function approve() {
     startTransition(async () => {
-      const response = await approveCupQualification(competitionId);
-      if (!response.ok) { setError(response.error ?? "ยืนยันไม่สำเร็จ"); return; }
+      const response = await runAction({ errorMessage: (value) => !value.ok ? value.error ?? "ยืนยันทีมผ่านเข้ารอบไม่สำเร็จ" : null, id: `cup-qualification-approve:${competitionId}`, loadingMessage: "กำลังยืนยันทีมผ่านเข้ารอบ...", successMessage: "ยืนยันทีมผ่านเข้ารอบแล้ว" }, () => approveCupQualification(competitionId));
+      if (!response?.ok) { setError(response?.error ?? "ยืนยันไม่สำเร็จ"); return; }
       setError("");
       setMessage("ยืนยันทีมผ่านเข้ารอบแล้ว");
       setWorkflowState("approved");
@@ -222,8 +224,8 @@ function CupQualificationPanel({ competitionId, config, groups, matches, teams }
 
   function reopen() {
     startTransition(async () => {
-      const response = await reopenCupQualification(competitionId);
-      if (!response.ok) { setError(response.error ?? "ยกเลิกการยืนยันไม่สำเร็จ"); return; }
+      const response = await runAction({ errorMessage: (value) => !value.ok ? value.error ?? "เปิดแก้ไขทีมผ่านเข้ารอบไม่สำเร็จ" : null, id: `cup-qualification-reopen:${competitionId}`, loadingMessage: "กำลังเปิดให้แก้ไข...", successMessage: "เปิดให้แก้ไขทีมผ่านเข้ารอบแล้ว" }, () => reopenCupQualification(competitionId));
+      if (!response?.ok) { setError(response?.error ?? "ยกเลิกการยืนยันไม่สำเร็จ"); return; }
       setError("");
       setMessage("เปิดให้แก้ไขรายชื่อทีมผ่านเข้ารอบแล้ว");
       setWorkflowState("editing");
