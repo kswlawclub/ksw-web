@@ -6,6 +6,7 @@ import { isLeagueCompetition, normalizeCompetitionType } from "@/lib/competition
 import { loadCompetitionParticipants } from "@/lib/competition-participants";
 import { updateMatch } from "@/app/admin/matches/actions";
 import { resolveStandardLeagueChampion } from "@/lib/league-template/champion-resolver";
+import { applyLeagueFixtureOverrides, type LeagueFixtureOverride } from "@/lib/league-template/fixture-overrides";
 import { generateRoundRobinFixtures } from "@/lib/league-template/round-robin";
 import { calculateStandardLeagueStandings, type StandardLeagueMatch } from "@/lib/league-template/standings";
 import { getLeagueStandingsPolicy } from "@/lib/league-template/standings-policies";
@@ -14,7 +15,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { sortTeamsByName } from "@/lib/team-sort";
 
 type Row = Record<string, unknown>;
-type LeagueSettingsInput = Pick<StandardLeagueConfig, "drawPoints" | "legs" | "lossPoints" | "standingsPolicyKey" | "winPoints">;
+type LeagueSettingsInput = Pick<StandardLeagueConfig, "drawPoints" | "lossPoints" | "standingsPolicyKey" | "winPoints">;
 
 export type LeagueConfigActionResult = {
   config?: StandardLeagueConfig | null;
@@ -49,7 +50,6 @@ function integer(row: Row | null | undefined, key: string, fallback: number) {
 
 function configFromRow(row: Row | null | undefined): StandardLeagueConfig | null {
   if (!row || text(row, "template_key") !== STANDARD_LEAGUE_TEMPLATE_KEY) return null;
-  const legs = integer(row, "legs", 1);
   const fixtureStatus = text(row, "fixture_status") === "confirmed" ? "confirmed" : "draft";
   const policy = text(row, "standings_policy_key");
   return {
@@ -62,7 +62,7 @@ function configFromRow(row: Row | null | undefined): StandardLeagueConfig | null
     drawPoints: integer(row, "draw_points", 1),
     fixtureStatus,
     fixtureVersion: integer(row, "fixture_version", 0),
-    legs: legs === 2 ? 2 : 1,
+    legs: 1,
     lossPoints: integer(row, "loss_points", 0),
     standingsPolicyKey: policy === "legacy_season6" ? "legacy_season6" : "standard_league_v1",
     templateKey: STANDARD_LEAGUE_TEMPLATE_KEY,
@@ -71,7 +71,6 @@ function configFromRow(row: Row | null | undefined): StandardLeagueConfig | null
 }
 
 function validateSettings(input: LeagueSettingsInput) {
-  if (input.legs !== 1 && input.legs !== 2) return "จำนวนเลกต้องเป็น 1 หรือ 2";
   if (![input.winPoints, input.drawPoints, input.lossPoints].every((value) => Number.isInteger(value) && value >= 0 && value <= 9)) {
     return "คะแนนชนะ เสมอ และแพ้ ต้องเป็นจำนวนเต็มระหว่าง 0 ถึง 9";
   }
@@ -117,14 +116,14 @@ async function loadConfigRow(supabase: NonNullable<ReturnType<typeof getSupabase
   return { error: "", row: result.data as Row | null };
 }
 
-async function buildFixturePlan(supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>, competitionId: string, legs: 1 | 2) {
+async function buildFixturePlan(supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>, competitionId: string) {
   const participants = await loadCompetitionParticipants(supabase, competitionId, { includeInactiveParticipants: false });
   const teams = sortTeamsByName(participants)
     .filter((team) => team.participant_is_active !== false)
     .map((team) => ({ id: team.id, name: team.name }));
   if (teams.length < 2) return { error: "ต้องมีทีมที่เข้าร่วมอย่างน้อย 2 ทีมก่อนสร้างโปรแกรม", plan: null };
   try {
-    return { error: "", plan: generateRoundRobinFixtures(teams, legs) };
+    return { error: "", plan: generateRoundRobinFixtures(teams, 1) };
   } catch (error) {
     console.error("league fixture plan generation failed", error);
     return { error: "ไม่สามารถสร้างแผนโปรแกรมการแข่งขันได้", plan: null };
@@ -169,7 +168,7 @@ export async function saveStandardLeagueConfigDraft(competitionId: string, setti
       draw_points: settings.drawPoints,
       fixture_status: "draft",
       fixture_version: existing?.fixtureVersion ?? 0,
-      legs: settings.legs,
+      legs: 1,
       loss_points: settings.lossPoints,
       standings_policy_key: settings.standingsPolicyKey,
       template_key: STANDARD_LEAGUE_TEMPLATE_KEY,
@@ -192,12 +191,12 @@ export async function generateStandardLeagueFixturePreview(competitionId: string
   const loaded = await loadConfigRow(verified.supabase, competitionId);
   const config = configFromRow(loaded.row);
   if (loaded.error || !config) return { error: loaded.error || "บันทึกการตั้งค่าลีกก่อนสร้างตัวอย่างโปรแกรม", ok: false };
-  const built = await buildFixturePlan(verified.supabase, competitionId, config.legs);
+  const built = await buildFixturePlan(verified.supabase, competitionId);
   if (built.error || !built.plan) return { config, error: built.error, ok: false };
   return { config, ok: true, plan: built.plan };
 }
 
-export async function confirmStandardLeagueFixtures(competitionId: string): Promise<LeagueFixtureConfirmationResult> {
+export async function confirmStandardLeagueFixtures(competitionId: string, overrides: LeagueFixtureOverride[] = []): Promise<LeagueFixtureConfirmationResult> {
   const verified = await verifyLeagueCompetition(competitionId);
   if (verified.error || !verified.supabase) return { error: verified.error, ok: false };
   const loaded = await loadConfigRow(verified.supabase, competitionId);
@@ -217,8 +216,10 @@ export async function confirmStandardLeagueFixtures(competitionId: string): Prom
     return { config, createdCount: 0, existingCount: existing.count ?? 0, fixtureVersion: config.fixtureVersion, ok: true };
   }
 
-  const built = await buildFixturePlan(verified.supabase, competitionId, config.legs);
+  const built = await buildFixturePlan(verified.supabase, competitionId);
   if (built.error || !built.plan) return { config, error: built.error, ok: false };
+  const validatedOverrides = applyLeagueFixtureOverrides(built.plan, overrides);
+  if (validatedOverrides.error) return { config, error: validatedOverrides.error, ok: false };
   const fixtureVersion = config.fixtureVersion + 1;
   const confirmed = await verified.supabase.rpc("confirm_standard_league_fixtures_v1", {
     p_competition_id: competitionId,
@@ -226,6 +227,13 @@ export async function confirmStandardLeagueFixtures(competitionId: string): Prom
     p_expected_fixture_count: built.plan.summary.fixtureCount,
     p_fixture_version: fixtureVersion,
     p_fixtures: built.plan.fixtures,
+    p_overrides: validatedOverrides.overrides.map((override) => ({
+          awayTeamId: override.awayTeamId,
+          fixtureKey: override.fixtureKey,
+          homeTeamId: override.homeTeamId,
+          matchDate: override.matchDate,
+          venue: override.venue,
+        })),
   });
   if (confirmed.error) {
     console.error("league template fixture confirmation failed", confirmed.error);
@@ -262,7 +270,7 @@ async function loadConfirmedLeagueState(supabase: NonNullable<ReturnType<typeof 
     .map((team) => ({ id: team.id, name: team.name }));
   let plan: LeagueFixturePlan;
   try {
-    plan = generateRoundRobinFixtures(teams, config.legs);
+    plan = generateRoundRobinFixtures(teams, 1);
   } catch (error) {
     console.error("standard league state fixture plan failed", error);
     return { error: "ไม่สามารถตรวจสอบชุดโปรแกรมลีกได้", resolution: null, standings: null };
@@ -346,6 +354,41 @@ export async function saveStandardLeagueMatch(competitionId: string, payload: {
   if (persisted.error) return { error: persisted.error, ok: false };
   revalidatePath(`/admin/competitions/${competitionId}`);
   return { champion: { championAt: persisted.config.championAt, championTeamId: persisted.config.championTeamId }, config: persisted.config, ok: true };
+}
+
+export async function swapStandardLeagueMatchSides(competitionId: string, matchId: string): Promise<LeagueMatchSaveResult> {
+  const verified = await verifyLeagueCompetition(competitionId);
+  if (verified.error || !verified.supabase) return { error: verified.error, ok: false };
+  const loaded = await loadConfigRow(verified.supabase, competitionId);
+  const config = configFromRow(loaded.row);
+  if (loaded.error || !config || config.fixtureStatus !== "confirmed") return { error: loaded.error || "ยังไม่ได้ยืนยันโปรแกรมลีก", ok: false };
+  const match = await verified.supabase
+    .from("matches")
+    .select("id, home_team_id, away_team_id, home_score, away_score, status, league_fixture_version")
+    .eq("id", matchId)
+    .eq("league_id", competitionId)
+    .maybeSingle();
+  if (match.error || !match.data) {
+    console.error("standard league side swap lookup failed", match.error);
+    return { error: "ไม่พบคู่แข่งขันลีกนี้", ok: false };
+  }
+  if (match.data.league_fixture_version !== config.fixtureVersion) return { error: "คู่นี้ไม่ได้อยู่ในชุดโปรแกรมลีกที่ยืนยันไว้", ok: false };
+  if (match.data.status !== "scheduled") return { error: "การแข่งขันเริ่มหรือจบแล้ว จึงไม่สามารถสลับเจ้าบ้านและทีมเยือนได้", ok: false };
+  if (match.data.home_score !== null || match.data.away_score !== null) return { error: "คู่นี้มีสกอร์แล้ว จึงไม่สามารถสลับเจ้าบ้านและทีมเยือนได้", ok: false };
+  const swapped = await verified.supabase
+    .from("matches")
+    .update({ away_team_id: match.data.home_team_id, home_team_id: match.data.away_team_id })
+    .eq("id", matchId)
+    .eq("league_id", competitionId)
+    .eq("league_fixture_version", config.fixtureVersion)
+    .select("id")
+    .maybeSingle();
+  if (swapped.error || !swapped.data) {
+    console.error("standard league side swap update failed", swapped.error);
+    return { error: "ไม่สามารถสลับเจ้าบ้านและทีมเยือนได้", ok: false };
+  }
+  revalidatePath(`/admin/competitions/${competitionId}`);
+  return { config, ok: true };
 }
 
 export async function completeStandardLeagueCompetition(competitionId: string): Promise<LeagueConfigActionResult> {

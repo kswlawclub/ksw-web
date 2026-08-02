@@ -4,7 +4,7 @@ export type LeagueTemplateDefinition = {
   hasKnockout: false;
   key: LeagueTemplateKey;
   label: string;
-  supportedLegs: readonly [1, 2];
+  supportedLegs: readonly [1];
   summary: "cumulative_standings";
   title: string;
 };
@@ -13,7 +13,7 @@ export const standardLeagueTemplate: LeagueTemplateDefinition = {
   hasKnockout: false,
   key: STANDARD_LEAGUE_TEMPLATE_KEY,
   label: "ลีกมาตรฐาน",
-  supportedLegs: [1, 2],
+  supportedLegs: [1],
   summary: "cumulative_standings",
   title: "Standard League",
 };
