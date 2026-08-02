@@ -93,6 +93,33 @@ function nodeFromRow(row: Row): CompetitionTreeNode {
   };
 }
 
+async function persistPartitionChampion(
+  supabase: SupabaseClient,
+  competitionId: string,
+  partitionKey: CouncilPartitionKey,
+  winnerTeamId: string,
+  source: "completion" | "final_save" | "load_backfill",
+) {
+  const championAt = new Date().toISOString();
+  const result = await supabase
+    .from("competition_knockout_partitions")
+    .update({ champion_at: championAt, champion_team_id: winnerTeamId, status: "completed", updated_at: championAt })
+    .eq("competition_id", competitionId)
+    .eq("partition_key", partitionKey)
+    .select("competition_id, partition_key, champion_team_id, champion_at, status");
+  if (result.error) {
+    console.error("council partition champion update failed", { code: result.error.code, competitionId, message: result.error.message, partitionKey, source, winnerTeamId });
+    return { error: "ไม่สามารถบันทึกแชมป์ดิวิชั่นได้", row: null as Row | null };
+  }
+  if (result.data?.length !== 1) {
+    console.error("council partition champion update affected unexpected rows", { affectedRows: result.data?.length ?? 0, competitionId, partitionKey, source, winnerTeamId });
+    return { error: "ไม่พบข้อมูลดิวิชั่นที่ต้องบันทึกแชมป์", row: null as Row | null };
+  }
+  const row = result.data[0] as Row;
+  console.info("council partition champion persisted", { championAt: text(row, "champion_at"), championTeamId: text(row, "champion_team_id"), competitionId, partitionKey, source });
+  return { error: "", row };
+}
+
 function sourceForInsert(source: CompetitionTreeSource) {
   return {
     bestOrder: source.type === "best_ranked" ? source.bestOrder ?? null : null,
@@ -159,7 +186,7 @@ async function verifyCouncilPartition(competitionId: string, partitionKey: strin
   const [competitionResult, configResult, partitionResult] = await Promise.all([
     supabase.from("leagues").select("competition_type, season_status").eq("id", competitionId).maybeSingle(),
     supabase.from("competition_knockout_configs").select("template_key").eq("competition_id", competitionId).maybeSingle(),
-    supabase.from("competition_knockout_partitions").select("partition_key, partition_label, entrant_count, bracket_capacity, qualification_snapshot, pairing_snapshot, champion_team_id, approval_status, status, updated_at").eq("competition_id", competitionId).eq("partition_key", partitionKey).maybeSingle(),
+    supabase.from("competition_knockout_partitions").select("partition_key, partition_label, entrant_count, bracket_capacity, qualification_snapshot, pairing_snapshot, champion_team_id, champion_at, approval_status, status, updated_at").eq("competition_id", competitionId).eq("partition_key", partitionKey).maybeSingle(),
   ]);
   if (competitionResult.error || configResult.error || partitionResult.error) {
     console.error("council bracket verification failed", { competition: competitionResult.error, config: configResult.error, partition: partitionResult.error });
@@ -180,11 +207,23 @@ async function loadState(supabase: SupabaseClient, competitionId: string, partit
     console.error("council bracket state load failed", { nodes: nodesResult.error, matches: matchesResult.error });
     return { championAt: null, championTeamId: null, entrantCount: numeric(partition, "entrant_count") ?? 0, error: "ไม่สามารถโหลดข้อมูลสายแข่งขันได้", matches: [], nodes: [], ok: false, pairingSources: [], partitionKey, partitionLabel: text(partition, "partition_label") || partitionKey, status: "draft" };
   }
-  const snapshot = Array.isArray(partition.qualification_snapshot) ? partition.qualification_snapshot : [];
-  const pairingSnapshot = Array.isArray(partition.pairing_snapshot) && partition.pairing_snapshot.length ? partition.pairing_snapshot : snapshot;
+  let persistedPartition = partition;
+  const finalNode = (nodesResult.data ?? []).map((row) => nodeFromRow(row as Row)).sort((left, right) => right.roundIndex - left.roundIndex || right.matchOrder - left.matchOrder)[0];
+  const finalMatch = finalNode?.linkedMatchId
+    ? (matchesResult.data ?? []).find((match) => text(match as Row, "id") === finalNode.linkedMatchId) as Row | undefined
+    : undefined;
+  if (!text(persistedPartition, "champion_team_id") && finalMatch && text(finalMatch, "status") === "finished" && text(finalMatch, "winner_team_id")) {
+    const backfill = await persistPartitionChampion(supabase, competitionId, partitionKey, text(finalMatch, "winner_team_id"), "load_backfill");
+    if (backfill.error || !backfill.row) {
+      return { championAt: null, championTeamId: null, entrantCount: numeric(partition, "entrant_count") ?? 0, error: backfill.error || "ไม่สามารถเติมข้อมูลแชมป์เดิมได้", matches: [], nodes: [], ok: false, pairingSources: [], partitionKey, partitionLabel: text(partition, "partition_label") || partitionKey, status: "draft" };
+    }
+    persistedPartition = { ...partition, ...backfill.row };
+  }
+  const snapshot = Array.isArray(persistedPartition.qualification_snapshot) ? persistedPartition.qualification_snapshot : [];
+  const pairingSnapshot = Array.isArray(persistedPartition.pairing_snapshot) && persistedPartition.pairing_snapshot.length ? persistedPartition.pairing_snapshot : snapshot;
   const rawPairingSources = pairingSnapshot.map((entry) => sourceFromSnapshot(entry as Row)).filter((source): source is CompetitionTreeSource => Boolean(source));
   let pairingSources = rawPairingSources;
-  if (!Array.isArray(partition.pairing_snapshot) || !partition.pairing_snapshot.length) {
+  if (!Array.isArray(persistedPartition.pairing_snapshot) || !persistedPartition.pairing_snapshot.length) {
     try {
       pairingSources = naturalPairing(rawPairingSources);
     } catch {
@@ -192,16 +231,16 @@ async function loadState(supabase: SupabaseClient, competitionId: string, partit
     }
   }
   return {
-    championAt: text(partition, "champion_team_id") ? text(partition, "updated_at") || null : null,
-    championTeamId: text(partition, "champion_team_id") || null,
-    entrantCount: numeric(partition, "entrant_count") ?? 0,
+    championAt: text(persistedPartition, "champion_at") || null,
+    championTeamId: text(persistedPartition, "champion_team_id") || null,
+    entrantCount: numeric(persistedPartition, "entrant_count") ?? 0,
     matches: (matchesResult.data ?? []) as CouncilBracketMatch[],
     nodes: (nodesResult.data ?? []).map((row) => nodeFromRow(row as Row)),
     ok: true,
     pairingSources,
     partitionKey,
-    partitionLabel: text(partition, "partition_label") || partitionKey,
-    status: text(partition, "status") === "completed" ? "completed" : text(partition, "status") === "active" ? "active" : text(partition, "status") === "fixtures_created" ? "fixtures_created" : text(partition, "status") === "reviewed" ? "reviewed" : "draft",
+    partitionLabel: text(persistedPartition, "partition_label") || partitionKey,
+    status: text(persistedPartition, "status") === "completed" ? "completed" : text(persistedPartition, "status") === "active" ? "active" : text(persistedPartition, "status") === "fixtures_created" ? "fixtures_created" : text(persistedPartition, "status") === "reviewed" ? "reviewed" : "draft",
   };
 }
 
@@ -298,6 +337,7 @@ function validScore(value: number | null) {
 export async function saveCouncilPartitionMatchV2(payload: { awayScore: number | null; competitionId: string; homeScore: number | null; matchDate: string | null; matchId: string; partitionKey: string; penaltyAwayScore: number | null; penaltyHomeScore: number | null; status: "finished" | "scheduled"; venue: string | null }) {
   const verified = await verifyCouncilPartition(payload.competitionId, payload.partitionKey);
   if (!verified.supabase || !verified.partition || !verified.partitionKey) return { error: verified.error, ok: false };
+  let partitionForState = verified.partition;
   if (verified.competition?.season_status === "completed") return { error: "การแข่งขันปิดแล้ว ไม่สามารถแก้ไขผลได้", ok: false };
   if (![payload.homeScore, payload.awayScore, payload.penaltyHomeScore, payload.penaltyAwayScore].every(validScore)) return { error: "คะแนนต้องเป็นจำนวนเต็มตั้งแต่ 0 ถึง 999", ok: false };
   const ownership = await verified.supabase.from("competition_bracket_nodes").select("id").eq("competition_id", payload.competitionId).eq("partition_key", verified.partitionKey).eq("linked_match_id", payload.matchId).maybeSingle();
@@ -316,24 +356,38 @@ export async function saveCouncilPartitionMatchV2(payload: { awayScore: number |
   if (update.error) return { error: "ไม่สามารถบันทึกผลการแข่งขันได้", ok: false };
   const finalNodeResult = await verified.supabase
     .from("competition_bracket_nodes")
-    .select("id")
+    .select("id, linked_match_id")
     .eq("competition_id", payload.competitionId)
     .eq("partition_key", verified.partitionKey)
     .order("round_index", { ascending: false })
     .order("match_order", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (finalNodeResult.error) return { error: "บันทึกผลแล้ว แต่ไม่สามารถตรวจสอบรอบชิงชนะเลิศได้", ok: false };
-  if (finalNodeResult.data?.id === ownership.data.id) {
-    const championUpdate = await verified.supabase
+  if (finalNodeResult.error || !finalNodeResult.data) return { error: "บันทึกผลแล้ว แต่ไม่สามารถตรวจสอบรอบชิงชนะเลิศได้", ok: false };
+  const isFinalMatch = finalNodeResult.data.id === ownership.data.id && finalNodeResult.data.linked_match_id === payload.matchId;
+  if (isFinalMatch && winnerTeamId) {
+    console.info("council final detected", { competitionId: payload.competitionId, matchId: payload.matchId, nodeId: finalNodeResult.data.id, partitionKey: verified.partitionKey, winnerTeamId });
+    const championUpdate = await persistPartitionChampion(verified.supabase, payload.competitionId, verified.partitionKey, winnerTeamId, "final_save");
+    if (championUpdate.error || !championUpdate.row) return { error: championUpdate.error || "ไม่สามารถบันทึกแชมป์ดิวิชั่นได้", ok: false };
+    partitionForState = { ...verified.partition, ...championUpdate.row };
+  } else if (isFinalMatch) {
+    const clearedAt = new Date().toISOString();
+    const championClear = await verified.supabase
       .from("competition_knockout_partitions")
-      .update({ champion_team_id: winnerTeamId, status: winnerTeamId ? "completed" : "fixtures_created", updated_at: new Date().toISOString() })
+      .update({ champion_at: null, champion_team_id: null, status: "fixtures_created", updated_at: clearedAt })
       .eq("competition_id", payload.competitionId)
-      .eq("partition_key", verified.partitionKey);
-    if (championUpdate.error) return { error: "บันทึกผลแล้ว แต่ไม่สามารถบันทึกแชมป์ดิวิชั่นได้", ok: false };
+      .eq("partition_key", verified.partitionKey)
+      .select("competition_id, partition_key, champion_team_id, champion_at, status");
+    if (championClear.error || championClear.data?.length !== 1) {
+      console.error("council final champion clear failed", { affectedRows: championClear.data?.length ?? 0, competitionId: payload.competitionId, error: championClear.error?.message, partitionKey: verified.partitionKey });
+      return { error: "บันทึกผลแล้ว แต่ไม่สามารถอัปเดตสถานะแชมป์ดิวิชั่นได้", ok: false };
+    }
+    partitionForState = { ...verified.partition, ...(championClear.data[0] as Row) };
   }
   revalidatePath(`/admin/competitions/${payload.competitionId}`);
-  return loadState(verified.supabase, payload.competitionId, verified.partitionKey, verified.partition);
+  const state = await loadState(verified.supabase, payload.competitionId, verified.partitionKey, partitionForState);
+  console.info("council bracket state returned after match save", { championAt: state.championAt, championTeamId: state.championTeamId, competitionId: payload.competitionId, partitionKey: verified.partitionKey });
+  return state;
 }
 
 export async function completeCouncilCupCompetitionV2(competitionId: string) {
@@ -354,8 +408,8 @@ export async function completeCouncilCupCompetitionV2(competitionId: string) {
     if (nodesResult.error || !nodesResult.data?.linked_match_id) return { error: `รอผลรอบชิงชนะเลิศ ${key === "division_1" ? "Division 1" : "Division 2"}`, ok: false };
     const finalResult = await supabase.from("matches").select("status, winner_team_id").eq("id", nodesResult.data.linked_match_id).eq("league_id", competitionId).eq("knockout_partition_key", key).maybeSingle();
     if (finalResult.error || finalResult.data?.status !== "finished" || !finalResult.data.winner_team_id) return { error: `รอผลรอบชิงชนะเลิศ ${key === "division_1" ? "Division 1" : "Division 2"}`, ok: false };
-    const partitionUpdate = await supabase.from("competition_knockout_partitions").update({ champion_team_id: finalResult.data.winner_team_id, status: "completed", updated_at: new Date().toISOString() }).eq("competition_id", competitionId).eq("partition_key", key);
-    if (partitionUpdate.error) return { error: "ไม่สามารถบันทึกแชมป์ดิวิชั่นได้", ok: false };
+    const partitionUpdate = await persistPartitionChampion(supabase, competitionId, key, finalResult.data.winner_team_id, "completion");
+    if (partitionUpdate.error || !partitionUpdate.row) return { error: partitionUpdate.error || "ไม่สามารถบันทึกแชมป์ดิวิชั่นได้", ok: false };
   }
   const close = await supabase.from("leagues").update({ season_status: "completed" }).eq("id", competitionId);
   if (close.error) return { error: "ไม่สามารถปิดการแข่งขันได้", ok: false };
