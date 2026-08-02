@@ -28,7 +28,7 @@ import {
 import { requireAdminSession } from "@/lib/admin-server-auth";
 import { isCupCompetition, normalizeCompetitionType } from "@/lib/competition-format";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { buildKswStandardPairing } from "@/lib/ksw-knockout-template";
+import { buildKnockoutTemplatePreview } from "@/lib/knockout-templates/registry";
 import type { ApprovedQualificationSummary } from "@/app/admin/competitions/[id]/qualification-actions";
 
 export type CompetitionEngineV2Config = {
@@ -494,7 +494,7 @@ export async function generateCompetitionTreeV2(
   }
 
   if (config.group_stage_enabled) {
-    const defaultSources = buildKswStandardPairing(entrants).sources;
+    const defaultSources = buildKnockoutTemplatePreview("ksw_standard", entrants).sources;
     if (previewSources && !hasSameSources(entrants, previewSources)) {
       return { error: "คู่แข่งขันที่เลือกไม่ตรงกับทีมผ่านเข้ารอบที่อนุมัติแล้ว", ok: false };
     }

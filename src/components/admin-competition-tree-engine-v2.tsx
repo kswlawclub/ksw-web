@@ -19,7 +19,9 @@ import {
   type CompetitionEngineV2Integrity,
 } from "@/lib/competition-engine-v2-state";
 import { buildCompetitionTree, type CompetitionTreeEntryMode, type CompetitionTreeNode, type CompetitionTreeSource, type CompetitionTreeSummary } from "@/lib/competition-tree";
-import { buildKswStandardPairing, explainKswStandardPair, kswSourceLabel, type KswQualificationSource } from "@/lib/ksw-knockout-template";
+import { buildKnockoutTemplatePreview, getDefaultKnockoutTemplate, getKnockoutTemplate, listKnockoutTemplates } from "@/lib/knockout-templates/registry";
+import type { KnockoutTemplateKey } from "@/lib/knockout-templates/types";
+import type { KswQualificationSource } from "@/lib/ksw-knockout-template";
 import { TeamLogo } from "@/components/team-logo";
 
 type AdminCompetitionTreeEngineV2Props = {
@@ -287,9 +289,10 @@ export function AdminCompetitionTreeEngineV2({
       teamName: source.teamId ? teamsById.get(source.teamId) : undefined,
     }));
   }, [groupNames, qualificationSnapshot, teams]);
-  const defaultPairing = useMemo(() => buildKswStandardPairing(qualifiedSources), [qualifiedSources]);
-  const [draftSources, setDraftSources] = useState<KswQualificationSource[]>(() => defaultPairing.sources);
-  const [selectedTemplate, setSelectedTemplate] = useState<"ksw-standard">("ksw-standard");
+  const [selectedTemplate, setSelectedTemplate] = useState<KnockoutTemplateKey>(getDefaultKnockoutTemplate().key);
+  const selectedTemplateDefinition = getKnockoutTemplate(selectedTemplate) ?? getDefaultKnockoutTemplate();
+  const defaultPairing = useMemo(() => buildKnockoutTemplatePreview(selectedTemplateDefinition.key, qualifiedSources), [qualifiedSources, selectedTemplateDefinition.key]);
+  const [draftSources, setDraftSources] = useState<KswQualificationSource[]>(() => defaultPairing.sources as KswQualificationSource[]);
   const [editingPairing, setEditingPairing] = useState(false);
   const activeCardRef = useRef("");
   const summary = generatedSummary ?? initialSummary;
@@ -388,12 +391,14 @@ export function AdminCompetitionTreeEngineV2({
     });
   }
 
-  function chooseKswStandardTemplate() {
-    setSelectedTemplate("ksw-standard");
-    setDraftSources(defaultPairing.sources);
+  function chooseTemplate(templateKey: KnockoutTemplateKey) {
+    const template = getKnockoutTemplate(templateKey);
+    if (!template?.enabled) return;
+    setSelectedTemplate(templateKey);
+    setDraftSources(buildKnockoutTemplatePreview(template.key, qualifiedSources).sources as KswQualificationSource[]);
     setEditingPairing(false);
     setError("");
-    setMessage("เลือก KSW Standard แล้ว ตรวจสอบตัวอย่างคู่แข่งขันก่อนยืนยันการจัดสาย");
+    setMessage(`เลือก ${template.name} แล้ว ตรวจสอบตัวอย่างคู่แข่งขันก่อนยืนยันการจัดสาย`);
   }
 
   function sourceKey(source: CompetitionTreeSource) {
@@ -564,28 +569,24 @@ export function AdminCompetitionTreeEngineV2({
                 <p className="mt-1 text-sm font-semibold text-slate-600">เลือกรูปแบบก่อนตรวจสอบตัวอย่างและยืนยันการจัดสาย</p>
               </div>
               <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2">
-                <button aria-pressed={selectedTemplate === "ksw-standard"} className={`min-w-0 rounded-md border p-4 text-left transition ${selectedTemplate === "ksw-standard" ? "border-[#d8ad45] bg-[#fffdf7] ring-1 ring-[#d8ad45]/30" : "border-slate-200 bg-white"}`} onClick={chooseKswStandardTemplate} type="button">
-                  <div className="flex flex-wrap items-start justify-between gap-2"><span className="text-base font-black text-[#061426]">KSW Standard</span><span className="rounded-full border border-[#d8ad45]/40 bg-white px-2 py-1 text-[11px] font-black text-[#8a6418]">ค่าเริ่มต้น</span></div>
-                  <p className="mt-2 text-sm font-semibold text-slate-600">แชมป์กลุ่มเป็นทีมวาง จับคู่ข้ามกลุ่ม และให้ Wild Card พบแชมป์กลุ่มก่อน</p>
-                  <div className="mt-3 flex items-center gap-2 text-xs font-black text-[#8a6418]"><span className="grid size-8 grid-cols-2 gap-0.5 rounded border border-[#d8ad45]/35 bg-white p-1" aria-hidden="true"><i className="bg-[#d8ad45]/70" /><i className="bg-slate-300" /><i className="bg-slate-300" /><i className="bg-[#d8ad45]/70" /></span><span>จัดสายตามอันดับและกลุ่ม</span></div>
-                </button>
-                <article className="min-w-0 rounded-md border border-dashed border-slate-300 bg-slate-50 p-4 text-slate-500">
-                  <div className="flex flex-wrap items-start justify-between gap-2"><h4 className="text-base font-black text-slate-700">Council Cup</h4><span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] font-black text-slate-500">เร็ว ๆ นี้</span></div>
-                  <p className="mt-2 text-sm font-semibold">Two Division template จะเปิดให้เลือกเมื่อพัฒนาพร้อมใช้งาน</p>
-                  <div className="mt-3 flex items-center gap-2 text-xs font-black"><span className="grid size-8 grid-cols-2 gap-0.5 rounded border border-slate-200 bg-white p-1" aria-hidden="true"><i className="bg-slate-300" /><i className="bg-slate-200" /><i className="bg-slate-200" /><i className="bg-slate-300" /></span><span>ยังไม่พร้อมใช้งาน</span></div>
-                </article>
+                {listKnockoutTemplates().map((template) => {
+                  const selected = selectedTemplate === template.key;
+                  const className = `min-w-0 rounded-md border p-4 text-left ${template.enabled ? "transition" : "border-dashed text-slate-500"} ${selected ? "border-[#d8ad45] bg-[#fffdf7] ring-1 ring-[#d8ad45]/30" : "border-slate-200 bg-white"}`;
+                  const content = <><div className="flex flex-wrap items-start justify-between gap-2"><span className="text-base font-black text-[#061426]">{template.name}</span><span className={`rounded-full border px-2 py-1 text-[11px] font-black ${template.enabled ? "border-[#d8ad45]/40 bg-white text-[#8a6418]" : "border-slate-200 bg-white text-slate-500"}`}>{template.enabled ? "ค่าเริ่มต้น" : "เร็ว ๆ นี้"}</span></div><p className="mt-2 text-sm font-semibold text-slate-600">{template.description}</p><p className="mt-3 text-xs font-black text-slate-500">{template.championCount} แชมป์ · {template.partitionCount} สายการแข่งขัน</p></>;
+                  return template.enabled ? <button aria-pressed={selected} className={className} key={template.key} onClick={() => chooseTemplate(template.key)} type="button">{content}</button> : <article className={className} data-disabled="true" key={template.key}>{content}</article>;
+                })}
               </div>
             </section>
             <section className="mt-5 min-w-0 rounded-md border border-[#d8ad45]/40 bg-[#fffdf7] p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div><h3 className="font-black text-[#061426]">ตัวอย่างการจัดสาย: KSW Standard</h3><p className="mt-1 text-sm font-semibold text-slate-600">แชมป์กลุ่มเป็นทีมวาง และไม่พบทีมจากกลุ่มเดียวกันในรอบแรก</p></div>
+              <div><h3 className="font-black text-[#061426]">ตัวอย่างการจัดสาย: {selectedTemplateDefinition.name}</h3><p className="mt-1 text-sm font-semibold text-slate-600">{selectedTemplateDefinition.description}</p></div>
               <div className="flex flex-wrap gap-2"><button className="min-h-10 rounded-md border border-[#d8ad45] bg-white px-3 py-2 text-sm font-black text-[#8a6418]" onClick={() => setDraftSources(defaultPairing.sources)} type="button">ใช้การจัดสายอัตโนมัติ</button><button className="min-h-10 rounded-md border border-[#d8ad45] bg-white px-3 py-2 text-sm font-black text-[#8a6418]" onClick={() => setEditingPairing((current) => !current)} type="button">{editingPairing ? "ดูตัวอย่างคู่" : "แก้ไขคู่ก่อนยืนยัน"}</button></div>
             </div>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               {previewMatches.map((match, index) => (
                 <div className="min-w-0 rounded-md border border-slate-200 bg-white p-3" key={`${match.roundIndex}-${match.matchOrder}`}>
                   <p className="text-xs font-black text-[#8a6418]">คู่ที่ {index + 1}</p>
-                  {editingPairing ? <div className="mt-2 grid gap-2">{([match.homeSource, match.awaySource] as CompetitionTreeSource[]).map((source, side) => source.type === "bye" ? <p className="rounded border border-slate-200 bg-slate-50 px-2 py-2 text-sm font-bold" key={`${side}-bye`}>Bye</p> : <select aria-label={`${side === 0 ? "ทีมเหย้า" : "ทีมเยือน"}คู่ที่ ${index + 1}`} className="min-h-10 min-w-0 rounded border border-slate-200 px-2 text-sm font-bold" key={side} onChange={(event) => selectSource(sourceKey(source), event.target.value)} value={sourceKey(source)}>{draftSources.map((candidate) => <option key={sourceKey(candidate)} value={sourceKey(candidate)}>{kswSourceLabel(candidate)}{candidate.teamName ? ` - ${candidate.teamName}` : ""}</option>)}</select>)}<span className="-order-1 text-center text-xs font-black text-slate-500">พบ</span></div> : <><p className="mt-2 break-words text-sm font-black text-[#061426]">{kswSourceLabel(match.homeSource)}{match.homeSource.teamId ? ` - ${teamsById.get(match.homeSource.teamId)?.name ?? "รอผล"}` : ""} พบ {match.awaySource.type === "bye" ? "Bye" : `${kswSourceLabel(match.awaySource)}${match.awaySource.teamId ? ` - ${teamsById.get(match.awaySource.teamId)?.name ?? "รอผล"}` : ""}`}</p><p className="mt-1 text-xs font-semibold text-slate-600">{explainKswStandardPair(match.homeSource, match.awaySource)}</p></>}
+                  {editingPairing ? <div className="mt-2 grid gap-2">{([match.homeSource, match.awaySource] as CompetitionTreeSource[]).map((source, side) => source.type === "bye" ? <p className="rounded border border-slate-200 bg-slate-50 px-2 py-2 text-sm font-bold" key={`${side}-bye`}>Bye</p> : <select aria-label={`${side === 0 ? "ทีมเหย้า" : "ทีมเยือน"}คู่ที่ ${index + 1}`} className="min-h-10 min-w-0 rounded border border-slate-200 px-2 text-sm font-bold" key={side} onChange={(event) => selectSource(sourceKey(source), event.target.value)} value={sourceKey(source)}>{draftSources.map((candidate) => <option key={sourceKey(candidate)} value={sourceKey(candidate)}>{selectedTemplateDefinition.sourceLabel(candidate)}{candidate.teamName ? ` - ${candidate.teamName}` : ""}</option>)}</select>)}<span className="-order-1 text-center text-xs font-black text-slate-500">พบ</span></div> : <><p className="mt-2 break-words text-sm font-black text-[#061426]">{selectedTemplateDefinition.sourceLabel(match.homeSource)}{match.homeSource.teamId ? ` - ${teamsById.get(match.homeSource.teamId)?.name ?? "รอผล"}` : ""} พบ {match.awaySource.type === "bye" ? "Bye" : `${selectedTemplateDefinition.sourceLabel(match.awaySource)}${match.awaySource.teamId ? ` - ${teamsById.get(match.awaySource.teamId)?.name ?? "รอผล"}` : ""}`}</p><p className="mt-1 text-xs font-semibold text-slate-600">{selectedTemplateDefinition.pairExplanation(match.homeSource, match.awaySource)}</p></>}
                 </div>
               ))}
             </div>
