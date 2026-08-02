@@ -31,6 +31,16 @@ export type StandardLeagueMatchweek = {
   updatedAt: string | null;
 };
 
+export type StandardLeagueScheduledMatch = {
+  effectiveMatchweek: number;
+  originalMatchweek: number;
+  rescheduleReason: string | null;
+  rescheduledAt: string | null;
+  rescheduledBy: string | null;
+  rescheduledByLabel: string | null;
+  scheduledMatchweek: number | null;
+};
+
 export type LeagueEntrant = {
   id: string;
   name: string;
