@@ -2,8 +2,23 @@ import { getSupabase, getSupabaseConfig } from "@/lib/supabase";
 import { loadCompetitionParticipants } from "@/lib/competition-participants";
 import { normalizeCompetitionType, supportsLeagueStandings } from "@/lib/competition-format";
 import { calculateStandardLeagueStandings } from "@/lib/league-template/standings";
+import type { PublicCupV2Data } from "@/lib/public-cup-v2-types";
 
 export type Row = Record<string, unknown>;
+
+export type PublicCompetitionDetailData = {
+  competition: Row;
+  cupGroupTeams: Row[];
+  cupGroups: Row[];
+  matches: Row[];
+  publicCupV2?: PublicCupV2Data | null;
+  scheduledMatches: Row[];
+  snapshots: Row[];
+  sponsors: Row[];
+  standardLeague?: { championAt: string | null; championTeamId: string | null; totalGoals: number } | null;
+  standings: Row[];
+  teams: Row[];
+};
 
 export const competitionColumns =
   "id, name, season, slug, short_description, description, cover_image_url, edition_number, start_date, end_date, location, display_order, competition_type, season_status, is_active, is_featured, is_published, created_at";
@@ -214,7 +229,7 @@ export async function loadLegacySeasonCompetition() {
   return bySeason[0];
 }
 
-export async function loadCompetitionDetailData(competition: Row) {
+export async function loadCompetitionDetailData(competition: Row): Promise<PublicCompetitionDetailData> {
   const supabase = getSupabase();
   const leagueId = text(competition, ["id"], "");
   const competitionType = normalizeCompetitionType(competition.competition_type);

@@ -6,6 +6,7 @@ import {
   loadCompetitionDetailData,
   text,
 } from "@/lib/competition-data";
+import { loadPublicCupV2Data } from "@/lib/public-cup-v2-loader";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -42,7 +43,10 @@ export default async function CompetitionPage({ params }: PageProps) {
     notFound();
   }
 
-  const data = await loadCompetitionDetailData(competition);
+  const [data] = await Promise.all([
+    loadCompetitionDetailData(competition),
+    loadPublicCupV2Data(competition),
+  ]);
 
   return <CompetitionDetailPage data={data} />;
 }
