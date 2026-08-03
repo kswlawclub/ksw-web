@@ -1,0 +1,9 @@
+import Link from "next/link";
+import { HomeMatchRow } from "@/components/home/home-display";
+import { homeText, type HomeCompetitionData } from "@/lib/home-competition-data";
+
+export function FeaturedResults({ data }: { data: HomeCompetitionData }) {
+  if (!data.currentCompetition || !data.featuredResults.length) return null;
+  const slug = homeText(data.currentCompetition, ["slug"], "");
+  return <section className="bg-[#f7f5ef]"><div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-10"><div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[.2em] text-[#8a641c]">Latest Results</p><h2 className="mt-2 text-3xl font-black text-[#061426]">ผลการแข่งขันล่าสุด</h2></div><Link className="text-sm font-black text-[#8a641c]" href={slug ? `/competitions/${slug}` : "/competitions"}>รายละเอียดและผลทั้งหมด</Link></div><div className="mt-6 grid gap-x-8 md:grid-cols-2">{data.featuredResults.map((match) => <HomeMatchRow key={homeText(match, ["id"], "")} match={match} result />)}</div></div></section>;
+}
