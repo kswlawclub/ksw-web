@@ -164,13 +164,6 @@ function matchCompetitionContext(match: Row) {
   return phase ? `${competitionName} · ${phase}` : competitionName;
 }
 
-function opponentForKsw(match: Row) {
-  const homeName = text(match, ["home_team_name"], "Home team unavailable");
-  const awayName = text(match, ["away_team_name"], "Away team unavailable");
-
-  return match.home_team_is_ksw === true ? awayName : homeName;
-}
-
 function formatVenue(value: string) {
   if (!value) {
     return "";
@@ -416,7 +409,14 @@ export default async function Home() {
   const featuredPhase = featuredPhaseMatch ? matchCompetitionContext(featuredPhaseMatch).replace(`${competitionName} · `, "") : "กำลังเตรียมโปรแกรม";
   const featuredCouncil = new Set(featuredMatches.map((match) => text(match, ["partition_label"], "")).filter(Boolean)).size === 2;
   const sortedScheduledMatches = allScheduledMatches;
-  const nextKswKickoffMatches = nextKswFixture ? [nextKswFixture] : [];
+  const nearestFixture = sortedScheduledMatches[0];
+  const nearestFixtureDate = nearestFixture ? fixtureDateValue(nearestFixture) : "";
+  const featuredChampions = latestChampions.filter((champion) => champion.competitionId === currentCompetitionId);
+  const featuredStatus = isCompetitionCompleted && featuredChampions.length
+    ? featuredChampions.map((champion) => `${champion.label}: ${champion.teamName}`).join(" · ")
+    : featuredCouncil
+      ? "2 Divisions"
+      : featuredPhase;
   const fixtureGroups = sortedScheduledMatches.reduce<Array<{ key: string; date: unknown; matches: Row[] }>>(
     (groups, match) => {
       const matchDate = fixtureDateValue(match);
@@ -601,6 +601,31 @@ export default async function Home() {
         </div>
       </section>
 
+      {currentCompetition ? (
+        <section className="bg-slate-100">
+          <div className="mx-auto w-full max-w-7xl px-4 pt-8 sm:px-6 lg:px-10">
+            <div className="overflow-hidden rounded-xl border border-[#d8ad45]/40 bg-white shadow-xl shadow-slate-900/10">
+              <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-[#061426] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#f4d58a]">Featured Competition</span>
+                    <span className="rounded-full border border-[#d8ad45]/45 bg-[#fff8e3] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#061426]">
+                      {competitionStatusLabel(competitionStatus)}
+                    </span>
+                    {featuredCouncil ? <span className="rounded-full border border-emerald-800/20 bg-emerald-50 px-3 py-1 text-[10px] font-black text-emerald-900">2 Divisions{isCompetitionCompleted && featuredChampions.length === 2 ? " · 2 Champions" : ""}</span> : null}
+                  </div>
+                  <h2 className="mt-3 break-words text-2xl font-black text-[#061426] sm:text-3xl">{competitionName}</h2>
+                  <p className="mt-2 text-sm font-bold text-slate-600">{competitionTypeLabel(competitionType)} · {allParticipants.length} ทีม · {featuredStatus}</p>
+                </div>
+                <Link className="inline-flex min-h-11 items-center justify-center rounded-md bg-[#061426] px-5 py-3 text-sm font-black text-[#f4d58a] shadow-lg shadow-slate-900/10 transition-colors hover:bg-[#0b2745]" href={competitionHref}>
+                  ดูรายการแข่งขัน
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       <section className="relative overflow-hidden border-b border-slate-200 bg-[#f6f2ea] shadow-inner shadow-slate-900/5">
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#d8ad45]/55 to-transparent" />
         <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
@@ -722,7 +747,7 @@ export default async function Home() {
         </div>
 	      </section>
 
-      {!isCompetitionCompleted ? (
+      {sortedScheduledMatches.length ? (
         <section className="bg-slate-100">
           <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
             <div id="next-fixtures" className="min-w-0 overflow-hidden rounded-2xl border border-[#d8ad45]/35 bg-[linear-gradient(135deg,#061426,#0b2745_58%,#071b31)] shadow-2xl shadow-[#061426]/25">
@@ -742,47 +767,19 @@ export default async function Home() {
                     </p>
                   </div>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[32rem]">
-                  {nextKswKickoffMatches.length ? (
-                    nextKswKickoffMatches.map((match, index) => {
-                      const matchDate = fixtureDateValue(match);
-                      const venue = text(match, ["venue"], "");
-
-                      return (
-                        <div
-                          className="rounded-xl border border-[#d8ad45]/35 bg-white/[0.08] p-4 text-left shadow-xl shadow-black/15 backdrop-blur"
-                          key={text(match, ["id", "match_id"], `ksw-kickoff-${index}`)}
-                        >
-                          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f4d58a]">
-                            Next Kickoff
-                          </p>
-                          <LiveCountdown
-                            className="mt-2 text-3xl font-black text-white"
-                            targetDate={typeof matchDate === "string" ? matchDate : ""}
-                          />
-                          <p className="mt-1 text-sm font-bold text-slate-300">
-                            {formatMatchDateLong(matchDate)} • {formatMatchTime(matchDate) || "TBC"}
-                          </p>
-                          <p className="mt-2 text-sm font-black text-white">
-                            vs {opponentForKsw(match)}
-                          </p>
-                          {venue ? (
-                            <p className="mt-2 inline-flex rounded-full border border-[#d8ad45]/35 bg-[#d8ad45]/15 px-3 py-1 text-xs font-black text-[#f4d58a]">
-                              📍 {formatVenue(venue)}
-                            </p>
-                          ) : null}
-                        </div>
-                      );
-                    })
+                <div className="min-w-0 rounded-xl border border-[#d8ad45]/35 bg-white/[0.08] p-4 text-left shadow-xl shadow-black/15 backdrop-blur lg:min-w-[20rem]">
+                  {nearestFixture ? (
+                    <>
+                      <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f4d58a]">นัดที่ใกล้ที่สุด</p>
+                      <p className="mt-2 truncate text-sm font-black text-white">{matchCompetitionContext(nearestFixture)}</p>
+                      <LiveCountdown className="mt-2 text-3xl font-black text-white" targetDate={typeof nearestFixtureDate === "string" ? nearestFixtureDate : ""} />
+                      <p className="mt-1 text-sm font-bold text-slate-300">{formatMatchDateLong(nearestFixtureDate)} · {formatMatchTime(nearestFixtureDate)}</p>
+                    </>
                   ) : (
-                    <div className="rounded-xl border border-[#d8ad45]/35 bg-white/[0.08] p-4 text-left shadow-xl shadow-black/15 backdrop-blur sm:col-span-2 lg:ml-auto lg:min-w-64">
-                      <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f4d58a]">
-                        Next Kickoff
-                      </p>
-                      <p className="mt-2 text-sm font-bold text-slate-200">
-                        No upcoming KSW fixtures in this competition.
-                      </p>
-                    </div>
+                    <>
+                      <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f4d58a]">Next Fixtures</p>
+                      <p className="mt-2 text-sm font-bold text-slate-200">ยังไม่มีโปรแกรมที่กำหนดวันเวลา</p>
+                    </>
                   )}
                 </div>
               </div>
@@ -965,7 +962,7 @@ export default async function Home() {
               </div>
               <div className="border-t border-[#d8ad45]/15 px-4 py-3 text-right sm:px-6">
                 <p className="text-xs font-semibold leading-5 text-slate-400">
-                  ข้อมูลการแข่งขันอ้างอิงจาก {competitionName}
+                  ข้อมูลการแข่งขันจากรายการที่เผยแพร่แล้ว
                 </p>
               </div>
             </div>
