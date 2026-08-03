@@ -12,6 +12,7 @@ const modules = [
   { title: "Manage Members", href: "/admin/members", status: "Open module" },
   { title: "Manage Gallery", href: "/admin/gallery", status: "Open module" },
   { title: "Manage Sponsors", href: "/admin/sponsors", status: "Open module" },
+  { title: "Competition Test", href: "/admin/system/competition-test", status: "Run checks", description: "Read-only acceptance checks for League, Cup, Public, and Analytics data." },
 ];
 
 export default function AdminDashboardPage() {
