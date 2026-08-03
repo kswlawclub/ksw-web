@@ -141,9 +141,11 @@ async function withCompletedCupChampions(competitions: Row[]) {
   }
   const teamNames = new Map(((teamsResult.data ?? []) as Record<string, unknown>[]).map((team) => [text(team, ["id"], ""), text(team, ["name"], "")]));
   const divisionChampions = new Map<string, { division_1?: string; division_2?: string }>();
+  const councilCompetitionIds = new Set<string>();
   ((partitionsResult.data ?? []) as Record<string, unknown>[]).forEach((partition) => {
     const competitionId = text(partition, ["competition_id"], "");
     const partitionKey = text(partition, ["partition_key"], "");
+    if (competitionId && (partitionKey === "division_1" || partitionKey === "division_2")) councilCompetitionIds.add(competitionId);
     const championName = teamNames.get(text(partition, ["champion_team_id"], ""));
     if (!competitionId || !championName || (partitionKey !== "division_1" && partitionKey !== "division_2")) return;
     divisionChampions.set(competitionId, { ...divisionChampions.get(competitionId), [partitionKey]: championName });
@@ -155,6 +157,7 @@ async function withCompletedCupChampions(competitions: Row[]) {
     const winnerId = finalNode ? winnerByMatchId.get(text(finalNode, ["linked_match_id"], "")) : "";
     const champions = divisionChampions.get(competitionId);
     if (champions?.division_1 && champions.division_2) return { ...competition, champion_division_1: champions.division_1, champion_division_2: champions.division_2 };
+    if (councilCompetitionIds.has(competitionId)) return competition;
     return winnerId && teamNames.get(winnerId) ? { ...competition, champion_name: teamNames.get(winnerId) } : competition;
   });
 }

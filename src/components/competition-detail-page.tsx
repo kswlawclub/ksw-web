@@ -3,7 +3,7 @@ import Link from "next/link";
 import { CompetitionResultsTable } from "@/components/competition-results-table";
 import { LeagueTable } from "@/components/league-table";
 import { TeamLogo } from "@/components/team-logo";
-import { PublicKnockoutBracket } from "@/components/public-knockout-bracket";
+import { PublicCouncilCupBrackets, PublicKnockoutBracket } from "@/components/public-knockout-bracket";
 import {
   calculateCupGroupStandings,
   type CupGroupStanding,
@@ -775,9 +775,11 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
   const standardChampion = standardLeague?.championTeamId ? teams.find((team) => text(team, ["id"], "") === standardLeague.championTeamId) : undefined;
   const standardCompleted = Boolean(standardLeague && seasonStatus === "completed");
   const kswStandardV2 = publicCupV2?.templateKey === "ksw_standard" ? publicCupV2 : null;
-  const knockoutMatchIds = new Set(kswStandardV2?.linkedMatches.map((match) => match.id) ?? []);
-  const legacyMatches = kswStandardV2 ? matches.filter((match) => !knockoutMatchIds.has(text(match, ["id"]))) : matches;
-  const legacyScheduledMatches = kswStandardV2 ? scheduledMatches.filter((match) => !knockoutMatchIds.has(text(match, ["id"]))) : scheduledMatches;
+  const councilV2 = publicCupV2?.templateKey === "council_two_division" ? publicCupV2 : null;
+  const cupV2 = kswStandardV2 ?? councilV2;
+  const knockoutMatchIds = new Set(cupV2?.linkedMatches.map((match) => match.id) ?? []);
+  const legacyMatches = cupV2 ? matches.filter((match) => !knockoutMatchIds.has(text(match, ["id"]))) : matches;
+  const legacyScheduledMatches = cupV2 ? scheduledMatches.filter((match) => !knockoutMatchIds.has(text(match, ["id"]))) : scheduledMatches;
   const legacyFixtures = [...legacyScheduledMatches, ...legacyMatches];
   const legacyKswJourney = legacyFixtures.filter(isKswMatchByFlag).sort((a, b) => matchTime(a) - matchTime(b));
   const legacyCupGroupStandings = isCup
@@ -796,7 +798,7 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
       ["Fixtures", "#fixtures", legacyScheduledMatches.length > 0],
       ["KSW Journey", "#ksw-journey", legacyKswJourney.length > 0],
       ["Group Standings", "#group-standings", isCup && legacyCupGroupStandings.length > 0],
-      ["Knockout Bracket", "#knockout-bracket", Boolean(kswStandardV2?.nodes.length)],
+      [councilV2 ? "Division Brackets" : "Knockout Bracket", "#knockout-bracket", Boolean(cupV2?.nodes.length)],
       [isCup ? "Cup Results" : "Tournament Results", "#tournament-results", legacyMatches.length > 0],
       ["Participating Teams", "#participating-teams", teams.length > 0],
       ["Partners", "#partners", sponsors.some((sponsor) => sponsor.is_active !== false)],
@@ -861,6 +863,7 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
         <TournamentJourney matches={legacyKswJourney} />
         {isCup ? <PublicCupGroupStandings standings={legacyCupGroupStandings} /> : null}
         {kswStandardV2 ? <PublicKnockoutBracket data={kswStandardV2} seasonCompleted={seasonStatus === "completed"} /> : null}
+        {councilV2 ? <PublicCouncilCupBrackets data={councilV2} seasonCompleted={seasonStatus === "completed"} /> : null}
         {legacyMatches.length ? (
           <CompetitionResultsTable
             isLeague={false}

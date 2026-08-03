@@ -17,10 +17,10 @@ function isByeNode(node: PublicCupV2Node) {
   return node.linkedMatch === null && (node.homeSource.type === "bye" || node.awaySource.type === "bye");
 }
 
-export function groupPublicCupV2Rounds(nodes: PublicCupV2Node[]): PublicCupV2Round[] {
+export function groupPublicCupV2Rounds(nodes: PublicCupV2Node[], partitionKey = "main"): PublicCupV2Round[] {
   const groups = new Map<number, PublicCupV2Node[]>();
   nodes
-    .filter((node) => node.partitionKey === "main")
+    .filter((node) => node.partitionKey === partitionKey)
     .forEach((node) => groups.set(node.roundIndex, [...(groups.get(node.roundIndex) ?? []), node]));
   const rounds = Array.from(groups.entries())
     .sort(([left], [right]) => left - right)

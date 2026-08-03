@@ -155,6 +155,15 @@ function fixtureDateValue(match: Row) {
   return match.match_date ?? match.date ?? match.kickoff_at;
 }
 
+function matchCompetitionContext(match: Row) {
+  const competitionName = text(match, ["competition_name"], "การแข่งขัน");
+  const roundLabel = text(match, ["round_label"], "");
+  const matchweek = text(match, ["effective_matchweek"], "");
+  const partition = text(match, ["partition_label"], "");
+  const phase = [partition, roundLabel || (matchweek ? `Matchweek ${matchweek}` : "")].filter(Boolean).join(" · ");
+  return phase ? `${competitionName} · ${phase}` : competitionName;
+}
+
 function opponentForKsw(match: Row) {
   const homeName = text(match, ["home_team_name"], "Home team unavailable");
   const awayName = text(match, ["away_team_name"], "Away team unavailable");
@@ -341,6 +350,8 @@ function sponsorSlots(sponsors: Row[], minimumSlots: number) {
 export default async function Home() {
   const homeCompetitionData = await loadHomeCompetitionData();
   const {
+    allMappedMatches,
+    allParticipants,
     allRecentResults,
     allScheduledMatches,
     configured,
@@ -349,6 +360,7 @@ export default async function Home() {
     isNextCompetitionComingSoon,
     isPrimaryCompetitionComingSoon,
     kswParticipants: teams,
+    latestChampions,
     nextCompetition,
     nextCompetitionStartsInDays,
     nextKswFixture,
@@ -398,6 +410,11 @@ export default async function Home() {
   const isCompetitionCompleted = competitionStatus === "completed";
   const isLeagueCompetition = isLeagueCompetitionType(competitionType);
   const isCupCompetitionSummary = isCupCompetition(competitionType);
+  const currentCompetitionId = text(currentCompetition, ["id"], "");
+  const featuredMatches = allMappedMatches.filter((match) => text(match, ["competition_id"], "") === currentCompetitionId);
+  const featuredPhaseMatch = featuredMatches.find((match) => !["finished", "completed"].includes(text(match, ["status"], "").toLowerCase())) ?? featuredMatches[0];
+  const featuredPhase = featuredPhaseMatch ? matchCompetitionContext(featuredPhaseMatch).replace(`${competitionName} · `, "") : "กำลังเตรียมโปรแกรม";
+  const featuredCouncil = new Set(featuredMatches.map((match) => text(match, ["partition_label"], "")).filter(Boolean)).size === 2;
   const sortedScheduledMatches = allScheduledMatches;
   const nextKswKickoffMatches = nextKswFixture ? [nextKswFixture] : [];
   const fixtureGroups = sortedScheduledMatches.reduce<Array<{ key: string; date: unknown; matches: Row[] }>>(
@@ -543,6 +560,9 @@ export default async function Home() {
                 </Link>
               ) : null}
             </div>
+            <p className="mt-2 text-sm font-semibold text-slate-300">
+              {allParticipants.length} ทีม · {featuredCouncil ? "2 Divisions" : featuredPhase}
+            </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <Link
                 className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/15 transition-transform hover:scale-[1.02]"
@@ -718,7 +738,7 @@ export default async function Home() {
                       Next Fixtures
                     </h2>
                       <p className="mt-1 text-sm font-semibold text-slate-300">
-                      Upcoming match schedule from {competitionName}.
+                      โปรแกรมการแข่งขันจากรายการที่เผยแพร่แล้ว
                     </p>
                   </div>
                 </div>
@@ -772,7 +792,7 @@ export default async function Home() {
                     <div className="grid gap-3" key={group.key}>
                       <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                         <p className="text-xs font-black uppercase tracking-[0.22em] text-[#f4d58a]">
-                          Matchday {groupIndex + 1}
+                          Fixtures {groupIndex + 1}
                         </p>
                         <p className="text-sm font-bold text-slate-300">
                           {formatMatchDateLong(group.date)}
@@ -799,6 +819,7 @@ export default async function Home() {
                           const statusLabel = fixtureStatusLabel(fixture, matchDate, now);
                           const startsIn = countdownText(matchDate, now);
                           const fixtureKey = text(fixture, ["id", "match_id"], `${group.key}-${index}`);
+                          const context = matchCompetitionContext(fixture);
 
                           return (
                             <div className="grid gap-3" key={fixtureKey}>
@@ -823,6 +844,8 @@ export default async function Home() {
                                     </span>
                                   ) : null}
                                 </div>
+
+                                <p className="mt-3 text-xs font-bold text-slate-500">{context}</p>
 
                                 {isKswMatch ? (
                                   <div className="mt-3">
@@ -881,6 +904,7 @@ export default async function Home() {
                                     : "border-white/80 shadow-black/10 hover:shadow-black/20"
                                 }`}
                               >
+                                <p className="mb-3 text-xs font-bold text-slate-500 lg:col-span-3">{context}</p>
                                 <div className="mb-4 lg:mb-0">
                                   <FixtureMetaBadgePair matchTime={matchTime} venue={venue} />
                                 </div>
@@ -1081,7 +1105,7 @@ export default async function Home() {
                   Recent Results
                 </h2>
                 <p className="mt-1 text-sm font-semibold text-slate-600">
-                  The latest completed matches from {competitionName}.
+                  ผลการแข่งขันล่าสุดจากรายการที่เผยแพร่แล้ว
                 </p>
               </div>
               </div>
@@ -1131,6 +1155,10 @@ export default async function Home() {
                       const awayIsKsw = match.away_team_is_ksw === true;
                       const isKswResult = homeIsKsw || awayIsKsw;
                       const outcome = homeKswOutcome(match);
+                      const context = matchCompetitionContext(match);
+                      const homePenalty = match.penalty_home_score;
+                      const awayPenalty = match.penalty_away_score;
+                      const hasPenalty = typeof homePenalty === "number" && typeof awayPenalty === "number";
 
                       return (
                         <article
@@ -1141,6 +1169,7 @@ export default async function Home() {
                           }`}
                           key={text(match, ["id", "match_id"], `${group.key}-${index}`)}
                         >
+                          <p className="mb-3 text-center text-xs font-bold text-slate-500 lg:col-span-3">{context}</p>
                           <div className="mb-4 flex flex-wrap items-center justify-center gap-2 lg:hidden">
                             {isKswResult ? (
                               <span className="rounded-full border border-[#d8ad45]/45 bg-[#fff4dc] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#061426]">
@@ -1182,6 +1211,9 @@ export default async function Home() {
                                 <span className="text-xl text-[#f4d58a] sm:text-2xl">Score TBC</span>
                               )}
                             </div>
+                            {hasPenalty ? (
+                              <p className="text-xs font-black text-[#9b1c1f]">จุดโทษ {homePenalty}-{awayPenalty}</p>
+                            ) : null}
                             <div className="flex flex-wrap justify-center gap-2 text-xs font-black text-[#061426]">
                               {matchTime ? (
                                 <span className="rounded-full bg-slate-100 px-3 py-1.5">
@@ -1244,6 +1276,37 @@ export default async function Home() {
         </div>
         </div>
       </section>
+
+      {latestChampions.length ? (
+        <section className="bg-slate-100">
+          <div className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
+            <div className="rounded-xl border border-[#d8ad45]/35 bg-white p-5 shadow-xl shadow-slate-900/10 sm:p-6">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-[#9b1c1f]">Latest Champions</p>
+                  <h2 className="mt-2 text-2xl font-black text-[#061426]">แชมป์ล่าสุด</h2>
+                </div>
+                <Link className="text-sm font-black text-[#9b1c1f] hover:text-[#061426]" href="/competitions">
+                  ดูรายการแข่งขันทั้งหมด
+                </Link>
+              </div>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {latestChampions.map((champion) => (
+                  <Link
+                    className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-[#d8ad45]/60 hover:bg-[#fff8e3]"
+                    href={champion.competitionSlug ? `/competitions/${champion.competitionSlug}` : "/competitions"}
+                    key={`${champion.competitionId}-${champion.label}`}
+                  >
+                    <p className="text-xs font-black text-[#9b1c1f]">{champion.label}</p>
+                    <p className="mt-2 break-words text-lg font-black text-[#061426]">{champion.teamName}</p>
+                    <p className="mt-1 break-words text-sm font-semibold text-slate-600">{champion.competitionName}</p>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <section id="sponsors" className="bg-gradient-to-br from-[#071b31] via-[#0b2745] to-[#061426]">
         <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">

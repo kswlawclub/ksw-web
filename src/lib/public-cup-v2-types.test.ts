@@ -37,6 +37,22 @@ test("maps Council champions from their separate persisted partitions", () => {
   assert.equal(result.champions.main, null);
 });
 
+test("keeps an incomplete Council champion state explicit without inventing another champion", () => {
+  const result = mapPublicCupV2Data({
+    config: { status: "active" },
+    groups: [],
+    linkedMatches: [],
+    nodes: [],
+    partitions: [{ champion_team_id: "team-a", partition_key: "division_1", status: "completed" }, { partition_key: "division_2", status: "active" }],
+    teams: [{ id: "team-a", name: "Team A" }],
+    templateKey: "council_two_division",
+  });
+
+  assert.equal(result.champions.division1?.name, "Team A");
+  assert.equal(result.champions.division2, null);
+  assert.equal(result.champions.main, null);
+});
+
 test("keeps legacy, unpublished, and missing-template Cups outside the V2 contract", () => {
   assert.equal(detectPublicCupV2Template({ competitionType: "cup", isPublished: false, templateKey: "ksw_standard" }), "legacy_cup");
   assert.equal(detectPublicCupV2Template({ competitionType: "cup", isPublished: true, templateKey: null }), "legacy_cup");

@@ -41,3 +41,13 @@ test("does not include Council nodes in the KSW main bracket", () => {
   const rounds = groupPublicCupV2Rounds([node({ partitionKey: "division_1" })]);
   assert.equal(rounds.length, 0);
 });
+
+test("keeps Council division topologies separate even when their sizes differ", () => {
+  const nodes = [
+    node({ id: "d1-r1", partitionKey: "division_1", roundIndex: 0, roundLabel: "Quarterfinal" }),
+    node({ id: "d1-r2", partitionKey: "division_1", roundIndex: 1, roundLabel: "Semifinal" }),
+    node({ id: "d2-r1", partitionKey: "division_2", roundIndex: 0, roundLabel: "Round of 16" }),
+  ];
+  assert.deepEqual(groupPublicCupV2Rounds(nodes, "division_1").map((round) => round.nodes.map((entry) => entry.id)), [["d1-r1"], ["d1-r2"]]);
+  assert.deepEqual(groupPublicCupV2Rounds(nodes, "division_2").map((round) => round.nodes.map((entry) => entry.id)), [["d2-r1"]]);
+});

@@ -1,8 +1,9 @@
 import "server-only";
 
-import { loadCompetitionParticipants } from "@/lib/competition-participants";
 import { normalizeCompetitionType, supportsLeagueStandings } from "@/lib/competition-format";
 import { isPublicCompetition } from "@/lib/competition-publication";
+import { homeFixturePartitionLabel, isHomeFinishedFixture } from "@/lib/home-competition-contract";
+import { calculateStandardLeagueStandings } from "@/lib/league-template/standings";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export type HomeRow = Record<string, unknown>;
@@ -35,6 +36,14 @@ export type HomeMappedMatch = HomeRow & {
   isKswFixture: boolean;
 };
 
+export type HomeChampion = {
+  competitionId: string;
+  competitionName: string;
+  competitionSlug: string;
+  label: string;
+  teamName: string;
+};
+
 export type HomeCompetitionSelectionReason =
   | "active_featured"
   | "active_priority"
@@ -62,6 +71,7 @@ export type HomeCompetitionData = {
   currentCompetition: HomeRow | undefined;
   errors: HomeCompetitionError[];
   finishedKswMatches: HomeMappedMatch[];
+  latestChampions: HomeChampion[];
   kswParticipants: HomeRow[];
   nextKswFixture: HomeMappedMatch | undefined;
   nextCompetition: HomeRow | undefined;
@@ -97,7 +107,7 @@ const leagueColumns =
 const standingsColumns =
   "team_id, league_id, team_name, short_name, logo_url, is_ksw, played, won, drawn, lost, goals_for, goals_against, goal_difference, points";
 const matchColumns =
-  "id, league_id, match_date, home_team_id, away_team_id, home_score, away_score, venue, status, match_type";
+  "id, league_id, match_date, home_team_id, away_team_id, home_score, away_score, penalty_home_score, penalty_away_score, winner_team_id, venue, status, match_type, competition_stage, knockout_partition_key, matchweek, scheduled_matchweek, league_fixture_version";
 const junctionColumns = "id, competition_id, team_id, is_active, display_order, created_at";
 const sponsorColumns = "id, name, logo_url, website_url, tier, sort_order, is_active";
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -427,6 +437,7 @@ export async function loadHomeCompetitionData(): Promise<HomeCompetitionData> {
         },
       ],
       finishedKswMatches: [],
+      latestChampions: [],
       kswParticipants: [],
       isNextCompetitionComingSoon: false,
       isPrimaryCompetitionComingSoon: false,
@@ -451,10 +462,10 @@ export async function loadHomeCompetitionData(): Promise<HomeCompetitionData> {
     supabase.from("leagues").select(leagueColumns).eq("is_published", true).order("created_at", { ascending: false }),
   );
   const selection = selectHomeCompetition(competitionsResult.data);
-  const currentCompetition = selection.primaryCompetition;
-  const currentCompetitionId = homeText(currentCompetition, ["id"], "");
-  const currentCompetitionType = normalizeCompetitionType(currentCompetition?.competition_type);
-  const loadStandings = supportsLeagueStandings(currentCompetitionType);
+  let currentCompetition = selection.primaryCompetition;
+  let currentCompetitionId = homeText(currentCompetition, ["id"], "");
+  let currentCompetitionType = normalizeCompetitionType(currentCompetition?.competition_type);
+  let loadStandings = supportsLeagueStandings(currentCompetitionType);
 
   if (!currentCompetitionId) {
     const sponsorsResult = await runQuery<HomeRow>(
@@ -473,6 +484,7 @@ export async function loadHomeCompetitionData(): Promise<HomeCompetitionData> {
       currentCompetition,
       errors,
       finishedKswMatches: [],
+      latestChampions: [],
       kswParticipants: [],
       isNextCompetitionComingSoon: selection.isNextCompetitionComingSoon,
       isPrimaryCompetitionComingSoon: selection.isPrimaryCompetitionComingSoon,
@@ -492,46 +504,78 @@ export async function loadHomeCompetitionData(): Promise<HomeCompetitionData> {
     };
   }
 
-  const [standingsResult, matchesResult, junctionResult, sponsorsResult] = await Promise.all([
-    loadStandings
-      ? runQuery<HomeRow>(
-          "league_standings_view",
-          supabase.from("league_standings_view").select(standingsColumns).eq("league_id", currentCompetitionId),
-        )
-      : Promise.resolve({ data: [] as HomeRow[], error: null }),
-    runQuery<HomeRow>(
-      "matches",
-      supabase
-        .from("matches")
-        .select(matchColumns)
-        .eq("league_id", currentCompetitionId)
-        .order("match_date", { ascending: true }),
-    ),
-    runQuery<HomeRow>(
-      "competition_teams",
-      supabase
-        .from("competition_teams")
-        .select(junctionColumns)
-        .eq("competition_id", currentCompetitionId)
-        .order("display_order", { ascending: true }),
-    ),
-    runQuery<HomeRow>(
-      "sponsors",
-      supabase.from("sponsors").select(sponsorColumns).order("sort_order", { ascending: true, nullsFirst: false }),
-    ),
+  const competitionIds = competitionsResult.data.map((competition) => homeText(competition, ["id"], "")).filter(Boolean);
+  const [matchesResult, junctionResult, configsResult, cupConfigsResult, partitionsResult, nodesResult, sponsorsResult] = await Promise.all([
+    runQuery<HomeRow>("matches", supabase.from("matches").select(matchColumns).in("league_id", competitionIds).order("match_date", { ascending: true })),
+    runQuery<HomeRow>("competition_teams", supabase.from("competition_teams").select(junctionColumns).in("competition_id", competitionIds).eq("is_active", true)),
+    runQuery<HomeRow>("competition_league_configs", supabase.from("competition_league_configs").select("competition_id, template_key, fixture_version, win_points, draw_points, loss_points, champion_team_id, champion_at").in("competition_id", competitionIds)),
+    runQuery<HomeRow>("competition_knockout_configs", supabase.from("competition_knockout_configs").select("competition_id, template_key, entrant_count, bracket_capacity, status").in("competition_id", competitionIds)),
+    runQuery<HomeRow>("competition_knockout_partitions", supabase.from("competition_knockout_partitions").select("competition_id, partition_key, partition_label, champion_team_id, champion_at, status").in("competition_id", competitionIds)),
+    runQuery<HomeRow>("competition_bracket_nodes", supabase.from("competition_bracket_nodes").select("competition_id, partition_key, round_index, round_label, match_order, linked_match_id").in("competition_id", competitionIds).not("linked_match_id", "is", null)),
+    runQuery<HomeRow>("sponsors", supabase.from("sponsors").select(sponsorColumns).order("sort_order", { ascending: true, nullsFirst: false })),
   ]);
-  const allParticipants = await loadCompetitionParticipants(supabase, currentCompetitionId, {
-    includeInactiveParticipants: false,
+  const participantIds = Array.from(new Set(junctionResult.data.map((row) => homeText(row, ["team_id"], "")).filter(Boolean)));
+  const teamsResult = participantIds.length
+    ? await runQuery<HomeRow>("teams", supabase.from("teams").select("id, name, short_name, logo_url, is_ksw").in("id", participantIds))
+    : { data: [] as HomeRow[], error: null };
+  const participantsByCompetition = new Map<string, HomeRow[]>();
+  const teamRowsById = new Map(teamsResult.data.map((team) => [homeText(team, ["id"], ""), team]));
+  junctionResult.data.forEach((junction) => {
+    const competitionId = homeText(junction, ["competition_id"], "");
+    const team = teamRowsById.get(homeText(junction, ["team_id"], ""));
+    if (!competitionId || !team) return;
+    participantsByCompetition.set(competitionId, [...(participantsByCompetition.get(competitionId) ?? []), { ...team, participant_is_active: junction.is_active }]);
   });
-  const participantRows = allParticipants as HomeRow[];
+  const competitionsById = new Map(competitionsResult.data.map((competition) => [homeText(competition, ["id"], ""), competition]));
+  const configByCompetition = new Map(configsResult.data.map((config) => [homeText(config, ["competition_id"], ""), config]));
+  const cupConfigByCompetition = new Map(cupConfigsResult.data.map((config) => [homeText(config, ["competition_id"], ""), config]));
+  if (selection.primarySelectionReason === "latest_completed") {
+    const completedWithChampion = competitionsResult.data
+      .filter((competition) => homeText(competition, ["season_status"], "") === "completed")
+      .sort(completedCompetitionSort)
+      .find((competition) => {
+        const competitionId = homeText(competition, ["id"], "");
+        return Boolean(homeText(configByCompetition.get(competitionId), ["champion_team_id"], ""))
+          || partitionsResult.data.some((partition) => homeText(partition, ["competition_id"], "") === competitionId && Boolean(homeText(partition, ["champion_team_id"], "")));
+      });
+    if (completedWithChampion) {
+      currentCompetition = completedWithChampion;
+      currentCompetitionId = homeText(currentCompetition, ["id"], "");
+      currentCompetitionType = normalizeCompetitionType(currentCompetition.competition_type);
+      loadStandings = supportsLeagueStandings(currentCompetitionType);
+    }
+  }
+  const nodeByMatchId = new Map(nodesResult.data.map((node) => [homeText(node, ["linked_match_id"], ""), node]));
+  const mappedMatches = matchesResult.data.map((match) => {
+    const competitionId = homeText(match, ["league_id"], "");
+    const competition = competitionsById.get(competitionId);
+    const node = nodeByMatchId.get(homeText(match, ["id"], ""));
+    const originalMatchweek = match.matchweek;
+    const scheduledMatchweek = match.scheduled_matchweek;
+    const effectiveMatchweek = scheduledMatchweek ?? originalMatchweek;
+    return mapHomeMatch({
+      ...match,
+      competition_id: competitionId,
+      competition_name: homeText(competition, ["name"], "Competition"),
+      competition_slug: homeText(competition, ["slug"], ""),
+      competition_type: homeText(competition, ["competition_type"], ""),
+      template_key: homeText(cupConfigByCompetition.get(competitionId), ["template_key"], homeText(configByCompetition.get(competitionId), ["template_key"], "")),
+      effective_matchweek: effectiveMatchweek,
+      original_matchweek: originalMatchweek,
+      partition_key: homeText(node, ["partition_key"], homeText(match, ["knockout_partition_key"], "main")),
+      partition_label: homeFixturePartitionLabel(homeText(node, ["partition_key"], "") || null) ?? "",
+      round_index: node?.round_index ?? null,
+      round_label: homeText(node, ["round_label"], ""),
+    }, participantsByCompetition.get(competitionId) ?? []);
+  });
+  const now = new Date().getTime();
+  const allScheduledMatches = sortUpcomingFixtures(mappedMatches.filter((match) => {
+    const status = homeText(match, ["status"], "").toLowerCase();
+    return !isHomeFinishedFixture(status) && homeFixtureTimeValue(match) >= now;
+  })).slice(0, 8);
+  const allFinishedMatches = mappedMatches.filter((match) => isHomeFinishedFixture(homeText(match, ["status"], ""))).sort((a, b) => homeFixtureTimeValue(b) - homeFixtureTimeValue(a));
+  const participantRows = participantsByCompetition.get(currentCompetitionId) ?? [];
   const kswParticipants = participantRows.filter((participant) => participant.is_ksw === true);
-  const mappedMatches = matchesResult.data.map((match) => mapHomeMatch(match, participantRows));
-  const allScheduledMatches = sortUpcomingFixtures(
-    mappedMatches.filter((match) => homeText(match, ["status"], "") === "scheduled"),
-  );
-  const allFinishedMatches = mappedMatches
-    .filter((match) => homeText(match, ["status"], "") === "finished")
-    .sort((a, b) => homeFixtureTimeValue(b) - homeFixtureTimeValue(a));
   const scheduledKswMatches = allScheduledMatches.filter((match) => match.isKswFixture);
   const finishedKswMatches = allFinishedMatches
     .filter(
@@ -540,9 +584,8 @@ export async function loadHomeCompetitionData(): Promise<HomeCompetitionData> {
         typeof match.home_score === "number" &&
         typeof match.away_score === "number",
     );
-  const allRecentResults = allFinishedMatches.slice(0, 5);
+  const allRecentResults = allFinishedMatches.slice(0, 8);
   const recentKswResults = finishedKswMatches.slice(0, 5);
-  const now = new Date().getTime();
   const nextKswFixture = scheduledKswMatches.find((match) => homeFixtureTimeValue(match) >= now);
   const summary = finishedKswMatches.reduce<HomeCompetitionSummary>(
     (record, match) => {
@@ -561,7 +604,41 @@ export async function loadHomeCompetitionData(): Promise<HomeCompetitionData> {
       wonCount: 0,
     },
   );
-  const errors = withResultErrors(competitionsResult, standingsResult, matchesResult, junctionResult, sponsorsResult);
+  let standings: HomeRow[] = [];
+  let standingsError: HomeCompetitionError | null = null;
+  const standardConfig = configByCompetition.get(currentCompetitionId);
+  if (standardConfig && homeText(standardConfig, ["template_key"], "") === "standard_league") {
+    const fixtureVersion = numberValue(standardConfig, "fixture_version");
+    standings = calculateStandardLeagueStandings({
+      config: { drawPoints: numberValue(standardConfig, "draw_points") || 1, lossPoints: numberValue(standardConfig, "loss_points"), winPoints: numberValue(standardConfig, "win_points") || 3 },
+      matches: mappedMatches.filter((match) => homeText(match, ["competition_id"], "") === currentCompetitionId && numberValue(match, "league_fixture_version") === fixtureVersion).map((match) => ({ awayScore: typeof match.away_score === "number" ? match.away_score : null, awayTeamId: homeText(match, ["away_team_id"], ""), fixtureKey: null, homeScore: typeof match.home_score === "number" ? match.home_score : null, homeTeamId: homeText(match, ["home_team_id"], ""), status: homeText(match, ["status"], "") })),
+      teams: participantRows.map((team) => ({ id: homeText(team, ["id"], ""), name: homeText(team, ["name"], "Team") })),
+    }).rows.map((row) => ({ team_id: row.teamId, team_name: row.teamName, is_ksw: participantRows.find((team) => homeText(team, ["id"], "") === row.teamId)?.is_ksw === true, played: row.played, won: row.wins, drawn: row.draws, lost: row.losses, goals_for: row.goalsFor, goals_against: row.goalsAgainst, goal_difference: row.goalDifference, points: row.points }));
+  } else if (loadStandings) {
+    const standingsResult = await runQuery<HomeRow>("league_standings_view", supabase.from("league_standings_view").select(standingsColumns).eq("league_id", currentCompetitionId));
+    standings = standingsResult.data;
+    standingsError = standingsResult.error;
+  }
+  const championTeamIds = new Set<string>();
+  configsResult.data.forEach((config) => championTeamIds.add(homeText(config, ["champion_team_id"], "")));
+  partitionsResult.data.forEach((partition) => championTeamIds.add(homeText(partition, ["champion_team_id"], "")));
+  const championTeamsResult = championTeamIds.size
+    ? await runQuery<HomeRow>("champion_teams", supabase.from("teams").select("id, name").in("id", Array.from(championTeamIds).filter(Boolean)))
+    : { data: [] as HomeRow[], error: null };
+  const championNameById = new Map(championTeamsResult.data.map((team) => [homeText(team, ["id"], ""), homeText(team, ["name"], "")]));
+  const latestChampions = competitionsResult.data.filter((competition) => homeText(competition, ["season_status"], "") === "completed").flatMap((competition) => {
+    const competitionId = homeText(competition, ["id"], "");
+    const base = { competitionId, competitionName: homeText(competition, ["name"], "Competition"), competitionSlug: homeText(competition, ["slug"], "") };
+    const leagueChampion = championNameById.get(homeText(configByCompetition.get(competitionId), ["champion_team_id"], ""));
+    if (leagueChampion) return [{ ...base, label: "Champion", teamName: leagueChampion }];
+    return partitionsResult.data.filter((partition) => homeText(partition, ["competition_id"], "") === competitionId).flatMap((partition) => {
+      const teamName = championNameById.get(homeText(partition, ["champion_team_id"], ""));
+      if (!teamName) return [];
+      const key = homeText(partition, ["partition_key"], "");
+      return [{ ...base, label: key === "division_1" ? "Champion Division 1" : key === "division_2" ? "Champion Division 2" : "Champion", teamName }];
+    });
+  }).slice(0, 4);
+  const errors = withResultErrors(competitionsResult, matchesResult, junctionResult, configsResult, cupConfigsResult, partitionsResult, nodesResult, sponsorsResult, teamsResult, championTeamsResult, { data: [], error: standingsError });
 
   return {
     allFinishedMatches,
@@ -573,6 +650,7 @@ export async function loadHomeCompetitionData(): Promise<HomeCompetitionData> {
     currentCompetition,
     errors,
     finishedKswMatches,
+    latestChampions,
     isNextCompetitionComingSoon: selection.isNextCompetitionComingSoon,
     isPrimaryCompetitionComingSoon: selection.isPrimaryCompetitionComingSoon,
     kswParticipants,
@@ -587,7 +665,7 @@ export async function loadHomeCompetitionData(): Promise<HomeCompetitionData> {
     recentKswResults,
     scheduledKswMatches,
     sponsors: sponsorsResult.data,
-    standings: standingsResult.data,
+    standings,
     summary,
   };
 }
