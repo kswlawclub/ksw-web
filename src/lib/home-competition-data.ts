@@ -44,18 +44,6 @@ export type HomeChampion = {
   teamName: string;
 };
 
-export type HomeChronicleHighlight = {
-  champions: Array<{ label: string; teamName: string }>;
-  competitionId: string;
-  competitionName: string;
-  competitionSlug: string;
-  competitionType: string;
-  matchCount: number;
-  participantCount: number;
-  runnerUpName: string | null;
-  season: string;
-};
-
 export type HomeCompetitionSelectionReason =
   | "active_featured"
   | "active_priority"
@@ -83,10 +71,6 @@ export type HomeCompetitionData = {
   currentCompetition: HomeRow | undefined;
   errors: HomeCompetitionError[];
   finishedKswMatches: HomeMappedMatch[];
-  featuredFixtures: HomeMappedMatch[];
-  featuredResults: HomeMappedMatch[];
-  featuredTemplateKey: string;
-  chronicleHighlights: HomeChronicleHighlight[];
   latestChampions: HomeChampion[];
   kswParticipants: HomeRow[];
   nextKswFixture: HomeMappedMatch | undefined;
@@ -453,10 +437,6 @@ export async function loadHomeCompetitionData(): Promise<HomeCompetitionData> {
         },
       ],
       finishedKswMatches: [],
-      featuredFixtures: [],
-      featuredResults: [],
-      featuredTemplateKey: "",
-      chronicleHighlights: [],
       latestChampions: [],
       kswParticipants: [],
       isNextCompetitionComingSoon: false,
@@ -504,10 +484,6 @@ export async function loadHomeCompetitionData(): Promise<HomeCompetitionData> {
       currentCompetition,
       errors,
       finishedKswMatches: [],
-      featuredFixtures: [],
-      featuredResults: [],
-      featuredTemplateKey: "",
-      chronicleHighlights: [],
       latestChampions: [],
       kswParticipants: [],
       isNextCompetitionComingSoon: selection.isNextCompetitionComingSoon,
@@ -598,22 +574,6 @@ export async function loadHomeCompetitionData(): Promise<HomeCompetitionData> {
     return !isHomeFinishedFixture(status) && homeFixtureTimeValue(match) >= now;
   })).slice(0, 8);
   const allFinishedMatches = mappedMatches.filter((match) => isHomeFinishedFixture(homeText(match, ["status"], ""))).sort((a, b) => homeFixtureTimeValue(b) - homeFixtureTimeValue(a));
-  const featuredFixtures = sortUpcomingFixtures(
-    mappedMatches.filter(
-      (match) =>
-        homeText(match, ["competition_id"], "") === currentCompetitionId &&
-        !isHomeFinishedFixture(homeText(match, ["status"], "")) &&
-        homeFixtureTimeValue(match) >= now,
-    ),
-  ).slice(0, 4);
-  const featuredResults = allFinishedMatches
-    .filter((match) => homeText(match, ["competition_id"], "") === currentCompetitionId)
-    .slice(0, 4);
-  const featuredTemplateKey = homeText(
-    cupConfigByCompetition.get(currentCompetitionId),
-    ["template_key"],
-    homeText(configByCompetition.get(currentCompetitionId), ["template_key"], ""),
-  );
   const participantRows = participantsByCompetition.get(currentCompetitionId) ?? [];
   const kswParticipants = participantRows.filter((participant) => participant.is_ksw === true);
   const scheduledKswMatches = allScheduledMatches.filter((match) => match.isKswFixture);
@@ -666,7 +626,7 @@ export async function loadHomeCompetitionData(): Promise<HomeCompetitionData> {
     ? await runQuery<HomeRow>("champion_teams", supabase.from("teams").select("id, name").in("id", Array.from(championTeamIds).filter(Boolean)))
     : { data: [] as HomeRow[], error: null };
   const championNameById = new Map(championTeamsResult.data.map((team) => [homeText(team, ["id"], ""), homeText(team, ["name"], "")]));
-  const persistedChampions = competitionsResult.data.filter((competition) => homeText(competition, ["season_status"], "") === "completed").flatMap((competition) => {
+  const latestChampions = competitionsResult.data.filter((competition) => homeText(competition, ["season_status"], "") === "completed").flatMap((competition) => {
     const competitionId = homeText(competition, ["id"], "");
     const base = { competitionId, competitionName: homeText(competition, ["name"], "Competition"), competitionSlug: homeText(competition, ["slug"], "") };
     const leagueChampion = championNameById.get(homeText(configByCompetition.get(competitionId), ["champion_team_id"], ""));
@@ -677,58 +637,7 @@ export async function loadHomeCompetitionData(): Promise<HomeCompetitionData> {
       const key = homeText(partition, ["partition_key"], "");
       return [{ ...base, label: key === "division_1" ? "Champion Division 1" : key === "division_2" ? "Champion Division 2" : "Champion", teamName }];
     });
-  });
-  const latestChampions = persistedChampions.slice(0, 4);
-  const chronicleHighlights = competitionsResult.data
-    .filter((competition) => homeText(competition, ["season_status"], "") === "completed")
-    .filter((competition) => !(selection.primarySelectionReason === "latest_completed" && homeText(competition, ["id"], "") === currentCompetitionId))
-    .sort(completedCompetitionSort)
-    .map((competition) => {
-      const competitionId = homeText(competition, ["id"], "");
-      const champions = persistedChampions
-        .filter((champion) => champion.competitionId === competitionId)
-        .map(({ label, teamName }) => ({ label, teamName }));
-      const competitionConfig = configByCompetition.get(competitionId);
-      const isStandardLeague = homeText(competitionConfig, ["template_key"], "") === "standard_league";
-      let runnerUpName: string | null = null;
-
-      if (isStandardLeague && champions[0]) {
-        const fixtureVersion = numberValue(competitionConfig ?? {}, "fixture_version");
-        const standingsRows = calculateStandardLeagueStandings({
-          config: {
-            drawPoints: numberValue(competitionConfig ?? {}, "draw_points") || 1,
-            lossPoints: numberValue(competitionConfig ?? {}, "loss_points"),
-            winPoints: numberValue(competitionConfig ?? {}, "win_points") || 3,
-          },
-          matches: mappedMatches
-            .filter((match) => homeText(match, ["competition_id"], "") === competitionId && numberValue(match, "league_fixture_version") === fixtureVersion)
-            .map((match) => ({
-              awayScore: typeof match.away_score === "number" ? match.away_score : null,
-              awayTeamId: homeText(match, ["away_team_id"], ""),
-              fixtureKey: null,
-              homeScore: typeof match.home_score === "number" ? match.home_score : null,
-              homeTeamId: homeText(match, ["home_team_id"], ""),
-              status: homeText(match, ["status"], ""),
-            })),
-          teams: (participantsByCompetition.get(competitionId) ?? []).map((team) => ({ id: homeText(team, ["id"], ""), name: homeText(team, ["name"], "Team") })),
-        }).rows;
-        runnerUpName = standingsRows.find((row) => row.teamName !== champions[0].teamName)?.teamName ?? null;
-      }
-
-      return {
-        champions,
-        competitionId,
-        competitionName: homeText(competition, ["name"], "Competition"),
-        competitionSlug: homeText(competition, ["slug"], ""),
-        competitionType: homeText(competition, ["competition_type"], ""),
-        matchCount: mappedMatches.filter((match) => homeText(match, ["competition_id"], "") === competitionId).length,
-        participantCount: (participantsByCompetition.get(competitionId) ?? []).length,
-        runnerUpName,
-        season: homeText(competition, ["season", "start_date"], ""),
-      };
-    })
-    .filter((highlight) => highlight.champions.length > 0)
-    .slice(0, 2);
+  }).slice(0, 4);
   const errors = withResultErrors(competitionsResult, matchesResult, junctionResult, configsResult, cupConfigsResult, partitionsResult, nodesResult, sponsorsResult, teamsResult, championTeamsResult, { data: [], error: standingsError });
 
   return {
@@ -738,13 +647,9 @@ export async function loadHomeCompetitionData(): Promise<HomeCompetitionData> {
     allRecentResults,
     allScheduledMatches,
     configured: errors.length === 0,
-    chronicleHighlights,
     currentCompetition,
     errors,
     finishedKswMatches,
-    featuredFixtures,
-    featuredResults,
-    featuredTemplateKey,
     latestChampions,
     isNextCompetitionComingSoon: selection.isNextCompetitionComingSoon,
     isPrimaryCompetitionComingSoon: selection.isPrimaryCompetitionComingSoon,
