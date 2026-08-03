@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AnalyticsPageView } from "@/components/analytics-page-view";
 import { GalleryGrid, type GalleryImage } from "@/components/gallery-grid";
 import { getSupabase } from "@/lib/supabase";
 
@@ -136,6 +137,7 @@ export default async function GalleryPage() {
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#061426] text-slate-100">
+      <AnalyticsPageView eventTypes={["page_view", "gallery_view"]} />
       <section className="relative overflow-hidden border-b border-[#d8ad45]/25">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.18),transparent_34%),linear-gradient(135deg,#061426,#0b2745_58%,#071b31)]" />
         <div className="relative mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-10">

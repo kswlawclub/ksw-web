@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { AnalyticsPageView } from "@/components/analytics-page-view";
+import { AnalyticsSponsorLink } from "@/components/analytics-sponsor-link";
 import { LiveCountdown } from "@/components/live-countdown";
 import { TeamLogo } from "@/components/team-logo";
 import {
@@ -509,6 +511,7 @@ export default async function Home() {
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#061426] text-slate-100">
+      <AnalyticsPageView />
       <style>
         {`
           @keyframes kswFloat {
@@ -1384,16 +1387,17 @@ export default async function Home() {
                     );
 
                     return isString(sponsorWebsite) ? (
-                      <a
+                      <AnalyticsSponsorLink
                         aria-label={`Visit ${sponsorName} website`}
                         className="cursor-pointer"
                         href={sponsorWebsite}
                         key={text(sponsor, ["id", "name"], `${section.key}-${index}`)}
                         rel="noopener noreferrer"
+                        sponsorId={text(sponsor, ["id"], "")}
                         target="_blank"
                       >
                         {sponsorMark}
-                      </a>
+                      </AnalyticsSponsorLink>
                     ) : (
                       <div key={text(sponsor, ["id", "name"], `${section.key}-${index}`)}>
                         {sponsorMark}

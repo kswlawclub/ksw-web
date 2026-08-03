@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AnalyticsSponsorLink } from "@/components/analytics-sponsor-link";
 import { getSupabase } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -346,16 +347,17 @@ export default async function PartnersPage() {
                     );
 
                     return websiteUrl ? (
-                      <a
+                      <AnalyticsSponsorLink
                         aria-label={`Visit ${name} website`}
                         className="cursor-pointer"
                         href={websiteUrl}
                         key={sponsor?.id ?? `${section.key}-${index}`}
                         rel="noopener noreferrer"
+                        sponsorId={sponsor?.id ?? ""}
                         target="_blank"
                       >
                         {sponsorMark}
-                      </a>
+                      </AnalyticsSponsorLink>
                     ) : (
                       <div key={sponsor?.id ?? `${section.key}-${index}`}>
                         {sponsorMark}

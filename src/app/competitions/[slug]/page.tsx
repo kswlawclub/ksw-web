@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { AnalyticsPageView } from "@/components/analytics-page-view";
 import { CompetitionDetailPage } from "@/components/competition-detail-page";
 import {
   loadCompetitionBySlug,
@@ -48,5 +49,5 @@ export default async function CompetitionPage({ params }: PageProps) {
     loadPublicCupV2Data(competition),
   ]);
 
-  return <CompetitionDetailPage data={{ ...data, publicCupV2 }} />;
+  return <><AnalyticsPageView competitionId={text(competition, ["id"], "")} eventTypes={["page_view", "competition_view"]} /><CompetitionDetailPage data={{ ...data, publicCupV2 }} /></>;
 }
