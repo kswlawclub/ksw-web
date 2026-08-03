@@ -43,10 +43,10 @@ export default async function CompetitionPage({ params }: PageProps) {
     notFound();
   }
 
-  const [data] = await Promise.all([
+  const [data, publicCupV2] = await Promise.all([
     loadCompetitionDetailData(competition),
     loadPublicCupV2Data(competition),
   ]);
 
-  return <CompetitionDetailPage data={data} />;
+  return <CompetitionDetailPage data={{ ...data, publicCupV2 }} />;
 }

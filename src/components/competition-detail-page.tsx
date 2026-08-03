@@ -3,6 +3,7 @@ import Link from "next/link";
 import { CompetitionResultsTable } from "@/components/competition-results-table";
 import { LeagueTable } from "@/components/league-table";
 import { TeamLogo } from "@/components/team-logo";
+import { PublicKnockoutBracket } from "@/components/public-knockout-bracket";
 import {
   calculateCupGroupStandings,
   type CupGroupStanding,
@@ -24,6 +25,7 @@ import {
   supportsLeagueStandings,
   type CompetitionType,
 } from "@/lib/competition-format";
+import type { PublicCupV2Data } from "@/lib/public-cup-v2-types";
 
 type CompetitionDetailData = {
   competition: Row;
@@ -33,6 +35,7 @@ type CompetitionDetailData = {
   scheduledMatches: Row[];
   snapshots: Row[];
   sponsors: Row[];
+  publicCupV2?: PublicCupV2Data | null;
   standardLeague?: { championAt: string | null; championTeamId: string | null; totalGoals: number } | null;
   standings: Row[];
   teams: Row[];
@@ -738,7 +741,7 @@ function TournamentLegacy({ competition }: { competition: Row }) {
 }
 
 export function CompetitionDetailPage({ data }: { data: CompetitionDetailData }) {
-  const { competition, cupGroups = [], cupGroupTeams = [], matches, scheduledMatches, snapshots, sponsors, standardLeague = null, standings, teams } = data;
+  const { competition, cupGroups = [], cupGroupTeams = [], matches, scheduledMatches, snapshots, sponsors, publicCupV2 = null, standardLeague = null, standings, teams } = data;
   const competitionType = normalizeCompetitionType(text(competition, ["competition_type"], ""));
   const seasonStatus = text(competition, ["season_status"], "active").toLowerCase();
   const isLeague = isLeagueCompetition(competitionType);
@@ -753,14 +756,6 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
   const kswMatchesNewest = matches.filter(isKswMatch).sort((a, b) => matchTime(b) - matchTime(a));
   const kswMatchesOldest = [...kswMatchesNewest].reverse();
   const allFixtures = [...scheduledMatches, ...matches].sort((a, b) => matchTime(a) - matchTime(b));
-  const kswTournamentJourney = allFixtures.filter(isKswMatchByFlag).sort((a, b) => matchTime(a) - matchTime(b));
-  const cupGroupStandings = isCup
-    ? calculateCupGroupStandings({
-        groups: cupGroups,
-        matches: [...matches, ...scheduledMatches],
-        teams: cupGroupTeams,
-      })
-    : [];
   const summaryStats = kswStanding
     ? [
         [seasonStatus === "completed" ? "Final Position" : "Current Position", `${kswIndex + 1} / ${sortedStandings.length}`],
@@ -779,6 +774,15 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
   ].filter(Boolean);
   const standardChampion = standardLeague?.championTeamId ? teams.find((team) => text(team, ["id"], "") === standardLeague.championTeamId) : undefined;
   const standardCompleted = Boolean(standardLeague && seasonStatus === "completed");
+  const kswStandardV2 = publicCupV2?.templateKey === "ksw_standard" ? publicCupV2 : null;
+  const knockoutMatchIds = new Set(kswStandardV2?.linkedMatches.map((match) => match.id) ?? []);
+  const legacyMatches = kswStandardV2 ? matches.filter((match) => !knockoutMatchIds.has(text(match, ["id"]))) : matches;
+  const legacyScheduledMatches = kswStandardV2 ? scheduledMatches.filter((match) => !knockoutMatchIds.has(text(match, ["id"]))) : scheduledMatches;
+  const legacyFixtures = [...legacyScheduledMatches, ...legacyMatches];
+  const legacyKswJourney = legacyFixtures.filter(isKswMatchByFlag).sort((a, b) => matchTime(a) - matchTime(b));
+  const legacyCupGroupStandings = isCup
+    ? calculateCupGroupStandings({ groups: cupGroups, matches: legacyFixtures, teams: cupGroupTeams })
+    : [];
 
   if (isTournamentArchive) {
     const tournamentMetadata = [
@@ -789,10 +793,11 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
     ].filter(Boolean);
     const tournamentCtas = [
       ["Overview", "#overview", true],
-      ["Fixtures", "#fixtures", scheduledMatches.length > 0],
-      ["KSW Journey", "#ksw-journey", kswTournamentJourney.length > 0],
-      ["Group Standings", "#group-standings", isCup && cupGroupStandings.length > 0],
-      [isCup ? "Cup Results" : "Tournament Results", "#tournament-results", matches.length > 0],
+      ["Fixtures", "#fixtures", legacyScheduledMatches.length > 0],
+      ["KSW Journey", "#ksw-journey", legacyKswJourney.length > 0],
+      ["Group Standings", "#group-standings", isCup && legacyCupGroupStandings.length > 0],
+      ["Knockout Bracket", "#knockout-bracket", Boolean(kswStandardV2?.nodes.length)],
+      [isCup ? "Cup Results" : "Tournament Results", "#tournament-results", legacyMatches.length > 0],
       ["Participating Teams", "#participating-teams", teams.length > 0],
       ["Partners", "#partners", sponsors.some((sponsor) => sponsor.is_active !== false)],
     ] as const;
@@ -848,17 +853,18 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
         <TournamentOverview
           competition={competition}
           competitionType={competitionType}
-          matches={matches}
-          scheduledMatches={scheduledMatches}
+          matches={legacyMatches}
+          scheduledMatches={legacyScheduledMatches}
           teams={teams}
         />
-        <UpcomingFixtures matches={scheduledMatches} />
-        <TournamentJourney matches={kswTournamentJourney} />
-        {isCup ? <PublicCupGroupStandings standings={cupGroupStandings} /> : null}
-        {matches.length ? (
+        <UpcomingFixtures matches={legacyScheduledMatches} />
+        <TournamentJourney matches={legacyKswJourney} />
+        {isCup ? <PublicCupGroupStandings standings={legacyCupGroupStandings} /> : null}
+        {kswStandardV2 ? <PublicKnockoutBracket data={kswStandardV2} seasonCompleted={seasonStatus === "completed"} /> : null}
+        {legacyMatches.length ? (
           <CompetitionResultsTable
             isLeague={false}
-            matches={matches}
+            matches={legacyMatches}
             sectionId="tournament-results"
             subtitle="Complete results from every match in this competition."
             title={isCup ? "Cup Results" : "Tournament Results"}
