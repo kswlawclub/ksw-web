@@ -13,6 +13,7 @@ const modules = [
   { title: "Manage Gallery", href: "/admin/gallery", status: "Open module" },
   { title: "Manage Sponsors", href: "/admin/sponsors", status: "Open module" },
   { title: "Competition Test", href: "/admin/system/competition-test", status: "Run checks", description: "Read-only acceptance checks for League, Cup, Public, and Analytics data." },
+  { title: "Website Analytics", href: "/admin/analytics", status: "Open dashboard", description: "Anonymous traffic, competition interest, and sponsor-click summaries." },
 ];
 
 export default function AdminDashboardPage() {
