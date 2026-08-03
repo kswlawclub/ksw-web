@@ -33,6 +33,7 @@ type CompetitionDetailData = {
   scheduledMatches: Row[];
   snapshots: Row[];
   sponsors: Row[];
+  standardLeague?: { championAt: string | null; championTeamId: string | null; totalGoals: number } | null;
   standings: Row[];
   teams: Row[];
 };
@@ -512,6 +513,78 @@ function UpcomingFixtures({ matches, title = "Upcoming Fixtures" }: { matches: R
   );
 }
 
+function StandardLeagueMatchweeks({ matches, scheduledMatches }: { matches: Row[]; scheduledMatches: Row[] }) {
+  const fixtures = [...matches, ...scheduledMatches];
+  const structuralMax = Math.max(0, ...fixtures.map((match) => number(match, ["matchweek"])));
+  const weeks = new Map<number, Row[]>();
+
+  fixtures.forEach((match) => {
+    const effectiveMatchweek = number(match, ["effective_matchweek", "scheduled_matchweek", "matchweek"]);
+    if (!effectiveMatchweek) return;
+    weeks.set(effectiveMatchweek, [...(weeks.get(effectiveMatchweek) ?? []), match]);
+  });
+
+  const groupedWeeks = Array.from(weeks.entries()).sort(([left], [right]) => left - right);
+  if (!groupedWeeks.length) return null;
+
+  return (
+    <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="fixtures">
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
+        <div className="border-b border-slate-200 px-4 py-5 sm:px-6">
+          <h2 className="text-2xl font-black">โปรแกรมและผลการแข่งขัน</h2>
+        </div>
+        <div className="grid gap-5 bg-slate-100 p-4 sm:p-6">
+          {groupedWeeks.map(([matchweek, weekMatches]) => {
+            const supplemental = matchweek > structuralMax;
+
+            return (
+              <section className="overflow-hidden rounded-xl border border-slate-200 bg-white" key={matchweek}>
+                <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
+                  <h3 className="text-base font-black text-[#061426]">
+                    {supplemental ? "นัดตกค้าง / สัปดาห์เพิ่มเติม" : `Matchweek ${matchweek}`}
+                  </h3>
+                  {supplemental ? <span className="rounded-full bg-[#fff4dc] px-2.5 py-1 text-xs font-black text-[#8a6418]">Matchweek {matchweek}</span> : null}
+                </header>
+                <div className="divide-y divide-slate-100">
+                  {weekMatches.sort((left, right) => matchTime(left) - matchTime(right)).map((match) => {
+                    const homeName = text(match, ["home_team_name"], "ทีมเหย้า");
+                    const awayName = text(match, ["away_team_name"], "ทีมเยือน");
+                    const finished = ["finished", "completed"].includes(text(match, ["status"], "").toLowerCase());
+                    const originalMatchweek = number(match, ["matchweek"]);
+                    const rescheduled = originalMatchweek > 0 && originalMatchweek !== matchweek;
+                    const matchDate = formatDateTime(match.match_date);
+                    const venue = text(match, ["venue"], "");
+
+                    return (
+                      <article className="grid gap-2 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center sm:gap-4" key={text(match, ["id"])}>
+                        <p className="min-w-0 text-sm font-black text-[#061426] sm:text-right">{homeName}</p>
+                        <div className="flex flex-wrap items-center gap-2 sm:justify-center">
+                          {finished ? (
+                            <span className="whitespace-nowrap rounded-md bg-[#061426] px-3 py-1 text-sm font-black text-white">
+                              {number(match, ["home_score"])} - {number(match, ["away_score"])}
+                            </span>
+                          ) : (
+                            <span className="whitespace-nowrap rounded-md bg-slate-100 px-3 py-1 text-sm font-black text-slate-600">VS</span>
+                          )}
+                          {rescheduled ? <span className="rounded-full bg-[#fff4dc] px-2 py-1 text-[11px] font-black text-[#8a6418]">เลื่อนมาจาก Matchweek {originalMatchweek}</span> : null}
+                        </div>
+                        <p className="min-w-0 text-sm font-black text-[#061426] sm:text-left">{awayName}</p>
+                        <p className="text-xs font-semibold text-slate-500 sm:col-span-3 sm:text-center">
+                          {finished ? "จบการแข่งขัน" : matchDate || "รอกำหนด"}{!finished && venue ? ` · ${venue}` : ""}
+                        </p>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function TournamentTeams({ teams }: { teams: Row[] }) {
   if (!teams.length) return null;
 
@@ -665,7 +738,7 @@ function TournamentLegacy({ competition }: { competition: Row }) {
 }
 
 export function CompetitionDetailPage({ data }: { data: CompetitionDetailData }) {
-  const { competition, cupGroups = [], cupGroupTeams = [], matches, scheduledMatches, snapshots, sponsors, standings, teams } = data;
+  const { competition, cupGroups = [], cupGroupTeams = [], matches, scheduledMatches, snapshots, sponsors, standardLeague = null, standings, teams } = data;
   const competitionType = normalizeCompetitionType(text(competition, ["competition_type"], ""));
   const seasonStatus = text(competition, ["season_status"], "active").toLowerCase();
   const isLeague = isLeagueCompetition(competitionType);
@@ -704,6 +777,8 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
     dateRange(competition),
     text(competition, ["location"], ""),
   ].filter(Boolean);
+  const standardChampion = standardLeague?.championTeamId ? teams.find((team) => text(team, ["id"], "") === standardLeague.championTeamId) : undefined;
+  const standardCompleted = Boolean(standardLeague && seasonStatus === "completed");
 
   if (isTournamentArchive) {
     const tournamentMetadata = [
@@ -849,6 +924,8 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
         </div>
       </section>
 
+      {standardLeague ? <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-10"><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl border border-[#d8ad45]/35 bg-white p-4"><p className="text-xs font-black text-[#8a6418]">{standardCompleted ? "Champion" : "ตารางคะแนนล่าสุด"}</p><p className="mt-2 text-xl font-black">{standardChampion ? text(standardChampion, ["name"], "-") : "รอยืนยันแชมป์"}</p>{standardLeague.championAt ? <p className="mt-1 text-xs text-slate-500">{formatDate(standardLeague.championAt)}</p> : null}</div><div className="rounded-xl border bg-white p-4"><p className="text-xs font-black text-slate-500">Runner-up</p><p className="mt-2 text-lg font-black">{text(standings[1], ["team_name"], "-")}</p></div><div className="rounded-xl border bg-white p-4"><p className="text-xs font-black text-slate-500">Third Place</p><p className="mt-2 text-lg font-black">{text(standings[2], ["team_name"], "-")}</p></div></div>{standardCompleted ? <div className="mt-3 grid gap-2 rounded-xl border bg-white p-4 text-sm sm:grid-cols-4"><p>ทีม <strong>{teams.length}</strong></p><p>แมตช์จบแล้ว <strong>{matches.length}/{matches.length + scheduledMatches.length}</strong></p><p>ประตูรวม <strong>{standardLeague.totalGoals}</strong></p><p>เฉลี่ย <strong>{matches.length ? (standardLeague.totalGoals / matches.length).toFixed(2) : "0.00"}</strong> ต่อนัด</p></div> : null}</section> : null}
+
       {showLeagueStandings && kswStanding ? (
         <section className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10" id="season-summary">
           <div className="rounded-2xl border border-[#d8ad45]/30 bg-white p-5 shadow-xl shadow-slate-900/10 sm:p-6">
@@ -906,7 +983,9 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
         </section>
       ) : null}
 
-      {!isFriendly && matches.length ? (
+      {standardLeague ? <StandardLeagueMatchweeks matches={matches} scheduledMatches={scheduledMatches} /> : null}
+
+      {!standardLeague && !isFriendly && matches.length ? (
         <CompetitionResultsTable isLeague={isLeague} matches={matches} />
       ) : null}
 

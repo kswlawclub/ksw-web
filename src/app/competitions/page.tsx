@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { loadPublishedCompetitions, Row, text } from "@/lib/competition-data";
+import { calculateStandardLeagueStandings } from "@/lib/league-template/standings";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import {
   getCompetitionTypeEnglishLabel,
@@ -158,6 +159,94 @@ async function withCompletedCupChampions(competitions: Row[]) {
   });
 }
 
+async function withCompletedStandardLeagueArchiveData(competitions: Row[]) {
+  const completedLeagueIds = competitions
+    .filter((competition) => isLeagueCompetition(normalizeCompetitionType(text(competition, ["competition_type"], ""))) && text(competition, ["season_status"], "") === "completed")
+    .map((competition) => text(competition, ["id"], ""))
+    .filter(Boolean);
+  const admin = getSupabaseAdmin();
+  if (!admin || !completedLeagueIds.length) return competitions;
+
+  const configsResult = await admin
+    .from("competition_league_configs")
+    .select("competition_id, template_key, fixture_version, win_points, draw_points, loss_points, champion_team_id")
+    .in("competition_id", completedLeagueIds)
+    .eq("template_key", "standard_league");
+  if (configsResult.error) {
+    console.error("completed standard league config lookup failed", configsResult.error);
+    return competitions;
+  }
+
+  const configs = (configsResult.data ?? []) as Record<string, unknown>[];
+  const configByCompetition = new Map(configs.map((config) => [text(config, ["competition_id"], ""), config]));
+  const standardLeagueIds = Array.from(configByCompetition.keys()).filter(Boolean);
+  if (!standardLeagueIds.length) return competitions;
+
+  const [participantsResult, matchesResult] = await Promise.all([
+    admin.from("competition_teams").select("competition_id, team_id").in("competition_id", standardLeagueIds).eq("is_active", true),
+    admin.from("matches").select("league_id, league_fixture_version, home_team_id, away_team_id, home_score, away_score, status").in("league_id", standardLeagueIds),
+  ]);
+  if (participantsResult.error || matchesResult.error) {
+    console.error("completed standard league archive lookup failed", participantsResult.error ?? matchesResult.error);
+    return competitions;
+  }
+
+  const participantRows = (participantsResult.data ?? []) as Record<string, unknown>[];
+  const participantIds = Array.from(new Set(participantRows.map((row) => text(row, ["team_id"], "")).filter(Boolean)));
+  const teamsResult = participantIds.length ? await admin.from("teams").select("id, name").in("id", participantIds) : { data: [], error: null };
+  if (teamsResult.error) {
+    console.error("completed standard league archive team lookup failed", teamsResult.error);
+    return competitions;
+  }
+  const teamNames = new Map(((teamsResult.data ?? []) as Record<string, unknown>[]).map((team) => [text(team, ["id"], ""), text(team, ["name"], "")]));
+  const participantsByCompetition = new Map<string, { id: string; name: string }[]>();
+  participantRows.forEach((participant) => {
+    const competitionId = text(participant, ["competition_id"], "");
+    const teamId = text(participant, ["team_id"], "");
+    const name = teamNames.get(teamId);
+    if (!competitionId || !teamId || !name) return;
+    participantsByCompetition.set(competitionId, [...(participantsByCompetition.get(competitionId) ?? []), { id: teamId, name }]);
+  });
+  const matchesByCompetition = new Map<string, Record<string, unknown>[]>();
+  ((matchesResult.data ?? []) as Record<string, unknown>[]).forEach((match) => {
+    const competitionId = text(match, ["league_id"], "");
+    if (!competitionId) return;
+    matchesByCompetition.set(competitionId, [...(matchesByCompetition.get(competitionId) ?? []), match]);
+  });
+
+  return competitions.map((competition) => {
+    const competitionId = text(competition, ["id"], "");
+    const config = configByCompetition.get(competitionId);
+    if (!config) return competition;
+    const fixtureVersion = Number(config.fixture_version ?? 0);
+    const leagueMatches = (matchesByCompetition.get(competitionId) ?? []).filter((match) => Number(match.league_fixture_version ?? 0) === fixtureVersion);
+    const standings = calculateStandardLeagueStandings({
+      config: {
+        drawPoints: Number(config.draw_points ?? 1),
+        lossPoints: Number(config.loss_points ?? 0),
+        winPoints: Number(config.win_points ?? 3),
+      },
+      matches: leagueMatches.map((match) => ({
+        awayScore: typeof match.away_score === "number" ? match.away_score : null,
+        awayTeamId: text(match, ["away_team_id"], ""),
+        fixtureKey: null,
+        homeScore: typeof match.home_score === "number" ? match.home_score : null,
+        homeTeamId: text(match, ["home_team_id"], ""),
+        status: text(match, ["status"], ""),
+      })),
+      teams: participantsByCompetition.get(competitionId) ?? [],
+    }).rows;
+    const championId = text(config, ["champion_team_id"], "");
+    return {
+      ...competition,
+      standard_champion_name: teamNames.get(championId) ?? "",
+      standard_fixture_count: leagueMatches.length,
+      standard_participant_count: (participantsByCompetition.get(competitionId) ?? []).length,
+      standard_runner_up_name: standings.find((row) => row.teamId !== championId)?.teamName ?? "",
+    };
+  });
+}
+
 function CompetitionCard({ competition }: { competition: Row }) {
   const slug = text(competition, ["slug"], "");
   const coverImageUrl = text(competition, ["cover_image_url"], "");
@@ -177,6 +266,10 @@ function CompetitionCard({ competition }: { competition: Row }) {
   const champion = text(competition, ["champion_name"], "");
   const division1Champion = text(competition, ["champion_division_1"], "");
   const division2Champion = text(competition, ["champion_division_2"], "");
+  const standardChampion = text(competition, ["standard_champion_name"], "");
+  const standardRunnerUp = text(competition, ["standard_runner_up_name"], "");
+  const standardTeamCount = text(competition, ["standard_participant_count"], "");
+  const standardFixtureCount = text(competition, ["standard_fixture_count"], "");
 
   const cardContent = (
     <>
@@ -210,6 +303,8 @@ function CompetitionCard({ competition }: { competition: Row }) {
           <p className="mt-3 text-sm leading-6 text-slate-600">{description}</p>
           {completed && division1Champion && division2Champion ? <div className="mt-3 text-sm font-black text-[#8a6418]"><p>2 Champions</p><p>Division 1: {division1Champion}</p><p>Division 2: {division2Champion}</p></div> : null}
           {completed && champion ? <p className="mt-3 text-sm font-black text-[#8a6418]">แชมป์: {champion}</p> : null}
+          {completed && competitionType === "league" && standardChampion ? <div className="mt-3 text-sm font-black text-[#8a6418]"><p>แชมป์: {standardChampion}</p>{standardRunnerUp ? <p className="mt-1 text-slate-600">รองแชมป์: {standardRunnerUp}</p> : null}</div> : null}
+          {completed && competitionType === "league" && (standardTeamCount || standardFixtureCount) ? <p className="mt-2 text-xs font-bold text-slate-500">{standardTeamCount ? `${standardTeamCount} ทีม` : ""}{standardTeamCount && standardFixtureCount ? " · " : ""}{standardFixtureCount ? `${standardFixtureCount} นัด` : ""}</p> : null}
         </div>
         {slug ? (
           <span className="inline-flex items-center justify-center rounded-md bg-[#061426] px-4 py-2.5 text-sm font-black text-[#f4d58a] shadow-lg shadow-slate-900/10 transition-colors group-hover:bg-[#0b2745]">
@@ -263,7 +358,7 @@ function CompetitionSection({ items, showAccent = true, title }: { items: Row[];
 }
 
 export default async function CompetitionsPage() {
-  const competitions = sortCompetitions(await withCompletedCupChampions(await loadPublishedCompetitions()));
+  const competitions = sortCompetitions(await withCompletedStandardLeagueArchiveData(await withCompletedCupChampions(await loadPublishedCompetitions())));
   const completedCups = competitions.filter((competition) =>
     isCupCompetition(normalizeCompetitionType(text(competition, ["competition_type"], "")))
     && text(competition, ["season_status"], "active") === "completed",

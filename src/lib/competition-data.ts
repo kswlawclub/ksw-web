@@ -1,6 +1,7 @@
 import { getSupabase, getSupabaseConfig } from "@/lib/supabase";
 import { loadCompetitionParticipants } from "@/lib/competition-participants";
 import { normalizeCompetitionType, supportsLeagueStandings } from "@/lib/competition-format";
+import { calculateStandardLeagueStandings } from "@/lib/league-template/standings";
 
 export type Row = Record<string, unknown>;
 
@@ -9,7 +10,7 @@ export const competitionColumns =
 export const standingsColumns =
   "team_id, league_id, team_name, short_name, logo_url, is_ksw, played, won, drawn, lost, goals_for, goals_against, goal_difference, points";
 export const matchColumns =
-  "id, league_id, group_id, competition_stage, fixture_source, match_date, home_team_id, away_team_id, home_score, away_score, venue, status, match_type";
+  "id, league_id, group_id, competition_stage, fixture_source, matchweek, scheduled_matchweek, league_fixture_version, league_fixture_key, match_date, home_team_id, away_team_id, home_score, away_score, venue, status, match_type";
 export const groupColumns =
   "id, competition_id, name, label, sort_order, qualifiers_count";
 export const competitionTeamGroupColumns =
@@ -234,8 +235,13 @@ export async function loadCompetitionDetailData(competition: Row) {
   }
 
   const isCup = competitionType === "cup";
+  const standardConfigRows = competitionType === "league"
+    ? await runSupabaseQuery("standard_league_config", supabase.from("competition_league_configs").select("template_key, fixture_version, win_points, draw_points, loss_points, champion_team_id, champion_at").eq("competition_id", leagueId).limit(1))
+    : [] as Row[];
+  const standardConfig = standardConfigRows[0];
+  const isStandardLeague = text(standardConfig, ["template_key"], "") === "standard_league";
   const [standings, finishedMatches, scheduledMatches, snapshots, teams, sponsors, cupGroups, cupGroupRows] = await Promise.all([
-    loadStandings
+    loadStandings && !isStandardLeague
       ? runSupabaseQuery(
           "competition_standings",
           supabase.from("league_standings_view").select(standingsColumns).eq("league_id", leagueId),
@@ -247,7 +253,7 @@ export async function loadCompetitionDetailData(competition: Row) {
         .from("matches")
         .select(matchColumns)
         .eq("league_id", leagueId)
-        .eq("status", "finished")
+        .in("status", ["finished", "completed"])
         .order("match_date", { ascending: false }),
     ),
     runSupabaseQuery(
@@ -296,16 +302,26 @@ export async function loadCompetitionDetailData(competition: Row) {
       : Promise.resolve([] as Row[]),
   ]);
   const matchTeamLookup = await loadMatchTeamLookup(supabase, [...finishedMatches, ...scheduledMatches]);
+  const standardMatches = [...finishedMatches, ...scheduledMatches].map((match) => ({
+    ...match,
+    effective_matchweek: typeof match.scheduled_matchweek === "number" ? match.scheduled_matchweek : match.matchweek,
+  }));
+  const standardStandings = isStandardLeague ? calculateStandardLeagueStandings({
+    config: { drawPoints: number(standardConfig, ["draw_points"]), lossPoints: number(standardConfig, ["loss_points"]), winPoints: number(standardConfig, ["win_points"]) || 3 },
+    matches: standardMatches.map((match) => ({ awayScore: typeof match.away_score === "number" ? match.away_score : null, awayTeamId: text(match, ["away_team_id"], ""), fixtureKey: text(match, ["league_fixture_key"], "") || null, homeScore: typeof match.home_score === "number" ? match.home_score : null, homeTeamId: text(match, ["home_team_id"], ""), status: text(match, ["status"], "") })),
+    teams: teams.map((team) => ({ id: text(team, ["id"], ""), name: text(team, ["name"], "") })),
+  }).rows.map((row, index) => ({ drawn: row.draws, goal_difference: row.goalDifference, goals_against: row.goalsAgainst, goals_for: row.goalsFor, lost: row.losses, played: row.played, points: row.points, position: index + 1, team_id: row.teamId, team_name: row.teamName, won: row.wins })) : standings;
 
   return {
     competition,
     cupGroups,
     cupGroupTeams: withGroupTeamData(cupGroupRows, teams),
-    matches: withMatchTeams(finishedMatches, matchTeamLookup),
-    scheduledMatches: withMatchTeams(scheduledMatches, matchTeamLookup),
+    matches: withMatchTeams(standardMatches.filter((match) => ["finished", "completed"].includes(text(match, ["status"], ""))), matchTeamLookup),
+    scheduledMatches: withMatchTeams(standardMatches.filter((match) => match.status === "scheduled"), matchTeamLookup),
     snapshots,
     sponsors,
-    standings,
+    standings: standardStandings,
+    standardLeague: isStandardLeague ? { championAt: text(standardConfig, ["champion_at"], "") || null, championTeamId: text(standardConfig, ["champion_team_id"], "") || null, totalGoals: standardMatches.reduce((sum, match) => sum + number(match, ["home_score"]) + number(match, ["away_score"]), 0) } : null,
     teams,
   };
 }
