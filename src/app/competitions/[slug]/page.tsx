@@ -8,6 +8,7 @@ import {
   text,
 } from "@/lib/competition-data";
 import { loadPublicCupV2Data } from "@/lib/public-cup-v2-loader";
+import { loadPublicCompetitionGroupData } from "@/lib/public-competition-group-loader";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -44,10 +45,11 @@ export default async function CompetitionPage({ params }: PageProps) {
     notFound();
   }
 
-  const [data, publicCupV2] = await Promise.all([
+  const [data, publicCupV2, publicCupGroupData] = await Promise.all([
     loadCompetitionDetailData(competition),
     loadPublicCupV2Data(competition),
+    loadPublicCompetitionGroupData(competition),
   ]);
 
-  return <><AnalyticsPageView competitionId={text(competition, ["id"], "")} eventTypes={["page_view", "competition_view"]} /><CompetitionDetailPage data={{ ...data, publicCupV2 }} /></>;
+  return <><AnalyticsPageView competitionId={text(competition, ["id"], "")} eventTypes={["page_view", "competition_view"]} /><CompetitionDetailPage data={{ ...data, publicCupGroupData, publicCupV2 }} /></>;
 }

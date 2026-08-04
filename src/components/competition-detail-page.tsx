@@ -27,6 +27,7 @@ import {
   type CompetitionType,
 } from "@/lib/competition-format";
 import type { PublicCupV2Data } from "@/lib/public-cup-v2-types";
+import type { PublicCompetitionGroupData } from "@/lib/public-competition-group-loader";
 import {
   buildPublicCupArchive,
 } from "@/lib/public-cup-v2-chronicle";
@@ -40,6 +41,7 @@ type CompetitionDetailData = {
   snapshots: Row[];
   sponsors: Row[];
   publicCupV2?: PublicCupV2Data | null;
+  publicCupGroupData?: PublicCompetitionGroupData;
   standardLeague?: { championAt: string | null; championTeamId: string | null; totalGoals: number } | null;
   standings: Row[];
   teams: Row[];
@@ -763,7 +765,8 @@ function ArchiveStandingTable({ standing }: { standing: CupGroupStanding | undef
   return <div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-xs"><thead className="bg-[#061426] text-white"><tr>{["#", "ทีม", "แข่ง", "ชนะ", "เสมอ", "แพ้", "ได้", "เสีย", "ผลต่าง", "คะแนน"].map((label) => <th className="px-2 py-2 font-black" key={label}>{label}</th>)}</tr></thead><tbody>{standing.rows.map((row) => <tr className="border-b border-slate-100" key={row.team_id}><td className="px-2 py-2 font-black">{row.position}</td><td className="px-2 py-2 font-black">{row.team_name}</td>{[row.played, row.won, row.drawn, row.lost, row.goals_for, row.goals_against, row.goal_difference, row.points].map((value, index) => <td className="px-2 py-2" key={index}>{value}</td>)}</tr>)}</tbody></table>{!standing.is_complete ? <p className="px-2 py-2 text-xs font-bold text-amber-800">ตารางคะแนนยังไม่สมบูรณ์</p> : null}</div>;
 }
 
-function CompletedMatchArchive({ cupGroups = [], cupV2 = null, matches, standings = [] }: { cupGroups?: Row[]; cupV2?: PublicCupV2Data | null; matches: Row[]; standings?: CupGroupStanding[] }) {
+function CompletedMatchArchive({ cupGroups = [], cupV2 = null, error = null, matches, standings = [] }: { cupGroups?: Row[]; cupV2?: PublicCupV2Data | null; error?: string | null; matches: Row[]; standings?: CupGroupStanding[] }) {
+  if (error) return <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="match-archive"><div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900">{error}</div></section>;
   const archive = buildPublicCupArchive({ matches: matches.filter((match) => ["finished", "completed"].includes(text(match, ["status"], "").toLowerCase())), nodes: cupV2?.nodes ?? [] });
   const groupById = new Map(cupGroups.map((group) => [text(group, ["id"], ""), group]));
   const groupMatches = archive.filter((entry) => entry.section === "group");
@@ -887,7 +890,7 @@ function CompletedParticipatingTeams({ cupV2, teams }: { cupV2: PublicCupV2Data 
 }
 
 export function CompetitionDetailPage({ data }: { data: CompetitionDetailData }) {
-  const { competition, cupGroups = [], cupGroupTeams = [], matches, scheduledMatches, snapshots, sponsors, publicCupV2 = null, standardLeague = null, standings, teams } = data;
+  const { competition, cupGroups = [], cupGroupTeams = [], matches, scheduledMatches, snapshots, sponsors, publicCupV2 = null, publicCupGroupData, standardLeague = null, standings, teams } = data;
   const competitionType = normalizeCompetitionType(text(competition, ["competition_type"], ""));
   const seasonStatus = text(competition, ["season_status"], "active").toLowerCase();
   const isLeague = isLeagueCompetition(competitionType);
@@ -927,10 +930,16 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
   const legacyMatches = cupV2 ? matches.filter((match) => !knockoutMatchIds.has(text(match, ["id"]))) : matches;
   const legacyScheduledMatches = cupV2 ? scheduledMatches.filter((match) => !knockoutMatchIds.has(text(match, ["id"]))) : scheduledMatches;
   const legacyFixtures = [...legacyScheduledMatches, ...legacyMatches];
-  const completedArchiveMatches = matches.filter((match) => ["finished", "completed"].includes(text(match, ["status"], "").toLowerCase()));
+  const groupDataReady = publicCupGroupData?.status === "ready";
+  const canonicalCupGroups = groupDataReady ? publicCupGroupData.groups : cupGroups;
+  const canonicalCupGroupTeams = groupDataReady ? publicCupGroupData.participants : cupGroupTeams;
+  const canonicalCupGroupMatches = groupDataReady ? publicCupGroupData.matches : matches.filter((match) => text(match, ["competition_stage"], "").toLowerCase() === "group" || Boolean(text(match, ["group_id"], "")));
+  const completedArchiveMatches = groupDataReady
+    ? canonicalCupGroupMatches.filter((match) => ["finished", "completed"].includes(text(match, ["status"], "").toLowerCase()))
+    : matches.filter((match) => ["finished", "completed"].includes(text(match, ["status"], "").toLowerCase()));
   const legacyKswJourney = legacyFixtures.filter(isKswMatchByFlag).sort((a, b) => matchTime(a) - matchTime(b));
   const legacyCupGroupStandings = isCup
-    ? calculateCupGroupStandings({ groups: cupGroups, matches: legacyFixtures.filter((match) => text(match, ["competition_stage"], "").toLowerCase() === "group" || Boolean(text(match, ["group_id"], ""))), teams: cupGroupTeams })
+    ? calculateCupGroupStandings({ groups: canonicalCupGroups, matches: canonicalCupGroupMatches, teams: canonicalCupGroupTeams })
     : [];
 
   if (isTournamentArchive) {
@@ -1012,7 +1021,7 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
             <CompletedParticipatingTeams cupV2={cupV2} teams={teams} />
             {kswStandardV2 ? <PublicKnockoutBracket championLabel="แชมป์" compact data={kswStandardV2} eyebrow="การแข่งขันที่จบแล้ว" localized sectionId="full-knockout-bracket" seasonCompleted title="สายการแข่งขันทั้งหมด" /> : null}
             {councilV2 ? <PublicCouncilCupBrackets compact data={councilV2} localized seasonCompleted showOverview={false} /> : null}
-            <CompletedMatchArchive cupGroups={cupGroups} cupV2={cupV2} matches={completedArchiveMatches} standings={legacyCupGroupStandings} />
+            <CompletedMatchArchive cupGroups={canonicalCupGroups} cupV2={cupV2} error={publicCupGroupData?.status === "error" ? publicCupGroupData.error : null} matches={completedArchiveMatches} standings={legacyCupGroupStandings} />
             <ChronicleSeasonSummary competition={competition} />
             <TournamentLegacy competition={competition} />
           </>

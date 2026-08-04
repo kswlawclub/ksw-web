@@ -201,8 +201,10 @@ export function PublicCouncilCupBrackets({ compact = false, data, localized = fa
           </div>
         </div>
       </section> : null}
-      {hasDivision1 ? <PublicKnockoutBracket championLabel={localized ? "แชมป์ Division 1" : "Champion Division 1"} compact={compact} data={data} eyebrow={localized ? "คัพสภาทนายความ" : "Council Cup"} localized={localized} partitionKey="division_1" sectionId="knockout-division-1" seasonCompleted={division1?.status === "completed"} theme="division_1" title="Division 1" /> : null}
-      {hasDivision2 ? <PublicKnockoutBracket championLabel={localized ? "แชมป์ Division 2" : "Champion Division 2"} compact={compact} data={data} eyebrow={localized ? "คัพสภาทนายความ" : "Council Cup"} localized={localized} partitionKey="division_2" sectionId="knockout-division-2" seasonCompleted={division2?.status === "completed"} theme="division_2" title="Division 2" /> : null}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {hasDivision1 ? <PublicKnockoutBracket championLabel={localized ? "แชมป์ Division 1" : "Champion Division 1"} compact={compact} data={data} eyebrow={localized ? "คัพสภาทนายความ" : "Council Cup"} localized={localized} partitionKey="division_1" sectionId="knockout-division-1" seasonCompleted={division1?.status === "completed"} theme="division_1" title="Division 1" /> : null}
+        {hasDivision2 ? <PublicKnockoutBracket championLabel={localized ? "แชมป์ Division 2" : "Champion Division 2"} compact={compact} data={data} eyebrow={localized ? "คัพสภาทนายความ" : "Council Cup"} localized={localized} partitionKey="division_2" sectionId="knockout-division-2" seasonCompleted={division2?.status === "completed"} theme="division_2" title="Division 2" /> : null}
+      </div>
     </>
   );
 }
