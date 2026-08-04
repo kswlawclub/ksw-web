@@ -111,7 +111,7 @@ function TeamCell({ align = "left", logoKey, match, nameKey, shortKey }: {
   );
 }
 
-function ResultRow({ match }: { match: Row }) {
+function ResultRow({ dateFallback = "Date TBC", match }: { dateFallback?: string; match: Row }) {
   const matchDate = match.match_date ?? match.date ?? match.kickoff_at;
   const venue = text(match, ["venue"], "");
   const badge = kswResultBadge(match);
@@ -119,7 +119,7 @@ function ResultRow({ match }: { match: Row }) {
 
   return (
     <tr className={`transition-colors hover:bg-[#fff8e8] ${kswMatch ? "border-l-4 border-l-[#d8ad45] bg-[#fff9ea]" : ""}`}>
-      <td className="px-4 py-3 text-xs font-bold text-slate-500">{formatDate(matchDate) || "Date TBC"}</td>
+      <td className="px-4 py-3 text-xs font-bold text-slate-500">{formatDate(matchDate) || dateFallback}</td>
       <td className="px-4 py-3">
         <TeamCell logoKey="home_team_logo_url" match={match} nameKey="home_team_name" shortKey="home_team_short_name" />
       </td>
@@ -143,7 +143,7 @@ function ResultRow({ match }: { match: Row }) {
   );
 }
 
-function MobileResultRow({ match }: { match: Row }) {
+function MobileResultRow({ dateFallback = "Date TBC", match }: { dateFallback?: string; match: Row }) {
   const matchDate = match.match_date ?? match.date ?? match.kickoff_at;
   const venue = text(match, ["venue"], "");
   const badge = kswResultBadge(match);
@@ -153,7 +153,7 @@ function MobileResultRow({ match }: { match: Row }) {
     <article className={`rounded-xl border bg-white p-3 shadow-sm ${kswMatch ? "border-[#d8ad45]/55 bg-[#fff9ea]" : "border-slate-200"}`}>
       <div className="mb-3 flex items-center justify-between gap-3">
         <span className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-500">
-          {formatDate(matchDate) || "Date TBC"}
+          {formatDate(matchDate) || dateFallback}
         </span>
         {badge ? (
           <span className={`inline-flex size-7 items-center justify-center rounded-full border text-xs font-black ${badge.className}`}>
@@ -174,12 +174,16 @@ function MobileResultRow({ match }: { match: Row }) {
 }
 
 export function CompetitionResultsTable({
+  countLabel = "Matches",
+  dateFallback = "Date TBC",
   isLeague,
   matches,
   sectionId = "all-results",
   subtitle = "Complete results from every match in this competition.",
   title,
 }: {
+  countLabel?: string;
+  dateFallback?: string;
   isLeague: boolean;
   matches: Row[];
   sectionId?: string;
@@ -222,7 +226,7 @@ export function CompetitionResultsTable({
               </p>
             </div>
             <span className="w-fit rounded-full border border-[#d8ad45]/35 bg-[#fff4dc] px-3 py-1.5 text-xs font-black text-[#061426]">
-              {matches.length} Matches
+              {matches.length} {countLabel}
             </span>
           </div>
         </div>
@@ -242,12 +246,12 @@ export function CompetitionResultsTable({
                     </tr>
                   </thead>
                   <tbody>
-                    <ResultRow match={groups[0].matches[0]} />
+                    <ResultRow dateFallback={dateFallback} match={groups[0].matches[0]} />
                   </tbody>
                 </table>
               </div>
               <div className="grid gap-3 p-3 lg:hidden">
-                <MobileResultRow match={groups[0].matches[0]} />
+                <MobileResultRow dateFallback={dateFallback} match={groups[0].matches[0]} />
               </div>
             </div>
           ) : null}
@@ -265,7 +269,7 @@ export function CompetitionResultsTable({
                     >
                       <span>
                         <span className="block text-xs font-black uppercase tracking-[0.18em] text-[#f4d58a]">Results</span>
-                        <span className="mt-1 block text-sm font-black">{formatDate(group.date) || "Date TBC"}</span>
+                        <span className="mt-1 block text-sm font-black">{formatDate(group.date) || dateFallback}</span>
                       </span>
                       <span className="flex shrink-0 items-center gap-3">
                         <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-black">
@@ -292,7 +296,7 @@ export function CompetitionResultsTable({
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                               {group.matches.map((match) => (
-                                <ResultRow key={text(match, ["id"])} match={match} />
+                                <ResultRow dateFallback={dateFallback} key={text(match, ["id"])} match={match} />
                               ))}
                             </tbody>
                           </table>
@@ -300,7 +304,7 @@ export function CompetitionResultsTable({
 
                         <div className="grid gap-3 p-3 lg:hidden">
                           {group.matches.map((match) => (
-                            <MobileResultRow key={text(match, ["id"])} match={match} />
+                                <MobileResultRow dateFallback={dateFallback} key={text(match, ["id"])} match={match} />
                           ))}
                         </div>
                       </div>
