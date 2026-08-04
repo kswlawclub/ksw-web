@@ -55,9 +55,9 @@ function MatchTeamRow({ align, team, winner }: { align: "left" | "right"; team: 
   const name = team?.name || "รอผู้ชนะจากคู่ก่อนหน้า";
   return (
     <div className={`flex min-w-0 items-center gap-2 ${align === "right" ? "justify-end text-right" : ""}`}>
-      {align === "right" ? <p className={`min-w-0 text-wrap text-sm leading-5 ${winner ? "font-black text-emerald-700" : "font-bold text-[#061426]"}`}>{name}</p> : null}
-      <TeamLogo className="!size-7" initials={teamInitials(team, "?")} logoUrl={team?.logoUrl ?? ""} teamName={name} />
-      {align === "left" ? <p className={`min-w-0 text-wrap text-sm leading-5 ${winner ? "font-black text-emerald-700" : "font-bold text-[#061426]"}`}>{name}</p> : null}
+      {align === "right" ? <p className={`min-w-0 max-w-full break-words whitespace-normal [overflow-wrap:anywhere] text-sm leading-5 ${winner ? "font-black text-emerald-700" : "font-bold text-[#061426]"}`}>{name}</p> : null}
+      <TeamLogo className="!size-7 shrink-0" initials={teamInitials(team, "?")} logoUrl={team?.logoUrl ?? ""} teamName={name} />
+      {align === "left" ? <p className={`min-w-0 max-w-full break-words whitespace-normal [overflow-wrap:anywhere] text-sm leading-5 ${winner ? "font-black text-emerald-700" : "font-bold text-[#061426]"}`}>{name}</p> : null}
     </div>
   );
 }

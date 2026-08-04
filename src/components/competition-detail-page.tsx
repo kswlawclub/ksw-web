@@ -487,15 +487,15 @@ function TournamentJourneyCard({ chronicle = false, match }: { chronicle?: boole
       </div>
       <div className={`grid grid-cols-[minmax(0,1fr)_82px_minmax(0,1fr)] items-center ${chronicle ? "gap-2" : "gap-3"}`}>
         <div className="flex min-w-0 items-center gap-2">
-          <TeamLogo className="!size-8" initials={homeShortName} logoUrl={text(match, ["home_team_logo_url"], "")} teamName={homeName} />
-          <p className="min-w-0 text-wrap text-sm font-black leading-5 text-[#061426]">{homeName}</p>
+          <TeamLogo className="!size-8 shrink-0" initials={homeShortName} logoUrl={text(match, ["home_team_logo_url"], "")} teamName={homeName} />
+          <p className="min-w-0 max-w-full break-words whitespace-normal [overflow-wrap:anywhere] text-sm font-black leading-5 text-[#061426]">{homeName}</p>
         </div>
         <span className="inline-flex items-center justify-center rounded-full border border-[#d8ad45]/40 bg-[#061426] px-3 py-2 text-sm font-black text-white">
           {matchScoreLabel(match)}
         </span>
         <div className="flex min-w-0 items-center justify-end gap-2 text-right">
-          <p className="min-w-0 text-wrap text-sm font-black leading-5 text-[#061426]">{awayName}</p>
-          <TeamLogo className="!size-8" initials={awayShortName} logoUrl={text(match, ["away_team_logo_url"], "")} teamName={awayName} />
+          <p className="min-w-0 max-w-full break-words whitespace-normal [overflow-wrap:anywhere] text-sm font-black leading-5 text-[#061426]">{awayName}</p>
+          <TeamLogo className="!size-8 shrink-0" initials={awayShortName} logoUrl={text(match, ["away_team_logo_url"], "")} teamName={awayName} />
         </div>
       </div>
       {chronicle ? <div className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 border-t border-slate-100 pt-2 text-xs font-bold text-slate-500"><CalendarDays aria-hidden="true" className="size-3.5 shrink-0" /><span>{formatDateTime(matchDate) || "รอกำหนดวันและเวลา"}</span>{venue ? <><span aria-hidden="true">·</span><MapPin aria-hidden="true" className="size-3.5 shrink-0" /><span>Field {venue}</span></> : null}</div> : venue ? <p className="mt-3 text-xs font-bold text-slate-500">Field {venue}</p> : null}
