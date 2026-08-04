@@ -61,7 +61,7 @@ function MatchTeamRow({ align, team, winner }: { align: "left" | "right"; team: 
   );
 }
 
-function PublicKnockoutMatchCard({ compact, node }: { compact: boolean; node: PublicCupV2Node }) {
+function PublicKnockoutMatchCard({ chronicle = false, compact, node }: { chronicle?: boolean; compact: boolean; node: PublicCupV2Node }) {
   const match = node.linkedMatch;
   const home = match?.homeTeam ?? node.homeSource.team;
   const away = match?.awayTeam ?? node.awaySource.team;
@@ -72,9 +72,9 @@ function PublicKnockoutMatchCard({ compact, node }: { compact: boolean; node: Pu
   const isKswMatch = isPublicCupKswMatch(node);
 
   return (
-    <article className={`min-w-0 rounded-lg border shadow-sm ${compact ? "p-2.5" : "p-3"} ${isKswMatch ? "border-[#d8ad45]/80 bg-[#fffaf0] shadow-[#d8ad45]/15" : "border-slate-200 bg-white"}`}>
-      {isKswMatch ? <span className="mb-2 inline-flex rounded-full bg-[#fff0c8] px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-[#8a6418]">KSW Match</span> : null}
-      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+    <article className={`min-w-0 border ${chronicle ? "rounded-md px-3 py-3 shadow-none" : `rounded-lg shadow-sm ${compact ? "p-2.5" : "p-3"}`} ${isKswMatch ? "border-[#d8ad45]/80 bg-[#fffaf0] shadow-[#d8ad45]/15" : "border-slate-200 bg-white"}`}>
+      {isKswMatch ? <span className={`mb-2 inline-flex rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-[#8a6418] ${chronicle ? "bg-[#fff7df]" : "bg-[#fff0c8]"}`}>KSW Match</span> : null}
+      <div className={`grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center ${chronicle ? "gap-3" : "gap-2"}`}>
         <MatchTeamRow align="left" team={home} winner={homeWinner} />
         <span className="whitespace-nowrap rounded-md bg-[#061426] px-2.5 py-1 text-xs font-black text-white">
           {publicCupV2ScoreLabel(node)}
@@ -83,7 +83,7 @@ function PublicKnockoutMatchCard({ compact, node }: { compact: boolean; node: Pu
       </div>
       {waitingForTeam ? <p className="mt-1.5 text-xs font-bold text-slate-500">{publicCupV2SourceLabel(node.homeSource)} · {publicCupV2SourceLabel(node.awaySource)}</p> : null}
       {match ? (
-        <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-500">
+        <div className={`flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-500 ${chronicle ? "mt-2 border-t border-slate-100 pt-2" : "mt-1.5"}`}>
           <span>{formatDateTime(match.matchDate)}{match.venue ? ` · ${match.venue}` : ""}</span>
           <span className={finished ? "font-black text-emerald-700" : "font-black text-[#8a6418]"}>{finished ? "จบการแข่งขัน" : "รอแข่งขัน"}</span>
         </div>
@@ -222,15 +222,15 @@ function CompletedCouncilDivisionBracket({ data, localized, partitionKey, theme,
         <div className="grid gap-2.5 bg-slate-100/80 p-2.5 sm:p-3">
           {rounds.map((round) => (
             <details className="group overflow-hidden rounded-md border border-slate-200 bg-white" key={round.roundIndex} open={round.roundIndex === finalRoundIndex}>
-              <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2.5 hover:bg-[#fffaf0]">
+              <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-4 py-3 hover:bg-[#fffaf0]">
                 <div className="flex min-w-0 items-center gap-2">
-                  <span aria-hidden className="inline-flex size-5 shrink-0 items-center justify-center rounded-full border border-slate-300 text-xs font-black text-slate-600"><span className="group-open:hidden">+</span><span className="hidden group-open:inline">-</span></span>
+                  <span aria-hidden className="inline-flex size-4 shrink-0 items-center justify-center text-xs font-black text-slate-500"><span className="group-open:hidden">+</span><span className="hidden group-open:inline">-</span></span>
                   <h3 className="min-w-0 text-base font-black text-[#061426]">{localizedRoundLabel(round.roundLabel, localized)}</h3>
                 </div>
-                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700">จบแล้ว {round.finishedCount}/{round.nodes.length} คู่</span>
+                <span className="text-xs font-bold text-slate-500">จบแล้ว {round.finishedCount}/{round.nodes.length} คู่</span>
               </summary>
-              <div className="grid gap-2 p-2.5">
-                {round.nodes.map((node) => <PublicKnockoutMatchCard compact key={node.id} node={node} />)}
+              <div className="grid gap-2 border-t border-slate-100 bg-[#fffdf8] p-3">
+                {round.nodes.map((node) => <PublicKnockoutMatchCard chronicle compact key={node.id} node={node} />)}
               </div>
             </details>
           ))}

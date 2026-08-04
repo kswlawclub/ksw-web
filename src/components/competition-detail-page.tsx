@@ -469,7 +469,7 @@ function TournamentOverview({
   );
 }
 
-function TournamentJourneyCard({ match }: { match: Row }) {
+function TournamentJourneyCard({ chronicle = false, match }: { chronicle?: boolean; match: Row }) {
   const matchDate = match.match_date ?? match.date ?? match.kickoff_at;
   const homeName = text(match, ["home_team_name"], "Home team unavailable");
   const awayName = text(match, ["away_team_name"], "Away team unavailable");
@@ -480,11 +480,11 @@ function TournamentJourneyCard({ match }: { match: Row }) {
   const status = text(match, ["status"], "");
 
   return (
-    <article className="rounded-xl border border-[#d8ad45]/30 bg-white p-4 shadow-lg shadow-slate-900/5">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+    <article className={chronicle ? "rounded-lg border border-slate-200 bg-white px-3 py-3 shadow-none" : "rounded-xl border border-[#d8ad45]/30 bg-white p-4 shadow-lg shadow-slate-900/5"}>
+      <div className={chronicle ? "mb-2 flex flex-wrap items-center justify-end gap-2" : "mb-3 flex flex-wrap items-center justify-between gap-2"}>
+        {!chronicle ? <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
           {formatDateTime(matchDate) || "รอกำหนดวันและเวลา"}
-        </p>
+        </p> : null}
         <div className="flex items-center gap-2">
           {badge ? (
             <span className={`inline-flex size-7 items-center justify-center rounded-full border text-xs font-black ${badge.className}`}>
@@ -492,13 +492,13 @@ function TournamentJourneyCard({ match }: { match: Row }) {
             </span>
           ) : null}
           {status ? (
-            <span className="rounded-full border border-[#d8ad45]/35 bg-[#fff4dc] px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#061426]">
+            <span className={chronicle ? "text-[10px] font-black uppercase tracking-[0.12em] text-slate-500" : "rounded-full border border-[#d8ad45]/35 bg-[#fff4dc] px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#061426]"}>
               {publicMatchStatusLabel(status)}
             </span>
           ) : null}
         </div>
       </div>
-      <div className="grid grid-cols-[minmax(0,1fr)_82px_minmax(0,1fr)] items-center gap-3">
+      <div className={`grid grid-cols-[minmax(0,1fr)_82px_minmax(0,1fr)] items-center ${chronicle ? "gap-2" : "gap-3"}`}>
         <div className="flex min-w-0 items-center gap-2">
           <TeamLogo className="!size-8" initials={homeShortName} logoUrl={text(match, ["home_team_logo_url"], "")} teamName={homeName} />
           <p className="min-w-0 text-wrap text-sm font-black leading-5 text-[#061426]">{homeName}</p>
@@ -511,7 +511,7 @@ function TournamentJourneyCard({ match }: { match: Row }) {
           <TeamLogo className="!size-8" initials={awayShortName} logoUrl={text(match, ["away_team_logo_url"], "")} teamName={awayName} />
         </div>
       </div>
-      {venue ? <p className="mt-3 text-xs font-bold text-slate-500">Field {venue}</p> : null}
+      {chronicle ? <p className="mt-2 border-t border-slate-100 pt-2 text-xs font-bold text-slate-500">{formatDateTime(matchDate) || "รอกำหนดวันและเวลา"}{venue ? ` · Field ${venue}` : ""}</p> : venue ? <p className="mt-3 text-xs font-bold text-slate-500">Field {venue}</p> : null}
     </article>
   );
 }
@@ -788,14 +788,15 @@ function publicArchiveGroupLabel(label: string) {
   return match ? `กลุ่ม ${match[1].trim()}` : normalized;
 }
 
-function ArchiveStandingTable({ standing }: { standing: CupGroupStanding | undefined }) {
+function ArchiveStandingTable({ chronicle = false, standing }: { chronicle?: boolean; standing: CupGroupStanding | undefined }) {
   if (!standing) return <p className="text-sm font-bold text-amber-800">ตารางคะแนนยังไม่สมบูรณ์</p>;
-  return <div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-xs"><thead className="bg-[#061426] text-white"><tr>{["#", "ทีม", "แข่ง", "ชนะ", "เสมอ", "แพ้", "ได้", "เสีย", "ผลต่าง", "คะแนน"].map((label) => <th className="px-2 py-2 font-black" key={label}>{label}</th>)}</tr></thead><tbody>{standing.rows.map((row) => <tr className="border-b border-slate-100" key={row.team_id}><td className="px-2 py-2 font-black">{row.position}</td><td className="px-2 py-2 font-black">{row.team_name}</td>{[row.played, row.won, row.drawn, row.lost, row.goals_for, row.goals_against, row.goal_difference, row.points].map((value, index) => <td className="px-2 py-2" key={index}>{value}</td>)}</tr>)}</tbody></table>{!standing.is_complete ? <p className="px-2 py-2 text-xs font-bold text-amber-800">ตารางคะแนนยังไม่สมบูรณ์</p> : null}</div>;
+  return <div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-xs"><thead className="bg-[#061426] text-white"><tr>{["#", "ทีม", "แข่ง", "ชนะ", "เสมอ", "แพ้", "ได้", "เสีย", "ผลต่าง", "คะแนน"].map((label) => <th className={chronicle ? "px-2 py-1.5 font-black" : "px-2 py-2 font-black"} key={label}>{label}</th>)}</tr></thead><tbody>{standing.rows.map((row) => <tr className="border-b border-slate-100" key={row.team_id}><td className={chronicle ? "px-2 py-1.5 font-black" : "px-2 py-2 font-black"}>{row.position}</td><td className={chronicle ? "px-2 py-1.5 font-black" : "px-2 py-2 font-black"}>{row.team_name}</td>{[row.played, row.won, row.drawn, row.lost, row.goals_for, row.goals_against, row.goal_difference, row.points].map((value, index) => <td className={chronicle ? "px-2 py-1.5" : "px-2 py-2"} key={index}>{value}</td>)}</tr>)}</tbody></table>{!standing.is_complete ? <p className="px-2 py-2 text-xs font-bold text-amber-800">ตารางคะแนนยังไม่สมบูรณ์</p> : null}</div>;
 }
 
 function CompletedMatchArchive({ cupGroups = [], cupV2 = null, error = null, matches, standings = [] }: { cupGroups?: Row[]; cupV2?: PublicCupV2Data | null; error?: string | null; matches: Row[]; standings?: CupGroupStanding[] }) {
   if (error) return <section className="mx-auto w-full max-w-7xl px-4 pb-8 sm:px-6 lg:px-10" id="match-archive"><div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900">{error}</div></section>;
   const archive = buildPublicCupArchive({ matches: matches.filter((match) => ["finished", "completed"].includes(text(match, ["status"], "").toLowerCase())), nodes: cupV2?.nodes ?? [] });
+  const chronicleArchive = cupV2?.templateKey === "council_two_division";
   const groupById = new Map(cupGroups.map((group) => [text(group, ["id"], ""), group]));
   const groupMatches = archive.filter((entry) => entry.section === "group");
   if (!archive.length) return null;
@@ -810,7 +811,49 @@ function CompletedMatchArchive({ cupGroups = [], cupV2 = null, error = null, mat
         <p className="mt-1 text-sm text-slate-600">เรียงตามรอบการแข่งขันและกลุ่ม</p>
       </div>
       <div className="grid gap-4 border-t border-slate-200/80 pt-5">
-        {groupMatches.length ? <section className="grid gap-3"><h3 className="text-lg font-black text-[#061426]">รอบแบ่งกลุ่ม</h3>{Array.from(groupMatchesById.entries()).sort(([left], [right]) => { const leftGroup = groupById.get(left); const rightGroup = groupById.get(right); const leftOrder = leftGroup ? number(leftGroup, ["sort_order"]) : Number.MAX_SAFE_INTEGER; const rightOrder = rightGroup ? number(rightGroup, ["sort_order"]) : Number.MAX_SAFE_INTEGER; return leftOrder - rightOrder || text(leftGroup, ["label", "name"], "ไม่ระบุกลุ่ม").localeCompare(text(rightGroup, ["label", "name"], "ไม่ระบุกลุ่ม")); }).map(([groupId, entries], index) => { const group = groupById.get(groupId); const label = group ? publicArchiveGroupLabel(text(group, ["label", "name"], "ไม่ระบุกลุ่ม")) : "ไม่ระบุกลุ่ม"; const standing = standings.find((item) => item.group_id === groupId); return <details className="overflow-hidden rounded-xl border border-slate-200 bg-white" key={groupId || "unknown"} open={index === 0}><summary className="cursor-pointer list-none px-4 py-4"><span className="text-sm font-black text-[#061426]">{label}</span><span className="ml-2 text-xs font-bold text-slate-500">{entries.length} คู่</span></summary><div className="grid gap-3 border-t border-slate-100 bg-slate-100 p-3"><ArchiveStandingTable standing={standing} />{entries.sort((left, right) => matchTime(left.match) - matchTime(right.match) || left.matchId.localeCompare(right.matchId)).map((entry) => <TournamentJourneyCard key={entry.matchId} match={entry.match} />)}</div></details>; })}</section> : null}
+        {groupMatches.length ? (
+          <section className="grid gap-3">
+            <h3 className="text-lg font-black text-[#061426]">รอบแบ่งกลุ่ม</h3>
+            {Array.from(groupMatchesById.entries())
+              .sort(([left], [right]) => {
+                const leftGroup = groupById.get(left);
+                const rightGroup = groupById.get(right);
+                const leftOrder = leftGroup ? number(leftGroup, ["sort_order"]) : Number.MAX_SAFE_INTEGER;
+                const rightOrder = rightGroup ? number(rightGroup, ["sort_order"]) : Number.MAX_SAFE_INTEGER;
+                return leftOrder - rightOrder || text(leftGroup, ["label", "name"], "ไม่ระบุกลุ่ม").localeCompare(text(rightGroup, ["label", "name"], "ไม่ระบุกลุ่ม"));
+              })
+              .map(([groupId, entries], index) => {
+                const group = groupById.get(groupId);
+                const label = group ? publicArchiveGroupLabel(text(group, ["label", "name"], "ไม่ระบุกลุ่ม")) : "ไม่ระบุกลุ่ม";
+                const standing = standings.find((item) => item.group_id === groupId);
+                return (
+                  <details className="overflow-hidden rounded-xl border border-slate-200 bg-white" key={groupId || "unknown"} open={index === 0}>
+                    <summary className={chronicleArchive ? "cursor-pointer list-none px-4 py-3" : "cursor-pointer list-none px-4 py-4"}>
+                      <span className="text-sm font-black text-[#061426]">{label}</span>
+                      <span className="ml-2 text-xs font-bold text-slate-500">{entries.length} คู่</span>
+                    </summary>
+                    {chronicleArchive ? (
+                      <div className="grid gap-4 border-t border-slate-100 bg-[#f8f9fb] p-3">
+                        <div>
+                          <p className="mb-2 text-xs font-black uppercase tracking-[0.14em] text-[#8a6418]">ตารางคะแนนของกลุ่ม</p>
+                          <ArchiveStandingTable chronicle standing={standing} />
+                        </div>
+                        <div className="grid gap-2">
+                          <p className="text-xs font-black uppercase tracking-[0.14em] text-[#8a6418]">ผลการแข่งขันของกลุ่ม</p>
+                          {entries.sort((left, right) => matchTime(left.match) - matchTime(right.match) || left.matchId.localeCompare(right.matchId)).map((entry) => <TournamentJourneyCard chronicle key={entry.matchId} match={entry.match} />)}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid gap-3 border-t border-slate-100 bg-slate-100 p-3">
+                        <ArchiveStandingTable standing={standing} />
+                        {entries.sort((left, right) => matchTime(left.match) - matchTime(right.match) || left.matchId.localeCompare(right.matchId)).map((entry) => <TournamentJourneyCard key={entry.matchId} match={entry.match} />)}
+                      </div>
+                    )}
+                  </details>
+                );
+              })}
+          </section>
+        ) : null}
       </div>
     </section>
   );
