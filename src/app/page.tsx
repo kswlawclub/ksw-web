@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { AnalyticsPageView } from "@/components/analytics-page-view";
 import { AnalyticsSponsorLink } from "@/components/analytics-sponsor-link";
+import { HomeMotionController } from "@/components/home-motion-controller";
 import { LiveCountdown } from "@/components/live-countdown";
 import { TeamLogo } from "@/components/team-logo";
 import {
@@ -523,6 +524,7 @@ export default async function Home() {
   return (
     <main className="flex min-h-screen flex-col overflow-x-hidden bg-[#061426] text-slate-100">
       <AnalyticsPageView />
+      <HomeMotionController />
       <style>
         {`
           @keyframes kswFloat {
@@ -544,7 +546,7 @@ export default async function Home() {
       <section className="relative overflow-hidden border-b border-[#d8ad45]/30">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.2),transparent_34%),linear-gradient(135deg,rgba(6,20,38,0.96),rgba(9,31,57,0.88))]" />
         <div className="relative mx-auto grid min-h-[540px] w-full max-w-7xl items-center gap-8 px-4 py-10 sm:px-6 sm:py-14 md:grid-cols-[1.12fr_0.88fr] lg:px-10">
-          <div className="min-w-0">
+          <div className="home-hero-content min-w-0">
             <p className="mb-4 text-xs font-bold uppercase tracking-[0.22em] text-[#d8ad45] sm:text-sm sm:tracking-[0.28em]">
               KHLONG SAM WA LAWYERS CLUB
             </p>
@@ -592,7 +594,7 @@ export default async function Home() {
             ) : null}
           </div>
 
-          <div className="ksw-float-logo relative mx-auto flex w-full max-w-[17rem] min-w-0 items-center justify-center sm:max-w-xs md:max-w-sm">
+          <div className="home-hero-crest relative mx-auto flex w-full max-w-[17rem] min-w-0 items-center justify-center sm:max-w-xs md:max-w-sm">
               <div className="absolute inset-0 -z-10 rounded-full bg-[#d8ad45]/20 blur-3xl" />
               <div className="absolute inset-x-6 inset-y-10 -z-10 rounded-full bg-[#f4d58a]/10 blur-2xl" />
               <img
@@ -605,9 +607,9 @@ export default async function Home() {
       </section>
 
       {currentCompetition ? (
-        <section className="order-2 bg-slate-100">
+        <section className="order-2 bg-slate-100" data-home-reveal>
           <div className="mx-auto w-full max-w-7xl px-4 pt-8 sm:px-6 lg:px-10">
-            <div className="overflow-hidden rounded-xl border border-[#d8ad45]/40 bg-white shadow-xl shadow-slate-900/10">
+            <div className="home-interactive-card overflow-hidden rounded-xl border border-[#d8ad45]/40 bg-white shadow-xl shadow-slate-900/10">
               <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -621,7 +623,7 @@ export default async function Home() {
                   <p className="mt-2 text-sm font-bold text-slate-600">{competitionTypeLabel(competitionType)} · {allParticipants.length} ทีม · {featuredStatus}{featuredMatches[0] ? ` · ${formatMatchDateLong(fixtureDateValue(featuredMatches[0]))}${text(featuredMatches[0], ["venue"], "") ? ` · สนาม ${text(featuredMatches[0], ["venue"], "")}` : ""}` : ""}</p>
                 </div>
                 <Link className="inline-flex min-h-11 items-center justify-center rounded-md bg-[#061426] px-5 py-3 text-sm font-black text-[#f4d58a] shadow-lg shadow-slate-900/10 transition-colors hover:bg-[#0b2745]" href={competitionHref}>
-                  ดูรายการแข่งขัน
+                  ดูรายการแข่งขัน <span className="home-action-arrow ml-2" aria-hidden="true">→</span>
                 </Link>
               </div>
             </div>
@@ -673,7 +675,7 @@ export default async function Home() {
         </div>
       </section>
 
-      <section id="gallery" className="order-4 bg-gradient-to-br from-[#071b31] via-[#0b2745] to-[#061426]">
+      <section id="gallery" className="order-4 bg-gradient-to-br from-[#071b31] via-[#0b2745] to-[#061426]" data-home-reveal>
         <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
           <div className="mb-7 max-w-3xl">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]">
@@ -694,7 +696,7 @@ export default async function Home() {
                 src="/images/ksw-highlights/highlight-action.jpg"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#061426]/92 via-[#061426]/25 to-transparent" />
-              <div className="absolute inset-x-0 bottom-0 p-5 sm:p-7">
+              <div className="home-gallery-copy absolute inset-x-0 bottom-0 p-5 sm:p-7">
                 <div className="mb-4 h-0.5 w-14 rounded-full bg-[#d8ad45]" />
                 <h3 className="text-2xl font-black text-white">Matchday Intensity</h3>
                 <p className="mt-2 text-sm leading-6 text-slate-200">
@@ -730,7 +732,7 @@ export default async function Home() {
                     src={image}
                   />
                   <div className="absolute inset-0 bg-gradient-to-r from-[#061426]/90 via-[#061426]/40 to-transparent" />
-                  <div className="absolute inset-y-0 left-0 flex max-w-[80%] flex-col justify-end p-4">
+                  <div className="home-gallery-copy absolute inset-y-0 left-0 flex max-w-[80%] flex-col justify-end p-4">
                     <div className="mb-3 h-0.5 w-10 rounded-full bg-[#d8ad45]" />
                     <h3 className="text-lg font-black text-white">{title}</h3>
                     <p className="mt-1 text-sm leading-6 text-slate-200">{caption}</p>
@@ -751,7 +753,7 @@ export default async function Home() {
 	      </section>
 
       {sortedScheduledMatches.length ? (
-        <section className="order-3 bg-slate-100">
+        <section className="order-3 bg-slate-100" data-home-reveal>
           <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
             <div id="next-fixtures" className="min-w-0 overflow-hidden rounded-2xl border border-[#d8ad45]/35 bg-[linear-gradient(135deg,#061426,#0b2745_58%,#071b31)] shadow-2xl shadow-[#061426]/25">
               <div className="grid gap-5 border-b border-[#d8ad45]/20 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
@@ -824,7 +826,7 @@ export default async function Home() {
                           return (
                             <div className="grid gap-3" key={fixtureKey}>
                               <article
-                                className={`group overflow-hidden rounded-xl border bg-white p-4 shadow-lg lg:hidden ${
+                                className={`home-interactive-card group overflow-hidden rounded-xl border bg-white p-4 shadow-lg lg:hidden ${
                                   isKswMatch
                                     ? "border-[#d8ad45] shadow-[#d8ad45]/20"
                                     : "border-white/80 shadow-black/10"
@@ -898,7 +900,7 @@ export default async function Home() {
                               </article>
 
                               <article
-                                className={`group hidden overflow-hidden rounded-xl border bg-white p-4 shadow-lg transition duration-300 lg:grid lg:grid-cols-[150px_minmax(0,1fr)_150px] lg:items-center lg:gap-5 lg:p-5 lg:hover:-translate-y-0.5 ${
+                                className={`home-interactive-card group hidden overflow-hidden rounded-xl border bg-white p-4 shadow-lg transition duration-300 lg:grid lg:grid-cols-[150px_minmax(0,1fr)_150px] lg:items-center lg:gap-5 lg:p-5 ${
                                   isKswMatch
                                     ? "border-[#d8ad45] shadow-[#d8ad45]/25"
                                     : "border-white/80 shadow-black/10 hover:shadow-black/20"
@@ -1278,7 +1280,7 @@ export default async function Home() {
       </section>
 
       {latestChampions.length ? (
-        <section className="order-5 bg-slate-100">
+        <section className="order-5 bg-slate-100" data-home-reveal>
           <div className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
             <div className="rounded-xl border border-[#d8ad45]/35 bg-white p-5 shadow-xl shadow-slate-900/10 sm:p-6">
               <div className="flex flex-wrap items-end justify-between gap-3">
@@ -1293,7 +1295,7 @@ export default async function Home() {
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
                 {latestChampions.slice(0, 1).map((champion) => (
                   <Link
-                    className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-[#d8ad45]/60 hover:bg-[#fff8e3]"
+                    className="home-interactive-card min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-[#d8ad45]/60 hover:bg-[#fff8e3]"
                     href={champion.competitionSlug ? `/competitions/${champion.competitionSlug}` : "/competitions"}
                     key={`${champion.competitionId}-${champion.label}`}
                   >
@@ -1308,7 +1310,7 @@ export default async function Home() {
         </section>
       ) : null}
 
-      <section id="sponsors" className="order-6 bg-gradient-to-br from-[#071b31] via-[#0b2745] to-[#061426]">
+      <section id="sponsors" className="order-6 bg-gradient-to-br from-[#071b31] via-[#0b2745] to-[#061426]" data-home-reveal>
         <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
         <div className="min-w-0 rounded-lg border border-[#d8ad45]/25 bg-white/[0.08] p-6 shadow-2xl shadow-black/30 backdrop-blur sm:p-8">
           <div className="grid gap-8 lg:grid-cols-[0.92fr_1.08fr] lg:items-start">
@@ -1369,7 +1371,7 @@ export default async function Home() {
                     const sponsorWebsite = text(sponsor, ["website_url"], "");
                     const sponsorMark = (
                       <div
-                        className={`flex ${section.logoSlotSize} items-center justify-center text-center transition-transform duration-300 hover:scale-[1.04]`}
+                        className={`home-sponsor-mark flex ${section.logoSlotSize} items-center justify-center text-center`}
                       >
                         {isString(sponsorLogo) ? (
                           <img

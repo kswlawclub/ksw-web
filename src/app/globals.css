@@ -43,6 +43,78 @@ body {
   object-position: center;
 }
 
+[data-home-reveal] {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 520ms ease, transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+[data-home-reveal][data-home-reveal-state="visible"] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.home-hero-content {
+  animation: homeHeroEnter 680ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.home-hero-crest {
+  animation: homeHeroCrestEnter 820ms 100ms cubic-bezier(0.22, 1, 0.36, 1) both, homeCrestFloat 8s ease-in-out 950ms infinite;
+}
+
+.home-interactive-card {
+  transition: transform 240ms ease, box-shadow 240ms ease, border-color 240ms ease;
+}
+
+@media (hover: hover) {
+  .home-interactive-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(216, 173, 69, 0.7);
+    box-shadow: 0 18px 34px rgba(6, 20, 38, 0.16);
+  }
+
+  .home-action-arrow {
+    transition: transform 180ms ease;
+  }
+
+  a:hover .home-action-arrow {
+    transform: translateX(3px);
+  }
+
+  .home-gallery-copy {
+    transition: transform 260ms ease;
+  }
+
+  .group:hover .home-gallery-copy {
+    transform: translateY(-5px);
+  }
+
+  .home-sponsor-mark {
+    transition: opacity 180ms ease, filter 180ms ease, transform 180ms ease;
+  }
+
+  a:hover .home-sponsor-mark {
+    filter: brightness(1.08);
+    opacity: 1;
+    transform: translateY(-2px) scale(1.02);
+  }
+}
+
+@keyframes homeHeroEnter {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes homeHeroCrestEnter {
+  from { opacity: 0; transform: translateY(12px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes homeCrestFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
 .fixtureMetaBadge {
   display: inline-flex;
   width: clamp(140px, 48vw, 170px);
@@ -185,6 +257,18 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  [data-home-reveal],
+  .home-hero-content,
+  .home-hero-crest,
+  .home-interactive-card,
+  .home-action-arrow,
+  .home-gallery-copy,
+  .home-sponsor-mark {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
   .ksw-flip-panel-top,
   .ksw-flip-panel-bottom {
     animation: none;
