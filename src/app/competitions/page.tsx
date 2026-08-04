@@ -450,19 +450,19 @@ function ChronicleSection({ groups }: { groups: ChronicleGroup[] }) {
   return (
     <section className="mx-auto w-full max-w-7xl px-4 pb-16 pt-6 sm:px-6 lg:px-10">
       <div className="mb-10 max-w-2xl border-l-2 border-[#d8ad45] pl-5">
-        <p className="text-xs font-black uppercase tracking-[0.22em] text-[#8a6418]">การแข่งขันที่จบแล้ว</p>
-        <h2 className="mt-2 text-3xl font-black tracking-tight text-[#061426] sm:text-4xl">พงศาวดารการแข่งขัน KSW</h2>
-        <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">บันทึกฤดูกาล ผลการแข่งขัน และทีมแชมป์จากการแข่งขันของชมรม</p>
+        <p className="text-xs font-black uppercase tracking-[0.22em] text-[#8a6418]">บันทึกที่ผ่านมา</p>
+        <h2 className="mt-2 text-3xl font-black tracking-tight text-[#061426] sm:text-4xl">บันทึกการแข่งขันที่ผ่านมา</h2>
+        <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">ฤดูกาล ผลการแข่งขัน และเรื่องราวสำคัญจากรายการของชมรม</p>
       </div>
       <div className="grid gap-12">
         {groups.map((group) => (
           <div className="grid gap-5" key={group.yearLabel}>
-            <div className="flex items-center gap-4">
-              <div className={`h-px flex-1 ${group.year === null ? "bg-slate-200" : "bg-[#d8ad45]/45"}`} />
-              <div className="shrink-0 text-right">
+            <div className="border-l-2 border-[#d8ad45]/50 pl-4">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-3">
                 <p className={`text-2xl font-black sm:text-3xl ${group.year === null ? "text-slate-500" : "text-[#061426]"}`}>{group.yearLabel}</p>
-                <p className="mt-1 text-xs font-bold text-slate-500">{group.entries.length} {group.entries.length === 1 ? "รายการ" : "รายการแข่งขัน"}</p>
+                <p className="text-xs font-bold text-slate-500">{group.entries.length} {group.entries.length === 1 ? "รายการ" : "รายการแข่งขัน"}</p>
               </div>
+              <div className={`mt-3 h-px w-full ${group.year === null ? "bg-slate-200" : "bg-[#d8ad45]/45"}`} />
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
               {group.entries.map((entry) => <ChronicleCard entry={entry} key={entry.competitionId} />)}
@@ -506,10 +506,10 @@ export default async function CompetitionsPage() {
         <div className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-10">
           <p className="text-xs font-black uppercase tracking-[0.24em] text-[#d8ad45]">KSW Digital Club Chronicle</p>
           <h1 className="mt-4 max-w-4xl text-4xl font-black tracking-tight sm:text-6xl">
-            พงศาวดารการแข่งขัน KSW
+            บันทึกการแข่งขันของ KSW
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
-            บันทึกรายการแข่งขันที่จบแล้วของชมรม ทั้งฤดูกาล ฟุตบอลถ้วย และช่วงเวลาสำคัญของ KSW L.C.
+            รวบรวมฤดูกาล ผลการแข่งขัน และช่วงเวลาสำคัญของชมรม
           </p>
         </div>
       </section>
