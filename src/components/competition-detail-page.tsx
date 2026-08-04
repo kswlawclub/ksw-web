@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { BookOpen, CalendarDays, ChevronDown, CircleDot, FileText, History, ListOrdered, MapPin, ScrollText, Swords, TableProperties, Trophy, Users } from "lucide-react";
 import { CompetitionResultsTable } from "@/components/competition-results-table";
 import { CompletedParticipatingTeamsGrid, type CompletedParticipantTeam } from "@/components/completed-participating-teams";
 import { LeagueTable } from "@/components/league-table";
@@ -497,7 +498,7 @@ function TournamentJourneyCard({ chronicle = false, match }: { chronicle?: boole
           <TeamLogo className="!size-8" initials={awayShortName} logoUrl={text(match, ["away_team_logo_url"], "")} teamName={awayName} />
         </div>
       </div>
-      {chronicle ? <p className="mt-2 border-t border-slate-100 pt-2 text-xs font-bold text-slate-500">{formatDateTime(matchDate) || "รอกำหนดวันและเวลา"}{venue ? ` · Field ${venue}` : ""}</p> : venue ? <p className="mt-3 text-xs font-bold text-slate-500">Field {venue}</p> : null}
+      {chronicle ? <div className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 border-t border-slate-100 pt-2 text-xs font-bold text-slate-500"><CalendarDays aria-hidden="true" className="size-3.5 shrink-0" /><span>{formatDateTime(matchDate) || "รอกำหนดวันและเวลา"}</span>{venue ? <><span aria-hidden="true">·</span><MapPin aria-hidden="true" className="size-3.5 shrink-0" /><span>Field {venue}</span></> : null}</div> : venue ? <p className="mt-3 text-xs font-bold text-slate-500">Field {venue}</p> : null}
     </article>
   );
 }
@@ -760,8 +761,8 @@ function TournamentLegacy({ competition }: { competition: Row }) {
       <details className="overflow-hidden rounded-xl border border-[#d8ad45]/30 bg-[#061426] text-white">
         <summary className="cursor-pointer list-none px-5 py-5 sm:px-6 sm:py-6">
           <div className="border-l-2 border-[#d8ad45] pl-4">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]">บันทึกการแข่งขัน</p>
-            <h2 className="mt-2 text-2xl font-black">เรื่องราวในความทรงจำของ KSW</h2>
+          <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]"><BookOpen aria-hidden="true" className="size-4 shrink-0" />บันทึกการแข่งขัน</p>
+          <h2 className="mt-2 text-2xl font-black">เรื่องราวในความทรงจำของ KSW</h2>
           </div>
         </summary>
         <p className="max-w-4xl border-t border-white/10 px-5 pb-6 pt-5 whitespace-pre-line text-sm leading-8 text-slate-300 sm:px-6 sm:pb-7 sm:text-base">{copy}</p>
@@ -795,13 +796,13 @@ function CompletedMatchArchive({ cupGroups = [], cupV2 = null, error = null, mat
     <section className="mx-auto w-full max-w-7xl px-4 pb-8 sm:px-6 lg:px-10" id="match-archive">
       <div className="mb-4 border-l-2 border-[#d8ad45] pl-4">
         <p className="text-xs font-black uppercase tracking-[0.2em] text-[#8a6418]">บันทึกฤดูกาล</p>
-        <h2 className="text-2xl font-black text-[#061426]">ประวัติการแข่งขัน</h2>
+        <h2 className="flex items-center gap-2 text-2xl font-black text-[#061426]"><TableProperties aria-hidden="true" className="size-5 shrink-0 text-[#8a6418]" />ประวัติการแข่งขัน</h2>
         <p className="mt-1 text-sm text-slate-600">เรียงตามรอบการแข่งขันและกลุ่ม</p>
       </div>
       <div className="grid gap-4 border-t border-slate-200/80 pt-5">
         {groupMatches.length ? (
           <section className="grid gap-3">
-            <h3 className="text-lg font-black text-[#061426]">รอบแบ่งกลุ่ม</h3>
+            <h3 className="flex items-center gap-2 text-lg font-black text-[#061426]"><Users aria-hidden="true" className="size-4 shrink-0 text-[#8a6418]" />รอบแบ่งกลุ่ม</h3>
             {Array.from(groupMatchesById.entries())
               .sort(([left], [right]) => {
                 const leftGroup = groupById.get(left);
@@ -815,19 +816,19 @@ function CompletedMatchArchive({ cupGroups = [], cupV2 = null, error = null, mat
                 const label = group ? publicArchiveGroupLabel(text(group, ["label", "name"], "ไม่ระบุกลุ่ม")) : "ไม่ระบุกลุ่ม";
                 const standing = standings.find((item) => item.group_id === groupId);
                 return (
-                  <details className="overflow-hidden rounded-xl border border-slate-200 bg-white" key={groupId || "unknown"}>
-                    <summary className={chronicleArchive ? "cursor-pointer list-none px-4 py-3" : "cursor-pointer list-none px-4 py-4"}>
-                      <span className="text-sm font-black text-[#061426]">{label}</span>
-                      <span className="ml-2 text-xs font-bold text-slate-500">{entries.length} คู่</span>
+                  <details className="group overflow-hidden rounded-xl border border-slate-200 bg-white" key={groupId || "unknown"}>
+                    <summary className={chronicleArchive ? "flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3" : "flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4"}>
+                      <span className="flex min-w-0 items-center gap-2"><ChevronDown aria-hidden="true" className="size-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" /><span className="text-sm font-black text-[#061426]">{label}</span></span>
+                      <span className="shrink-0 text-xs font-bold text-slate-500">{entries.length} คู่</span>
                     </summary>
                     {chronicleArchive ? (
                       <div className="grid gap-4 border-t border-slate-100 bg-[#f8f9fb] p-3">
                         <div>
-                          <p className="mb-2 text-xs font-black uppercase tracking-[0.14em] text-[#8a6418]">ตารางคะแนนของกลุ่ม</p>
+                          <p className="mb-2 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.14em] text-[#8a6418]"><ListOrdered aria-hidden="true" className="size-3.5 shrink-0" />ตารางคะแนนของกลุ่ม</p>
                           <ArchiveStandingTable chronicle standing={standing} />
                         </div>
                         <div className="grid gap-2">
-                          <p className="text-xs font-black uppercase tracking-[0.14em] text-[#8a6418]">ผลการแข่งขันของกลุ่ม</p>
+                          <p className="flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.14em] text-[#8a6418]"><Swords aria-hidden="true" className="size-3.5 shrink-0" />ผลการแข่งขันของกลุ่ม</p>
                           {entries.sort((left, right) => matchTime(left.match) - matchTime(right.match) || left.matchId.localeCompare(right.matchId)).map((entry) => <TournamentJourneyCard chronicle key={entry.matchId} match={entry.match} />)}
                         </div>
                       </div>
@@ -892,7 +893,7 @@ function CompletedChampionSummary({
     <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-9 lg:px-10" id="champion-summary">
       <div className="rounded-2xl border border-[#d8ad45]/35 bg-[#fffefb] px-5 py-8 shadow-lg shadow-slate-900/10 sm:px-8 sm:py-9">
         <p className="text-xs font-black uppercase tracking-[0.22em] text-[#8a6418]">การแข่งขันเสร็จสิ้น</p>
-        <h2 className="mt-3 text-3xl font-black tracking-tight text-[#061426] sm:text-4xl">บทสรุปของฤดูกาล</h2>
+        <h2 className="mt-3 flex items-center gap-3 text-3xl font-black tracking-tight text-[#061426] sm:text-4xl"><Trophy aria-hidden="true" className="size-6 shrink-0 text-[#8a6418] sm:size-7" />บทสรุปของฤดูกาล</h2>
         {cupV2?.templateKey === "council_two_division" ? (
           <div className="mt-7 grid gap-7 sm:grid-cols-2 sm:gap-8">
             <HonorChampion accent="gold" initials={(council?.division1?.shortName ?? council?.division1?.name ?? "?").slice(0, 3).toUpperCase()} label="แชมป์ Division 1" logoUrl={council?.division1?.logoUrl ?? ""} name={council?.division1?.name ?? "ผลสรุปกำลังจัดเตรียม"} />
@@ -953,7 +954,7 @@ function CompletedSeasonStory({ competition, competitionType, cupV2, matches, te
   return (
     <section className="mx-auto w-full max-w-7xl px-4 pb-6 pt-7 sm:px-6 lg:px-10" id="season-story">
       <div className="max-w-4xl border-l-2 border-[#d8ad45] pl-4 sm:pl-5">
-        <p className="text-xs font-black uppercase tracking-[0.2em] text-[#8a6418]">ภาพรวมการแข่งขัน</p>
+        <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-[#8a6418]"><ScrollText aria-hidden="true" className="size-4 shrink-0" />ภาพรวมการแข่งขัน</p>
         <p className="mt-2 text-sm font-semibold leading-7 text-slate-700 sm:text-base">
           {completedCompetitionStory({ competition, competitionType, cupV2, matchCount, teamCount })}
         </p>
@@ -1033,9 +1034,9 @@ function CompletedKswTournamentSummary({ cupV2, groupStandings, matches, standin
   return (
     <section className="mx-auto w-full max-w-7xl px-4 pb-8 sm:px-6 lg:px-10" id="ksw-tournament-summary">
       <div className="rounded-xl border border-[#d8ad45]/30 bg-[#fffdf8] px-5 py-5 shadow-sm shadow-slate-900/10 sm:px-6 sm:py-6">
-        <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.2em] text-[#8a6418]">KSW Tournament Summary</p><h2 className="mt-2 text-2xl font-black text-[#061426]">ผลงานของ KSW</h2></div>{partition ? <span className="rounded-full bg-[#fff0c8] px-3 py-1 text-xs font-black text-[#8a6418]">{partition.label}</span> : null}</div>
+        <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-[#8a6418]"><FileText aria-hidden="true" className="size-4 shrink-0" />KSW Tournament Summary</p><h2 className="mt-2 text-2xl font-black text-[#061426]">ผลงานของ KSW</h2></div>{partition ? <span className="rounded-full bg-[#fff0c8] px-3 py-1 text-xs font-black text-[#8a6418]">{partition.label}</span> : null}</div>
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">{statItems.map(([label, value]) => <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-center" key={label}><p className="text-[10px] font-black text-slate-500">{label}</p><p className="mt-1 text-lg font-black text-[#061426]">{value}</p></div>)}</div>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">{statItems.map(([label, value]) => { const StatIcon = label === "แข่ง" ? CalendarDays : label === "ได้" ? CircleDot : null; return <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-center" key={label}><p className="flex items-center justify-center gap-1 text-[10px] font-black text-slate-500">{StatIcon ? <StatIcon aria-hidden="true" className="size-3 shrink-0" /> : null}{label}</p><p className="mt-1 text-lg font-black text-[#061426]">{value}</p></div>; })}</div>
           {cupV2 ? <div className="border-l-2 border-[#d8ad45] pl-4"><p className="text-sm font-black text-[#061426]">เส้นทางในฟุตบอลถ้วย</p><div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">{stages.map((stage) => <div className={`rounded-md px-3 py-2 text-center text-xs font-black ${stage.reached ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`} key={stage.label}>{stage.reached ? "✓" : "✕"} {stage.label}</div>)}</div></div> : null}
         </div>
       </div>
@@ -1078,7 +1079,7 @@ function CompletedParticipatingTeams({ championTeamId = null, cupV2, standings, 
   return (
     <section className="mx-auto w-full max-w-7xl px-4 pb-8 sm:px-6 lg:px-10" id="participating-teams">
       <div className="border-t border-slate-200/80 pt-5">
-        <p className="text-xs font-black uppercase tracking-[0.2em] text-[#8a6418]">ทีมที่เข้าร่วม</p>
+        <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-[#8a6418]"><Users aria-hidden="true" className="size-4 shrink-0" />ทีมที่เข้าร่วม</p>
         <h2 className="mt-2 text-2xl font-black text-[#061426]">ทีมที่เข้าร่วมการแข่งขัน</h2>
         <div className="mt-5"><p className="mb-3 text-sm font-bold text-slate-500">{allTeams.length} ทีม</p><CompletedParticipatingTeamsGrid teams={allTeams} /></div>
       </div>
@@ -1170,7 +1171,8 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
         <section className="bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.2),transparent_34%),linear-gradient(135deg,#061426,#091f39)] text-white">
           <div className={completedTournament ? "mx-auto grid w-full max-w-7xl items-stretch gap-7 px-4 py-10 sm:px-6 sm:py-12 lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.72fr)] lg:gap-10 lg:px-10" : "mx-auto grid w-full max-w-7xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.72fr)] lg:px-10"}>
             <div className={completedTournament ? "flex min-w-0 flex-col justify-center" : ""}>
-              <p className="text-xs font-black uppercase tracking-[0.24em] text-[#d8ad45]">
+              <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.24em] text-[#d8ad45]">
+                {completedTournament ? <Trophy aria-hidden="true" className="size-4 shrink-0" /> : null}
                 {typeLabel(competitionType)}
               </p>
               <h1 className={completedTournament ? "mt-4 max-w-4xl break-words text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl" : "mt-4 max-w-4xl text-4xl font-black tracking-tight sm:text-5xl"}>
@@ -1194,9 +1196,10 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
               <div className={completedTournament ? "mt-7 flex flex-col gap-3 border-t border-white/10 pt-5 sm:flex-row sm:flex-wrap" : "mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap"}>
                 {tournamentCtas
                   .filter(([, , visible]) => visible)
-                  .map(([label, href]) => (
-                    <Link
-                      className={`inline-flex items-center justify-center rounded-md px-5 py-3 text-sm font-black transition-colors ${
+                  .map(([label, href]) => {
+                    const CtaIcon = completedTournament && href === "#champion-summary" ? Trophy : completedTournament && href === "#match-archive" ? History : null;
+                    return <Link
+                      className={`inline-flex items-center justify-center gap-2 rounded-md px-5 py-3 text-sm font-black transition-colors ${
                         href === "#overview" || href === "#champion-summary"
                           ? completedTournament
                             ? "bg-[#d8ad45] text-[#061426] shadow-sm shadow-black/20 hover:bg-[#f4d58a]"
@@ -1206,9 +1209,10 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
                       href={href}
                       key={href}
                     >
+                      {CtaIcon ? <CtaIcon aria-hidden="true" className="size-4 shrink-0" /> : null}
                       {label}
                     </Link>
-                  ))}
+                  })}
               </div>
             </div>
             <HeroCover competition={competition} completed={completedTournament} />

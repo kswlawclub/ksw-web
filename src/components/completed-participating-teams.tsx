@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { TeamLogo } from "@/components/team-logo";
 
 export type CompletedParticipantTeam = {
@@ -25,7 +26,8 @@ export function CompletedParticipatingTeamsGrid({ teams }: { teams: CompletedPar
         ))}
       </div>
       {teams.length > 12 ? (
-        <button aria-expanded={expanded} className="mt-3 text-sm font-black text-[#8a6418] underline underline-offset-4" onClick={() => setExpanded((current) => !current)} type="button">
+        <button aria-expanded={expanded} className="mt-3 inline-flex items-center gap-1.5 text-sm font-black text-[#8a6418] underline underline-offset-4" onClick={() => setExpanded((current) => !current)} type="button">
+          {expanded ? <ChevronUp aria-hidden="true" className="size-4 shrink-0" /> : <ChevronDown aria-hidden="true" className="size-4 shrink-0" />}
           {expanded ? "ซ่อนทีมเพิ่มเติม" : "แสดงทีมทั้งหมด"}
         </button>
       ) : null}

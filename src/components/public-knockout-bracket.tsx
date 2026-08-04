@@ -1,4 +1,5 @@
 import { TeamLogo } from "@/components/team-logo";
+import { CalendarDays, ChevronDown, GitBranch, MapPin, Trophy } from "lucide-react";
 import {
   groupPublicCupV2Rounds,
   isPublicCupKswMatch,
@@ -84,11 +85,11 @@ function PublicKnockoutMatchCard({ chronicle = false, compact, node }: { chronic
       {waitingForTeam ? <p className="mt-1.5 text-xs font-bold text-slate-500">{publicCupV2SourceLabel(node.homeSource)} · {publicCupV2SourceLabel(node.awaySource)}</p> : null}
       {match ? (
         <div className={`flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-500 ${chronicle ? "mt-2 border-t border-slate-100 pt-2" : "mt-1.5"}`}>
-          <span>{formatDateTime(match.matchDate)}{match.venue ? ` · ${match.venue}` : ""}</span>
+          <span className="flex min-w-0 items-center gap-1.5">{chronicle ? <CalendarDays aria-hidden="true" className="size-3.5 shrink-0" /> : null}{formatDateTime(match.matchDate)}{match.venue ? <><span aria-hidden="true">·</span>{chronicle ? <MapPin aria-hidden="true" className="size-3.5 shrink-0" /> : null}{match.venue}</> : null}</span>
           <span className={finished ? "font-black text-emerald-700" : "font-black text-[#8a6418]"}>{finished ? "จบการแข่งขัน" : "รอแข่งขัน"}</span>
         </div>
       ) : null}
-      {match?.winner ? <p className="mt-1.5 text-xs font-black text-emerald-700">ผู้ชนะ: {match.winner.name}</p> : null}
+      {match?.winner ? <p className="mt-1.5 flex items-center gap-1.5 text-xs font-black text-emerald-700">{chronicle ? <Trophy aria-hidden="true" className="size-3.5 shrink-0" /> : null}ผู้ชนะ: {match.winner.name}</p> : null}
     </article>
   );
 }
@@ -205,7 +206,7 @@ function CompletedCouncilDivisionBracket({ data, localized, partitionKey, theme,
       <div className={`overflow-hidden rounded-xl border bg-white shadow-sm shadow-slate-900/10 ${palette.accent}`}>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
           <div>
-            <p className={`text-xs font-black uppercase tracking-[0.18em] ${palette.eyebrow}`}>คัพสภาทนายความ</p>
+            <p className={`flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] ${palette.eyebrow}`}><GitBranch aria-hidden="true" className="size-4 shrink-0" />คัพสภาทนายความ</p>
             <h2 className="mt-1 text-2xl font-black text-[#061426]">{title}</h2>
           </div>
           <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">จบการแข่งขัน</span>
@@ -224,7 +225,7 @@ function CompletedCouncilDivisionBracket({ data, localized, partitionKey, theme,
             <details className="group overflow-hidden rounded-md border border-slate-200 bg-white" key={round.roundIndex} open={round.roundIndex === finalRoundIndex}>
               <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-4 py-3 hover:bg-[#fffaf0]">
                 <div className="flex min-w-0 items-center gap-2">
-                  <span aria-hidden className="inline-flex size-4 shrink-0 items-center justify-center text-xs font-black text-slate-500"><span className="group-open:hidden">+</span><span className="hidden group-open:inline">-</span></span>
+                  <ChevronDown aria-hidden="true" className="size-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
                   <h3 className="min-w-0 text-base font-black text-[#061426]">{localizedRoundLabel(round.roundLabel, localized)}</h3>
                 </div>
                 <span className="text-xs font-bold text-slate-500">จบแล้ว {round.finishedCount}/{round.nodes.length} คู่</span>
