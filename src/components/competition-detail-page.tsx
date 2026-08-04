@@ -770,13 +770,15 @@ function TournamentLegacy({ competition }: { competition: Row }) {
     "This competition is preserved as part of the KSW Chronicle.";
 
   return (
-    <section className="mx-auto w-full max-w-7xl px-4 pb-8 sm:px-6 lg:px-10">
-      <details className="rounded-xl border border-[#d8ad45]/30 bg-[#061426] text-white shadow-sm shadow-slate-900/20">
-        <summary className="cursor-pointer list-none px-5 py-4 sm:px-6 sm:py-5">
-          <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]">บันทึกการแข่งขัน</p>
-          <h2 className="mt-2 text-2xl font-black">เรื่องราวในความทรงจำของ KSW</h2>
+    <section className="mx-auto w-full max-w-7xl px-4 pb-10 pt-1 sm:px-6 lg:px-10">
+      <details className="overflow-hidden rounded-xl border border-[#d8ad45]/30 bg-[#061426] text-white">
+        <summary className="cursor-pointer list-none px-5 py-5 sm:px-6 sm:py-6">
+          <div className="border-l-2 border-[#d8ad45] pl-4">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]">บันทึกการแข่งขัน</p>
+            <h2 className="mt-2 text-2xl font-black">เรื่องราวในความทรงจำของ KSW</h2>
+          </div>
         </summary>
-        <p className="border-t border-white/10 px-5 pb-5 pt-4 whitespace-pre-line text-sm leading-7 text-slate-300 sm:px-6 sm:pb-5">{copy}</p>
+        <p className="max-w-4xl border-t border-white/10 px-5 pb-6 pt-5 whitespace-pre-line text-sm leading-8 text-slate-300 sm:px-6 sm:pb-7 sm:text-base">{copy}</p>
       </details>
     </section>
   );
