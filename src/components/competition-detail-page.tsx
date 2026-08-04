@@ -31,6 +31,7 @@ import type { PublicCompetitionGroupData } from "@/lib/public-competition-group-
 import {
   buildPublicCupArchive,
 } from "@/lib/public-cup-v2-chronicle";
+import { sortCompletedParticipantTeams } from "@/lib/completed-participating-team-order";
 
 type CompetitionDetailData = {
   competition: Row;
@@ -994,16 +995,22 @@ function ChronicleSeasonSummary({ competition }: { competition: Row }) {
   );
 }
 
-function CompletedParticipatingTeams({ cupV2, teams }: { cupV2: PublicCupV2Data | null; teams: Row[] }) {
-  const toDisplayTeam = (team: { display_order?: unknown; id: string; logoUrl?: string | null; logo_url?: unknown; name?: unknown; shortName?: string | null; short_name?: unknown }): CompletedParticipantTeam & { displayOrder: number | null } => ({
-    displayOrder: typeof team.display_order === "number" ? team.display_order : null,
+function CompletedParticipatingTeams({ championTeamId = null, cupV2, standings, teams }: { championTeamId?: string | null; cupV2: PublicCupV2Data | null; standings: Row[]; teams: Row[] }) {
+  const nullableNumber = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? value : typeof value === "string" && value.trim() && Number.isFinite(Number(value)) ? Number(value) : null;
+  const toDisplayTeam = (team: { display_order?: unknown; id: string; is_ksw?: unknown; logoUrl?: string | null; logo_url?: unknown; name?: unknown; seed?: unknown; shortName?: string | null; short_name?: unknown }): CompletedParticipantTeam & { displayOrder: number | null; isKsw: boolean; seed: number | null } => ({
+    displayOrder: nullableNumber(team.display_order),
     id: team.id,
+    isKsw: team.is_ksw === true || (typeof team.name === "string" && team.name.toLowerCase().includes("ksw")),
     logoUrl: typeof team.logoUrl === "string" ? team.logoUrl : typeof team.logo_url === "string" ? team.logo_url : "",
     name: typeof team.name === "string" ? team.name : "ทีมไม่ทราบชื่อ",
+    seed: nullableNumber(team.seed),
     shortName: typeof team.shortName === "string" ? team.shortName : typeof team.short_name === "string" ? team.short_name : "",
   });
-  const allTeams = (teams.length ? teams.map((team) => toDisplayTeam({ display_order: team.display_order, id: text(team, ["id"], text(team, ["name"], "team")), logo_url: team.logo_url, name: team.name, short_name: team.short_name })) : cupV2?.teams.map(toDisplayTeam) ?? [])
-    .sort((left, right) => (left.displayOrder ?? Number.MAX_SAFE_INTEGER) - (right.displayOrder ?? Number.MAX_SAFE_INTEGER) || left.name.localeCompare(right.name, "th"));
+  const sourceTeams = teams.length
+    ? teams.map((team) => toDisplayTeam({ display_order: team.display_order, id: text(team, ["id"], text(team, ["name"], "team")), is_ksw: team.is_ksw, logo_url: team.logo_url, name: team.name, seed: team.seed, short_name: team.short_name }))
+    : cupV2?.teams.map(toDisplayTeam) ?? [];
+  const leaguePlacements = new Map(sortStandings(standings).map((standing, index) => [text(standing, ["team_id"], ""), index + 1]));
+  const allTeams = sortCompletedParticipantTeams({ bracket: cupV2, championTeamIds: championTeamId ? new Set([championTeamId]) : undefined, leaguePlacements, teams: sourceTeams });
   if (!allTeams.length) return null;
 
   return (
@@ -1148,7 +1155,7 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
           <>
             <CompletedChampionSummary competition={competition} cupV2={cupV2} matches={completedArchiveMatches} standardChampion={standardChampion} standardLeague={standardLeague} standings={standings} teams={teams} />
             <CompletedKswTournamentSummary cupV2={cupV2} groupStandings={legacyCupGroupStandings} matches={matches} standings={standings} teams={teams} />
-            <CompletedParticipatingTeams cupV2={cupV2} teams={teams} />
+            <CompletedParticipatingTeams cupV2={cupV2} standings={standings} teams={teams} />
             {kswStandardV2 ? <PublicKnockoutBracket championLabel="แชมป์" compact data={kswStandardV2} eyebrow="การแข่งขันที่จบแล้ว" localized sectionId="full-knockout-bracket" seasonCompleted title="สายการแข่งขันทั้งหมด" /> : null}
             {councilV2 ? <PublicCouncilCupBrackets compact data={councilV2} localized seasonCompleted showOverview={false} /> : null}
             <CompletedMatchArchive cupGroups={canonicalCupGroups} cupV2={cupV2} error={publicCupGroupData?.status === "error" ? publicCupGroupData.error : null} matches={completedArchiveMatches} standings={legacyCupGroupStandings} />
@@ -1241,10 +1248,10 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
 
       {seasonStatus === "completed" ? <CompletedSeasonStory competition={competition} competitionType={competitionType} cupV2={null} matches={matches} teams={teams} /> : null}
 
-      {seasonStatus === "completed" && !standardLeague ? <><CompletedChampionSummary competition={competition} cupV2={null} matches={matches} standardChampion={undefined} standardLeague={null} standings={standings} teams={teams} /><CompletedKswTournamentSummary cupV2={null} groupStandings={[]} matches={matches} standings={standings} teams={teams} /><CompletedParticipatingTeams cupV2={null} teams={teams} /><CompletedMatchArchive matches={matches} /><ChronicleSeasonSummary competition={competition} /></> : null}
+      {seasonStatus === "completed" && !standardLeague ? <><CompletedChampionSummary competition={competition} cupV2={null} matches={matches} standardChampion={undefined} standardLeague={null} standings={standings} teams={teams} /><CompletedKswTournamentSummary cupV2={null} groupStandings={[]} matches={matches} standings={standings} teams={teams} /><CompletedParticipatingTeams cupV2={null} standings={standings} teams={teams} /><CompletedMatchArchive matches={matches} /><ChronicleSeasonSummary competition={competition} /></> : null}
 
       {standardCompleted ? (
-        <><CompletedChampionSummary competition={competition} cupV2={null} matches={matches} standardChampion={standardChampion} standardLeague={standardLeague} standings={standings} teams={teams} /><CompletedKswTournamentSummary cupV2={null} groupStandings={[]} matches={matches} standings={standings} teams={teams} /><CompletedParticipatingTeams cupV2={null} teams={teams} /></>
+        <><CompletedChampionSummary competition={competition} cupV2={null} matches={matches} standardChampion={standardChampion} standardLeague={standardLeague} standings={standings} teams={teams} /><CompletedKswTournamentSummary cupV2={null} groupStandings={[]} matches={matches} standings={standings} teams={teams} /><CompletedParticipatingTeams championTeamId={standardLeague?.championTeamId} cupV2={null} standings={standings} teams={teams} /></>
       ) : standardLeague ? (
         <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-10"><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl border border-[#d8ad45]/35 bg-white p-4"><p className="text-xs font-black text-[#8a6418]">ตารางคะแนนล่าสุด</p><p className="mt-2 text-xl font-black">{standardChampion ? text(standardChampion, ["name"], "-") : "รอยืนยันแชมป์"}</p></div><div className="rounded-xl border bg-white p-4"><p className="text-xs font-black text-slate-500">Runner-up</p><p className="mt-2 text-lg font-black">{text(standings[1], ["team_name"], "-")}</p></div><div className="rounded-xl border bg-white p-4"><p className="text-xs font-black text-slate-500">Third Place</p><p className="mt-2 text-lg font-black">{text(standings[2], ["team_name"], "-")}</p></div></div></section>
       ) : null}
