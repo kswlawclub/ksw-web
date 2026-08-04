@@ -372,8 +372,6 @@ function SponsorsSection({ sponsors }: { sponsors: Row[] }) {
 
 function HeroCover({ competition, completed }: { competition: Row; completed: boolean }) {
   const coverImageUrl = text(competition, ["cover_image_url"], "");
-  const fallbackSeason = editionLabel(competition) || text(competition, ["season"], "");
-  const fallbackType = typeLabel(normalizeCompetitionType(text(competition, ["competition_type"], "")));
 
   return (
     <div className={completed ? "relative min-h-[230px] overflow-hidden rounded-xl border border-[#d8ad45]/30 bg-[#081a2e] sm:min-h-[270px] lg:min-h-[320px]" : "relative min-h-[260px] overflow-hidden rounded-2xl border border-[#d8ad45]/30 bg-[radial-gradient(circle_at_top,rgba(216,173,69,0.22),transparent_36%),linear-gradient(135deg,#071b31,#061426)] shadow-2xl shadow-black/25"}>
@@ -386,18 +384,6 @@ function HeroCover({ competition, completed }: { competition: Row; completed: bo
           src={coverImageUrl}
           unoptimized
         />
-      ) : null}
-      {!coverImageUrl && completed ? (
-        <div className="absolute inset-0 flex flex-col justify-between p-6 sm:p-7">
-          <div className="border-l-2 border-[#d8ad45] pl-4">
-            <p className="text-4xl font-black tracking-[0.16em] text-[#f4d58a] sm:text-5xl">KSW</p>
-            <p className="mt-2 text-xs font-black uppercase tracking-[0.2em] text-slate-300">Digital Club Chronicle</p>
-          </div>
-          <div className="border-t border-white/10 pt-4 text-sm font-bold text-slate-300">
-            <p>{fallbackType}</p>
-            {fallbackSeason ? <p className="mt-1 text-[#f4d58a]">{fallbackSeason}</p> : null}
-          </div>
-        </div>
       ) : null}
       <div className="absolute inset-0 bg-gradient-to-t from-[#061426]/90 via-[#061426]/30 to-transparent" />
       <div className={completed ? "absolute inset-x-0 bottom-0 p-5 sm:p-6" : "absolute inset-x-0 bottom-0 p-5"}>
@@ -824,12 +810,12 @@ function CompletedMatchArchive({ cupGroups = [], cupV2 = null, error = null, mat
                 const rightOrder = rightGroup ? number(rightGroup, ["sort_order"]) : Number.MAX_SAFE_INTEGER;
                 return leftOrder - rightOrder || text(leftGroup, ["label", "name"], "ไม่ระบุกลุ่ม").localeCompare(text(rightGroup, ["label", "name"], "ไม่ระบุกลุ่ม"));
               })
-              .map(([groupId, entries], index) => {
+              .map(([groupId, entries]) => {
                 const group = groupById.get(groupId);
                 const label = group ? publicArchiveGroupLabel(text(group, ["label", "name"], "ไม่ระบุกลุ่ม")) : "ไม่ระบุกลุ่ม";
                 const standing = standings.find((item) => item.group_id === groupId);
                 return (
-                  <details className="overflow-hidden rounded-xl border border-slate-200 bg-white" key={groupId || "unknown"} open={index === 0}>
+                  <details className="overflow-hidden rounded-xl border border-slate-200 bg-white" key={groupId || "unknown"}>
                     <summary className={chronicleArchive ? "cursor-pointer list-none px-4 py-3" : "cursor-pointer list-none px-4 py-4"}>
                       <span className="text-sm font-black text-[#061426]">{label}</span>
                       <span className="ml-2 text-xs font-bold text-slate-500">{entries.length} คู่</span>

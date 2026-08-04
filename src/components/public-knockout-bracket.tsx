@@ -103,9 +103,9 @@ function partitionStatusLabel(status: string) {
 function localizedRoundLabel(label: string, localized: boolean) {
   if (!localized) return label;
   const normalized = label.toLowerCase();
-  if (normalized.includes("final") && !normalized.includes("semi")) return "รอบชิงชนะเลิศ";
-  if (normalized.includes("semi")) return "รอบรองชนะเลิศ";
   if (normalized.includes("quarter")) return "รอบก่อนรองชนะเลิศ";
+  if (normalized.includes("semi")) return "รอบรองชนะเลิศ";
+  if (normalized.includes("final")) return "รอบชิงชนะเลิศ";
   if (normalized.includes("group")) return "รอบแบ่งกลุ่ม";
   if (normalized.includes("round")) return "รอบน็อกเอาต์ก่อนหน้า";
   return label;
