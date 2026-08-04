@@ -110,7 +110,7 @@ function isFinishedGroupMatch(match: CupGroupRow, groupId: string) {
   return (
     text(match, "competition_stage") === "group" &&
     text(match, "group_id") === groupId &&
-    text(match, "status") === "finished" &&
+    ["finished", "completed"].includes(text(match, "status").toLowerCase()) &&
     typeof match.home_score === "number" &&
     typeof match.away_score === "number"
   );

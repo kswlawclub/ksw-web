@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { buildPublicCupArchive, chronicleGroupLabel, derivePublicCupChampionPath, hasUnpartitionedPublicCupTeams, publicCupArchiveMetadata, publicCupPartitionTeams } from "./public-cup-v2-chronicle.ts";
 import { mapPublicCupV2Data } from "./public-cup-v2-types.ts";
+import { calculateCupGroupStandings } from "./cup-group-standings.ts";
 
 const data = mapPublicCupV2Data({
   config: { status: "completed" },
@@ -64,4 +65,19 @@ test("completed Council archive assigns one topology-defined final per division 
   assert.equal(archive.filter((entry) => entry.section === "knockout" && entry.partitionKey === "division_1" && entry.isFinal).length, 1);
   assert.deepEqual(archive.filter((entry) => entry.section === "group").map((entry) => entry.groupId), ["group-a", "group-b", null]);
   assert.equal(new Set(archive.map((entry) => entry.matchId)).size, archive.length);
+});
+
+test("archive round identity is partition plus round index, and completed group results feed the shared standings helper", () => {
+  const archive = buildPublicCupArchive({
+    matches: [{ id: "d1-quarter" }, { id: "d1-final" }, { id: "d2-final" }],
+    nodes: data.nodes,
+  });
+  assert.equal(new Set(archive.filter((entry) => entry.section === "knockout").map((entry) => `${entry.partitionKey}:${entry.roundIndex}`)).size, 3);
+  const standings = calculateCupGroupStandings({
+    groups: [{ id: "group-a", label: "Group A", qualifiers_count: 2, sort_order: 1 }],
+    matches: [{ away_score: 0, away_team_id: "b", competition_stage: "group", group_id: "group-a", home_score: 1, home_team_id: "a", status: "completed" }],
+    teams: [{ group_id: "group-a", name: "A", team_id: "a" }, { group_id: "group-a", name: "B", team_id: "b" }],
+  });
+  assert.equal(standings[0]?.finished_matches, 1);
+  assert.equal(standings[0]?.rows[0]?.team_id, "a");
 });
