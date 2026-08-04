@@ -186,6 +186,56 @@ export function PublicKnockoutBracket({
   );
 }
 
+function CompletedCouncilDivisionBracket({ data, localized, partitionKey, theme, title }: {
+  data: PublicCupV2Data;
+  localized: boolean;
+  partitionKey: "division_1" | "division_2";
+  theme: Extract<BracketTheme, "division_1" | "division_2">;
+  title: string;
+}) {
+  const rounds = groupPublicCupV2Rounds(data.nodes, partitionKey);
+  if (!rounds.length) return null;
+  const partition = data.partitions.find((entry) => entry.key === partitionKey);
+  const champion = partition?.champion ?? null;
+  const palette = themes[theme];
+
+  return (
+    <section className="mx-auto w-full max-w-7xl px-4 pb-6 sm:px-6 lg:px-10" id={partitionKey === "division_1" ? "knockout-division-1" : "knockout-division-2"}>
+      <div className={`border-y bg-white shadow-xl shadow-slate-900/10 ${palette.accent}`}>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-6">
+          <div>
+            <p className={`text-xs font-black uppercase tracking-[0.18em] ${palette.eyebrow}`}>คัพสภาทนายความ</p>
+            <h2 className="mt-1 text-2xl font-black text-[#061426]">{title}</h2>
+          </div>
+          <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">จบการแข่งขัน</span>
+        </div>
+        {champion ? (
+          <div className={`border-b border-slate-200 px-4 py-3 sm:px-6 ${palette.champion}`}>
+            <p className={`text-xs font-black ${palette.eyebrow}`}>แชมป์ {title}</p>
+            <div className="mt-2 flex min-w-0 items-center gap-3">
+              <TeamLogo className="!size-10" initials={teamInitials(champion, "?")} logoUrl={champion.logoUrl ?? ""} teamName={champion.name} />
+              <p className="min-w-0 text-wrap text-xl font-black text-[#061426]">{champion.name}</p>
+            </div>
+          </div>
+        ) : null}
+        <div className="grid gap-3 bg-slate-100 p-2.5 sm:p-3">
+          {rounds.map((round) => (
+            <section className="overflow-hidden rounded-lg border border-slate-200 bg-white" key={round.roundIndex}>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2.5">
+                <h3 className="text-base font-black text-[#061426]">{localizedRoundLabel(round.roundLabel, localized)}</h3>
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700">จบแล้ว {round.finishedCount}/{round.nodes.length} คู่</span>
+              </div>
+              <div className="grid gap-2 p-2.5">
+                {round.nodes.map((node) => <PublicKnockoutMatchCard compact key={node.id} node={node} />)}
+              </div>
+            </section>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function PublicCouncilCupBrackets({ compact = false, data, localized = false, seasonCompleted, showOverview = true }: { compact?: boolean; data: PublicCupV2Data; localized?: boolean; seasonCompleted: boolean; showOverview?: boolean }) {
   const division1 = data.partitions.find((partition) => partition.key === "division_1");
   const division2 = data.partitions.find((partition) => partition.key === "division_2");
@@ -193,6 +243,7 @@ export function PublicCouncilCupBrackets({ compact = false, data, localized = fa
   const hasDivision2 = data.nodes.some((node) => node.partitionKey === "division_2");
   if (!hasDivision1 && !hasDivision2) return null;
   const completedWithTwoChampions = seasonCompleted && Boolean(division1?.champion && division2?.champion);
+  const useCompletedCouncilPresentation = compact && seasonCompleted;
 
   return (
     <>
@@ -207,9 +258,14 @@ export function PublicCouncilCupBrackets({ compact = false, data, localized = fa
           </div>
         </div>
       </section> : null}
-      <div className={`grid gap-6 ${compact && seasonCompleted ? "xl:grid-cols-2" : "lg:grid-cols-2"}`}>
-        {hasDivision1 ? <PublicKnockoutBracket championLabel={localized ? "แชมป์ Division 1" : "Champion Division 1"} compact={compact} data={data} eyebrow={localized ? "คัพสภาทนายความ" : "Council Cup"} localized={localized} openAllRounds={compact && seasonCompleted} partitionKey="division_1" sectionId="knockout-division-1" seasonCompleted={division1?.status === "completed"} theme="division_1" title="Division 1" /> : null}
-        {hasDivision2 ? <PublicKnockoutBracket championLabel={localized ? "แชมป์ Division 2" : "Champion Division 2"} compact={compact} data={data} eyebrow={localized ? "คัพสภาทนายความ" : "Council Cup"} localized={localized} openAllRounds={compact && seasonCompleted} partitionKey="division_2" sectionId="knockout-division-2" seasonCompleted={division2?.status === "completed"} theme="division_2" title="Division 2" /> : null}
+      <div className={`grid gap-6 ${useCompletedCouncilPresentation ? "xl:grid-cols-2" : "lg:grid-cols-2"}`}>
+        {useCompletedCouncilPresentation ? <>
+          {hasDivision1 ? <CompletedCouncilDivisionBracket data={data} localized={localized} partitionKey="division_1" theme="division_1" title="Division 1" /> : null}
+          {hasDivision2 ? <CompletedCouncilDivisionBracket data={data} localized={localized} partitionKey="division_2" theme="division_2" title="Division 2" /> : null}
+        </> : <>
+          {hasDivision1 ? <PublicKnockoutBracket championLabel={localized ? "แชมป์ Division 1" : "Champion Division 1"} compact={compact} data={data} eyebrow={localized ? "คัพสภาทนายความ" : "Council Cup"} localized={localized} partitionKey="division_1" sectionId="knockout-division-1" seasonCompleted={division1?.status === "completed"} theme="division_1" title="Division 1" /> : null}
+          {hasDivision2 ? <PublicKnockoutBracket championLabel={localized ? "แชมป์ Division 2" : "Champion Division 2"} compact={compact} data={data} eyebrow={localized ? "คัพสภาทนายความ" : "Council Cup"} localized={localized} partitionKey="division_2" sectionId="knockout-division-2" seasonCompleted={division2?.status === "completed"} theme="division_2" title="Division 2" /> : null}
+        </>}
       </div>
     </>
   );
