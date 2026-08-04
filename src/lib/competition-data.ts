@@ -25,7 +25,7 @@ export const competitionColumns =
 export const standingsColumns =
   "team_id, league_id, team_name, short_name, logo_url, is_ksw, played, won, drawn, lost, goals_for, goals_against, goal_difference, points";
 export const matchColumns =
-  "id, league_id, group_id, competition_stage, fixture_source, matchweek, scheduled_matchweek, league_fixture_version, league_fixture_key, match_date, home_team_id, away_team_id, home_score, away_score, venue, status, match_type";
+  "id, league_id, group_id, competition_stage, fixture_source, knockout_partition_key, matchweek, scheduled_matchweek, league_fixture_version, league_fixture_key, match_date, home_team_id, away_team_id, home_score, away_score, penalty_home_score, penalty_away_score, venue, status, match_type";
 export const groupColumns =
   "id, competition_id, name, label, sort_order, qualifiers_count";
 export const competitionTeamGroupColumns =

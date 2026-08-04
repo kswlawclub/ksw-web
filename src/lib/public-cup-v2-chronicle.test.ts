@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chronicleGroupLabel, derivePublicCupChampionPath, hasUnpartitionedPublicCupTeams, publicCupArchiveMetadata, publicCupPartitionTeams } from "./public-cup-v2-chronicle.ts";
+import { buildPublicCupArchive, chronicleGroupLabel, derivePublicCupChampionPath, hasUnpartitionedPublicCupTeams, publicCupArchiveMetadata, publicCupPartitionTeams } from "./public-cup-v2-chronicle.ts";
 import { mapPublicCupV2Data } from "./public-cup-v2-types.ts";
 
 const data = mapPublicCupV2Data({
@@ -45,4 +45,23 @@ test("Chronicle archive preserves division and group labels with an explicit unk
   assert.deepEqual(publicCupArchiveMetadata(data, node), { divisionLabel: "division_1", groupLabel: "Group A" });
   assert.equal(chronicleGroupLabel("group-a", new Map([["group-a", "Group A"]])), "Group A");
   assert.equal(chronicleGroupLabel("missing", new Map()), "ไม่ระบุกลุ่ม");
+});
+
+test("completed Council archive assigns one topology-defined final per division and keeps groups out of divisions", () => {
+  const archive = buildPublicCupArchive({
+    matches: [
+      { competition_stage: "knockout", id: "d1-quarter" },
+      { competition_stage: "knockout", id: "d1-final" },
+      { competition_stage: "knockout", id: "d2-final" },
+      { competition_stage: "group", group_id: "group-a", id: "group-a-1" },
+      { competition_stage: "group", group_id: "group-b", id: "group-b-1" },
+      { competition_stage: "group", id: "unknown-group" },
+      { competition_stage: "knockout", id: "d1-final" },
+    ],
+    nodes: data.nodes,
+  });
+  assert.deepEqual(archive.filter((entry) => entry.section === "knockout" && entry.isFinal).map((entry) => entry.matchId).sort(), ["d1-final", "d2-final"]);
+  assert.equal(archive.filter((entry) => entry.section === "knockout" && entry.partitionKey === "division_1" && entry.isFinal).length, 1);
+  assert.deepEqual(archive.filter((entry) => entry.section === "group").map((entry) => entry.groupId), ["group-a", "group-b", null]);
+  assert.equal(new Set(archive.map((entry) => entry.matchId)).size, archive.length);
 });

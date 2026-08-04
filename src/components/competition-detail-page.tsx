@@ -28,8 +28,7 @@ import {
 } from "@/lib/competition-format";
 import type { PublicCupV2Data } from "@/lib/public-cup-v2-types";
 import {
-  chronicleGroupLabel,
-  publicCupArchiveMetadata,
+  buildPublicCupArchive,
 } from "@/lib/public-cup-v2-chronicle";
 
 type CompetitionDetailData = {
@@ -753,39 +752,6 @@ function TournamentLegacy({ competition }: { competition: Row }) {
   );
 }
 
-function completedCupArchiveRows(data: PublicCupV2Data | null) {
-  if (!data) return [] as Row[];
-
-  return data.nodes.flatMap((node) => {
-    const match = node.linkedMatch;
-    if (!match || !["finished", "completed"].includes(match.status)) return [];
-    const metadata = publicCupArchiveMetadata(data, node);
-    return [{
-      archive_division_label: metadata.divisionLabel,
-      archive_group_label: metadata.groupLabel,
-      away_score: match.awayScore,
-      away_team_logo_url: match.awayTeam?.logoUrl ?? "",
-      away_team_name: match.awayTeam?.name ?? "ทีมเยือน",
-      away_team_short_name: match.awayTeam?.shortName ?? "",
-      competition_stage: node.roundLabel || "Knockout Stage",
-      home_score: match.homeScore,
-      home_team_logo_url: match.homeTeam?.logoUrl ?? "",
-      home_team_name: match.homeTeam?.name ?? "ทีมเหย้า",
-      home_team_short_name: match.homeTeam?.shortName ?? "",
-      id: match.id,
-      match_date: match.matchDate,
-      penalty_away_score: match.awayPenaltyScore,
-      penalty_home_score: match.homePenaltyScore,
-      status: match.status,
-      venue: match.venue,
-    } satisfies Row];
-  });
-}
-
-function archiveStageLabel(match: Row) {
-  return text(match, ["competition_stage"], "") || (text(match, ["group_id", "archive_group_label"], "") ? "Group Stage" : "Match Results");
-}
-
 function thaiArchiveStageLabel(label: string) {
   const normalized = label.toLowerCase();
   if (normalized.includes("final") && !normalized.includes("semi")) return "รอบชิงชนะเลิศ";
@@ -811,27 +777,21 @@ function archiveStagePriority(label: string) {
   return 4;
 }
 
-function CompletedMatchArchive({ cupGroups = [], cupV2 = null, matches }: { cupGroups?: Row[]; cupV2?: PublicCupV2Data | null; matches: Row[] }) {
-  const groupLabels = new Map(cupGroups.map((group) => [text(group, ["id"], ""), text(group, ["label", "name"], "ไม่ระบุกลุ่ม")]));
-  const groups = new Map<string, { division: string; groupLabel: string; matches: Row[]; stage: string }>();
-  matches
-    .filter((match) => ["finished", "completed"].includes(text(match, ["status"], "").toLowerCase()))
-    .forEach((match) => {
-      const stage = archiveStageLabel(match);
-      const division = text(match, ["archive_division_label"], "") || (cupV2?.templateKey === "council_two_division" ? "ไม่ระบุดิวิชั่น" : "Main");
-      const isGroupStage = thaiArchiveStageLabel(stage) === "รอบแบ่งกลุ่ม";
-      const groupLabel = text(match, ["archive_group_label"], "") || (isGroupStage ? chronicleGroupLabel(text(match, ["group_id"], ""), groupLabels) : "");
-      const key = `${division}::${stage}::${groupLabel}`;
-      const current = groups.get(key);
-      groups.set(key, { division, groupLabel, matches: [...(current?.matches ?? []), match], stage });
-    });
-  const grouped = Array.from(groups.values()).sort((left, right) =>
-    left.division.localeCompare(right.division)
-    || archiveStagePriority(left.stage) - archiveStagePriority(right.stage)
-    || left.stage.localeCompare(right.stage)
-    || left.groupLabel.localeCompare(right.groupLabel),
-  );
-  if (!grouped.length) return null;
+function ArchiveStandingTable({ standing }: { standing: CupGroupStanding | undefined }) {
+  if (!standing) return <p className="text-sm font-bold text-amber-800">ตารางคะแนนยังไม่สมบูรณ์</p>;
+  return <div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-xs"><thead className="bg-[#061426] text-white"><tr>{["#", "ทีม", "แข่ง", "ชนะ", "เสมอ", "แพ้", "ได้", "เสีย", "ผลต่าง", "คะแนน"].map((label) => <th className="px-2 py-2 font-black" key={label}>{label}</th>)}</tr></thead><tbody>{standing.rows.map((row) => <tr className="border-b border-slate-100" key={row.team_id}><td className="px-2 py-2 font-black">{row.position}</td><td className="px-2 py-2 font-black">{row.team_name}</td>{[row.played, row.won, row.drawn, row.lost, row.goals_for, row.goals_against, row.goal_difference, row.points].map((value, index) => <td className="px-2 py-2" key={index}>{value}</td>)}</tr>)}</tbody></table>{!standing.is_complete ? <p className="px-2 py-2 text-xs font-bold text-amber-800">ตารางคะแนนยังไม่สมบูรณ์</p> : null}</div>;
+}
+
+function CompletedMatchArchive({ cupGroups = [], cupV2 = null, matches, standings = [] }: { cupGroups?: Row[]; cupV2?: PublicCupV2Data | null; matches: Row[]; standings?: CupGroupStanding[] }) {
+  const archive = buildPublicCupArchive({ matches: matches.filter((match) => ["finished", "completed"].includes(text(match, ["status"], "").toLowerCase())), nodes: cupV2?.nodes ?? [] });
+  const groupById = new Map(cupGroups.map((group) => [text(group, ["id"], ""), group]));
+  const knockout = archive.filter((entry) => entry.section === "knockout");
+  const groupMatches = archive.filter((entry) => entry.section === "group");
+  if (!archive.length) return null;
+  const knockoutByPartition = new Map<string, typeof knockout>();
+  knockout.forEach((entry) => knockoutByPartition.set(entry.partitionKey ?? "main", [...(knockoutByPartition.get(entry.partitionKey ?? "main") ?? []), entry]));
+  const groupMatchesById = new Map<string, typeof groupMatches>();
+  groupMatches.forEach((entry) => groupMatchesById.set(entry.groupId ?? "", [...(groupMatchesById.get(entry.groupId ?? "") ?? []), entry]));
 
   return (
     <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="match-archive">
@@ -840,31 +800,13 @@ function CompletedMatchArchive({ cupGroups = [], cupV2 = null, matches }: { cupG
         <p className="mt-1 text-sm text-slate-600">เรียงตามรอบการแข่งขันและกลุ่ม</p>
       </div>
       <div className="grid gap-6">
-        {grouped.map((group, index) => {
-          const stageLabel = thaiArchiveStageLabel(group.stage);
-          const isGroupStage = stageLabel === "รอบแบ่งกลุ่ม";
-          const firstGroupStage = isGroupStage && !grouped.slice(0, index).some((entry) => thaiArchiveStageLabel(entry.stage) === "รอบแบ่งกลุ่ม");
-          const open = archiveStagePriority(group.stage) === 0 || firstGroupStage;
-          const showDivision = cupV2?.templateKey === "council_two_division";
-          const groupLabel = publicArchiveGroupLabel(group.groupLabel);
-          return (
-            <details className="overflow-hidden rounded-xl border border-slate-200 bg-white" key={`${group.division}-${group.stage}-${group.groupLabel}`} open={open}>
-              <summary className="cursor-pointer list-none px-4 py-4 hover:bg-[#fffaf0]">
-                <div className="flex flex-wrap items-center gap-2">
-                  {showDivision ? <span className="rounded-full bg-[#061426] px-2.5 py-1 text-xs font-black text-white">{group.division}</span> : null}
-                  <span className="text-sm font-black text-[#061426]">{stageLabel}</span>
-                  {groupLabel ? <span className="rounded-full bg-[#fff4dc] px-2.5 py-1 text-xs font-black text-[#8a6418]">{groupLabel}</span> : null}
-                  <span className="text-xs font-bold text-slate-500">{group.matches.length} คู่</span>
-                </div>
-              </summary>
-              <div className="grid gap-3 border-t border-slate-100 bg-slate-100 p-3">
-                {[...group.matches]
-                  .sort((left, right) => matchTime(left) - matchTime(right) || text(left, ["id"], "").localeCompare(text(right, ["id"], "")))
-                  .map((match) => <TournamentJourneyCard key={text(match, ["id"])} match={match} />)}
-              </div>
-            </details>
-          );
+        {Array.from(knockoutByPartition.entries()).sort(([left], [right]) => left.localeCompare(right)).map(([partitionKey, entries]) => {
+          const division = cupV2?.partitions.find((partition) => partition.key === partitionKey)?.label ?? partitionKey;
+          const rounds = new Map<string, typeof entries>();
+          entries.forEach((entry) => rounds.set(entry.roundLabel ?? "Knockout Stage", [...(rounds.get(entry.roundLabel ?? "Knockout Stage") ?? []), entry]));
+          return <section className="grid gap-3" key={partitionKey}><h3 className="text-lg font-black text-[#061426]">{cupV2?.templateKey === "council_two_division" ? division : "รอบน็อกเอาต์"}</h3>{Array.from(rounds.entries()).sort(([left], [right]) => archiveStagePriority(left) - archiveStagePriority(right)).map(([round, roundEntries]) => <details className="overflow-hidden rounded-xl border border-slate-200 bg-white" key={round} open={roundEntries.some((entry) => entry.isFinal)}><summary className="cursor-pointer list-none px-4 py-4"><span className="text-sm font-black text-[#061426]">{thaiArchiveStageLabel(round)}</span><span className="ml-2 text-xs font-bold text-slate-500">{roundEntries.length} คู่</span></summary><div className="grid gap-3 border-t border-slate-100 bg-slate-100 p-3">{roundEntries.sort((left, right) => left.matchOrder - right.matchOrder || matchTime(left.match) - matchTime(right.match)).map((entry) => <TournamentJourneyCard key={entry.matchId} match={entry.match} />)}</div></details>)}</section>;
         })}
+        {groupMatches.length ? <section className="grid gap-3"><h3 className="text-lg font-black text-[#061426]">รอบแบ่งกลุ่ม</h3>{Array.from(groupMatchesById.entries()).sort(([left], [right]) => { const leftGroup = groupById.get(left); const rightGroup = groupById.get(right); return number(leftGroup, ["sort_order"]) - number(rightGroup, ["sort_order"]) || text(leftGroup, ["label", "name"], "ไม่ระบุกลุ่ม").localeCompare(text(rightGroup, ["label", "name"], "ไม่ระบุกลุ่ม")); }).map(([groupId, entries], index) => { const group = groupById.get(groupId); const label = group ? publicArchiveGroupLabel(text(group, ["label", "name"], "ไม่ระบุกลุ่ม")) : "ไม่ระบุกลุ่ม"; const standing = standings.find((item) => item.group_id === groupId); return <details className="overflow-hidden rounded-xl border border-slate-200 bg-white" key={groupId || "unknown"} open={index === 0}><summary className="cursor-pointer list-none px-4 py-4"><span className="text-sm font-black text-[#061426]">{label}</span><span className="ml-2 text-xs font-bold text-slate-500">{entries.length} คู่</span></summary><div className="grid gap-3 border-t border-slate-100 bg-slate-100 p-3"><ArchiveStandingTable standing={standing} />{entries.sort((left, right) => matchTime(left.match) - matchTime(right.match) || left.matchId.localeCompare(right.matchId)).map((entry) => <TournamentJourneyCard key={entry.matchId} match={entry.match} />)}</div></details>; })}</section> : null}
       </div>
     </section>
   );
@@ -1013,13 +955,10 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
   const legacyMatches = cupV2 ? matches.filter((match) => !knockoutMatchIds.has(text(match, ["id"]))) : matches;
   const legacyScheduledMatches = cupV2 ? scheduledMatches.filter((match) => !knockoutMatchIds.has(text(match, ["id"]))) : scheduledMatches;
   const legacyFixtures = [...legacyScheduledMatches, ...legacyMatches];
-  const completedArchiveMatches = [
-    ...legacyMatches,
-    ...completedCupArchiveRows(cupV2),
-  ].filter((match, index, rows) => rows.findIndex((candidate) => text(candidate, ["id"], "") === text(match, ["id"], "")) === index);
+  const completedArchiveMatches = matches.filter((match) => ["finished", "completed"].includes(text(match, ["status"], "").toLowerCase()));
   const legacyKswJourney = legacyFixtures.filter(isKswMatchByFlag).sort((a, b) => matchTime(a) - matchTime(b));
   const legacyCupGroupStandings = isCup
-    ? calculateCupGroupStandings({ groups: cupGroups, matches: legacyFixtures, teams: cupGroupTeams })
+    ? calculateCupGroupStandings({ groups: cupGroups, matches: legacyFixtures.filter((match) => text(match, ["competition_stage"], "").toLowerCase() === "group" || Boolean(text(match, ["group_id"], ""))), teams: cupGroupTeams })
     : [];
 
   if (isTournamentArchive) {
@@ -1101,7 +1040,7 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
             <CompletedParticipatingTeams cupV2={cupV2} teams={teams} />
             {kswStandardV2 ? <PublicKnockoutBracket championLabel="แชมป์" compact data={kswStandardV2} eyebrow="การแข่งขันที่จบแล้ว" localized sectionId="full-knockout-bracket" seasonCompleted title="สายการแข่งขันทั้งหมด" /> : null}
             {councilV2 ? <PublicCouncilCupBrackets compact data={councilV2} localized seasonCompleted showOverview={false} /> : null}
-            <CompletedMatchArchive cupGroups={cupGroups} cupV2={cupV2} matches={completedArchiveMatches} />
+            <CompletedMatchArchive cupGroups={cupGroups} cupV2={cupV2} matches={completedArchiveMatches} standings={legacyCupGroupStandings} />
             <ChronicleSeasonSummary competition={competition} />
             <TournamentLegacy competition={competition} />
           </>
