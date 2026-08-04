@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { CompetitionResultsTable } from "@/components/competition-results-table";
+import { CompletedParticipatingTeamsGrid, type CompletedParticipantTeam } from "@/components/completed-participating-teams";
 import { LeagueTable } from "@/components/league-table";
 import { TeamLogo } from "@/components/team-logo";
 import { PublicCouncilCupBrackets, PublicKnockoutBracket } from "@/components/public-knockout-bracket";
@@ -135,6 +136,12 @@ function kswBadgeFromMatch(match: Row) {
   return kswWon
     ? { label: "W", className: "border-emerald-500/30 bg-emerald-50 text-emerald-700" }
     : { label: "L", className: "border-[#9b1c1f]/30 bg-[#9b1c1f]/10 text-[#9b1c1f]" };
+}
+
+function publicMatchStatusLabel(status: string) {
+  if (["finished", "completed"].includes(status.toLowerCase())) return "จบการแข่งขัน";
+  if (status.toLowerCase() === "scheduled") return "กำหนดการแข่งขันแล้ว";
+  return status || "รอผลการแข่งขัน";
 }
 
 function latestStandingSnapshotRows(rows: Row[]) {
@@ -287,8 +294,8 @@ function ResultCard({ match }: { match: Row }) {
           )}
         </div>
         <div className="flex flex-wrap justify-center gap-2 text-xs font-black text-[#061426]">
-          <span className="rounded-full bg-slate-100 px-3 py-1.5">{formatDateTime(matchDate) || "Date TBC"}</span>
-          {venue ? <span className="rounded-full bg-[#fff4dc] px-3 py-1.5">Field {venue}</span> : null}
+          <span className="rounded-full bg-slate-100 px-3 py-1.5">{formatDateTime(matchDate) || "รอกำหนดวันและเวลา"}</span>
+          {venue ? <span className="rounded-full bg-[#fff4dc] px-3 py-1.5">สนาม {venue}</span> : null}
         </div>
       </div>
 
@@ -447,7 +454,7 @@ function TournamentJourneyCard({ match }: { match: Row }) {
     <article className="rounded-xl border border-[#d8ad45]/30 bg-white p-4 shadow-lg shadow-slate-900/5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
-          {formatDateTime(matchDate) || "Date TBC"}
+          {formatDateTime(matchDate) || "รอกำหนดวันและเวลา"}
         </p>
         <div className="flex items-center gap-2">
           {badge ? (
@@ -457,7 +464,7 @@ function TournamentJourneyCard({ match }: { match: Row }) {
           ) : null}
           {status ? (
             <span className="rounded-full border border-[#d8ad45]/35 bg-[#fff4dc] px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#061426]">
-              {status}
+              {publicMatchStatusLabel(status)}
             </span>
           ) : null}
         </div>
@@ -735,11 +742,13 @@ function TournamentLegacy({ competition }: { competition: Row }) {
 
   return (
     <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
-      <div className="rounded-2xl border border-[#d8ad45]/25 bg-[#061426] p-5 text-white shadow-xl shadow-slate-900/20 sm:p-6">
-        <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]">Competition Legacy</p>
-        <h2 className="mt-2 text-2xl font-black">A Chapter in KSW History</h2>
-        <p className="mt-4 max-w-3xl whitespace-pre-line text-sm leading-7 text-slate-300">{copy}</p>
-      </div>
+      <details className="rounded-2xl border border-[#d8ad45]/25 bg-[#061426] text-white shadow-xl shadow-slate-900/20">
+        <summary className="cursor-pointer list-none p-5 sm:p-6">
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]">บันทึกการแข่งขัน</p>
+          <h2 className="mt-2 text-2xl font-black">เรื่องราวในความทรงจำของ KSW</h2>
+        </summary>
+        <p className="border-t border-white/10 px-5 pb-5 pt-4 whitespace-pre-line text-sm leading-7 text-slate-300 sm:px-6 sm:pb-6">{copy}</p>
+      </details>
     </section>
   );
 }
@@ -787,6 +796,12 @@ function thaiArchiveStageLabel(label: string) {
   return "ผลการแข่งขัน";
 }
 
+function publicArchiveGroupLabel(label: string) {
+  const normalized = label.trim();
+  const match = normalized.match(/^group\s*(.+)$/i);
+  return match ? `กลุ่ม ${match[1].trim()}` : normalized;
+}
+
 function archiveStagePriority(label: string) {
   const normalized = label.toLowerCase();
   if (normalized.includes("final") && !normalized.includes("semi")) return 0;
@@ -804,7 +819,8 @@ function CompletedMatchArchive({ cupGroups = [], cupV2 = null, matches }: { cupG
     .forEach((match) => {
       const stage = archiveStageLabel(match);
       const division = text(match, ["archive_division_label"], "") || (cupV2?.templateKey === "council_two_division" ? "ไม่ระบุดิวิชั่น" : "Main");
-      const groupLabel = text(match, ["archive_group_label"], "") || (stage === "Group Stage" ? chronicleGroupLabel(text(match, ["group_id"], ""), groupLabels) : "");
+      const isGroupStage = thaiArchiveStageLabel(stage) === "รอบแบ่งกลุ่ม";
+      const groupLabel = text(match, ["archive_group_label"], "") || (isGroupStage ? chronicleGroupLabel(text(match, ["group_id"], ""), groupLabels) : "");
       const key = `${division}::${stage}::${groupLabel}`;
       const current = groups.get(key);
       groups.set(key, { division, groupLabel, matches: [...(current?.matches ?? []), match], stage });
@@ -826,29 +842,25 @@ function CompletedMatchArchive({ cupGroups = [], cupV2 = null, matches }: { cupG
       <div className="grid gap-6">
         {grouped.map((group, index) => {
           const stageLabel = thaiArchiveStageLabel(group.stage);
-          const firstGroupStage = group.stage === "Group Stage" && !grouped.slice(0, index).some((entry) => entry.stage === "Group Stage");
+          const isGroupStage = stageLabel === "รอบแบ่งกลุ่ม";
+          const firstGroupStage = isGroupStage && !grouped.slice(0, index).some((entry) => thaiArchiveStageLabel(entry.stage) === "รอบแบ่งกลุ่ม");
           const open = archiveStagePriority(group.stage) === 0 || firstGroupStage;
           const showDivision = cupV2?.templateKey === "council_two_division";
+          const groupLabel = publicArchiveGroupLabel(group.groupLabel);
           return (
             <details className="overflow-hidden rounded-xl border border-slate-200 bg-white" key={`${group.division}-${group.stage}-${group.groupLabel}`} open={open}>
               <summary className="cursor-pointer list-none px-4 py-4 hover:bg-[#fffaf0]">
                 <div className="flex flex-wrap items-center gap-2">
                   {showDivision ? <span className="rounded-full bg-[#061426] px-2.5 py-1 text-xs font-black text-white">{group.division}</span> : null}
                   <span className="text-sm font-black text-[#061426]">{stageLabel}</span>
-                  {group.groupLabel ? <span className="rounded-full bg-[#fff4dc] px-2.5 py-1 text-xs font-black text-[#8a6418]">{group.groupLabel}</span> : null}
+                  {groupLabel ? <span className="rounded-full bg-[#fff4dc] px-2.5 py-1 text-xs font-black text-[#8a6418]">{groupLabel}</span> : null}
                   <span className="text-xs font-bold text-slate-500">{group.matches.length} คู่</span>
                 </div>
               </summary>
-              <div className="border-t border-slate-100">
-                <CompetitionResultsTable
-                  countLabel="คู่"
-                  dateFallback="รอกำหนดวันและเวลา"
-                  isLeague={false}
-                  matches={[...group.matches].sort((left, right) => matchTime(left) - matchTime(right) || text(left, ["id"], "").localeCompare(text(right, ["id"], "")))}
-                  sectionId={`match-archive-${group.division}-${group.stage}-${group.groupLabel}`.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}
-                  subtitle={`${showDivision ? `${group.division} · ` : ""}${stageLabel}${group.groupLabel ? ` · ${group.groupLabel}` : ""}`}
-                  title={stageLabel}
-                />
+              <div className="grid gap-3 border-t border-slate-100 bg-slate-100 p-3">
+                {[...group.matches]
+                  .sort((left, right) => matchTime(left) - matchTime(right) || text(left, ["id"], "").localeCompare(text(right, ["id"], "")))
+                  .map((match) => <TournamentJourneyCard key={text(match, ["id"])} match={match} />)}
               </div>
             </details>
           );
@@ -902,18 +914,18 @@ function CompletedChampionSummary({
   return (
     <section className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10" id="champion-summary">
       <div className="border-y border-[#d8ad45]/35 bg-white px-5 py-8 shadow-xl shadow-slate-900/10 sm:px-8">
-        <p className="text-xs font-black uppercase tracking-[0.22em] text-[#8a6418]">Season Complete</p>
+        <p className="text-xs font-black uppercase tracking-[0.22em] text-[#8a6418]">การแข่งขันเสร็จสิ้น</p>
         <h2 className="mt-3 text-3xl font-black tracking-tight text-[#061426] sm:text-4xl">บทสรุปของฤดูกาล</h2>
         {cupV2?.templateKey === "council_two_division" ? (
           <div className="mt-6 grid gap-5 sm:grid-cols-2">
-            <div className="border-l-2 border-[#d8ad45] pl-4"><p className="text-xs font-black text-[#8a6418]">Champion Division 1</p><p className="mt-2 text-2xl font-black">{council?.division1?.name ?? "ผลสรุปกำลังจัดเตรียม"}</p></div>
-            <div className="border-l-2 border-emerald-800 pl-4"><p className="text-xs font-black text-emerald-800">Champion Division 2</p><p className="mt-2 text-2xl font-black">{council?.division2?.name ?? "ผลสรุปกำลังจัดเตรียม"}</p></div>
+            <div className="border-l-2 border-[#d8ad45] pl-4"><p className="text-xs font-black text-[#8a6418]">แชมป์ Division 1</p><p className="mt-2 text-2xl font-black">{council?.division1?.name ?? "ผลสรุปกำลังจัดเตรียม"}</p></div>
+            <div className="border-l-2 border-emerald-800 pl-4"><p className="text-xs font-black text-emerald-800">แชมป์ Division 2</p><p className="mt-2 text-2xl font-black">{council?.division2?.name ?? "ผลสรุปกำลังจัดเตรียม"}</p></div>
           </div>
         ) : hasChampionContract ? (
           <div className="mt-6 border-l-2 border-[#d8ad45] pl-4">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a6418]">Champion</p>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a6418]">แชมป์</p>
             <p className="mt-2 text-3xl font-black text-[#061426] sm:text-4xl">{championName ?? "ผลสรุปกำลังจัดเตรียม"}</p>
-            {runnerUp ? <p className="mt-3 text-sm font-bold text-slate-600">Runner-up: {text(runnerUp, ["team_name"], "-")}{thirdPlace ? ` · Third Place: ${text(thirdPlace, ["team_name"], "-")}` : ""}</p> : null}
+            {runnerUp ? <p className="mt-3 text-sm font-bold text-slate-600">รองชนะเลิศ: {text(runnerUp, ["team_name"], "-")}{thirdPlace ? ` · อันดับ 3: ${text(thirdPlace, ["team_name"], "-")}` : ""}</p> : null}
           </div>
         ) : <p className="mt-5 text-lg font-black text-[#061426]">การแข่งขันเสร็จสิ้น</p>}
         {missingChampion ? <p className="mt-5 text-sm font-bold text-amber-800">ผลสรุปกำลังจัดเตรียม</p> : null}
@@ -929,7 +941,7 @@ function ChronicleSeasonSummary({ competition }: { competition: Row }) {
   return (
     <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="season-summary">
       <div className="max-w-4xl border-l-2 border-[#d8ad45] pl-5">
-        <p className="text-xs font-black uppercase tracking-[0.2em] text-[#8a6418]">Season Summary</p>
+        <p className="text-xs font-black uppercase tracking-[0.2em] text-[#8a6418]">สรุปฤดูกาล</p>
         <h2 className="mt-2 text-2xl font-black text-[#061426]">เรื่องราวของการแข่งขัน</h2>
         <p className="mt-4 whitespace-pre-line text-sm leading-7 text-slate-700 sm:text-base">{description}</p>
       </div>
@@ -937,21 +949,8 @@ function ChronicleSeasonSummary({ competition }: { competition: Row }) {
   );
 }
 
-type ChronicleDisplayTeam = { displayOrder: number | null; id: string; logoUrl: string; name: string; shortName: string };
-
-function CompactTeamList({ teams }: { teams: ChronicleDisplayTeam[] }) {
-  if (!teams.length) return <p className="text-sm font-bold text-slate-500">ยังไม่มีข้อมูลทีม</p>;
-  return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-      {teams.map((team) => {
-        return <div className="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2" key={team.id}><TeamLogo className="!size-7" initials={(team.shortName || team.name).slice(0, 3)} logoUrl={team.logoUrl} teamName={team.name} /><span className="min-w-0 text-wrap text-sm font-black text-[#061426]">{team.name}</span></div>;
-      })}
-    </div>
-  );
-}
-
 function CompletedParticipatingTeams({ cupV2, teams }: { cupV2: PublicCupV2Data | null; teams: Row[] }) {
-  const toDisplayTeam = (team: { display_order?: unknown; id: string; logoUrl?: string | null; logo_url?: unknown; name?: unknown; shortName?: string | null; short_name?: unknown }): ChronicleDisplayTeam => ({
+  const toDisplayTeam = (team: { display_order?: unknown; id: string; logoUrl?: string | null; logo_url?: unknown; name?: unknown; shortName?: string | null; short_name?: unknown }): CompletedParticipantTeam & { displayOrder: number | null } => ({
     displayOrder: typeof team.display_order === "number" ? team.display_order : null,
     id: team.id,
     logoUrl: typeof team.logoUrl === "string" ? team.logoUrl : typeof team.logo_url === "string" ? team.logo_url : "",
@@ -965,9 +964,9 @@ function CompletedParticipatingTeams({ cupV2, teams }: { cupV2: PublicCupV2Data 
   return (
     <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="participating-teams">
       <div className="border-y border-slate-200 bg-white px-5 py-6 shadow-xl shadow-slate-900/10 sm:px-6">
-        <p className="text-xs font-black uppercase tracking-[0.2em] text-[#8a6418]">Participating Teams</p>
+        <p className="text-xs font-black uppercase tracking-[0.2em] text-[#8a6418]">ทีมที่เข้าร่วม</p>
         <h2 className="mt-2 text-2xl font-black text-[#061426]">ทีมที่เข้าร่วมการแข่งขัน</h2>
-        <div className="mt-5"><p className="mb-3 text-sm font-bold text-slate-500">{allTeams.length} ทีม</p><CompactTeamList teams={allTeams} /></div>
+        <div className="mt-5"><p className="mb-3 text-sm font-bold text-slate-500">{allTeams.length} ทีม</p><CompletedParticipatingTeamsGrid teams={allTeams} /></div>
       </div>
     </section>
   );
@@ -1100,8 +1099,8 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
           <>
             <CompletedChampionSummary competition={competition} cupV2={cupV2} matches={completedArchiveMatches} standardChampion={standardChampion} standardLeague={standardLeague} standings={standings} teams={teams} />
             <CompletedParticipatingTeams cupV2={cupV2} teams={teams} />
-            {kswStandardV2 ? <PublicKnockoutBracket data={kswStandardV2} eyebrow="การแข่งขันที่จบแล้ว" sectionId="full-knockout-bracket" seasonCompleted title="สายการแข่งขันทั้งหมด" /> : null}
-            {councilV2 ? <PublicCouncilCupBrackets data={councilV2} seasonCompleted /> : null}
+            {kswStandardV2 ? <PublicKnockoutBracket championLabel="แชมป์" compact data={kswStandardV2} eyebrow="การแข่งขันที่จบแล้ว" localized sectionId="full-knockout-bracket" seasonCompleted title="สายการแข่งขันทั้งหมด" /> : null}
+            {councilV2 ? <PublicCouncilCupBrackets compact data={councilV2} localized seasonCompleted showOverview={false} /> : null}
             <CompletedMatchArchive cupGroups={cupGroups} cupV2={cupV2} matches={completedArchiveMatches} />
             <ChronicleSeasonSummary competition={competition} />
             <TournamentLegacy competition={competition} />
