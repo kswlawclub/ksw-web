@@ -52,7 +52,7 @@ test("keeps Council division topologies separate even when their sizes differ", 
   assert.deepEqual(groupPublicCupV2Rounds(nodes, "division_2").map((round) => round.nodes.map((entry) => entry.id)), [["d2-r1"]]);
 });
 
-test("preserves Quarterfinal, Semifinal, and Final as ordered round columns", () => {
+test("preserves Quarterfinal, Semifinal, and Final as ordered round sections", () => {
   const nodes = [
     ...Array.from({ length: 4 }, (_, index) => node({ id: `quarter-${index}`, matchOrder: index + 1, partitionKey: "division_1", roundIndex: 0, roundLabel: "Quarterfinal" })),
     ...Array.from({ length: 2 }, (_, index) => node({ id: `semi-${index}`, matchOrder: index + 1, partitionKey: "division_1", roundIndex: 1, roundLabel: "Semifinal" })),
