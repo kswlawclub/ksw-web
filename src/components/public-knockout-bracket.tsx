@@ -118,6 +118,7 @@ export function PublicKnockoutBracket({
   eyebrow = "KSW Standard",
   localized = false,
   partitionKey = "main",
+  roundColumns = false,
   roundOrder = "ascending",
   sectionId = "knockout-bracket",
   seasonCompleted,
@@ -130,6 +131,7 @@ export function PublicKnockoutBracket({
   eyebrow?: string;
   localized?: boolean;
   partitionKey?: string;
+  roundColumns?: boolean;
   roundOrder?: "ascending" | "descending";
   sectionId?: string;
   seasonCompleted: boolean;
@@ -141,6 +143,8 @@ export function PublicKnockoutBracket({
   const partition = data.partitions.find((entry) => entry.key === partitionKey);
   const champion = partition?.champion ?? null;
   const palette = themes[theme];
+  const displayedRounds = roundOrder === "descending" ? [...rounds].reverse() : rounds;
+  const largestRoundSize = Math.max(...rounds.map((round) => round.nodes.length));
 
   return (
     <section className={`mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-10 ${compact ? "pb-6" : "pb-10"}`} id={sectionId}>
@@ -161,22 +165,27 @@ export function PublicKnockoutBracket({
             </div>
           </div>
         ) : null}
-        <div className={`grid bg-slate-100 ${compact ? "gap-2 p-2.5 sm:p-3" : "gap-4 p-4 sm:p-6"}`}>
-          {(roundOrder === "descending" ? [...rounds].reverse() : rounds).map((round) => (
-            <details className="overflow-hidden rounded-lg border border-slate-200 bg-white" key={round.roundIndex} open={round.current}>
-              <summary className={`cursor-pointer list-none hover:bg-[#fffaf0] ${compact ? "px-3 py-2.5" : "px-4 py-3"}`}>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-base font-black text-[#061426]">{localizedRoundLabel(round.roundLabel, localized)}</h3>
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-black ${round.completed ? "bg-emerald-50 text-emerald-700" : round.current ? "bg-[#fff4dc] text-[#8a6418]" : "bg-slate-100 text-slate-600"}`}>
-                    {round.completed ? `จบแล้ว ${round.finishedCount}/${round.nodes.length} คู่` : round.current ? "กำลังแข่งขัน" : "รอผลรอบก่อน"}
-                  </span>
-                </div>
-              </summary>
-              <div className={`grid gap-2 border-t border-slate-100 sm:grid-cols-2 xl:grid-cols-3 ${compact ? "p-2.5" : "p-3"}`}>
-                {round.nodes.map((node) => <PublicKnockoutMatchCard compact={compact} key={node.id} node={node} />)}
-              </div>
-            </details>
-          ))}
+        <div className={roundColumns ? "overflow-x-auto overscroll-x-contain bg-slate-100" : "bg-slate-100"}>
+          <div className={roundColumns ? "flex min-w-max gap-3 p-2.5 sm:p-3" : `grid ${compact ? "gap-2 p-2.5 sm:p-3" : "gap-4 p-4 sm:p-6"}`}>
+            {displayedRounds.map((round) => {
+              const columnAlignment = round.nodes.length === largestRoundSize ? "justify-between" : round.nodes.length === 1 ? "justify-center" : "justify-around";
+              return (
+                <details className={`overflow-hidden rounded-lg border border-slate-200 bg-white ${roundColumns ? "w-[11rem] shrink-0 sm:w-48" : ""}`} key={round.roundIndex} open={roundColumns || round.current}>
+                  <summary className={`cursor-pointer list-none hover:bg-[#fffaf0] ${compact ? "px-3 py-2.5" : "px-4 py-3"}`}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="text-base font-black text-[#061426]">{localizedRoundLabel(round.roundLabel, localized)}</h3>
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-black ${round.completed ? "bg-emerald-50 text-emerald-700" : round.current ? "bg-[#fff4dc] text-[#8a6418]" : "bg-slate-100 text-slate-600"}`}>
+                        {round.completed ? `จบแล้ว ${round.finishedCount}/${round.nodes.length} คู่` : round.current ? "กำลังแข่งขัน" : "รอผลรอบก่อน"}
+                      </span>
+                    </div>
+                  </summary>
+                  <div className={roundColumns ? `flex min-h-[29rem] flex-col gap-2 border-t border-slate-100 p-2.5 ${columnAlignment}` : `grid gap-2 border-t border-slate-100 sm:grid-cols-2 xl:grid-cols-3 ${compact ? "p-2.5" : "p-3"}`}>
+                    {round.nodes.map((node) => <PublicKnockoutMatchCard compact={compact} key={node.id} node={node} />)}
+                  </div>
+                </details>
+              );
+            })}
+          </div>
         </div>
       </div>
     </section>
@@ -205,8 +214,8 @@ export function PublicCouncilCupBrackets({ compact = false, data, localized = fa
         </div>
       </section> : null}
       <div className="grid gap-6 lg:grid-cols-2">
-        {hasDivision1 ? <PublicKnockoutBracket championLabel={localized ? "แชมป์ Division 1" : "Champion Division 1"} compact={compact} data={data} eyebrow={localized ? "คัพสภาทนายความ" : "Council Cup"} localized={localized} partitionKey="division_1" sectionId="knockout-division-1" seasonCompleted={division1?.status === "completed"} theme="division_1" title="Division 1" /> : null}
-        {hasDivision2 ? <PublicKnockoutBracket championLabel={localized ? "แชมป์ Division 2" : "Champion Division 2"} compact={compact} data={data} eyebrow={localized ? "คัพสภาทนายความ" : "Council Cup"} localized={localized} partitionKey="division_2" sectionId="knockout-division-2" seasonCompleted={division2?.status === "completed"} theme="division_2" title="Division 2" /> : null}
+        {hasDivision1 ? <PublicKnockoutBracket championLabel={localized ? "แชมป์ Division 1" : "Champion Division 1"} compact={compact} data={data} eyebrow={localized ? "คัพสภาทนายความ" : "Council Cup"} localized={localized} partitionKey="division_1" roundColumns={compact && seasonCompleted} sectionId="knockout-division-1" seasonCompleted={division1?.status === "completed"} theme="division_1" title="Division 1" /> : null}
+        {hasDivision2 ? <PublicKnockoutBracket championLabel={localized ? "แชมป์ Division 2" : "Champion Division 2"} compact={compact} data={data} eyebrow={localized ? "คัพสภาทนายความ" : "Council Cup"} localized={localized} partitionKey="division_2" roundColumns={compact && seasonCompleted} sectionId="knockout-division-2" seasonCompleted={division2?.status === "completed"} theme="division_2" title="Division 2" /> : null}
       </div>
     </>
   );

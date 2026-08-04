@@ -52,6 +52,17 @@ test("keeps Council division topologies separate even when their sizes differ", 
   assert.deepEqual(groupPublicCupV2Rounds(nodes, "division_2").map((round) => round.nodes.map((entry) => entry.id)), [["d2-r1"]]);
 });
 
+test("preserves Quarterfinal, Semifinal, and Final as ordered round columns", () => {
+  const nodes = [
+    ...Array.from({ length: 4 }, (_, index) => node({ id: `quarter-${index}`, matchOrder: index + 1, partitionKey: "division_1", roundIndex: 0, roundLabel: "Quarterfinal" })),
+    ...Array.from({ length: 2 }, (_, index) => node({ id: `semi-${index}`, matchOrder: index + 1, partitionKey: "division_1", roundIndex: 1, roundLabel: "Semifinal" })),
+    node({ id: "final", partitionKey: "division_1", roundIndex: 2, roundLabel: "Final" }),
+  ];
+  const rounds = groupPublicCupV2Rounds(nodes, "division_1");
+
+  assert.deepEqual(rounds.map((round) => [round.roundLabel, round.nodes.length]), [["Quarterfinal", 4], ["Semifinal", 2], ["Final", 1]]);
+});
+
 test("identifies a KSW match from a resolved bracket team without changing topology", () => {
   assert.equal(isPublicCupKswMatch(node({
     linkedMatch: { awayPenaltyScore: null, awayScore: 0, awayTeam: null, homePenaltyScore: null, homeScore: 1, homeTeam: { id: "ksw", logoUrl: null, name: "KSW เอฟซี", shortName: "KSW" }, id: "match", matchDate: null, status: "finished", venue: null, winner: null },
