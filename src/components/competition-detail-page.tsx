@@ -370,11 +370,13 @@ function SponsorsSection({ sponsors }: { sponsors: Row[] }) {
   );
 }
 
-function HeroCover({ competition }: { competition: Row }) {
+function HeroCover({ competition, completed }: { competition: Row; completed: boolean }) {
   const coverImageUrl = text(competition, ["cover_image_url"], "");
+  const fallbackSeason = editionLabel(competition) || text(competition, ["season"], "");
+  const fallbackType = typeLabel(normalizeCompetitionType(text(competition, ["competition_type"], "")));
 
   return (
-    <div className="relative min-h-[260px] overflow-hidden rounded-2xl border border-[#d8ad45]/30 bg-[radial-gradient(circle_at_top,rgba(216,173,69,0.22),transparent_36%),linear-gradient(135deg,#071b31,#061426)] shadow-2xl shadow-black/25">
+    <div className={completed ? "relative min-h-[230px] overflow-hidden rounded-xl border border-[#d8ad45]/30 bg-[#081a2e] sm:min-h-[270px] lg:min-h-[320px]" : "relative min-h-[260px] overflow-hidden rounded-2xl border border-[#d8ad45]/30 bg-[radial-gradient(circle_at_top,rgba(216,173,69,0.22),transparent_36%),linear-gradient(135deg,#071b31,#061426)] shadow-2xl shadow-black/25"}>
       {coverImageUrl ? (
         <Image
           alt=""
@@ -385,10 +387,35 @@ function HeroCover({ competition }: { competition: Row }) {
           unoptimized
         />
       ) : null}
+      {!coverImageUrl && completed ? (
+        <div className="absolute inset-0 flex flex-col justify-between p-6 sm:p-7">
+          <div className="border-l-2 border-[#d8ad45] pl-4">
+            <p className="text-4xl font-black tracking-[0.16em] text-[#f4d58a] sm:text-5xl">KSW</p>
+            <p className="mt-2 text-xs font-black uppercase tracking-[0.2em] text-slate-300">Digital Club Chronicle</p>
+          </div>
+          <div className="border-t border-white/10 pt-4 text-sm font-bold text-slate-300">
+            <p>{fallbackType}</p>
+            {fallbackSeason ? <p className="mt-1 text-[#f4d58a]">{fallbackSeason}</p> : null}
+          </div>
+        </div>
+      ) : null}
       <div className="absolute inset-0 bg-gradient-to-t from-[#061426]/90 via-[#061426]/30 to-transparent" />
-      <div className="absolute inset-x-0 bottom-0 p-5">
+      <div className={completed ? "absolute inset-x-0 bottom-0 p-5 sm:p-6" : "absolute inset-x-0 bottom-0 p-5"}>
         <div className="mb-3 h-0.5 w-14 rounded-full bg-[#d8ad45]" />
         <p className="text-sm font-black uppercase tracking-[0.22em] text-[#f4d58a]">KSW Digital Club Chronicle</p>
+      </div>
+    </div>
+  );
+}
+
+function HonorChampion({ accent, initials, label, logoUrl, name }: { accent: "gold" | "green"; initials: string; label: string; logoUrl: string; name: string }) {
+  const accentClass = accent === "gold" ? "border-[#d8ad45] text-[#8a6418]" : "border-emerald-800 text-emerald-800";
+  return (
+    <div className={`min-w-0 border-l-2 pl-4 sm:pl-5 ${accentClass}`}>
+      <p className="text-xs font-black tracking-[0.08em]">{label}</p>
+      <div className="mt-3 flex min-w-0 items-center gap-3">
+        <TeamLogo className="!size-11 shrink-0" initials={initials || "?"} logoUrl={logoUrl} teamName={name} />
+        <p className="min-w-0 break-words text-2xl font-black leading-tight text-[#061426] sm:text-3xl">{name}</p>
       </div>
     </div>
   );
@@ -832,23 +859,26 @@ function CompletedChampionSummary({
 
   return (
     <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-9 lg:px-10" id="champion-summary">
-      <div className="rounded-2xl border border-[#d8ad45]/35 bg-[#fffefb] px-5 py-7 shadow-lg shadow-slate-900/10 sm:px-8 sm:py-8">
+      <div className="rounded-2xl border border-[#d8ad45]/35 bg-[#fffefb] px-5 py-8 shadow-lg shadow-slate-900/10 sm:px-8 sm:py-9">
         <p className="text-xs font-black uppercase tracking-[0.22em] text-[#8a6418]">การแข่งขันเสร็จสิ้น</p>
         <h2 className="mt-3 text-3xl font-black tracking-tight text-[#061426] sm:text-4xl">บทสรุปของฤดูกาล</h2>
         {cupV2?.templateKey === "council_two_division" ? (
-          <div className="mt-6 grid gap-5 sm:grid-cols-2">
-            <div className="border-l-2 border-[#d8ad45] pl-4"><p className="text-xs font-black text-[#8a6418]">แชมป์ Division 1</p><p className="mt-2 text-2xl font-black">{council?.division1?.name ?? "ผลสรุปกำลังจัดเตรียม"}</p></div>
-            <div className="border-l-2 border-emerald-800 pl-4"><p className="text-xs font-black text-emerald-800">แชมป์ Division 2</p><p className="mt-2 text-2xl font-black">{council?.division2?.name ?? "ผลสรุปกำลังจัดเตรียม"}</p></div>
+          <div className="mt-7 grid gap-7 sm:grid-cols-2 sm:gap-8">
+            <HonorChampion accent="gold" initials={(council?.division1?.shortName ?? council?.division1?.name ?? "?").slice(0, 3).toUpperCase()} label="แชมป์ Division 1" logoUrl={council?.division1?.logoUrl ?? ""} name={council?.division1?.name ?? "ผลสรุปกำลังจัดเตรียม"} />
+            <HonorChampion accent="green" initials={(council?.division2?.shortName ?? council?.division2?.name ?? "?").slice(0, 3).toUpperCase()} label="แชมป์ Division 2" logoUrl={council?.division2?.logoUrl ?? ""} name={council?.division2?.name ?? "ผลสรุปกำลังจัดเตรียม"} />
           </div>
         ) : hasChampionContract ? (
-          <div className="mt-6 border-l-2 border-[#d8ad45] pl-4">
+          <div className="mt-7 border-l-2 border-[#d8ad45] pl-4 sm:pl-5">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a6418]">แชมป์</p>
-            <p className="mt-2 text-3xl font-black text-[#061426] sm:text-4xl">{championName ?? "ผลสรุปกำลังจัดเตรียม"}</p>
+            <div className="mt-3 flex min-w-0 items-center gap-3">
+              <TeamLogo className="!size-11 shrink-0" initials={standardChampion ? teamInitials(standardChampion) : (cupV2?.champions.main?.shortName ?? championName ?? "?").slice(0, 3).toUpperCase()} logoUrl={standardChampion ? text(standardChampion, ["logo_url"], "") : cupV2?.champions.main?.logoUrl ?? ""} teamName={championName ?? "ผลสรุปกำลังจัดเตรียม"} />
+              <p className="min-w-0 break-words text-3xl font-black leading-tight text-[#061426] sm:text-4xl">{championName ?? "ผลสรุปกำลังจัดเตรียม"}</p>
+            </div>
             {runnerUp ? <p className="mt-3 text-sm font-bold text-slate-600">รองชนะเลิศ: {text(runnerUp, ["team_name"], "-")}{thirdPlace ? ` · อันดับ 3: ${text(thirdPlace, ["team_name"], "-")}` : ""}</p> : null}
           </div>
         ) : <p className="mt-5 text-lg font-black text-[#061426]">การแข่งขันเสร็จสิ้น</p>}
         {missingChampion ? <p className="mt-5 text-sm font-bold text-amber-800">ผลสรุปกำลังจัดเตรียม</p> : null}
-        {metadata.length ? <p className="mt-6 border-t border-slate-200 pt-4 text-sm font-bold leading-6 text-slate-600">{metadata.join(" · ")}</p> : null}
+        {metadata.length ? <p className="mt-8 border-t border-slate-200/80 pt-4 text-sm font-bold leading-6 text-slate-600">{metadata.join(" · ")}</p> : null}
       </div>
     </section>
   );
@@ -1079,6 +1109,7 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
     : [];
 
   if (isTournamentArchive) {
+    const completedTournament = seasonStatus === "completed";
     const tournamentMetadata = [
       editionLabel(competition),
       text(competition, ["season"], ""),
@@ -1106,12 +1137,12 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
     return (
       <main className="min-h-screen overflow-x-hidden bg-slate-100 text-[#061426]">
         <section className="bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.2),transparent_34%),linear-gradient(135deg,#061426,#091f39)] text-white">
-          <div className="mx-auto grid w-full max-w-7xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.72fr)] lg:px-10">
-            <div>
+          <div className={completedTournament ? "mx-auto grid w-full max-w-7xl items-stretch gap-7 px-4 py-10 sm:px-6 sm:py-12 lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.72fr)] lg:gap-10 lg:px-10" : "mx-auto grid w-full max-w-7xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.72fr)] lg:px-10"}>
+            <div className={completedTournament ? "flex min-w-0 flex-col justify-center" : ""}>
               <p className="text-xs font-black uppercase tracking-[0.24em] text-[#d8ad45]">
                 {typeLabel(competitionType)}
               </p>
-              <h1 className="mt-4 max-w-4xl text-4xl font-black tracking-tight sm:text-5xl">
+              <h1 className={completedTournament ? "mt-4 max-w-4xl break-words text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl" : "mt-4 max-w-4xl text-4xl font-black tracking-tight sm:text-5xl"}>
                 {text(competition, ["name"], "Competition")}
               </h1>
               <div className="mt-4 flex flex-wrap gap-2">
@@ -1129,14 +1160,16 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
                   {text(competition, ["short_description"], "")}
                 </p>
               ) : null}
-              <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              <div className={completedTournament ? "mt-7 flex flex-col gap-3 border-t border-white/10 pt-5 sm:flex-row sm:flex-wrap" : "mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap"}>
                 {tournamentCtas
                   .filter(([, , visible]) => visible)
                   .map(([label, href]) => (
                     <Link
                       className={`inline-flex items-center justify-center rounded-md px-5 py-3 text-sm font-black transition-colors ${
                         href === "#overview" || href === "#champion-summary"
-                          ? "bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] text-[#061426] shadow-lg shadow-[#d8ad45]/15 hover:scale-[1.02]"
+                          ? completedTournament
+                            ? "bg-[#d8ad45] text-[#061426] shadow-sm shadow-black/20 hover:bg-[#f4d58a]"
+                            : "bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] text-[#061426] shadow-lg shadow-[#d8ad45]/15 hover:scale-[1.02]"
                           : "border border-[#d8ad45]/50 bg-white/[0.03] text-[#f4d58a] backdrop-blur hover:bg-[#d8ad45]/10"
                       }`}
                       href={href}
@@ -1147,7 +1180,7 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
                   ))}
               </div>
             </div>
-            <HeroCover competition={competition} />
+            <HeroCover competition={competition} completed={completedTournament} />
           </div>
         </section>
 
@@ -1243,7 +1276,7 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
               ) : null}
             </div>
           </div>
-          <HeroCover competition={competition} />
+          <HeroCover competition={competition} completed={false} />
         </div>
       </section>
 
