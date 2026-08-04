@@ -26,6 +26,13 @@ import {
   type CompetitionType,
 } from "@/lib/competition-format";
 import type { PublicCupV2Data } from "@/lib/public-cup-v2-types";
+import {
+  derivePublicCupChampionPath,
+  chronicleGroupLabel,
+  hasUnpartitionedPublicCupTeams,
+  publicCupArchiveMetadata,
+  publicCupPartitionTeams,
+} from "@/lib/public-cup-v2-chronicle";
 
 type CompetitionDetailData = {
   competition: Row;
@@ -746,7 +753,10 @@ function completedCupArchiveRows(data: PublicCupV2Data | null) {
   return data.nodes.flatMap((node) => {
     const match = node.linkedMatch;
     if (!match || !["finished", "completed"].includes(match.status)) return [];
+    const metadata = publicCupArchiveMetadata(data, node);
     return [{
+      archive_division_label: metadata.divisionLabel,
+      archive_group_label: metadata.groupLabel,
       away_score: match.awayScore,
       away_team_logo_url: match.awayTeam?.logoUrl ?? "",
       away_team_name: match.awayTeam?.name ?? "ทีมเยือน",
@@ -767,7 +777,7 @@ function completedCupArchiveRows(data: PublicCupV2Data | null) {
 }
 
 function archiveStageLabel(match: Row) {
-  return text(match, ["competition_stage"], "") || "Group Stage";
+  return text(match, ["competition_stage"], "") || (text(match, ["group_id", "archive_group_label"], "") ? "Group Stage" : "Match Results");
 }
 
 function archiveStagePriority(label: string) {
@@ -779,15 +789,25 @@ function archiveStagePriority(label: string) {
   return 4;
 }
 
-function CompletedMatchArchive({ matches }: { matches: Row[] }) {
-  const groups = new Map<string, Row[]>();
+function CompletedMatchArchive({ cupGroups = [], cupV2 = null, matches }: { cupGroups?: Row[]; cupV2?: PublicCupV2Data | null; matches: Row[] }) {
+  const groupLabels = new Map(cupGroups.map((group) => [text(group, ["id"], ""), text(group, ["label", "name"], "ไม่ระบุกลุ่ม")]));
+  const groups = new Map<string, { division: string; groupLabel: string; matches: Row[]; stage: string }>();
   matches
     .filter((match) => ["finished", "completed"].includes(text(match, ["status"], "").toLowerCase()))
     .forEach((match) => {
-      const label = archiveStageLabel(match);
-      groups.set(label, [...(groups.get(label) ?? []), match]);
+      const stage = archiveStageLabel(match);
+      const division = text(match, ["archive_division_label"], "") || (cupV2?.templateKey === "council_two_division" ? "ไม่ระบุดิวิชั่น" : "Main");
+      const groupLabel = text(match, ["archive_group_label"], "") || (stage === "Group Stage" ? chronicleGroupLabel(text(match, ["group_id"], ""), groupLabels) : "");
+      const key = `${division}::${stage}::${groupLabel}`;
+      const current = groups.get(key);
+      groups.set(key, { division, groupLabel, matches: [...(current?.matches ?? []), match], stage });
     });
-  const grouped = Array.from(groups.entries()).sort(([left], [right]) => archiveStagePriority(left) - archiveStagePriority(right) || left.localeCompare(right));
+  const grouped = Array.from(groups.values()).sort((left, right) =>
+    left.division.localeCompare(right.division)
+    || archiveStagePriority(left.stage) - archiveStagePriority(right.stage)
+    || left.stage.localeCompare(right.stage)
+    || left.groupLabel.localeCompare(right.groupLabel),
+  );
   if (!grouped.length) return null;
 
   return (
@@ -798,15 +818,21 @@ function CompletedMatchArchive({ matches }: { matches: Row[] }) {
         <p className="mt-1 text-sm text-slate-600">เรียงจากรอบชิงชนะเลิศย้อนกลับไปยังรอบก่อนหน้า</p>
       </div>
       <div className="grid gap-6">
-        {grouped.map(([label, stageMatches]) => (
-          <CompetitionResultsTable
-            isLeague={false}
-            key={label}
-            matches={[...stageMatches].sort((left, right) => matchTime(left) - matchTime(right))}
-            sectionId={`match-archive-${label.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}`}
-            subtitle={`ผลการแข่งขันใน${label}`}
-            title={label}
-          />
+        {grouped.map((group) => (
+          <div className="border-l-2 border-slate-200 pl-3" key={`${group.division}-${group.stage}-${group.groupLabel}`}>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-[#061426] px-2.5 py-1 text-xs font-black text-white">{group.division}</span>
+              <span className="text-sm font-black text-[#061426]">{group.stage}</span>
+              {group.groupLabel ? <span className="rounded-full bg-[#fff4dc] px-2.5 py-1 text-xs font-black text-[#8a6418]">{group.groupLabel}</span> : null}
+            </div>
+            <CompetitionResultsTable
+              isLeague={false}
+              matches={[...group.matches].sort((left, right) => matchTime(left) - matchTime(right) || text(left, ["id"], "").localeCompare(text(right, ["id"], "")))}
+              sectionId={`match-archive-${group.division}-${group.stage}-${group.groupLabel}`.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}
+              subtitle={`${group.division} · ${group.stage}${group.groupLabel ? ` · ${group.groupLabel}` : ""}`}
+              title={group.stage}
+            />
+          </div>
         ))}
       </div>
     </section>
@@ -892,9 +918,74 @@ function ChronicleSeasonSummary({ competition }: { competition: Row }) {
   );
 }
 
+type ChronicleDisplayTeam = { id: string; logoUrl: string; name: string; shortName: string };
+
+function CompactTeamList({ teams }: { teams: ChronicleDisplayTeam[] }) {
+  if (!teams.length) return <p className="text-sm font-bold text-slate-500">ยังไม่มีข้อมูลทีม</p>;
+  return (
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      {teams.map((team) => {
+        return <div className="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2" key={team.id}><TeamLogo className="!size-7" initials={(team.shortName || team.name).slice(0, 3)} logoUrl={team.logoUrl} teamName={team.name} /><span className="min-w-0 text-wrap text-sm font-black text-[#061426]">{team.name}</span></div>;
+      })}
+    </div>
+  );
+}
+
+function CompletedParticipatingTeams({ cupV2, teams }: { cupV2: PublicCupV2Data | null; teams: Row[] }) {
+  const isCouncil = cupV2?.templateKey === "council_two_division";
+  const division1 = isCouncil && cupV2 ? publicCupPartitionTeams(cupV2, "division_1") : [];
+  const division2 = isCouncil && cupV2 ? publicCupPartitionTeams(cupV2, "division_2") : [];
+  const unpartitioned = isCouncil && cupV2 ? hasUnpartitionedPublicCupTeams(cupV2, [division1, division2]) : false;
+  const toDisplayTeam = (team: { id: string; logoUrl?: string | null; logo_url?: unknown; name?: unknown; shortName?: string | null; short_name?: unknown }): ChronicleDisplayTeam => ({
+    id: team.id,
+    logoUrl: typeof team.logoUrl === "string" ? team.logoUrl : typeof team.logo_url === "string" ? team.logo_url : "",
+    name: typeof team.name === "string" ? team.name : "ทีมไม่ทราบชื่อ",
+    shortName: typeof team.shortName === "string" ? team.shortName : typeof team.short_name === "string" ? team.short_name : "",
+  });
+  const displayDivision1 = division1.map(toDisplayTeam);
+  const displayDivision2 = division2.map(toDisplayTeam);
+  const allTeams = cupV2?.teams.length ? cupV2.teams.map(toDisplayTeam) : teams.map((team) => toDisplayTeam({ id: text(team, ["id"], text(team, ["name"], "team")), logo_url: team.logo_url, name: team.name, short_name: team.short_name }));
+  if (!allTeams.length) return null;
+
+  return (
+    <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="participating-teams">
+      <div className="border-y border-slate-200 bg-white px-5 py-6 shadow-xl shadow-slate-900/10 sm:px-6">
+        <p className="text-xs font-black uppercase tracking-[0.2em] text-[#8a6418]">Participating Teams</p>
+        <h2 className="mt-2 text-2xl font-black text-[#061426]">ทีมที่เข้าร่วมการแข่งขัน</h2>
+        {isCouncil ? (
+          <div className="mt-5 grid gap-6 lg:grid-cols-2">
+            <div><div className="mb-3 flex items-center justify-between gap-3"><h3 className="font-black text-[#061426]">Division 1</h3><span className="text-xs font-bold text-slate-500">{division1.length} ทีม</span></div><CompactTeamList teams={displayDivision1} /></div>
+            <div><div className="mb-3 flex items-center justify-between gap-3"><h3 className="font-black text-[#061426]">Division 2</h3><span className="text-xs font-bold text-slate-500">{division2.length} ทีม</span></div><CompactTeamList teams={displayDivision2} /></div>
+            {unpartitioned ? <p className="text-sm font-bold text-amber-800 lg:col-span-2">มีทีมบางส่วนที่ยังไม่ระบุข้อมูลดิวิชั่น จึงไม่แสดงปะปนกับ Division 1 หรือ Division 2</p> : null}
+          </div>
+        ) : <div className="mt-5"><p className="mb-3 text-sm font-bold text-slate-500">{allTeams.length} ทีม</p><CompactTeamList teams={allTeams} /></div>}
+      </div>
+    </section>
+  );
+}
+
+function ChampionPathMatch({ node }: { node: PublicCupV2Data["nodes"][number] }) {
+  const match = node.linkedMatch;
+  if (!match) return null;
+  return (
+    <article className="rounded-xl border border-[#d8ad45]/25 bg-white p-4 shadow-sm">
+      <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a6418]">{node.roundLabel}</p>
+      <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+        <p className="min-w-0 text-wrap text-sm font-black text-[#061426]">{match.homeTeam?.name ?? "ทีมเหย้า"}</p>
+        <span className="rounded-md bg-[#061426] px-3 py-2 text-sm font-black text-white">{match.homeScore ?? "-"} - {match.awayScore ?? "-"}</span>
+        <p className="min-w-0 text-wrap text-right text-sm font-black text-[#061426]">{match.awayTeam?.name ?? "ทีมเยือน"}</p>
+      </div>
+      {match.homePenaltyScore !== null && match.awayPenaltyScore !== null ? <p className="mt-2 text-xs font-bold text-slate-500">จุดโทษ {match.homePenaltyScore}-{match.awayPenaltyScore}</p> : null}
+    </article>
+  );
+}
+
 function RoadToChampion({ data }: { data: PublicCupV2Data | null }) {
   if (!data?.nodes.length) return null;
   const council = data.templateKey === "council_two_division";
+  const mainPath = derivePublicCupChampionPath({ championId: data.champions.main?.id, data, partitionKey: "main" });
+  const division1Path = derivePublicCupChampionPath({ championId: data.champions.division1?.id, data, partitionKey: "division_1" });
+  const division2Path = derivePublicCupChampionPath({ championId: data.champions.division2?.id, data, partitionKey: "division_2" });
 
   return (
     <>
@@ -905,14 +996,9 @@ function RoadToChampion({ data }: { data: PublicCupV2Data | null }) {
           <p className="mt-1 text-sm text-slate-600">เริ่มจากรอบชิงชนะเลิศ แล้วย้อนกลับไปยังทุกด่านของการแข่งขัน</p>
         </div>
       </section>
-      {council ? (
-        <>
-          <PublicKnockoutBracket championLabel="Champion Division 1" data={data} eyebrow="Road to Champion" partitionKey="division_1" roundOrder="descending" sectionId="road-division-1" seasonCompleted theme="division_1" title="Division 1" />
-          <PublicKnockoutBracket championLabel="Champion Division 2" data={data} eyebrow="Road to Champion" partitionKey="division_2" roundOrder="descending" sectionId="road-division-2" seasonCompleted theme="division_2" title="Division 2" />
-        </>
-      ) : (
-        <PublicKnockoutBracket data={data} eyebrow="Road to Champion" roundOrder="descending" sectionId="road-main" seasonCompleted title="เส้นทางสู่แชมป์" />
-      )}
+      <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
+        {council ? <div className="grid gap-6 lg:grid-cols-2">{[["Division 1", division1Path], ["Division 2", division2Path]].map(([label, path]) => <div className="grid gap-3" key={label as string}><h3 className="font-black text-[#061426]">{label as string}</h3>{(path as PublicCupV2Data["nodes"]).map((node) => <ChampionPathMatch key={node.id} node={node} />)}{!(path as PublicCupV2Data["nodes"]).length ? <p className="text-sm font-bold text-amber-800">ยังพบเส้นทางแชมป์ได้ไม่ครบ</p> : null}</div>)}</div> : <div className="grid gap-3">{mainPath.map((node) => <ChampionPathMatch key={node.id} node={node} />)}{!mainPath.length ? <p className="text-sm font-bold text-amber-800">ยังพบเส้นทางแชมป์ได้ไม่ครบ</p> : null}</div>}
+      </section>
     </>
   );
 }
@@ -1044,12 +1130,12 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
         {seasonStatus === "completed" ? (
           <>
             <CompletedChampionSummary competition={competition} cupV2={cupV2} matches={completedArchiveMatches} standardChampion={standardChampion} standardLeague={standardLeague} standings={standings} teams={teams} />
+            <CompletedParticipatingTeams cupV2={cupV2} teams={teams} />
             <RoadToChampion data={cupV2} />
             {kswStandardV2 ? <PublicKnockoutBracket data={kswStandardV2} eyebrow="Full Tournament Bracket" sectionId="full-knockout-bracket" seasonCompleted title="สายการแข่งขันทั้งหมด" /> : null}
             {councilV2 ? <PublicCouncilCupBrackets data={councilV2} seasonCompleted /> : null}
-            <CompletedMatchArchive matches={completedArchiveMatches} />
+            <CompletedMatchArchive cupGroups={cupGroups} cupV2={cupV2} matches={completedArchiveMatches} />
             <ChronicleSeasonSummary competition={competition} />
-            <TournamentTeams teams={teams} />
             <TournamentLegacy competition={competition} />
           </>
         ) : (
