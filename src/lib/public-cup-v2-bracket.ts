@@ -57,3 +57,14 @@ export function publicCupV2ScoreLabel(node: PublicCupV2Node) {
   if (match.homePenaltyScore === null || match.awayPenaltyScore === null) return normalTime;
   return `${normalTime} (จุดโทษ ${match.homePenaltyScore}-${match.awayPenaltyScore})`;
 }
+
+export function isPublicCupKswMatch(node: PublicCupV2Node) {
+  const teams = [
+    node.linkedMatch?.homeTeam,
+    node.linkedMatch?.awayTeam,
+    node.homeSource.team,
+    node.awaySource.team,
+  ];
+
+  return teams.some((team) => `${team?.name ?? ""} ${team?.shortName ?? ""}`.toLowerCase().includes("ksw"));
+}

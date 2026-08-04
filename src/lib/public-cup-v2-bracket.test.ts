@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { groupPublicCupV2Rounds, publicCupV2ScoreLabel, publicCupV2SourceLabel } from "./public-cup-v2-bracket.ts";
+import { groupPublicCupV2Rounds, isPublicCupKswMatch, publicCupV2ScoreLabel, publicCupV2SourceLabel } from "./public-cup-v2-bracket.ts";
 import type { PublicCupV2Node } from "./public-cup-v2-types.ts";
 
 function node(input: Partial<PublicCupV2Node>): PublicCupV2Node {
@@ -50,4 +50,11 @@ test("keeps Council division topologies separate even when their sizes differ", 
   ];
   assert.deepEqual(groupPublicCupV2Rounds(nodes, "division_1").map((round) => round.nodes.map((entry) => entry.id)), [["d1-r1"], ["d1-r2"]]);
   assert.deepEqual(groupPublicCupV2Rounds(nodes, "division_2").map((round) => round.nodes.map((entry) => entry.id)), [["d2-r1"]]);
+});
+
+test("identifies a KSW match from a resolved bracket team without changing topology", () => {
+  assert.equal(isPublicCupKswMatch(node({
+    linkedMatch: { awayPenaltyScore: null, awayScore: 0, awayTeam: null, homePenaltyScore: null, homeScore: 1, homeTeam: { id: "ksw", logoUrl: null, name: "KSW เอฟซี", shortName: "KSW" }, id: "match", matchDate: null, status: "finished", venue: null, winner: null },
+  })), true);
+  assert.equal(isPublicCupKswMatch(node({ linkedMatch: { awayPenaltyScore: null, awayScore: null, awayTeam: { id: "away", logoUrl: null, name: "ทีมเยือน", shortName: null }, homePenaltyScore: null, homeScore: null, homeTeam: { id: "home", logoUrl: null, name: "ทีมเหย้า", shortName: null }, id: "match", matchDate: null, status: "scheduled", venue: null, winner: null } })), false);
 });

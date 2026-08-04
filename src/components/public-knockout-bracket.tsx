@@ -1,6 +1,7 @@
 import { TeamLogo } from "@/components/team-logo";
 import {
   groupPublicCupV2Rounds,
+  isPublicCupKswMatch,
   publicCupV2ScoreLabel,
   publicCupV2SourceLabel,
 } from "@/lib/public-cup-v2-bracket";
@@ -60,7 +61,7 @@ function MatchTeamRow({ align, team, winner }: { align: "left" | "right"; team: 
   );
 }
 
-function PublicKnockoutMatchCard({ node }: { node: PublicCupV2Node }) {
+function PublicKnockoutMatchCard({ compact, node }: { compact: boolean; node: PublicCupV2Node }) {
   const match = node.linkedMatch;
   const home = match?.homeTeam ?? node.homeSource.team;
   const away = match?.awayTeam ?? node.awaySource.team;
@@ -68,9 +69,11 @@ function PublicKnockoutMatchCard({ node }: { node: PublicCupV2Node }) {
   const homeWinner = match?.winner?.id === home?.id;
   const awayWinner = match?.winner?.id === away?.id;
   const waitingForTeam = !match && (!node.homeSource.team || !node.awaySource.team);
+  const isKswMatch = isPublicCupKswMatch(node);
 
   return (
-    <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+    <article className={`min-w-0 rounded-lg border shadow-sm ${compact ? "p-2.5" : "p-3"} ${isKswMatch ? "border-[#d8ad45]/80 bg-[#fffaf0] shadow-[#d8ad45]/15" : "border-slate-200 bg-white"}`}>
+      {isKswMatch ? <span className="mb-2 inline-flex rounded-full bg-[#fff0c8] px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-[#8a6418]">KSW Match</span> : null}
       <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
         <MatchTeamRow align="left" team={home} winner={homeWinner} />
         <span className="whitespace-nowrap rounded-md bg-[#061426] px-2.5 py-1 text-xs font-black text-white">
@@ -78,14 +81,14 @@ function PublicKnockoutMatchCard({ node }: { node: PublicCupV2Node }) {
         </span>
         <MatchTeamRow align="right" team={away} winner={awayWinner} />
       </div>
-      {waitingForTeam ? <p className="mt-2 text-xs font-bold text-slate-500">{publicCupV2SourceLabel(node.homeSource)} · {publicCupV2SourceLabel(node.awaySource)}</p> : null}
+      {waitingForTeam ? <p className="mt-1.5 text-xs font-bold text-slate-500">{publicCupV2SourceLabel(node.homeSource)} · {publicCupV2SourceLabel(node.awaySource)}</p> : null}
       {match ? (
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-500">
+        <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-500">
           <span>{formatDateTime(match.matchDate)}{match.venue ? ` · ${match.venue}` : ""}</span>
           <span className={finished ? "font-black text-emerald-700" : "font-black text-[#8a6418]"}>{finished ? "จบการแข่งขัน" : "รอแข่งขัน"}</span>
         </div>
       ) : null}
-      {match?.winner ? <p className="mt-2 text-xs font-black text-emerald-700">ผู้ชนะ: {match.winner.name}</p> : null}
+      {match?.winner ? <p className="mt-1.5 text-xs font-black text-emerald-700">ผู้ชนะ: {match.winner.name}</p> : null}
     </article>
   );
 }
@@ -140,9 +143,9 @@ export function PublicKnockoutBracket({
   const palette = themes[theme];
 
   return (
-    <section className={`mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-10 ${compact ? "pb-8" : "pb-10"}`} id={sectionId}>
+    <section className={`mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-10 ${compact ? "pb-6" : "pb-10"}`} id={sectionId}>
       <div className={`border-y bg-white shadow-xl shadow-slate-900/10 ${palette.accent}`}>
-        <div className={`flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 sm:px-6 ${compact ? "py-4" : "py-5"}`}>
+        <div className={`flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 sm:px-6 ${compact ? "py-3" : "py-5"}`}>
           <div>
             <p className={`text-xs font-black uppercase tracking-[0.18em] ${palette.eyebrow}`}>{eyebrow}</p>
             <h2 className="mt-1 text-2xl font-black text-[#061426]">{title}</h2>
@@ -158,10 +161,10 @@ export function PublicKnockoutBracket({
             </div>
           </div>
         ) : null}
-        <div className={`grid bg-slate-100 ${compact ? "gap-3 p-3 sm:p-4" : "gap-4 p-4 sm:p-6"}`}>
+        <div className={`grid bg-slate-100 ${compact ? "gap-2 p-2.5 sm:p-3" : "gap-4 p-4 sm:p-6"}`}>
           {(roundOrder === "descending" ? [...rounds].reverse() : rounds).map((round) => (
             <details className="overflow-hidden rounded-lg border border-slate-200 bg-white" key={round.roundIndex} open={round.current}>
-              <summary className="cursor-pointer list-none px-4 py-3 hover:bg-[#fffaf0]">
+              <summary className={`cursor-pointer list-none hover:bg-[#fffaf0] ${compact ? "px-3 py-2.5" : "px-4 py-3"}`}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="text-base font-black text-[#061426]">{localizedRoundLabel(round.roundLabel, localized)}</h3>
                   <span className={`rounded-full px-2.5 py-1 text-xs font-black ${round.completed ? "bg-emerald-50 text-emerald-700" : round.current ? "bg-[#fff4dc] text-[#8a6418]" : "bg-slate-100 text-slate-600"}`}>
@@ -169,8 +172,8 @@ export function PublicKnockoutBracket({
                   </span>
                 </div>
               </summary>
-              <div className="grid gap-2 border-t border-slate-100 p-3 sm:grid-cols-2 xl:grid-cols-3">
-                {round.nodes.map((node) => <PublicKnockoutMatchCard key={node.id} node={node} />)}
+              <div className={`grid gap-2 border-t border-slate-100 sm:grid-cols-2 xl:grid-cols-3 ${compact ? "p-2.5" : "p-3"}`}>
+                {round.nodes.map((node) => <PublicKnockoutMatchCard compact={compact} key={node.id} node={node} />)}
               </div>
             </details>
           ))}

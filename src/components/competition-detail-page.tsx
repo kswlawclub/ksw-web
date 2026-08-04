@@ -852,6 +852,134 @@ function CompletedChampionSummary({
   );
 }
 
+function completedCompetitionStory({ competition, competitionType, cupV2, matchCount, teamCount }: {
+  competition: Row;
+  competitionType: CompetitionType;
+  cupV2: PublicCupV2Data | null;
+  matchCount: number;
+  teamCount: number;
+}) {
+  const competitionName = text(competition, ["name"], "การแข่งขันนี้");
+  const type = cupV2?.templateKey === "council_two_division"
+    ? "การแข่งขันแบบสองดิวิชั่น"
+    : competitionType === "league"
+      ? "การแข่งขันลีก"
+      : competitionType === "friendly"
+        ? "การแข่งขันกระชับมิตร"
+        : "การแข่งขันฟุตบอลถ้วย";
+  const format = cupV2?.templateKey === "council_two_division"
+    ? "แบ่งการแข่งขันออกเป็น Division 1 และ Division 2"
+    : cupV2?.templateKey === "ksw_standard"
+      ? "แข่งขันในรูปแบบฟุตบอลถ้วย"
+      : "แข่งขันตามรูปแบบของรายการ";
+
+  return `${competitionName} เป็น${type} มี ${teamCount} ทีม แข่งขันทั้งหมด ${matchCount} นัด ${format}`;
+}
+
+function CompletedSeasonStory({ competition, competitionType, cupV2, matches, teams }: {
+  competition: Row;
+  competitionType: CompetitionType;
+  cupV2: PublicCupV2Data | null;
+  matches: Row[];
+  teams: Row[];
+}) {
+  const teamCount = teams.length || cupV2?.teams.length || 0;
+  const matchCount = matches.length || cupV2?.linkedMatches.length || 0;
+  if (!teamCount && !matchCount) return null;
+
+  return (
+    <section className="mx-auto w-full max-w-7xl px-4 pb-7 pt-8 sm:px-6 lg:px-10" id="season-story">
+      <div className="max-w-4xl border-l-2 border-[#d8ad45] pl-4 sm:pl-5">
+        <p className="text-xs font-black uppercase tracking-[0.2em] text-[#8a6418]">ภาพรวมการแข่งขัน</p>
+        <p className="mt-2 text-sm font-semibold leading-7 text-slate-700 sm:text-base">
+          {completedCompetitionStory({ competition, competitionType, cupV2, matchCount, teamCount })}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function kswMatchesForSummary(matches: Row[], teamId: string) {
+  return matches.filter((match) => {
+    const homeTeamId = text(match, ["home_team_id"], "");
+    const awayTeamId = text(match, ["away_team_id"], "");
+    return (teamId && (homeTeamId === teamId || awayTeamId === teamId)) || isKswMatch(match) || isKswMatchByFlag(match);
+  });
+}
+
+function cupRoundLabel(label: string) {
+  const normalized = label.toLowerCase();
+  if (normalized.includes("final") && !normalized.includes("semi")) return "Final";
+  if (normalized.includes("semi")) return "Semifinal";
+  if (normalized.includes("quarter")) return "Quarterfinal";
+  if (normalized.includes("group")) return "Group";
+  return label;
+}
+
+function CompletedKswTournamentSummary({ cupV2, groupStandings, matches, standings, teams }: {
+  cupV2: PublicCupV2Data | null;
+  groupStandings: CupGroupStanding[];
+  matches: Row[];
+  standings: Row[];
+  teams: Row[];
+}) {
+  const kswTeam = teams.find(isKswRow) ?? cupV2?.teams.find((team) => `${team.name} ${team.shortName ?? ""}`.toLowerCase().includes("ksw"));
+  const kswTeamId = kswTeam && typeof kswTeam.id === "string" ? kswTeam.id : "";
+  const kswGroupRow = groupStandings.flatMap((standing) => standing.rows).find((row) => row.team_id === kswTeamId || row.is_ksw);
+  const kswLeagueRow = standings.find((standing) => text(standing, ["team_id"], "") === kswTeamId || isKswRow(standing));
+  const kswMatches = kswMatchesForSummary(matches, kswTeamId);
+  if (!kswTeam && !kswGroupRow && !kswLeagueRow && !kswMatches.length) return null;
+
+  const finishedMatches = kswMatches.filter((match) => ["finished", "completed"].includes(text(match, ["status"], "").toLowerCase()));
+  const stats = finishedMatches.reduce<{ drawn: number; goalsAgainst: number; goalsFor: number; lost: number; played: number; won: number }>((total, match) => {
+    const homeScore = match.home_score;
+    const awayScore = match.away_score;
+    if (typeof homeScore !== "number" || typeof awayScore !== "number") return total;
+    const homeIsKsw = text(match, ["home_team_id"], "") === kswTeamId || match.home_team_is_ksw === true || text(match, ["home_team_name", "home_team_short_name"], "").toLowerCase().includes("ksw");
+    const kswScore = homeIsKsw ? homeScore : awayScore;
+    const opponentScore = homeIsKsw ? awayScore : homeScore;
+    total.played += 1;
+    total.goalsFor += kswScore;
+    total.goalsAgainst += opponentScore;
+    if (kswScore === opponentScore) total.drawn += 1;
+    else if (kswScore > opponentScore) total.won += 1;
+    else total.lost += 1;
+    return total;
+  }, { drawn: 0, goalsAgainst: 0, goalsFor: 0, lost: 0, played: 0, won: 0 });
+  const standing = kswGroupRow ?? kswLeagueRow;
+  const kswNodes = cupV2?.nodes.filter((node) => [node.linkedMatch?.homeTeam, node.linkedMatch?.awayTeam, node.homeSource.team, node.awaySource.team].some((team) => team?.id === kswTeamId || `${team?.name ?? ""} ${team?.shortName ?? ""}`.toLowerCase().includes("ksw"))) ?? [];
+  const partition = kswNodes.length ? cupV2?.partitions.find((item) => item.key === kswNodes[0].partitionKey) : undefined;
+  const stages = ["Group", "Quarterfinal", "Semifinal", "Final"].map((stage) => ({
+    label: stage,
+    reached: stage === "Group" ? Boolean(kswGroupRow) : kswNodes.some((node) => cupRoundLabel(node.roundLabel) === stage),
+  }));
+  const statItems = standing
+    ? [
+        ["อันดับ", String("position" in standing ? standing.position : standings.findIndex((row) => row === standing) + 1)],
+        ["แข่ง", String("played" in standing ? standing.played : number(standing as Row, ["played", "p"]))],
+        ["ชนะ", String("won" in standing ? standing.won : number(standing as Row, ["won", "w"]))],
+        ["เสมอ", String("drawn" in standing ? standing.drawn : number(standing as Row, ["drawn", "draws", "d"]))],
+        ["แพ้", String("lost" in standing ? standing.lost : number(standing as Row, ["lost", "l"]))],
+        ["ได้", String("goals_for" in standing ? standing.goals_for : number(standing as Row, ["goals_for", "gf"]))],
+        ["เสีย", String("goals_against" in standing ? standing.goals_against : number(standing as Row, ["goals_against", "ga"]))],
+        ["ผลต่าง", String("goal_difference" in standing ? standing.goal_difference : number(standing as Row, ["goal_difference", "gd"]))],
+        ["คะแนน", String("points" in standing ? standing.points : number(standing as Row, ["points", "pts"]))],
+      ]
+    : [["แข่ง", String(stats.played)], ["ชนะ", String(stats.won)], ["เสมอ", String(stats.drawn)], ["แพ้", String(stats.lost)], ["ได้", String(stats.goalsFor)], ["เสีย", String(stats.goalsAgainst)], ["ผลต่าง", String(stats.goalsFor - stats.goalsAgainst)]];
+
+  return (
+    <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="ksw-tournament-summary">
+      <div className="border-y border-[#d8ad45]/35 bg-[#fffdf8] px-5 py-6 shadow-xl shadow-slate-900/10 sm:px-6">
+        <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.2em] text-[#8a6418]">KSW Tournament Summary</p><h2 className="mt-2 text-2xl font-black text-[#061426]">ผลงานของ KSW</h2></div>{partition ? <span className="rounded-full bg-[#fff0c8] px-3 py-1 text-xs font-black text-[#8a6418]">{partition.label}</span> : null}</div>
+        <div className="mt-5 grid gap-5 lg:grid-cols-2">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">{statItems.map(([label, value]) => <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-center" key={label}><p className="text-[10px] font-black text-slate-500">{label}</p><p className="mt-1 text-lg font-black text-[#061426]">{value}</p></div>)}</div>
+          {cupV2 ? <div className="border-l-2 border-[#d8ad45] pl-4"><p className="text-sm font-black text-[#061426]">เส้นทางในฟุตบอลถ้วย</p><div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">{stages.map((stage) => <div className={`rounded-md px-3 py-2 text-center text-xs font-black ${stage.reached ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`} key={stage.label}>{stage.reached ? "✓" : "✕"} {stage.label}</div>)}</div></div> : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function ChronicleSeasonSummary({ competition }: { competition: Row }) {
   const description = text(competition, ["description"], "") || text(competition, ["short_description"], "");
   if (!description) return null;
@@ -1015,9 +1143,11 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
           </div>
         </section>
 
+        {seasonStatus === "completed" ? <CompletedSeasonStory competition={competition} competitionType={competitionType} cupV2={cupV2} matches={matches} teams={teams} /> : null}
         {seasonStatus === "completed" ? (
           <>
             <CompletedChampionSummary competition={competition} cupV2={cupV2} matches={completedArchiveMatches} standardChampion={standardChampion} standardLeague={standardLeague} standings={standings} teams={teams} />
+            <CompletedKswTournamentSummary cupV2={cupV2} groupStandings={legacyCupGroupStandings} matches={matches} standings={standings} teams={teams} />
             <CompletedParticipatingTeams cupV2={cupV2} teams={teams} />
             {kswStandardV2 ? <PublicKnockoutBracket championLabel="แชมป์" compact data={kswStandardV2} eyebrow="การแข่งขันที่จบแล้ว" localized sectionId="full-knockout-bracket" seasonCompleted title="สายการแข่งขันทั้งหมด" /> : null}
             {councilV2 ? <PublicCouncilCupBrackets compact data={councilV2} localized seasonCompleted showOverview={false} /> : null}
@@ -1109,10 +1239,12 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
         </div>
       </section>
 
-      {seasonStatus === "completed" && !standardLeague ? <><CompletedChampionSummary competition={competition} cupV2={null} matches={matches} standardChampion={undefined} standardLeague={null} standings={standings} teams={teams} /><CompletedMatchArchive matches={matches} /><ChronicleSeasonSummary competition={competition} /></> : null}
+      {seasonStatus === "completed" ? <CompletedSeasonStory competition={competition} competitionType={competitionType} cupV2={null} matches={matches} teams={teams} /> : null}
+
+      {seasonStatus === "completed" && !standardLeague ? <><CompletedChampionSummary competition={competition} cupV2={null} matches={matches} standardChampion={undefined} standardLeague={null} standings={standings} teams={teams} /><CompletedKswTournamentSummary cupV2={null} groupStandings={[]} matches={matches} standings={standings} teams={teams} /><CompletedParticipatingTeams cupV2={null} teams={teams} /><CompletedMatchArchive matches={matches} /><ChronicleSeasonSummary competition={competition} /></> : null}
 
       {standardCompleted ? (
-        <CompletedChampionSummary competition={competition} cupV2={null} matches={matches} standardChampion={standardChampion} standardLeague={standardLeague} standings={standings} teams={teams} />
+        <><CompletedChampionSummary competition={competition} cupV2={null} matches={matches} standardChampion={standardChampion} standardLeague={standardLeague} standings={standings} teams={teams} /><CompletedKswTournamentSummary cupV2={null} groupStandings={[]} matches={matches} standings={standings} teams={teams} /><CompletedParticipatingTeams cupV2={null} teams={teams} /></>
       ) : standardLeague ? (
         <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-10"><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl border border-[#d8ad45]/35 bg-white p-4"><p className="text-xs font-black text-[#8a6418]">ตารางคะแนนล่าสุด</p><p className="mt-2 text-xl font-black">{standardChampion ? text(standardChampion, ["name"], "-") : "รอยืนยันแชมป์"}</p></div><div className="rounded-xl border bg-white p-4"><p className="text-xs font-black text-slate-500">Runner-up</p><p className="mt-2 text-lg font-black">{text(standings[1], ["team_name"], "-")}</p></div><div className="rounded-xl border bg-white p-4"><p className="text-xs font-black text-slate-500">Third Place</p><p className="mt-2 text-lg font-black">{text(standings[2], ["team_name"], "-")}</p></div></div></section>
       ) : null}
@@ -1182,7 +1314,7 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
         <CompetitionResultsTable isLeague={isLeague} matches={matches} />
       ) : null}
 
-      {teams.length ? (
+      {teams.length && seasonStatus !== "completed" ? (
         <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="participating-teams">
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10 sm:p-6">
             <h2 className="text-2xl font-black">Participating Teams</h2>
