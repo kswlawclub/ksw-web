@@ -18,7 +18,7 @@ export function CompletedParticipatingTeamsGrid({ teams }: { teams: CompletedPar
     <>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {visibleTeams.map((team) => (
-          <div className="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2" key={team.id}>
+          <div className="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200/80 bg-[#fffdf8] px-3 py-2" key={team.id}>
             <TeamLogo className="!size-7" initials={(team.shortName || team.name).slice(0, 3)} logoUrl={team.logoUrl} teamName={team.name} />
             <span className="min-w-0 text-wrap text-sm font-black text-[#061426]">{team.name}</span>
           </div>

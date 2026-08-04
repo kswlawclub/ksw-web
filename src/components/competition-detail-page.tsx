@@ -743,13 +743,13 @@ function TournamentLegacy({ competition }: { competition: Row }) {
     "This competition is preserved as part of the KSW Chronicle.";
 
   return (
-    <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
-      <details className="rounded-2xl border border-[#d8ad45]/25 bg-[#061426] text-white shadow-xl shadow-slate-900/20">
-        <summary className="cursor-pointer list-none p-5 sm:p-6">
+    <section className="mx-auto w-full max-w-7xl px-4 pb-8 sm:px-6 lg:px-10">
+      <details className="rounded-xl border border-[#d8ad45]/30 bg-[#061426] text-white shadow-sm shadow-slate-900/20">
+        <summary className="cursor-pointer list-none px-5 py-4 sm:px-6 sm:py-5">
           <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d8ad45]">บันทึกการแข่งขัน</p>
           <h2 className="mt-2 text-2xl font-black">เรื่องราวในความทรงจำของ KSW</h2>
         </summary>
-        <p className="border-t border-white/10 px-5 pb-5 pt-4 whitespace-pre-line text-sm leading-7 text-slate-300 sm:px-6 sm:pb-6">{copy}</p>
+        <p className="border-t border-white/10 px-5 pb-5 pt-4 whitespace-pre-line text-sm leading-7 text-slate-300 sm:px-6 sm:pb-5">{copy}</p>
       </details>
     </section>
   );
@@ -767,7 +767,7 @@ function ArchiveStandingTable({ standing }: { standing: CupGroupStanding | undef
 }
 
 function CompletedMatchArchive({ cupGroups = [], cupV2 = null, error = null, matches, standings = [] }: { cupGroups?: Row[]; cupV2?: PublicCupV2Data | null; error?: string | null; matches: Row[]; standings?: CupGroupStanding[] }) {
-  if (error) return <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="match-archive"><div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900">{error}</div></section>;
+  if (error) return <section className="mx-auto w-full max-w-7xl px-4 pb-8 sm:px-6 lg:px-10" id="match-archive"><div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900">{error}</div></section>;
   const archive = buildPublicCupArchive({ matches: matches.filter((match) => ["finished", "completed"].includes(text(match, ["status"], "").toLowerCase())), nodes: cupV2?.nodes ?? [] });
   const groupById = new Map(cupGroups.map((group) => [text(group, ["id"], ""), group]));
   const groupMatches = archive.filter((entry) => entry.section === "group");
@@ -776,12 +776,13 @@ function CompletedMatchArchive({ cupGroups = [], cupV2 = null, error = null, mat
   groupMatches.forEach((entry) => groupMatchesById.set(entry.groupId ?? "", [...(groupMatchesById.get(entry.groupId ?? "") ?? []), entry]));
 
   return (
-    <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="match-archive">
-      <div className="mb-5 border-l-2 border-[#d8ad45] pl-4">
+    <section className="mx-auto w-full max-w-7xl px-4 pb-8 sm:px-6 lg:px-10" id="match-archive">
+      <div className="mb-4 border-l-2 border-[#d8ad45] pl-4">
+        <p className="text-xs font-black uppercase tracking-[0.2em] text-[#8a6418]">บันทึกฤดูกาล</p>
         <h2 className="text-2xl font-black text-[#061426]">ประวัติการแข่งขัน</h2>
         <p className="mt-1 text-sm text-slate-600">เรียงตามรอบการแข่งขันและกลุ่ม</p>
       </div>
-      <div className="grid gap-6">
+      <div className="grid gap-4 border-t border-slate-200/80 pt-5">
         {groupMatches.length ? <section className="grid gap-3"><h3 className="text-lg font-black text-[#061426]">รอบแบ่งกลุ่ม</h3>{Array.from(groupMatchesById.entries()).sort(([left], [right]) => { const leftGroup = groupById.get(left); const rightGroup = groupById.get(right); const leftOrder = leftGroup ? number(leftGroup, ["sort_order"]) : Number.MAX_SAFE_INTEGER; const rightOrder = rightGroup ? number(rightGroup, ["sort_order"]) : Number.MAX_SAFE_INTEGER; return leftOrder - rightOrder || text(leftGroup, ["label", "name"], "ไม่ระบุกลุ่ม").localeCompare(text(rightGroup, ["label", "name"], "ไม่ระบุกลุ่ม")); }).map(([groupId, entries], index) => { const group = groupById.get(groupId); const label = group ? publicArchiveGroupLabel(text(group, ["label", "name"], "ไม่ระบุกลุ่ม")) : "ไม่ระบุกลุ่ม"; const standing = standings.find((item) => item.group_id === groupId); return <details className="overflow-hidden rounded-xl border border-slate-200 bg-white" key={groupId || "unknown"} open={index === 0}><summary className="cursor-pointer list-none px-4 py-4"><span className="text-sm font-black text-[#061426]">{label}</span><span className="ml-2 text-xs font-bold text-slate-500">{entries.length} คู่</span></summary><div className="grid gap-3 border-t border-slate-100 bg-slate-100 p-3"><ArchiveStandingTable standing={standing} />{entries.sort((left, right) => matchTime(left.match) - matchTime(right.match) || left.matchId.localeCompare(right.matchId)).map((entry) => <TournamentJourneyCard key={entry.matchId} match={entry.match} />)}</div></details>; })}</section> : null}
       </div>
     </section>
@@ -830,8 +831,8 @@ function CompletedChampionSummary({
     : hasChampionContract && !championName;
 
   return (
-    <section className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10" id="champion-summary">
-      <div className="border-y border-[#d8ad45]/35 bg-white px-5 py-8 shadow-xl shadow-slate-900/10 sm:px-8">
+    <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-9 lg:px-10" id="champion-summary">
+      <div className="rounded-2xl border border-[#d8ad45]/35 bg-[#fffefb] px-5 py-7 shadow-lg shadow-slate-900/10 sm:px-8 sm:py-8">
         <p className="text-xs font-black uppercase tracking-[0.22em] text-[#8a6418]">การแข่งขันเสร็จสิ้น</p>
         <h2 className="mt-3 text-3xl font-black tracking-tight text-[#061426] sm:text-4xl">บทสรุปของฤดูกาล</h2>
         {cupV2?.templateKey === "council_two_division" ? (
@@ -889,7 +890,7 @@ function CompletedSeasonStory({ competition, competitionType, cupV2, matches, te
   if (!teamCount && !matchCount) return null;
 
   return (
-    <section className="mx-auto w-full max-w-7xl px-4 pb-7 pt-8 sm:px-6 lg:px-10" id="season-story">
+    <section className="mx-auto w-full max-w-7xl px-4 pb-6 pt-7 sm:px-6 lg:px-10" id="season-story">
       <div className="max-w-4xl border-l-2 border-[#d8ad45] pl-4 sm:pl-5">
         <p className="text-xs font-black uppercase tracking-[0.2em] text-[#8a6418]">ภาพรวมการแข่งขัน</p>
         <p className="mt-2 text-sm font-semibold leading-7 text-slate-700 sm:text-base">
@@ -969,8 +970,8 @@ function CompletedKswTournamentSummary({ cupV2, groupStandings, matches, standin
     : [["แข่ง", String(stats.played)], ["ชนะ", String(stats.won)], ["เสมอ", String(stats.drawn)], ["แพ้", String(stats.lost)], ["ได้", String(stats.goalsFor)], ["เสีย", String(stats.goalsAgainst)], ["ผลต่าง", String(stats.goalsFor - stats.goalsAgainst)]];
 
   return (
-    <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="ksw-tournament-summary">
-      <div className="border-y border-[#d8ad45]/35 bg-[#fffdf8] px-5 py-6 shadow-xl shadow-slate-900/10 sm:px-6">
+    <section className="mx-auto w-full max-w-7xl px-4 pb-8 sm:px-6 lg:px-10" id="ksw-tournament-summary">
+      <div className="rounded-xl border border-[#d8ad45]/30 bg-[#fffdf8] px-5 py-5 shadow-sm shadow-slate-900/10 sm:px-6 sm:py-6">
         <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.2em] text-[#8a6418]">KSW Tournament Summary</p><h2 className="mt-2 text-2xl font-black text-[#061426]">ผลงานของ KSW</h2></div>{partition ? <span className="rounded-full bg-[#fff0c8] px-3 py-1 text-xs font-black text-[#8a6418]">{partition.label}</span> : null}</div>
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">{statItems.map(([label, value]) => <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-center" key={label}><p className="text-[10px] font-black text-slate-500">{label}</p><p className="mt-1 text-lg font-black text-[#061426]">{value}</p></div>)}</div>
@@ -985,7 +986,7 @@ function ChronicleSeasonSummary({ competition }: { competition: Row }) {
   const description = text(competition, ["description"], "") || text(competition, ["short_description"], "");
   if (!description) return null;
   return (
-    <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="season-summary">
+    <section className="mx-auto w-full max-w-7xl px-4 pb-8 sm:px-6 lg:px-10" id="season-summary">
       <div className="max-w-4xl border-l-2 border-[#d8ad45] pl-5">
         <p className="text-xs font-black uppercase tracking-[0.2em] text-[#8a6418]">สรุปฤดูกาล</p>
         <h2 className="mt-2 text-2xl font-black text-[#061426]">เรื่องราวของการแข่งขัน</h2>
@@ -1014,8 +1015,8 @@ function CompletedParticipatingTeams({ championTeamId = null, cupV2, standings, 
   if (!allTeams.length) return null;
 
   return (
-    <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="participating-teams">
-      <div className="border-y border-slate-200 bg-white px-5 py-6 shadow-xl shadow-slate-900/10 sm:px-6">
+    <section className="mx-auto w-full max-w-7xl px-4 pb-8 sm:px-6 lg:px-10" id="participating-teams">
+      <div className="border-t border-slate-200/80 pt-5">
         <p className="text-xs font-black uppercase tracking-[0.2em] text-[#8a6418]">ทีมที่เข้าร่วม</p>
         <h2 className="mt-2 text-2xl font-black text-[#061426]">ทีมที่เข้าร่วมการแข่งขัน</h2>
         <div className="mt-5"><p className="mb-3 text-sm font-bold text-slate-500">{allTeams.length} ทีม</p><CompletedParticipatingTeamsGrid teams={allTeams} /></div>

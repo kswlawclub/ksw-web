@@ -146,8 +146,8 @@ export function PublicKnockoutBracket({
   const displayedRounds = roundOrder === "descending" ? [...rounds].reverse() : rounds;
 
   return (
-    <section className={`mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-10 ${compact ? "pb-6" : "pb-10"}`} id={sectionId}>
-      <div className={`border-y bg-white shadow-xl shadow-slate-900/10 ${palette.accent}`}>
+    <section className={`mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-10 ${compact ? "pb-8" : "pb-10"}`} id={sectionId}>
+      <div className={`bg-white ${compact ? "rounded-xl border shadow-sm shadow-slate-900/10" : "border-y shadow-xl shadow-slate-900/10"} ${palette.accent}`}>
         <div className={`flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 sm:px-6 ${compact ? "py-3" : "py-5"}`}>
           <div>
             <p className={`text-xs font-black uppercase tracking-[0.18em] ${palette.eyebrow}`}>{eyebrow}</p>
@@ -164,7 +164,7 @@ export function PublicKnockoutBracket({
             </div>
           </div>
         ) : null}
-        <div className={`grid bg-slate-100 ${compact ? "gap-2 p-2.5 sm:p-3" : "gap-4 p-4 sm:p-6"}`}>
+        <div className={`grid bg-slate-100/80 ${compact ? "gap-2 p-2.5 sm:p-3" : "gap-4 p-4 sm:p-6"}`}>
           {displayedRounds.map((round) => (
             <details className="overflow-hidden rounded-lg border border-slate-200 bg-white" key={round.roundIndex} open={openAllRounds || round.current}>
               <summary className={`cursor-pointer list-none hover:bg-[#fffaf0] ${compact ? "px-3 py-2.5" : "px-4 py-3"}`}>
@@ -202,8 +202,8 @@ function CompletedCouncilDivisionBracket({ data, localized, partitionKey, theme,
 
   return (
     <section className="min-w-0" id={partitionKey === "division_1" ? "knockout-division-1" : "knockout-division-2"}>
-      <div className={`overflow-hidden rounded-lg border bg-white shadow-lg shadow-slate-900/5 ${palette.accent}`}>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-6">
+      <div className={`overflow-hidden rounded-xl border bg-white shadow-sm shadow-slate-900/10 ${palette.accent}`}>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
           <div>
             <p className={`text-xs font-black uppercase tracking-[0.18em] ${palette.eyebrow}`}>คัพสภาทนายความ</p>
             <h2 className="mt-1 text-2xl font-black text-[#061426]">{title}</h2>
@@ -211,7 +211,7 @@ function CompletedCouncilDivisionBracket({ data, localized, partitionKey, theme,
           <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">จบการแข่งขัน</span>
         </div>
         {champion ? (
-          <div className={`border-b border-slate-200 px-4 py-3 sm:px-6 ${palette.champion}`}>
+          <div className={`border-b border-slate-200 px-4 py-3 sm:px-5 ${palette.champion}`}>
             <p className={`text-xs font-black ${palette.eyebrow}`}>แชมป์ {title}</p>
             <div className="mt-2 flex min-w-0 items-center gap-3">
               <TeamLogo className="!size-10" initials={teamInitials(champion, "?")} logoUrl={champion.logoUrl ?? ""} teamName={champion.name} />
@@ -219,7 +219,7 @@ function CompletedCouncilDivisionBracket({ data, localized, partitionKey, theme,
             </div>
           </div>
         ) : null}
-        <div className="grid gap-2.5 bg-slate-100 p-2.5 sm:p-3">
+        <div className="grid gap-2.5 bg-slate-100/80 p-2.5 sm:p-3">
           {rounds.map((round) => (
             <details className="group overflow-hidden rounded-md border border-slate-200 bg-white" key={round.roundIndex} open={round.roundIndex === finalRoundIndex}>
               <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2.5 hover:bg-[#fffaf0]">
@@ -262,7 +262,7 @@ export function PublicCouncilCupBrackets({ compact = false, data, localized = fa
           </div>
         </div>
       </section> : null}
-      {useCompletedCouncilPresentation ? <div className="mx-auto grid w-full max-w-7xl gap-5 px-4 sm:px-6 xl:grid-cols-2 xl:gap-6 lg:px-10">
+      {useCompletedCouncilPresentation ? <div className="mx-auto grid w-full max-w-7xl gap-4 px-4 pb-8 sm:px-6 xl:grid-cols-2 xl:gap-5 lg:px-10">
           {hasDivision1 ? <CompletedCouncilDivisionBracket data={data} localized={localized} partitionKey="division_1" theme="division_1" title="Division 1" /> : null}
           {hasDivision2 ? <CompletedCouncilDivisionBracket data={data} localized={localized} partitionKey="division_2" theme="division_2" title="Division 2" /> : null}
         </div> : <div className="grid gap-6 lg:grid-cols-2">
