@@ -102,6 +102,7 @@ export function PublicKnockoutBracket({
   data,
   eyebrow = "KSW Standard",
   partitionKey = "main",
+  roundOrder = "ascending",
   sectionId = "knockout-bracket",
   seasonCompleted,
   theme = "main",
@@ -111,6 +112,7 @@ export function PublicKnockoutBracket({
   data: PublicCupV2Data;
   eyebrow?: string;
   partitionKey?: string;
+  roundOrder?: "ascending" | "descending";
   sectionId?: string;
   seasonCompleted: boolean;
   theme?: BracketTheme;
@@ -142,7 +144,7 @@ export function PublicKnockoutBracket({
           </div>
         ) : null}
         <div className="grid gap-4 bg-slate-100 p-4 sm:p-6">
-          {rounds.map((round) => (
+          {(roundOrder === "descending" ? [...rounds].reverse() : rounds).map((round) => (
             <details className="overflow-hidden rounded-lg border border-slate-200 bg-white" key={round.roundIndex} open={round.current}>
               <summary className="cursor-pointer list-none px-4 py-3 hover:bg-[#fffaf0]">
                 <div className="flex flex-wrap items-center justify-between gap-2">

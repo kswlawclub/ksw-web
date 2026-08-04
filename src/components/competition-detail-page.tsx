@@ -740,6 +740,183 @@ function TournamentLegacy({ competition }: { competition: Row }) {
   );
 }
 
+function completedCupArchiveRows(data: PublicCupV2Data | null) {
+  if (!data) return [] as Row[];
+
+  return data.nodes.flatMap((node) => {
+    const match = node.linkedMatch;
+    if (!match || !["finished", "completed"].includes(match.status)) return [];
+    return [{
+      away_score: match.awayScore,
+      away_team_logo_url: match.awayTeam?.logoUrl ?? "",
+      away_team_name: match.awayTeam?.name ?? "ทีมเยือน",
+      away_team_short_name: match.awayTeam?.shortName ?? "",
+      competition_stage: node.roundLabel || "Knockout Stage",
+      home_score: match.homeScore,
+      home_team_logo_url: match.homeTeam?.logoUrl ?? "",
+      home_team_name: match.homeTeam?.name ?? "ทีมเหย้า",
+      home_team_short_name: match.homeTeam?.shortName ?? "",
+      id: match.id,
+      match_date: match.matchDate,
+      penalty_away_score: match.awayPenaltyScore,
+      penalty_home_score: match.homePenaltyScore,
+      status: match.status,
+      venue: match.venue,
+    } satisfies Row];
+  });
+}
+
+function archiveStageLabel(match: Row) {
+  return text(match, ["competition_stage"], "") || "Group Stage";
+}
+
+function archiveStagePriority(label: string) {
+  const normalized = label.toLowerCase();
+  if (normalized.includes("final") && !normalized.includes("semi")) return 0;
+  if (normalized.includes("semi")) return 1;
+  if (normalized.includes("quarter")) return 2;
+  if (normalized.includes("round of 16")) return 3;
+  return 4;
+}
+
+function CompletedMatchArchive({ matches }: { matches: Row[] }) {
+  const groups = new Map<string, Row[]>();
+  matches
+    .filter((match) => ["finished", "completed"].includes(text(match, ["status"], "").toLowerCase()))
+    .forEach((match) => {
+      const label = archiveStageLabel(match);
+      groups.set(label, [...(groups.get(label) ?? []), match]);
+    });
+  const grouped = Array.from(groups.entries()).sort(([left], [right]) => archiveStagePriority(left) - archiveStagePriority(right) || left.localeCompare(right));
+  if (!grouped.length) return null;
+
+  return (
+    <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="match-archive">
+      <div className="mb-5 border-l-2 border-[#d8ad45] pl-4">
+        <p className="text-xs font-black uppercase tracking-[0.2em] text-[#8a6418]">Match Archive</p>
+        <h2 className="mt-2 text-2xl font-black text-[#061426]">ประวัติการแข่งขัน</h2>
+        <p className="mt-1 text-sm text-slate-600">เรียงจากรอบชิงชนะเลิศย้อนกลับไปยังรอบก่อนหน้า</p>
+      </div>
+      <div className="grid gap-6">
+        {grouped.map(([label, stageMatches]) => (
+          <CompetitionResultsTable
+            isLeague={false}
+            key={label}
+            matches={[...stageMatches].sort((left, right) => matchTime(left) - matchTime(right))}
+            sectionId={`match-archive-${label.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}`}
+            subtitle={`ผลการแข่งขันใน${label}`}
+            title={label}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function CompletedChampionSummary({
+  competition,
+  cupV2,
+  matches,
+  standardChampion,
+  standardLeague,
+  standings,
+  teams,
+}: {
+  competition: Row;
+  cupV2: PublicCupV2Data | null;
+  matches: Row[];
+  standardChampion: Row | undefined;
+  standardLeague: CompetitionDetailData["standardLeague"];
+  standings: Row[];
+  teams: Row[];
+}) {
+  const championName = standardChampion
+    ? text(standardChampion, ["name"], "")
+    : cupV2?.champions.main?.name ?? null;
+  const council = cupV2?.templateKey === "council_two_division" ? cupV2.champions : null;
+  const championId = standardLeague?.championTeamId ?? "";
+  const runnerUp = standardLeague && championId
+    ? sortStandings(standings).find((standing) => text(standing, ["team_id"], "") !== championId)
+    : undefined;
+  const thirdPlace = standardLeague && championId
+    ? sortStandings(standings).filter((standing) => text(standing, ["team_id"], "") !== championId)[1]
+    : undefined;
+  const totalGoals = matches.reduce((total, match) => total + number(match, ["home_score"]) + number(match, ["away_score"]), 0);
+  const metadata = [
+    teams.length ? `${teams.length} ทีม` : "",
+    matches.length ? `${matches.length} แมตช์` : "",
+    dateRange(competition),
+    text(competition, ["location"], ""),
+    totalGoals ? `${totalGoals} ประตูรวม` : "",
+  ].filter(Boolean);
+  const hasChampionContract = Boolean(standardLeague) || cupV2?.templateKey === "ksw_standard" || cupV2?.templateKey === "council_two_division";
+  const missingChampion = cupV2?.templateKey === "council_two_division"
+    ? !council?.division1 || !council.division2
+    : hasChampionContract && !championName;
+
+  return (
+    <section className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10" id="champion-summary">
+      <div className="border-y border-[#d8ad45]/35 bg-white px-5 py-8 shadow-xl shadow-slate-900/10 sm:px-8">
+        <p className="text-xs font-black uppercase tracking-[0.22em] text-[#8a6418]">Season Complete</p>
+        <h2 className="mt-3 text-3xl font-black tracking-tight text-[#061426] sm:text-4xl">บทสรุปของฤดูกาล</h2>
+        {cupV2?.templateKey === "council_two_division" ? (
+          <div className="mt-6 grid gap-5 sm:grid-cols-2">
+            <div className="border-l-2 border-[#d8ad45] pl-4"><p className="text-xs font-black text-[#8a6418]">Champion Division 1</p><p className="mt-2 text-2xl font-black">{council?.division1?.name ?? "ผลสรุปกำลังจัดเตรียม"}</p></div>
+            <div className="border-l-2 border-emerald-800 pl-4"><p className="text-xs font-black text-emerald-800">Champion Division 2</p><p className="mt-2 text-2xl font-black">{council?.division2?.name ?? "ผลสรุปกำลังจัดเตรียม"}</p></div>
+          </div>
+        ) : hasChampionContract ? (
+          <div className="mt-6 border-l-2 border-[#d8ad45] pl-4">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a6418]">Champion</p>
+            <p className="mt-2 text-3xl font-black text-[#061426] sm:text-4xl">{championName ?? "ผลสรุปกำลังจัดเตรียม"}</p>
+            {runnerUp ? <p className="mt-3 text-sm font-bold text-slate-600">Runner-up: {text(runnerUp, ["team_name"], "-")}{thirdPlace ? ` · Third Place: ${text(thirdPlace, ["team_name"], "-")}` : ""}</p> : null}
+          </div>
+        ) : <p className="mt-5 text-lg font-black text-[#061426]">การแข่งขันเสร็จสิ้น</p>}
+        {missingChampion ? <p className="mt-5 text-sm font-bold text-amber-800">ผลสรุปกำลังจัดเตรียม</p> : null}
+        {metadata.length ? <p className="mt-6 border-t border-slate-200 pt-4 text-sm font-bold leading-6 text-slate-600">{metadata.join(" · ")}</p> : null}
+      </div>
+    </section>
+  );
+}
+
+function ChronicleSeasonSummary({ competition }: { competition: Row }) {
+  const description = text(competition, ["description"], "") || text(competition, ["short_description"], "");
+  if (!description) return null;
+  return (
+    <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="season-summary">
+      <div className="max-w-4xl border-l-2 border-[#d8ad45] pl-5">
+        <p className="text-xs font-black uppercase tracking-[0.2em] text-[#8a6418]">Season Summary</p>
+        <h2 className="mt-2 text-2xl font-black text-[#061426]">เรื่องราวของการแข่งขัน</h2>
+        <p className="mt-4 whitespace-pre-line text-sm leading-7 text-slate-700 sm:text-base">{description}</p>
+      </div>
+    </section>
+  );
+}
+
+function RoadToChampion({ data }: { data: PublicCupV2Data | null }) {
+  if (!data?.nodes.length) return null;
+  const council = data.templateKey === "council_two_division";
+
+  return (
+    <>
+      <section className="mx-auto w-full max-w-7xl px-4 pb-4 sm:px-6 lg:px-10" id="road-to-champion">
+        <div className="border-l-2 border-[#d8ad45] pl-4">
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-[#8a6418]">Road to Champion</p>
+          <h2 className="mt-2 text-2xl font-black text-[#061426]">เส้นทางสู่แชมป์</h2>
+          <p className="mt-1 text-sm text-slate-600">เริ่มจากรอบชิงชนะเลิศ แล้วย้อนกลับไปยังทุกด่านของการแข่งขัน</p>
+        </div>
+      </section>
+      {council ? (
+        <>
+          <PublicKnockoutBracket championLabel="Champion Division 1" data={data} eyebrow="Road to Champion" partitionKey="division_1" roundOrder="descending" sectionId="road-division-1" seasonCompleted theme="division_1" title="Division 1" />
+          <PublicKnockoutBracket championLabel="Champion Division 2" data={data} eyebrow="Road to Champion" partitionKey="division_2" roundOrder="descending" sectionId="road-division-2" seasonCompleted theme="division_2" title="Division 2" />
+        </>
+      ) : (
+        <PublicKnockoutBracket data={data} eyebrow="Road to Champion" roundOrder="descending" sectionId="road-main" seasonCompleted title="เส้นทางสู่แชมป์" />
+      )}
+    </>
+  );
+}
+
 export function CompetitionDetailPage({ data }: { data: CompetitionDetailData }) {
   const { competition, cupGroups = [], cupGroupTeams = [], matches, scheduledMatches, snapshots, sponsors, publicCupV2 = null, standardLeague = null, standings, teams } = data;
   const competitionType = normalizeCompetitionType(text(competition, ["competition_type"], ""));
@@ -781,6 +958,10 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
   const legacyMatches = cupV2 ? matches.filter((match) => !knockoutMatchIds.has(text(match, ["id"]))) : matches;
   const legacyScheduledMatches = cupV2 ? scheduledMatches.filter((match) => !knockoutMatchIds.has(text(match, ["id"]))) : scheduledMatches;
   const legacyFixtures = [...legacyScheduledMatches, ...legacyMatches];
+  const completedArchiveMatches = [
+    ...legacyMatches,
+    ...completedCupArchiveRows(cupV2),
+  ].filter((match, index, rows) => rows.findIndex((candidate) => text(candidate, ["id"], "") === text(match, ["id"], "")) === index);
   const legacyKswJourney = legacyFixtures.filter(isKswMatchByFlag).sort((a, b) => matchTime(a) - matchTime(b));
   const legacyCupGroupStandings = isCup
     ? calculateCupGroupStandings({ groups: cupGroups, matches: legacyFixtures, teams: cupGroupTeams })
@@ -793,16 +974,24 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
       dateRange(competition),
       text(competition, ["location"], ""),
     ].filter(Boolean);
-    const tournamentCtas = [
-      ["Overview", "#overview", true],
-      ["Fixtures", "#fixtures", legacyScheduledMatches.length > 0],
-      ["KSW Journey", "#ksw-journey", legacyKswJourney.length > 0],
-      ["Group Standings", "#group-standings", isCup && legacyCupGroupStandings.length > 0],
-      [councilV2 ? "Division Brackets" : "Knockout Bracket", "#knockout-bracket", Boolean(cupV2?.nodes.length)],
-      [isCup ? "Cup Results" : "Tournament Results", "#tournament-results", legacyMatches.length > 0],
-      ["Participating Teams", "#participating-teams", teams.length > 0],
-      ["Partners", "#partners", sponsors.some((sponsor) => sponsor.is_active !== false)],
-    ] as const;
+    const tournamentCtas = seasonStatus === "completed"
+      ? [
+          ["Champion Summary", "#champion-summary", true],
+          ["Road to Champion", "#road-to-champion", Boolean(cupV2?.nodes.length)],
+          ["Full Bracket", "#full-knockout-bracket", Boolean(kswStandardV2?.nodes.length)],
+          ["Match Archive", "#match-archive", completedArchiveMatches.length > 0],
+          ["Season Summary", "#season-summary", Boolean(text(competition, ["description", "short_description"], ""))],
+        ] as const
+      : [
+          ["Overview", "#overview", true],
+          ["Fixtures", "#fixtures", legacyScheduledMatches.length > 0],
+          ["KSW Journey", "#ksw-journey", legacyKswJourney.length > 0],
+          ["Group Standings", "#group-standings", isCup && legacyCupGroupStandings.length > 0],
+          [councilV2 ? "Division Brackets" : "Knockout Bracket", "#knockout-bracket", Boolean(cupV2?.nodes.length)],
+          [isCup ? "Cup Results" : "Tournament Results", "#tournament-results", legacyMatches.length > 0],
+          ["Participating Teams", "#participating-teams", teams.length > 0],
+          ["Partners", "#partners", sponsors.some((sponsor) => sponsor.is_active !== false)],
+        ] as const;
 
     return (
       <main className="min-h-screen overflow-x-hidden bg-slate-100 text-[#061426]">
@@ -836,7 +1025,7 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
                   .map(([label, href]) => (
                     <Link
                       className={`inline-flex items-center justify-center rounded-md px-5 py-3 text-sm font-black transition-colors ${
-                        href === "#overview"
+                        href === "#overview" || href === "#champion-summary"
                           ? "bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] text-[#061426] shadow-lg shadow-[#d8ad45]/15 hover:scale-[1.02]"
                           : "border border-[#d8ad45]/50 bg-white/[0.03] text-[#f4d58a] backdrop-blur hover:bg-[#d8ad45]/10"
                       }`}
@@ -852,29 +1041,43 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
           </div>
         </section>
 
-        <TournamentOverview
-          competition={competition}
-          competitionType={competitionType}
-          matches={legacyMatches}
-          scheduledMatches={legacyScheduledMatches}
-          teams={teams}
-        />
-        <UpcomingFixtures matches={legacyScheduledMatches} />
-        <TournamentJourney matches={legacyKswJourney} />
-        {isCup ? <PublicCupGroupStandings standings={legacyCupGroupStandings} /> : null}
-        {kswStandardV2 ? <PublicKnockoutBracket data={kswStandardV2} seasonCompleted={seasonStatus === "completed"} /> : null}
-        {councilV2 ? <PublicCouncilCupBrackets data={councilV2} seasonCompleted={seasonStatus === "completed"} /> : null}
-        {legacyMatches.length ? (
-          <CompetitionResultsTable
-            isLeague={false}
-            matches={legacyMatches}
-            sectionId="tournament-results"
-            subtitle="Complete results from every match in this competition."
-            title={isCup ? "Cup Results" : "Tournament Results"}
-          />
-        ) : null}
-        <TournamentTeams teams={teams} />
-        {seasonStatus === "completed" ? <TournamentLegacy competition={competition} /> : null}
+        {seasonStatus === "completed" ? (
+          <>
+            <CompletedChampionSummary competition={competition} cupV2={cupV2} matches={completedArchiveMatches} standardChampion={standardChampion} standardLeague={standardLeague} standings={standings} teams={teams} />
+            <RoadToChampion data={cupV2} />
+            {kswStandardV2 ? <PublicKnockoutBracket data={kswStandardV2} eyebrow="Full Tournament Bracket" sectionId="full-knockout-bracket" seasonCompleted title="สายการแข่งขันทั้งหมด" /> : null}
+            {councilV2 ? <PublicCouncilCupBrackets data={councilV2} seasonCompleted /> : null}
+            <CompletedMatchArchive matches={completedArchiveMatches} />
+            <ChronicleSeasonSummary competition={competition} />
+            <TournamentTeams teams={teams} />
+            <TournamentLegacy competition={competition} />
+          </>
+        ) : (
+          <>
+            <TournamentOverview
+              competition={competition}
+              competitionType={competitionType}
+              matches={legacyMatches}
+              scheduledMatches={legacyScheduledMatches}
+              teams={teams}
+            />
+            <UpcomingFixtures matches={legacyScheduledMatches} />
+            <TournamentJourney matches={legacyKswJourney} />
+            {isCup ? <PublicCupGroupStandings standings={legacyCupGroupStandings} /> : null}
+            {kswStandardV2 ? <PublicKnockoutBracket data={kswStandardV2} seasonCompleted={false} /> : null}
+            {councilV2 ? <PublicCouncilCupBrackets data={councilV2} seasonCompleted={false} /> : null}
+            {legacyMatches.length ? (
+              <CompetitionResultsTable
+                isLeague={false}
+                matches={legacyMatches}
+                sectionId="tournament-results"
+                subtitle="Complete results from every match in this competition."
+                title={isCup ? "Cup Results" : "Tournament Results"}
+              />
+            ) : null}
+            <TournamentTeams teams={teams} />
+          </>
+        )}
         <SponsorsSection sponsors={sponsors} />
       </main>
     );
@@ -933,9 +1136,17 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
         </div>
       </section>
 
-      {standardLeague ? <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-10"><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl border border-[#d8ad45]/35 bg-white p-4"><p className="text-xs font-black text-[#8a6418]">{standardCompleted ? "Champion" : "ตารางคะแนนล่าสุด"}</p><p className="mt-2 text-xl font-black">{standardChampion ? text(standardChampion, ["name"], "-") : "รอยืนยันแชมป์"}</p>{standardLeague.championAt ? <p className="mt-1 text-xs text-slate-500">{formatDate(standardLeague.championAt)}</p> : null}</div><div className="rounded-xl border bg-white p-4"><p className="text-xs font-black text-slate-500">Runner-up</p><p className="mt-2 text-lg font-black">{text(standings[1], ["team_name"], "-")}</p></div><div className="rounded-xl border bg-white p-4"><p className="text-xs font-black text-slate-500">Third Place</p><p className="mt-2 text-lg font-black">{text(standings[2], ["team_name"], "-")}</p></div></div>{standardCompleted ? <div className="mt-3 grid gap-2 rounded-xl border bg-white p-4 text-sm sm:grid-cols-4"><p>ทีม <strong>{teams.length}</strong></p><p>แมตช์จบแล้ว <strong>{matches.length}/{matches.length + scheduledMatches.length}</strong></p><p>ประตูรวม <strong>{standardLeague.totalGoals}</strong></p><p>เฉลี่ย <strong>{matches.length ? (standardLeague.totalGoals / matches.length).toFixed(2) : "0.00"}</strong> ต่อนัด</p></div> : null}</section> : null}
+      {seasonStatus === "completed" && !standardLeague ? <><CompletedChampionSummary competition={competition} cupV2={null} matches={matches} standardChampion={undefined} standardLeague={null} standings={standings} teams={teams} /><CompletedMatchArchive matches={matches} /><ChronicleSeasonSummary competition={competition} /></> : null}
 
-      {showLeagueStandings && kswStanding ? (
+      {standardCompleted ? (
+        <CompletedChampionSummary competition={competition} cupV2={null} matches={matches} standardChampion={standardChampion} standardLeague={standardLeague} standings={standings} teams={teams} />
+      ) : standardLeague ? (
+        <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-10"><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl border border-[#d8ad45]/35 bg-white p-4"><p className="text-xs font-black text-[#8a6418]">ตารางคะแนนล่าสุด</p><p className="mt-2 text-xl font-black">{standardChampion ? text(standardChampion, ["name"], "-") : "รอยืนยันแชมป์"}</p></div><div className="rounded-xl border bg-white p-4"><p className="text-xs font-black text-slate-500">Runner-up</p><p className="mt-2 text-lg font-black">{text(standings[1], ["team_name"], "-")}</p></div><div className="rounded-xl border bg-white p-4"><p className="text-xs font-black text-slate-500">Third Place</p><p className="mt-2 text-lg font-black">{text(standings[2], ["team_name"], "-")}</p></div></div></section>
+      ) : null}
+
+      {standardCompleted ? <><CompletedMatchArchive matches={matches} /><ChronicleSeasonSummary competition={competition} /></> : null}
+
+      {showLeagueStandings && kswStanding && !standardCompleted ? (
         <section className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10" id="season-summary">
           <div className="rounded-2xl border border-[#d8ad45]/30 bg-white p-5 shadow-xl shadow-slate-900/10 sm:p-6">
             <h2 className="text-2xl font-black">KSW Season Summary</h2>
@@ -951,7 +1162,7 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
         </section>
       ) : null}
 
-      {kswMatchesNewest.length ? (
+      {kswMatchesNewest.length && seasonStatus !== "completed" ? (
         <section className={`mx-auto w-full max-w-7xl px-4 ${showLeagueStandings && kswStanding ? "pb-10" : "py-10"} sm:px-6 lg:px-10`} id="ksw-results">
           <div className="rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
             <div className="border-b border-slate-200 px-4 py-5 sm:px-6">
@@ -979,7 +1190,7 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
         </section>
       ) : null}
 
-      {isFriendly && allFixtures.length ? (
+      {isFriendly && allFixtures.length && seasonStatus !== "completed" ? (
         <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="match">
           <div className="rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
             <div className="border-b border-slate-200 px-4 py-5 sm:px-6">
@@ -992,9 +1203,9 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
         </section>
       ) : null}
 
-      {standardLeague ? <StandardLeagueMatchweeks matches={matches} scheduledMatches={scheduledMatches} /> : null}
+      {standardLeague && !standardCompleted ? <StandardLeagueMatchweeks matches={matches} scheduledMatches={scheduledMatches} /> : null}
 
-      {!standardLeague && !isFriendly && matches.length ? (
+      {!standardLeague && !isFriendly && seasonStatus !== "completed" && matches.length ? (
         <CompetitionResultsTable isLeague={isLeague} matches={matches} />
       ) : null}
 
@@ -1015,6 +1226,8 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
           </div>
         </section>
       ) : null}
+
+      {seasonStatus === "completed" ? <TournamentLegacy competition={competition} /> : null}
 
       <SponsorsSection sponsors={sponsors} />
     </main>
