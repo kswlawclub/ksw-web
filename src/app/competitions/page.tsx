@@ -1,6 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
+import { loadChronicleGroups } from "@/lib/chronicle-loader";
+import type { ChronicleGroup, ChronicleViewModel } from "@/lib/chronicle-view-model";
 import { loadPublishedCompetitions, Row, text } from "@/lib/competition-data";
 import { calculateStandardLeagueStandings } from "@/lib/league-template/standings";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
@@ -360,19 +362,83 @@ function CompetitionSection({ items, showAccent = true, title }: { items: Row[];
   );
 }
 
-export default async function CompetitionsPage() {
-  const competitions = sortCompetitions(await withCompletedStandardLeagueArchiveData(await withCompletedCupChampions(await loadPublishedCompetitions())));
-  const completedCups = competitions.filter((competition) =>
-    isCupCompetition(normalizeCompetitionType(text(competition, ["competition_type"], "")))
-    && text(competition, ["season_status"], "active") === "completed",
+function ChronicleCard({ entry }: { entry: ChronicleViewModel }) {
+  const championSummary = entry.templateKey === "council_two_division"
+    ? [
+        entry.councilChampions?.division1 ? `Division 1: ${entry.councilChampions.division1}` : "",
+        entry.councilChampions?.division2 ? `Division 2: ${entry.councilChampions.division2}` : "",
+      ].filter(Boolean)
+    : entry.champion ? [`แชมป์: ${entry.champion}`] : [];
+
+  const summary = [
+    entry.seasonLabel ?? "",
+    entry.location ?? "",
+    entry.teamCount ? `${entry.teamCount} ทีม` : "",
+    entry.matchCount ? `${entry.completedMatchCount}/${entry.matchCount} นัดจบแล้ว` : "",
+  ].filter(Boolean);
+
+  return (
+    <Link
+      className="group grid min-w-0 gap-4 rounded-2xl border border-[#d8ad45]/25 bg-white p-5 shadow-xl shadow-slate-900/10 transition-transform hover:-translate-y-0.5 sm:grid-cols-[minmax(0,1fr)_auto]"
+      href={`/competitions/${entry.slug}`}
+    >
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full border border-[#d8ad45]/35 bg-[#d8ad45]/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#8a6418]">
+            {entry.typeLabel}
+          </span>
+          <span className="text-xs font-black text-slate-500">Completed / จบการแข่งขัน</span>
+        </div>
+        <h3 className="mt-3 text-xl font-black leading-tight text-[#061426]">{entry.name}</h3>
+        {summary.length ? <p className="mt-2 text-sm font-bold text-slate-500">{summary.join(" • ")}</p> : null}
+        {entry.excerpt ? <p className="mt-3 text-sm leading-6 text-slate-600">{entry.excerpt}</p> : null}
+        {championSummary.length ? <p className="mt-3 text-sm font-black text-[#8a6418]">{championSummary.join(" · ")}</p> : null}
+        {entry.runnerUp ? <p className="mt-1 text-sm font-bold text-slate-600">รองแชมป์: {entry.runnerUp}</p> : null}
+        {entry.warning ? <p className="mt-3 text-sm font-bold text-amber-700">{entry.warning}</p> : null}
+      </div>
+      <span className="self-end text-sm font-black text-[#061426] transition-colors group-hover:text-[#8a6418] sm:self-center">
+        ดูบันทึกการแข่งขัน
+      </span>
+    </Link>
   );
+}
+
+function ChronicleSection({ groups }: { groups: ChronicleGroup[] }) {
+  if (!groups.length) return null;
+
+  return (
+    <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10">
+      <div className="mb-5">
+        <div className="mb-3 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
+        <h2 className="text-2xl font-black text-[#061426]">KSW Chronicle</h2>
+      </div>
+      <div className="grid gap-8">
+        {groups.map((group) => (
+          <div className="grid gap-4" key={group.yearLabel}>
+            <h3 className="text-lg font-black text-slate-600">{group.yearLabel}</h3>
+            <div className="grid gap-4 lg:grid-cols-2">
+              {group.entries.map((entry) => <ChronicleCard entry={entry} key={entry.competitionId} />)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export default async function CompetitionsPage() {
+  const [publishedCompetitions, chronicleGroups] = await Promise.all([
+    loadPublishedCompetitions(),
+    loadChronicleGroups(),
+  ]);
+  const competitions = sortCompetitions(await withCompletedStandardLeagueArchiveData(await withCompletedCupChampions(publishedCompetitions)));
   const currentOrFeatured = competitions.filter((competition) => {
     const status = text(competition, ["season_status"], "active");
     return status !== "completed" && (competition.is_featured === true || status === "active" || status === "upcoming" || status === "in_progress");
   });
   const featuredIds = new Set(currentOrFeatured.map((competition) => text(competition, ["id"], "")).filter(Boolean));
-  const completedCupIds = new Set(completedCups.map((competition) => text(competition, ["id"], "")).filter(Boolean));
-  const categoryCompetitions = competitions.filter((competition) => !featuredIds.has(text(competition, ["id"], "")) && !completedCupIds.has(text(competition, ["id"], "")));
+  const chronicleCompetitionIds = new Set(chronicleGroups.flatMap((group) => group.entries.map((entry) => entry.competitionId)));
+  const categoryCompetitions = competitions.filter((competition) => !featuredIds.has(text(competition, ["id"], "")) && !chronicleCompetitionIds.has(text(competition, ["id"], "")));
   const leagues = categoryCompetitions.filter((competition) =>
     isLeagueCompetition(normalizeCompetitionType(text(competition, ["competition_type"], ""))),
   );
@@ -400,14 +466,14 @@ export default async function CompetitionsPage() {
         </div>
       </section>
 
-      {competitions.length ? (
+      {competitions.length || chronicleGroups.length ? (
         <>
           <CompetitionSection items={currentOrFeatured} showAccent={false} title="Current / Featured" />
-          <CompetitionSection items={completedCups} title="Cup Archives / Completed Competitions" />
           <CompetitionSection items={leagues} title="League Seasons" />
           <CompetitionSection items={cups} title="Cups" />
           <CompetitionSection items={smallTournaments} title="Small Tournaments" />
           <CompetitionSection items={specialMatches} title="Special Matches" />
+          <ChronicleSection groups={chronicleGroups} />
         </>
       ) : (
         <section className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
