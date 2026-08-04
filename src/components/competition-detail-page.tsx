@@ -752,16 +752,6 @@ function TournamentLegacy({ competition }: { competition: Row }) {
   );
 }
 
-function thaiArchiveStageLabel(label: string) {
-  const normalized = label.toLowerCase();
-  if (normalized.includes("final") && !normalized.includes("semi")) return "รอบชิงชนะเลิศ";
-  if (normalized.includes("semi")) return "รอบรองชนะเลิศ";
-  if (normalized.includes("quarter")) return "รอบก่อนรองชนะเลิศ";
-  if (normalized.includes("group")) return "รอบแบ่งกลุ่ม";
-  if (normalized.includes("round")) return "รอบน็อกเอาต์ก่อนหน้า";
-  return "ผลการแข่งขัน";
-}
-
 function publicArchiveGroupLabel(label: string) {
   const normalized = label.trim();
   const match = normalized.match(/^group\s*(.+)$/i);
@@ -776,11 +766,8 @@ function ArchiveStandingTable({ standing }: { standing: CupGroupStanding | undef
 function CompletedMatchArchive({ cupGroups = [], cupV2 = null, matches, standings = [] }: { cupGroups?: Row[]; cupV2?: PublicCupV2Data | null; matches: Row[]; standings?: CupGroupStanding[] }) {
   const archive = buildPublicCupArchive({ matches: matches.filter((match) => ["finished", "completed"].includes(text(match, ["status"], "").toLowerCase())), nodes: cupV2?.nodes ?? [] });
   const groupById = new Map(cupGroups.map((group) => [text(group, ["id"], ""), group]));
-  const knockout = archive.filter((entry) => entry.section === "knockout");
   const groupMatches = archive.filter((entry) => entry.section === "group");
   if (!archive.length) return null;
-  const knockoutByPartition = new Map<string, typeof knockout>();
-  knockout.forEach((entry) => knockoutByPartition.set(entry.partitionKey ?? "main", [...(knockoutByPartition.get(entry.partitionKey ?? "main") ?? []), entry]));
   const groupMatchesById = new Map<string, typeof groupMatches>();
   groupMatches.forEach((entry) => groupMatchesById.set(entry.groupId ?? "", [...(groupMatchesById.get(entry.groupId ?? "") ?? []), entry]));
 
@@ -791,14 +778,6 @@ function CompletedMatchArchive({ cupGroups = [], cupV2 = null, matches, standing
         <p className="mt-1 text-sm text-slate-600">เรียงตามรอบการแข่งขันและกลุ่ม</p>
       </div>
       <div className="grid gap-6">
-        {knockoutByPartition.size ? <div className={cupV2?.templateKey === "council_two_division" ? "grid gap-6 lg:grid-cols-2" : "grid gap-6"}>
-        {Array.from(knockoutByPartition.entries()).sort(([left], [right]) => left.localeCompare(right)).map(([partitionKey, entries]) => {
-          const division = cupV2?.partitions.find((partition) => partition.key === partitionKey)?.label ?? partitionKey;
-          const rounds = new Map<number, typeof entries>();
-          entries.forEach((entry) => rounds.set(entry.roundIndex ?? -1, [...(rounds.get(entry.roundIndex ?? -1) ?? []), entry]));
-          return <section className="grid gap-3" key={partitionKey}><h3 className="text-lg font-black text-[#061426]">{cupV2?.templateKey === "council_two_division" ? division : "รอบน็อกเอาต์"}</h3>{Array.from(rounds.entries()).sort(([left], [right]) => right - left).map(([roundIndex, roundEntries]) => { const round = roundEntries[0]?.roundLabel ?? "Knockout Stage"; return <details className="overflow-hidden rounded-xl border border-slate-200 bg-white" key={roundIndex} open={roundEntries.some((entry) => entry.isFinal)}><summary className="cursor-pointer list-none px-4 py-4"><span className="text-sm font-black text-[#061426]">{thaiArchiveStageLabel(round)}</span><span className="ml-2 text-xs font-bold text-slate-500">{roundEntries.length} คู่</span></summary><div className="grid gap-3 border-t border-slate-100 bg-slate-100 p-3">{roundEntries.sort((left, right) => left.matchOrder - right.matchOrder || matchTime(left.match) - matchTime(right.match)).map((entry) => <TournamentJourneyCard key={entry.matchId} match={entry.match} />)}</div></details>; })}</section>;
-        })}
-        </div> : null}
         {groupMatches.length ? <section className="grid gap-3"><h3 className="text-lg font-black text-[#061426]">รอบแบ่งกลุ่ม</h3>{Array.from(groupMatchesById.entries()).sort(([left], [right]) => { const leftGroup = groupById.get(left); const rightGroup = groupById.get(right); const leftOrder = leftGroup ? number(leftGroup, ["sort_order"]) : Number.MAX_SAFE_INTEGER; const rightOrder = rightGroup ? number(rightGroup, ["sort_order"]) : Number.MAX_SAFE_INTEGER; return leftOrder - rightOrder || text(leftGroup, ["label", "name"], "ไม่ระบุกลุ่ม").localeCompare(text(rightGroup, ["label", "name"], "ไม่ระบุกลุ่ม")); }).map(([groupId, entries], index) => { const group = groupById.get(groupId); const label = group ? publicArchiveGroupLabel(text(group, ["label", "name"], "ไม่ระบุกลุ่ม")) : "ไม่ระบุกลุ่ม"; const standing = standings.find((item) => item.group_id === groupId); return <details className="overflow-hidden rounded-xl border border-slate-200 bg-white" key={groupId || "unknown"} open={index === 0}><summary className="cursor-pointer list-none px-4 py-4"><span className="text-sm font-black text-[#061426]">{label}</span><span className="ml-2 text-xs font-bold text-slate-500">{entries.length} คู่</span></summary><div className="grid gap-3 border-t border-slate-100 bg-slate-100 p-3"><ArchiveStandingTable standing={standing} />{entries.sort((left, right) => matchTime(left.match) - matchTime(right.match) || left.matchId.localeCompare(right.matchId)).map((entry) => <TournamentJourneyCard key={entry.matchId} match={entry.match} />)}</div></details>; })}</section> : null}
       </div>
     </section>
