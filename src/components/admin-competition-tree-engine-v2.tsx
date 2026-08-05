@@ -14,7 +14,7 @@ import {
 } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
 import type { CompetitionFixturesV2Result, CompetitionKnockoutMatchV2 } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
 import { approveCouncilDivisionsV2, getCouncilDivisionStateV2, getCouncilTemplatePreflightV2, reopenCouncilDivisionsV2, saveCouncilDivisionDraftV2 } from "@/app/admin/competitions/[id]/council-division-actions";
-import type { CouncilDivisionEntry, CouncilDivisionState, CouncilTemplatePreflightResult } from "@/app/admin/competitions/[id]/council-division-actions";
+import type { CouncilDivisionExtraSelections, CouncilDivisionState, CouncilTemplatePreflightResult } from "@/app/admin/competitions/[id]/council-division-actions";
 import {
   completeCouncilCupCompetitionV2,
   confirmCouncilBracketV2,
@@ -147,7 +147,7 @@ function TemplateMiniDiagram({ diagram }: { diagram: KnockoutTemplateDiagram }) 
 
 function CouncilDivisionApproval({
   error,
-  extraTeamIds,
+  extras,
   onApprove,
   onExtrasChange,
   onReopen,
@@ -156,9 +156,9 @@ function CouncilDivisionApproval({
   state,
 }: {
   error: string;
-  extraTeamIds: string[];
+  extras: { division1: string[]; division2: string[] };
   onApprove: () => void;
-  onExtrasChange: (teamIds: string[]) => void;
+  onExtrasChange: (value: { division1: string[]; division2: string[] }) => void;
   onReopen: () => void;
   onSaveDraft: () => void;
   pending: boolean;
@@ -169,13 +169,14 @@ function CouncilDivisionApproval({
   const [previewOpen, setPreviewOpen] = useState(false);
   if (!state) return <section className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4" id="cup-division-approval"><h3 className="font-black text-[#061426]">ตรวจสอบและแบ่งดิวิชั่น</h3><p className="mt-2 text-sm font-semibold text-slate-600">กำลังโหลดข้อมูลการแบ่งดิวิชั่น...</p></section>;
   const approved = state.approvalStatus === "approved";
-  const selectedExtras = state.division2.entries.filter((entry) => entry.sourceType !== "group_rank");
+  const selectedExtras = [...state.division1.entries, ...state.division2.entries].filter((entry) => entry.sourceType !== "group_rank");
   const candidateOptions = [...selectedExtras, ...state.candidatePool].filter((entry, index, entries) => entries.findIndex((candidate) => candidate.teamId === entry.teamId) === index);
-  const divisionCard = (key: "division-1" | "division-2", title: string, entries: CouncilDivisionEntry[], capacity: number | null, detail: string, extraCount = 0) => {
+  const divisionCard = (key: "division-1" | "division-2", title: string, division: CouncilDivisionState["division1"], detail: string) => {
     const theme = key === "division-1" ? { accent: "border-blue-200", badge: "border-[#d8ad45]/45 bg-[#fffdf7] text-[#8a6418]", heading: "text-blue-900", panel: "bg-blue-50/40" } : { accent: "border-emerald-200", badge: "border-slate-300 bg-slate-50 text-slate-700", heading: "text-emerald-900", panel: "bg-emerald-50/40" };
-    return <article className={`min-w-0 rounded-md border ${theme.accent} ${theme.panel} p-4`} id={`cup-${key}`}><div className="flex flex-wrap items-start justify-between gap-2"><div><h4 className={`text-lg font-black ${theme.heading}`}>{title}</h4><p className="mt-1 text-sm font-semibold text-slate-600">{detail}</p></div><span className={`rounded-full border px-2.5 py-1 text-xs font-black ${theme.badge}`}>{entries.length} ทีม</span></div><div className="mt-3 grid gap-2 text-sm font-bold sm:grid-cols-3"><span>เริ่มรอบ {capacity ?? "-"} ทีม</span><span>ทีมเติม {extraCount} ทีม</span><span>สถานะ: {approved ? "พร้อมจัดสาย" : "รออนุมัติ"}</span></div><div className="mt-3 grid gap-2 sm:grid-cols-2">{entries.map((entry) => <div className="min-w-0 rounded border border-slate-200 bg-white/80 px-3 py-2" key={entry.teamId}><p className="break-words text-sm font-black text-[#061426]">{entry.teamName}</p><p className="mt-1 text-xs font-bold text-slate-500">{entry.label} · {entry.reason}</p></div>)}</div></article>;
+    return <article className={`min-w-0 rounded-md border ${theme.accent} ${theme.panel} p-4`} id={`cup-${key}`}><div className="flex flex-wrap items-start justify-between gap-2"><div><h4 className={`text-lg font-black ${theme.heading}`}>{title}</h4><p className="mt-1 text-sm font-semibold text-slate-600">{detail}</p></div><span className={`rounded-full border px-2.5 py-1 text-xs font-black ${theme.badge}`}>{division.entries.length} ทีม</span></div><div className="mt-3 grid gap-2 text-sm font-bold sm:grid-cols-3"><span>เริ่มรอบ {division.bracketCapacity ?? "-"} ทีม</span><span>ทีมเติม {division.extraCount}/{division.extraNeeded} ทีม</span><span>สถานะ: {approved ? "พร้อมจัดสาย" : division.error ?? "รออนุมัติ"}</span></div><div className="mt-3 grid gap-2 sm:grid-cols-2">{division.entries.map((entry) => <div className="min-w-0 rounded border border-slate-200 bg-white/80 px-3 py-2" key={entry.teamId}><p className="break-words text-sm font-black text-[#061426]">{entry.teamName}</p><p className="mt-1 text-xs font-bold text-slate-500">{entry.label} · {entry.reason}</p></div>)}</div></article>;
   };
-  return <section className="mt-5 min-w-0 rounded-lg border border-blue-200 bg-blue-50/30 p-4" id="cup-division-approval"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-xl font-black text-[#061426]">ตรวจสอบและแบ่งดิวิชั่น</h3><p className="mt-1 text-sm font-semibold text-slate-600">คัพสภา – สองดิวิชั่น ใช้ทีมจากผลการคัดเลือกที่อนุมัติแล้ว</p></div><span className={`rounded-full border px-3 py-1.5 text-xs font-black ${approved ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-[#d8ad45]/40 bg-[#fff7e6] text-[#8a6418]"}`}>{approved ? "อนุมัติการแบ่งดิวิชั่นแล้ว" : "รออนุมัติการแบ่งดิวิชั่น"}</span></div><div className="mt-4 grid gap-3">{divisionCard("division-1", "Division 1", state.division1.entries, state.division1.bracketCapacity, "อันดับ 1 ของแต่ละกลุ่ม")}{divisionCard("division-2", "Division 2", state.division2.entries, state.division2.bracketCapacity, "อันดับ 2 ของแต่ละกลุ่มและทีมเติม", state.division2.extraCount)}</div>{!approved ? <button className="mt-4 min-h-10 rounded-md border border-blue-200 bg-white px-3 py-2 text-sm font-black text-blue-800" onClick={() => setPreviewOpen((value) => !value)} type="button">{previewOpen ? "ซ่อนตัวอย่างสายแข่งขัน" : "ดูตัวอย่างสายแข่งขัน"}</button> : null}{previewOpen ? <div className="mt-3 grid gap-3"><p className="text-sm font-black text-[#061426]">ตัวอย่างสายแข่งขันจากร่างปัจจุบัน</p>{[state.division1, state.division2].map((division, index) => <div className="rounded-md border border-slate-200 bg-white p-3" key={index}><p className="text-sm font-black text-[#061426]">Division {index + 1} · เริ่มรอบ {division.bracketCapacity} ทีม</p><ol className="mt-2 grid gap-1 text-sm font-semibold text-slate-700 sm:grid-cols-2">{division.entries.map((entry, position) => <li key={entry.teamId}>{position + 1}. {entry.teamName} ({entry.label})</li>)}</ol></div>)}</div> : null}{approved ? <p className="mt-4 rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700">Division 1 และ Division 2 พร้อมจัดสายแยกกัน · Champion ยังล็อกจนกว่าทั้งสองดิวิชั่นจบ</p> : null}{state.division1.error || state.division2.error ? <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-800">{state.division1.error ?? state.division2.error}</p> : null}{!approved && state.division2.extraNeeded > 0 ? <div className="mt-4 rounded-md border border-slate-200 bg-white p-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-black text-[#061426]">ทีมเติม Division 2</p><div className="flex gap-2"><button className="text-sm font-black text-[#8a6418]" onClick={() => onExtrasChange(state.recommendedExtraTeamIds)} type="button">ใช้การแบ่งอัตโนมัติ</button><button className="text-sm font-black text-blue-800" onClick={() => setEditing((value) => !value)} type="button">{editing ? "ปิดการแก้ไข" : "แก้ไขทีมดิวิชั่น 2"}</button></div></div>{editing ? <div className="mt-3 grid gap-2">{Array.from({ length: state.division2.extraNeeded }, (_, index) => <label className="grid gap-1 text-sm font-bold" key={index}>ทีมเติม {index + 1}<select className="min-h-10 rounded-md border border-slate-200 bg-white px-2" onChange={(event) => onExtrasChange(extraTeamIds.map((teamId, teamIndex) => teamIndex === index ? event.target.value : teamId))} value={extraTeamIds[index] ?? ""}><option value="">เลือกทีม</option>{candidateOptions.map((entry) => <option key={entry.teamId} value={entry.teamId}>{entry.teamName} · {entry.label}</option>)}</select></label>)}</div> : null}</div> : null}{error ? <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-800">{error}</p> : null}<div className="mt-5 flex flex-wrap gap-2">{approved ? <><button className="min-h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-black text-[#061426]" onClick={() => setDetailsOpen((value) => !value)} type="button">{detailsOpen ? "พับรายละเอียด" : "แสดงรายละเอียด"}</button><button className="min-h-10 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-black text-blue-800 disabled:opacity-60" disabled={pending} onClick={onReopen} type="button">เปิดการแบ่งดิวิชั่นเพื่อแก้ไข</button></> : <><button className="min-h-10 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-black text-[#061426] disabled:opacity-60" disabled={pending || Boolean(state.division1.error || state.division2.error)} onClick={onSaveDraft} type="button">บันทึกร่าง</button><button className="min-h-10 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={pending || Boolean(state.division1.error || state.division2.error)} onClick={onApprove} type="button">ยืนยันการแบ่งดิวิชั่น</button></>}</div></section>;
+  const extraControl = (key: "division1" | "division2", title: string, needed: number) => !approved && needed > 0 ? <div className="mt-4 rounded-md border border-slate-200 bg-white p-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-black text-[#061426]">{title}</p><div className="flex gap-2"><button className="text-sm font-black text-[#8a6418]" onClick={() => onExtrasChange({ division1: state.recommendedDivision1ExtraTeamIds, division2: state.recommendedDivision2ExtraTeamIds })} type="button">ใช้การจัดลำดับอัตโนมัติ</button><button className="text-sm font-black text-blue-800" onClick={() => setEditing((value) => !value)} type="button">{editing ? "ปิดการแก้ไข" : "เลือกทีม"}</button></div></div>{editing ? <div className="mt-3 grid gap-2">{Array.from({ length: needed }, (_, index) => <label className="grid gap-1 text-sm font-bold" key={index}>ทีมเติม {index + 1}<select className="min-h-10 rounded-md border border-slate-200 bg-white px-2" onChange={(event) => onExtrasChange({ ...extras, [key]: extras[key].map((teamId, teamIndex) => teamIndex === index ? event.target.value : teamId) })} value={extras[key][index] ?? ""}><option value="">เลือกทีม</option>{candidateOptions.map((entry) => <option key={entry.teamId} value={entry.teamId}>{entry.teamName} · {entry.label}</option>)}</select></label>)}</div> : null}</div> : null;
+  return <section className="mt-5 min-w-0 rounded-lg border border-blue-200 bg-blue-50/30 p-4" id="cup-division-approval"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-xl font-black text-[#061426]">ตรวจสอบและแบ่งดิวิชั่น</h3><p className="mt-1 text-sm font-semibold text-slate-600">คัพสภา – สองดิวิชั่น ใช้ผลการคัดเลือกและอันดับ 3 ที่ดีที่สุด</p></div><span className={`rounded-full border px-3 py-1.5 text-xs font-black ${approved ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-[#d8ad45]/40 bg-[#fff7e6] text-[#8a6418]"}`}>{approved ? "อนุมัติการแบ่งดิวิชั่นแล้ว" : "รออนุมัติการแบ่งดิวิชั่น"}</span></div>{state.thirdPlaceTieRequiresConfirmation ? <p className="mt-3 rounded-md border border-[#8a6418]/25 bg-[#fff7e6] px-3 py-2 text-sm font-bold text-[#8a6418]">ต้องยืนยันทีมอันดับ 3 ที่ดีที่สุด เนื่องจากคะแนนและสถิติยังเสมอกัน</p> : null}<div className="mt-4 grid gap-3">{divisionCard("division-1", "Division 1", state.division1, "แชมป์กลุ่มและทีมอันดับ 3 ที่ดีที่สุด")}{divisionCard("division-2", "Division 2", state.division2, "รองแชมป์กลุ่มและทีมอันดับ 3 ที่เหลือ")}</div>{extraControl("division1", "ทีมเติม Division 1", state.division1.extraNeeded)}{extraControl("division2", "ทีมเติม Division 2", state.division2.extraNeeded)}{!approved ? <button className="mt-4 min-h-10 rounded-md border border-blue-200 bg-white px-3 py-2 text-sm font-black text-blue-800" onClick={() => setPreviewOpen((value) => !value)} type="button">{previewOpen ? "ซ่อนตัวอย่างสายแข่งขัน" : "ดูตัวอย่างสายแข่งขัน"}</button> : null}{previewOpen ? <div className="mt-3 grid gap-3"><p className="text-sm font-black text-[#061426]">ตัวอย่างสายแข่งขันจากร่างปัจจุบัน</p>{[state.division1, state.division2].map((division, index) => <div className="rounded-md border border-slate-200 bg-white p-3" key={index}><p className="text-sm font-black text-[#061426]">Division {index + 1} · เริ่มรอบ {division.bracketCapacity} ทีม</p><ol className="mt-2 grid gap-1 text-sm font-semibold text-slate-700 sm:grid-cols-2">{division.entries.map((entry, position) => <li key={entry.teamId}>{position + 1}. {entry.teamName} ({entry.label})</li>)}</ol></div>)}</div> : null}{error ? <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-800">{error}</p> : null}<div className="mt-5 flex flex-wrap gap-2">{approved ? <><button className="min-h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-black text-[#061426]" onClick={() => setDetailsOpen((value) => !value)} type="button">{detailsOpen ? "พับรายละเอียด" : "แสดงรายละเอียด"}</button><button className="min-h-10 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-black text-blue-800 disabled:opacity-60" disabled={pending} onClick={onReopen} type="button">เปิดการแบ่งดิวิชั่นเพื่อแก้ไข</button></> : <><button className="min-h-10 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-black text-[#061426] disabled:opacity-60" disabled={pending || Boolean(state.division1.error || state.division2.error)} onClick={onSaveDraft} type="button">บันทึกร่าง</button><button className="min-h-10 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={pending || Boolean(state.division1.error || state.division2.error)} onClick={onApprove} type="button">ยืนยันการแบ่งดิวิชั่น</button></>}</div></section>;
 }
 
 function KnockoutMatchCard({
@@ -501,7 +502,8 @@ export function AdminCompetitionTreeEngineV2({
   const [selectedTemplate, setSelectedTemplate] = useState<KnockoutTemplateKey | null>(templateKey);
   const [councilState, setCouncilState] = useState<CouncilDivisionState | null>(null);
   const [councilPreflight, setCouncilPreflight] = useState<CouncilTemplatePreflightResult | null>(null);
-  const [councilExtraTeamIds, setCouncilExtraTeamIds] = useState<string[]>([]);
+  const [councilExtras, setCouncilExtras] = useState<CouncilDivisionExtraSelections>({ division1: [], division2: [] });
+  const [templateSelectionOpen, setTemplateSelectionOpen] = useState(false);
   const selectedTemplateDefinition = selectedTemplate ? getKnockoutTemplate(selectedTemplate) : undefined;
   const defaultPairing = useMemo(
     () => selectedTemplateDefinition ? buildKnockoutTemplatePreview(selectedTemplateDefinition.key, qualifiedSources) : null,
@@ -600,7 +602,7 @@ export function AdminCompetitionTreeEngineV2({
         return;
       }
       setCouncilState(result.state ?? null);
-      setCouncilExtraTeamIds(result.state?.recommendedExtraTeamIds ?? []);
+      setCouncilExtras({ division1: result.state?.recommendedDivision1ExtraTeamIds ?? [], division2: result.state?.recommendedDivision2ExtraTeamIds ?? [] });
     });
     return () => { active = false; };
   }, [competitionId, qualificationApproved, selectedTemplate]);
@@ -644,7 +646,8 @@ export function AdminCompetitionTreeEngineV2({
       setSelectedTemplate(templateKey);
       setCouncilState(null);
       setCouncilPreflight(null);
-      setCouncilExtraTeamIds([]);
+      setCouncilExtras({ division1: [], division2: [] });
+      setTemplateSelectionOpen(false);
       setDraftSources(buildKnockoutTemplatePreview(template.key, qualifiedSources).sources as KswQualificationSource[]);
       setEditingPairing(false);
       setMessage(`เลือก ${template.name} แล้ว`);
@@ -655,7 +658,7 @@ export function AdminCompetitionTreeEngineV2({
   function saveCouncilDraft() {
     setError("");
     startTransition(async () => {
-      const result = await saveCouncilDivisionDraftV2(competitionId, councilExtraTeamIds);
+      const result = await saveCouncilDivisionDraftV2(competitionId, councilExtras);
       if (!result.ok) return setError(result.error ?? "ไม่สามารถบันทึกร่างการแบ่งดิวิชั่น");
       setCouncilState(result.state ?? null);
       setMessage("บันทึกร่างการแบ่งดิวิชั่นแล้ว");
@@ -666,7 +669,7 @@ export function AdminCompetitionTreeEngineV2({
   function approveCouncilDivisions() {
     setError("");
     startTransition(async () => {
-      const result = await approveCouncilDivisionsV2(competitionId, councilExtraTeamIds);
+      const result = await approveCouncilDivisionsV2(competitionId, councilExtras);
       if (!result.ok) return setError(result.error ?? "ไม่สามารถยืนยันการแบ่งดิวิชั่น");
       setCouncilState(result.state ?? null);
       setMessage("อนุมัติการแบ่งดิวิชั่นแล้ว พร้อมจัดสายแยกในขั้นถัดไป");
@@ -681,10 +684,17 @@ export function AdminCompetitionTreeEngineV2({
       const result = await reopenCouncilDivisionsV2(competitionId);
       if (!result.ok) return setError(result.error ?? "ไม่สามารถเปิดการแบ่งดิวิชั่นเพื่อแก้ไข");
       setCouncilState(result.state ?? null);
-      setCouncilExtraTeamIds(result.state?.recommendedExtraTeamIds ?? []);
+      setCouncilExtras({ division1: result.state?.recommendedDivision1ExtraTeamIds ?? [], division2: result.state?.recommendedDivision2ExtraTeamIds ?? [] });
       setMessage("เปิดการแบ่งดิวิชั่นเพื่อแก้ไขแล้ว");
       router.refresh();
     });
+  }
+
+  function openTemplateSelection() {
+    if (!window.confirm("เปลี่ยนรูปแบบการแข่งขัน? ร่างการแบ่งดิวิชั่นหรือการจัดสายอัตโนมัติที่ยังไม่มี bracket จะถูกล้างเมื่อยืนยันรูปแบบใหม่")) return;
+    setError("");
+    setMessage("");
+    setTemplateSelectionOpen(true);
   }
 
   function sourceKey(source: CompetitionTreeSource) {
@@ -793,13 +803,13 @@ export function AdminCompetitionTreeEngineV2({
     });
   }
 
-  if (selectedTemplate === "council_two_division" && qualificationApproved) {
+  if (selectedTemplate === "council_two_division" && qualificationApproved && !templateSelectionOpen) {
     const groupsById = new Map(groupNames.map((group) => [group.id, group.name]));
     return (
       <section className="mx-auto w-full max-w-7xl scroll-mt-28 px-4 pb-8 sm:px-6 lg:px-10" id="cup-knockout">
         <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-2xl font-black text-[#061426]">จัดการแข่งขันรอบน็อกเอาต์</h2><p className="mt-1 text-sm font-semibold text-slate-600">Council Cup – Two Division</p><a className="mt-3 inline-flex min-h-10 items-center rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-black text-[#061426]" href="#cup-workspace-nav">กลับเมนูลัด</a></div><span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-black text-blue-900">สองดิวิชั่น · สองแชมป์</span></div>
-          <CouncilDivisionApproval error={error} extraTeamIds={councilExtraTeamIds} onApprove={approveCouncilDivisions} onExtrasChange={setCouncilExtraTeamIds} onReopen={reopenCouncilDivisions} onSaveDraft={saveCouncilDraft} pending={isPending} state={councilState} />
+          <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-2xl font-black text-[#061426]">จัดการแข่งขันรอบน็อกเอาต์</h2><p className="mt-1 text-sm font-semibold text-slate-600">Council Cup – Two Division</p><div className="mt-3 flex flex-wrap gap-2"><a className="inline-flex min-h-10 items-center rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-black text-[#061426]" href="#cup-workspace-nav">กลับเมนูลัด</a><button className="min-h-10 rounded-md border border-[#d8ad45] bg-white px-3 py-2 text-sm font-black text-[#8a6418]" onClick={openTemplateSelection} type="button">เปลี่ยนรูปแบบการแข่งขัน</button></div></div><span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-black text-blue-900">สองดิวิชั่น · สองแชมป์</span></div>
+          <CouncilDivisionApproval error={error} extras={councilExtras} onApprove={approveCouncilDivisions} onExtrasChange={setCouncilExtras} onReopen={reopenCouncilDivisions} onSaveDraft={saveCouncilDraft} pending={isPending} state={councilState} />
           {councilState?.approvalStatus === "approved" ? <><CouncilPartitionBracket competitionId={competitionId} groupsById={groupsById} partitionKey="division_1" teamsById={teamsById} /><CouncilPartitionBracket competitionId={competitionId} groupsById={groupsById} partitionKey="division_2" teamsById={teamsById} /><CouncilChampions competitionId={competitionId} competitionStatus={competitionStatus} teamsById={teamsById} /></> : null}
         </article>
       </section>
@@ -879,7 +889,7 @@ export function AdminCompetitionTreeEngineV2({
                 })}
               </div>
             </section>
-            {selectedTemplate === "council_two_division" && qualificationApproved ? <><CouncilDivisionApproval error={error} extraTeamIds={councilExtraTeamIds} onApprove={approveCouncilDivisions} onExtrasChange={setCouncilExtraTeamIds} onReopen={reopenCouncilDivisions} onSaveDraft={saveCouncilDraft} pending={isPending} state={councilState} />{councilPreflight && !councilPreflight.ok ? <section className="mt-5 min-w-0 rounded-md border border-[#8a6418]/25 bg-[#fff7e6] p-4"><p className="font-black text-[#8a6418]">{councilPreflight.message}</p>{councilPreflight.missingRequirements.length ? <ul className="mt-2 list-disc space-y-1 pl-5 text-sm font-semibold text-slate-700">{councilPreflight.missingRequirements.map((requirement) => <li key={requirement}>{requirement}</li>)}</ul> : null}</section> : null}</> : selectedTemplate === "council_two_division" ? <section className="mt-5 min-w-0 rounded-md border border-[#d8ad45]/40 bg-[#fffdf7] p-4"><h3 className="font-black text-[#061426]">เลือกคัพสภา – สองดิวิชั่นแล้ว</h3><p className="mt-1 text-sm font-semibold text-slate-600">ยังสร้างโครงสร้างการแข่งขันไม่ได้จนกว่าข้อมูลด้านล่างจะพร้อม</p>{councilPreflight ? councilPreflight.ok ? <p className="mt-3 text-sm font-bold text-emerald-800">{councilPreflight.message}</p> : <div className="mt-3 rounded-md border border-[#8a6418]/25 bg-white px-3 py-3 text-sm font-semibold text-slate-700"><p className="font-black text-[#8a6418]">{councilPreflight.message}</p>{councilPreflight.missingRequirements.length ? <ul className="mt-2 list-disc space-y-1 pl-5">{councilPreflight.missingRequirements.map((requirement) => <li key={requirement}>{requirement}</li>)}</ul> : null}</div> : <p className="mt-3 text-sm font-semibold text-slate-600">กำลังตรวจสอบความพร้อมของข้อมูล</p>}</section> : selectedTemplate === "ksw_standard" && selectedTemplateDefinition && defaultPairing ? <section className="mt-5 min-w-0 rounded-md border border-[#d8ad45]/40 bg-[#fffdf7] p-4">
+            {selectedTemplate === "council_two_division" && qualificationApproved ? <><CouncilDivisionApproval error={error} extras={councilExtras} onApprove={approveCouncilDivisions} onExtrasChange={setCouncilExtras} onReopen={reopenCouncilDivisions} onSaveDraft={saveCouncilDraft} pending={isPending} state={councilState} />{councilPreflight && !councilPreflight.ok ? <section className="mt-5 min-w-0 rounded-md border border-[#8a6418]/25 bg-[#fff7e6] p-4"><p className="font-black text-[#8a6418]">{councilPreflight.message}</p>{councilPreflight.missingRequirements.length ? <ul className="mt-2 list-disc space-y-1 pl-5 text-sm font-semibold text-slate-700">{councilPreflight.missingRequirements.map((requirement) => <li key={requirement}>{requirement}</li>)}</ul> : null}</section> : null}</> : selectedTemplate === "council_two_division" ? <section className="mt-5 min-w-0 rounded-md border border-[#d8ad45]/40 bg-[#fffdf7] p-4"><h3 className="font-black text-[#061426]">เลือกคัพสภา – สองดิวิชั่นแล้ว</h3><p className="mt-1 text-sm font-semibold text-slate-600">ยังสร้างโครงสร้างการแข่งขันไม่ได้จนกว่าข้อมูลด้านล่างจะพร้อม</p>{councilPreflight ? councilPreflight.ok ? <p className="mt-3 text-sm font-bold text-emerald-800">{councilPreflight.message}</p> : <div className="mt-3 rounded-md border border-[#8a6418]/25 bg-white px-3 py-3 text-sm font-semibold text-slate-700"><p className="font-black text-[#8a6418]">{councilPreflight.message}</p>{councilPreflight.missingRequirements.length ? <ul className="mt-2 list-disc space-y-1 pl-5">{councilPreflight.missingRequirements.map((requirement) => <li key={requirement}>{requirement}</li>)}</ul> : null}</div> : <p className="mt-3 text-sm font-semibold text-slate-600">กำลังตรวจสอบความพร้อมของข้อมูล</p>}</section> : selectedTemplate === "ksw_standard" && selectedTemplateDefinition && defaultPairing ? <section className="mt-5 min-w-0 rounded-md border border-[#d8ad45]/40 bg-[#fffdf7] p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div><h3 className="font-black text-[#061426]">ตัวอย่างการจัดสาย: {selectedTemplateDefinition.name}</h3><p className="mt-1 text-sm font-semibold text-slate-600">{selectedTemplateDefinition.description}</p></div>
               <div className="flex flex-wrap gap-2"><button className="min-h-10 rounded-md border border-[#d8ad45] bg-white px-3 py-2 text-sm font-black text-[#8a6418]" onClick={() => setDraftSources(defaultPairing.sources)} type="button">ใช้การจัดสายอัตโนมัติ</button><button className="min-h-10 rounded-md border border-[#d8ad45] bg-white px-3 py-2 text-sm font-black text-[#8a6418]" onClick={() => setEditingPairing((current) => !current)} type="button">{editingPairing ? "ดูตัวอย่างคู่" : "แก้ไขคู่ก่อนยืนยัน"}</button></div>

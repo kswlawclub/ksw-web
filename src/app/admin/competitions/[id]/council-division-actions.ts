@@ -27,9 +27,16 @@ export type CouncilDivisionState = {
   approvedAt: string | null;
   approvedByLabel: string | null;
   candidatePool: CouncilDivisionEntry[];
-  division1: { bracketCapacity: number | null; entries: CouncilDivisionEntry[]; error: string | null };
+  division1: { bracketCapacity: number | null; entries: CouncilDivisionEntry[]; extraCount: number; extraNeeded: number; error: string | null };
   division2: { bracketCapacity: number | null; entries: CouncilDivisionEntry[]; extraCount: number; extraNeeded: number; error: string | null };
-  recommendedExtraTeamIds: string[];
+  recommendedDivision1ExtraTeamIds: string[];
+  recommendedDivision2ExtraTeamIds: string[];
+  thirdPlaceTieRequiresConfirmation: boolean;
+};
+
+export type CouncilDivisionExtraSelections = {
+  division1: string[];
+  division2: string[];
 };
 
 export type CouncilTemplatePreflightResult = {
@@ -69,7 +76,7 @@ async function loadCouncilData(competitionId: string) {
   return { competition: competitionResult.data, config: configResult.data, groups: groupsResult.data ?? [], matches: matchesResult.data ?? [], participants: participantsResult.data ?? [], partitions: partitionsResult.data ?? [], supabase };
 }
 
-function buildState(data: Exclude<Awaited<ReturnType<typeof loadCouncilData>>, { error: string; supabase: null }>, requestedExtraTeamIds?: string[]): CouncilDivisionState {
+function buildState(data: Exclude<Awaited<ReturnType<typeof loadCouncilData>>, { error: string; supabase: null }>, requestedExtras?: CouncilDivisionExtraSelections): CouncilDivisionState {
   const groupLabels = new Map(data.groups.map((group) => [asText(group.id), asText(group.label) || asText(group.name)]));
   const participantNames = new Map(data.participants.map((row) => {
     const team = Array.isArray(row.teams) ? row.teams[0] : row.teams;
@@ -99,45 +106,46 @@ function buildState(data: Exclude<Awaited<ReturnType<typeof loadCouncilData>>, {
     const team = Array.isArray(row.teams) ? row.teams[0] : row.teams;
     return { group_id: asText(row.group_id), name: asText((team as SourceRow | null)?.name), team_id: asText(row.team_id) };
   });
-  const rankedCandidates = calculateCupGroupStandings({ groups: data.groups as SourceRow[], matches: data.matches as SourceRow[], teams: standingTeams })
-    .flatMap((standing) => standing.rows.filter((row) => row.position >= 3).map((row) => ({ bestOrder: null, groupId: standing.group_id, label: `${standing.group_name}${row.position}`, rank: row.position, reason: "อันดับถัดไปของกลุ่ม", sourceType: "group_rank" as const, teamId: row.team_id, teamName: row.team_name })));
+  const thirdPlaceCandidates = calculateCupGroupStandings({ groups: data.groups as SourceRow[], matches: data.matches as SourceRow[], teams: standingTeams })
+    .flatMap((standing) => standing.rows.filter((row) => row.position === 3).map((row) => ({
+      goalDifference: row.goal_difference,
+      goalsFor: row.goals_for,
+      groupId: standing.group_id,
+      points: row.points,
+      teamId: row.team_id,
+      teamName: row.team_name,
+      tieUnresolved: row.tie_unresolved,
+      won: row.won,
+    })))
+    .sort((left, right) => right.points - left.points || right.goalDifference - left.goalDifference || right.goalsFor - left.goalsFor || right.won - left.won || left.teamName.localeCompare(right.teamName));
+  const unresolvedThirdPlaceIds = new Set(thirdPlaceCandidates.filter((candidate, index, entries) => candidate.tieUnresolved || (index > 0 && candidate.points === entries[index - 1].points && candidate.goalDifference === entries[index - 1].goalDifference && candidate.goalsFor === entries[index - 1].goalsFor && candidate.won === entries[index - 1].won)).map((candidate) => candidate.teamId));
+  const rankedCandidates = thirdPlaceCandidates.map((candidate, index) => ({ bestOrder: index + 1, groupId: candidate.groupId, label: `อันดับ 3 ที่ดีที่สุด #${index + 1}`, rank: 3, reason: unresolvedThirdPlaceIds.has(candidate.teamId) ? "ต้องยืนยันอันดับ 3 ที่ดีที่สุด" : "อันดับ 3 ที่ดีที่สุด", sourceType: "best_ranked" as const, teamId: candidate.teamId, teamName: candidate.teamName }));
   const division1Capacity = nextCapacity(division1Base.length);
   const division2Capacity = nextCapacity(division2Base.length);
-  const division1Error = division1Capacity === null || division1Capacity !== division1Base.length ? "Division 1 ต้องมีแชมป์กลุ่มจำนวน 4, 8, 16 หรือ 32 ทีม" : null;
-  const extraNeeded = division2Capacity ? division2Capacity - division2Base.length : 0;
+  const division1ExtraNeeded = division1Capacity ? division1Capacity - division1Base.length : 0;
+  const division2ExtraNeeded = division2Capacity ? division2Capacity - division2Base.length : 0;
   const reserved = new Set([...division1Base, ...division2Base].map((entry) => entry.teamId));
-  const bestCandidates = snapshot.filter((value) => value.type === "best_ranked" && !reserved.has(asText(value.teamId))).sort((a, b) => Number(a.bestOrder ?? 0) - Number(b.bestOrder ?? 0));
-  const recommendedExtraTeamIds = bestCandidates.slice(0, extraNeeded).map((value) => asText(value.teamId));
-  const selectedExtraTeamIds = requestedExtraTeamIds ?? recommendedExtraTeamIds;
-  const uniqueSelectedExtraTeamIds = Array.from(new Set(selectedExtraTeamIds));
-  const invalidSelection = uniqueSelectedExtraTeamIds.length !== selectedExtraTeamIds.length || uniqueSelectedExtraTeamIds.length !== extraNeeded;
-  const extraEntries = uniqueSelectedExtraTeamIds.map((teamId) => {
-    const best = bestCandidates.find((value) => asText(value.teamId) === teamId);
-    if (best) return entryFromSnapshot(best, "ทีมอันดับเพิ่มเติมที่ดีที่สุด");
-    const ranked = rankedCandidates.find((candidate) => candidate.teamId === teamId);
-    if (ranked) return ranked;
-    return {
-      bestOrder: null,
-      groupId: null,
-      label: "Admin selected",
-      rank: null,
-      reason: "ผู้ดูแลเลือกเพิ่ม",
-      sourceType: "admin_selected" as const,
-      teamId,
-      teamName: participantNames.get(teamId) ?? "",
-    };
-  }).filter((entry) => Boolean(entry.teamName) && !reserved.has(entry.teamId));
-  const division2Error = division2Capacity === null
-    ? "Division 2 ต้องมีทีมไม่เกิน 32 ทีม"
-    : invalidSelection || extraEntries.length !== extraNeeded
-      ? `Division 2 ต้องเลือกทีมเติมอีก ${extraNeeded} ทีม`
-      : null;
+  const automaticCandidates = rankedCandidates.filter((candidate) => !unresolvedThirdPlaceIds.has(candidate.teamId));
+  const recommendedDivision1ExtraTeamIds = automaticCandidates.slice(0, division1ExtraNeeded).map((candidate) => candidate.teamId);
+  const recommendedDivision2ExtraTeamIds = automaticCandidates.filter((candidate) => !recommendedDivision1ExtraTeamIds.includes(candidate.teamId)).slice(0, division2ExtraNeeded).map((candidate) => candidate.teamId);
+  const selectedDivision1Ids = requestedExtras?.division1 ?? recommendedDivision1ExtraTeamIds;
+  const selectedDivision2Ids = requestedExtras?.division2 ?? recommendedDivision2ExtraTeamIds;
+  const selectedIds = [...selectedDivision1Ids, ...selectedDivision2Ids];
+  const selectedUnique = new Set(selectedIds);
+  const extraEntries = (teamIds: string[]): CouncilDivisionEntry[] => teamIds.flatMap((teamId) => {
+    const entry = rankedCandidates.find((candidate) => candidate.teamId === teamId);
+    return entry && !reserved.has(entry.teamId) ? [entry] : [];
+  });
+  const division1Extras = extraEntries(selectedDivision1Ids);
+  const division2Extras = extraEntries(selectedDivision2Ids);
+  const invalidSelections = selectedUnique.size !== selectedIds.length || division1Extras.length !== division1ExtraNeeded || division2Extras.length !== division2ExtraNeeded;
+  const division1Error = division1Capacity === null ? "Division 1 ต้องมีทีมไม่เกิน 32 ทีม" : invalidSelections || division1Extras.length !== division1ExtraNeeded ? `Division 1 ต้องเลือกทีมอันดับ 3 ที่ดีที่สุดเพิ่มอีก ${division1ExtraNeeded} ทีม` : null;
+  const division2Error = division2Capacity === null ? "Division 2 ต้องมีทีมไม่เกิน 32 ทีม" : invalidSelections || division2Extras.length !== division2ExtraNeeded ? `Division 2 ต้องเลือกทีมอันดับ 3 ที่ดีที่สุดเพิ่มอีก ${division2ExtraNeeded} ทีม` : null;
   const candidatePool = Array.from(participantNames.entries())
-    .filter(([teamId]) => !reserved.has(teamId) && !uniqueSelectedExtraTeamIds.includes(teamId))
+    .filter(([teamId]) => !reserved.has(teamId) && !selectedUnique.has(teamId))
     .map(([teamId, teamName]) => {
-      const best = bestCandidates.find((value) => asText(value.teamId) === teamId);
       const ranked = rankedCandidates.find((candidate) => candidate.teamId === teamId);
-      return best ? entryFromSnapshot(best, "ทีมอันดับเพิ่มเติมที่ดีที่สุด") : ranked ?? { bestOrder: null, groupId: null, label: "Admin selected", rank: null, reason: "ผู้ดูแลเลือกเพิ่ม", sourceType: "admin_selected" as const, teamId, teamName };
+      return ranked ?? { bestOrder: null, groupId: null, label: "Admin selected", rank: null, reason: "ผู้ดูแลเลือกเพิ่ม", sourceType: "admin_selected" as const, teamId, teamName };
     });
   const saved = new Map(data.partitions.map((partition) => [asText(partition.partition_key), partition]));
   const division1Saved = saved.get("division_1");
@@ -148,9 +156,11 @@ function buildState(data: Exclude<Awaited<ReturnType<typeof loadCouncilData>>, {
     approvedAt: approvalStatus === "approved" && typeof division1Saved?.approved_at === "string" ? division1Saved.approved_at : null,
     approvedByLabel: approvalStatus === "approved" && typeof division1Saved?.approved_by_label === "string" ? division1Saved.approved_by_label : null,
     candidatePool,
-    division1: { bracketCapacity: division1Capacity, entries: division1Base, error: division1Error },
-    division2: { bracketCapacity: division2Capacity, entries: [...division2Base, ...extraEntries], extraCount: extraEntries.length, extraNeeded, error: division2Error },
-    recommendedExtraTeamIds,
+    division1: { bracketCapacity: division1Capacity, entries: [...division1Base, ...division1Extras], extraCount: division1Extras.length, extraNeeded: division1ExtraNeeded, error: division1Error },
+    division2: { bracketCapacity: division2Capacity, entries: [...division2Base, ...division2Extras], extraCount: division2Extras.length, extraNeeded: division2ExtraNeeded, error: division2Error },
+    recommendedDivision1ExtraTeamIds,
+    recommendedDivision2ExtraTeamIds,
+    thirdPlaceTieRequiresConfirmation: unresolvedThirdPlaceIds.size > 0,
   };
 }
 
@@ -184,21 +194,27 @@ export async function getCouncilDivisionStateV2(competitionId: string) {
   const data = await loadCouncilData(competitionId);
   if (!data.supabase) return { error: data.error, ok: false };
   if (data.config.template_key !== councilTemplateKey) return { error: "ยังไม่ได้เลือกคัพสภา – สองดิวิชั่น", ok: false };
+  const savedDivision1 = data.partitions.find((partition) => asText(partition.partition_key) === "division_1");
   const savedDivision2 = data.partitions.find((partition) => asText(partition.partition_key) === "division_2");
-  const savedEntries = Array.isArray(savedDivision2?.qualification_snapshot) ? savedDivision2.qualification_snapshot as SourceRow[] : [];
+  const savedDivision1Entries = Array.isArray(savedDivision1?.qualification_snapshot) ? savedDivision1.qualification_snapshot as SourceRow[] : [];
+  const savedDivision2Entries = Array.isArray(savedDivision2?.qualification_snapshot) ? savedDivision2.qualification_snapshot as SourceRow[] : [];
   const rawSnapshot = Array.isArray(data.config.qualification_snapshot) ? data.config.qualification_snapshot as unknown[] : [];
+  const winnerIds = rawSnapshot.map((entry: unknown) => entry as SourceRow).filter((entry) => entry.type === "group_rank" && entry.rank === 1).map((entry) => asText(entry.teamId));
   const baseIds = rawSnapshot.map((entry: unknown) => entry as SourceRow).filter((entry) => entry.type === "group_rank" && entry.rank === 2).map((entry) => asText(entry.teamId));
-  const extras = savedEntries.map((entry) => asText(entry.teamId)).filter((teamId) => teamId && !baseIds.includes(teamId));
-  return { ok: true, state: buildState(data, extras.length ? extras : undefined) };
+  const extras = {
+    division1: savedDivision1Entries.map((entry) => asText(entry.teamId)).filter((teamId) => teamId && !winnerIds.includes(teamId)),
+    division2: savedDivision2Entries.map((entry) => asText(entry.teamId)).filter((teamId) => teamId && !baseIds.includes(teamId)),
+  };
+  return { ok: true, state: buildState(data, extras.division1.length || extras.division2.length ? extras : undefined) };
 }
 
-async function persistCouncilDivisions(competitionId: string, extraTeamIds: string[], approvalStatus: "approved" | "draft") {
+async function persistCouncilDivisions(competitionId: string, extras: CouncilDivisionExtraSelections, approvalStatus: "approved" | "draft") {
   const data = await loadCouncilData(competitionId);
   if (!data.supabase) return { error: data.error, ok: false };
   if (data.competition.season_status === "completed") return { error: "การแข่งขันปิดแล้ว ต้องเปิดการแข่งขันเพื่อแก้ไขก่อน", ok: false };
   if (data.config.template_key !== councilTemplateKey) return { error: "กรุณาเลือกคัพสภา – สองดิวิชั่นก่อน", ok: false };
   if (data.partitions.some((partition) => partition.approval_status === "approved")) return { error: "เปิดการแบ่งดิวิชั่นเพื่อแก้ไขก่อนเปลี่ยนข้อมูลที่อนุมัติแล้ว", ok: false };
-  const state = buildState(data, extraTeamIds);
+  const state = buildState(data, extras);
   if (state.division1.error || state.division2.error || !state.division1.bracketCapacity || !state.division2.bracketCapacity) return { error: state.division1.error ?? state.division2.error ?? "ข้อมูลดิวิชั่นไม่สมบูรณ์", ok: false };
   const payload = [
     { bracketCapacity: state.division1.bracketCapacity, entrantCount: state.division1.entries.length, entries: state.division1.entries, pairingSnapshot: [], partitionKey: "division_1", partitionLabel: "Division 1" },
@@ -213,12 +229,12 @@ async function persistCouncilDivisions(competitionId: string, extraTeamIds: stri
   return { ok: true, state: { ...state, approvalStatus, approvedAt: approvalStatus === "approved" ? new Date().toISOString() : null, approvedByLabel: approvalStatus === "approved" ? "Administrator session" : null } };
 }
 
-export async function saveCouncilDivisionDraftV2(competitionId: string, extraTeamIds: string[]) {
-  return persistCouncilDivisions(competitionId, extraTeamIds, "draft");
+export async function saveCouncilDivisionDraftV2(competitionId: string, extras: CouncilDivisionExtraSelections) {
+  return persistCouncilDivisions(competitionId, extras, "draft");
 }
 
-export async function approveCouncilDivisionsV2(competitionId: string, extraTeamIds: string[]) {
-  return persistCouncilDivisions(competitionId, extraTeamIds, "approved");
+export async function approveCouncilDivisionsV2(competitionId: string, extras: CouncilDivisionExtraSelections) {
+  return persistCouncilDivisions(competitionId, extras, "approved");
 }
 
 export async function reopenCouncilDivisionsV2(competitionId: string) {
@@ -229,11 +245,17 @@ export async function reopenCouncilDivisionsV2(competitionId: string) {
   const result = await data.supabase.rpc("reopen_council_division_partitions_v1", { p_competition_id: competitionId });
   if (result.error) return { error: "เปิดการแบ่งดิวิชั่นเพื่อแก้ไขไม่ได้ เพราะมีสายหรือแมตช์เริ่มแล้ว", ok: false };
   revalidatePath(`/admin/competitions/${competitionId}`);
+  const savedDivision1 = data.partitions.find((partition) => asText(partition.partition_key) === "division_1");
   const savedDivision2 = data.partitions.find((partition) => asText(partition.partition_key) === "division_2");
-  const savedEntries = Array.isArray(savedDivision2?.qualification_snapshot) ? savedDivision2.qualification_snapshot as SourceRow[] : [];
+  const savedDivision1Entries = Array.isArray(savedDivision1?.qualification_snapshot) ? savedDivision1.qualification_snapshot as SourceRow[] : [];
+  const savedDivision2Entries = Array.isArray(savedDivision2?.qualification_snapshot) ? savedDivision2.qualification_snapshot as SourceRow[] : [];
   const rawSnapshot = Array.isArray(data.config.qualification_snapshot) ? data.config.qualification_snapshot as unknown[] : [];
+  const winnerIds = rawSnapshot.map((entry: unknown) => entry as SourceRow).filter((entry) => entry.type === "group_rank" && entry.rank === 1).map((entry) => asText(entry.teamId));
   const baseIds = rawSnapshot.map((entry: unknown) => entry as SourceRow).filter((entry) => entry.type === "group_rank" && entry.rank === 2).map((entry) => asText(entry.teamId));
-  const extraIds = savedEntries.map((entry) => asText(entry.teamId)).filter((teamId) => teamId && !baseIds.includes(teamId));
-  const state = buildState(data, extraIds.length ? extraIds : undefined);
+  const extras = {
+    division1: savedDivision1Entries.map((entry) => asText(entry.teamId)).filter((teamId) => teamId && !winnerIds.includes(teamId)),
+    division2: savedDivision2Entries.map((entry) => asText(entry.teamId)).filter((teamId) => teamId && !baseIds.includes(teamId)),
+  };
+  const state = buildState(data, extras.division1.length || extras.division2.length ? extras : undefined);
   return { ok: true, state: { ...state, approvalStatus: "draft" as const, approvedAt: null, approvedByLabel: null } };
 }

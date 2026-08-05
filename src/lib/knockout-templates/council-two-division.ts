@@ -6,13 +6,13 @@ const supportedEntrantCounts = [4, 8, 16, 32];
 function validateCouncilSources(sources: CompetitionTreeSource[]) {
   const groupWinnerCount = sources.filter((source) => source.type === "group_rank" && source.rank === 1).length;
   const runnerUpCount = sources.filter((source) => source.type === "group_rank" && source.rank === 2).length;
-  const hasSupportedDivision1 = supportedEntrantCounts.includes(groupWinnerCount);
-  const hasCapacityForDivision2 = supportedEntrantCounts.some((capacity) => capacity >= runnerUpCount);
+  const hasSupportedDivision1 = groupWinnerCount > 0 && supportedEntrantCounts.some((capacity) => capacity >= groupWinnerCount);
+  const hasCapacityForDivision2 = runnerUpCount > 0 && supportedEntrantCounts.some((capacity) => capacity >= runnerUpCount);
 
   if (hasSupportedDivision1 && hasCapacityForDivision2) return { errors: [], valid: true };
 
   return {
-    errors: ["คัพสภา – สองดิวิชั่นต้องมีแชมป์กลุ่ม 4, 8, 16 หรือ 32 ทีม และรองแชมป์กลุ่มต้องจัดลงสายได้"],
+    errors: ["คัพสภา – สองดิวิชั่นต้องมีทีมผ่านเข้ารอบเพียงพอสำหรับเติมทั้งสองดิวิชั่น"],
     valid: false,
   };
 }

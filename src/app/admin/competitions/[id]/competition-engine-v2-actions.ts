@@ -376,7 +376,7 @@ export async function selectCompetitionKnockoutTemplateV2(
   const [configResult, nodesResult, matchesResult] = await Promise.all([
     verified.supabase
       .from("competition_knockout_configs")
-      .select("competition_id")
+      .select("competition_id, template_key")
       .eq("competition_id", competitionId)
       .maybeSingle(),
     verified.supabase.from("competition_bracket_nodes").select("id").eq("competition_id", competitionId).limit(1),
@@ -392,6 +392,17 @@ export async function selectCompetitionKnockoutTemplateV2(
   }
   if (nodesResult.data?.length || matchesResult.data?.length) {
     return { error: "เปลี่ยนรูปแบบการแข่งขันไม่ได้ เพราะมีโครงสร้างหรือแมตช์รอบน็อกเอาต์แล้ว", ok: false };
+  }
+
+  if (configResult.data.template_key && configResult.data.template_key !== templateKey) {
+    const resetPartitions = await verified.supabase
+      .from("competition_knockout_partitions")
+      .delete()
+      .eq("competition_id", competitionId);
+    if (resetPartitions.error) {
+      console.error("knockout template draft reset failed", resetPartitions.error);
+      return { error: "ไม่สามารถล้างร่างของรูปแบบการแข่งขันเดิม", ok: false };
+    }
   }
 
   const update = await verified.supabase
