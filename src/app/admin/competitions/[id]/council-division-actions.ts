@@ -5,6 +5,7 @@ import { requireAdminSession } from "@/lib/admin-server-auth";
 import { isCupCompetition, normalizeCompetitionType } from "@/lib/competition-format";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { calculateCupGroupStandings } from "@/lib/cup-group-standings";
+import { resetCouncilKnockoutRuntimeV2 } from "@/app/admin/competitions/[id]/council-bracket-actions";
 
 const capacities = [4, 8, 16, 32] as const;
 const councilTemplateKey = "council_two_division" as const;
@@ -242,6 +243,8 @@ export async function reopenCouncilDivisionsV2(competitionId: string) {
   if (!data.supabase) return { error: data.error, ok: false };
   if (data.competition.season_status === "completed") return { error: "การแข่งขันปิดแล้ว ต้องเปิดการแข่งขันเพื่อแก้ไขก่อน", ok: false };
   if (data.config.template_key !== councilTemplateKey) return { error: "ยังไม่ได้เลือกคัพสภา – สองดิวิชั่น", ok: false };
+  const reset = await resetCouncilKnockoutRuntimeV2(competitionId);
+  if (!reset.ok) return { error: reset.error ?? "ไม่สามารถล้างข้อมูลน็อกเอาต์เพื่อเปิดการแบ่งดิวิชั่น", ok: false };
   const result = await data.supabase.rpc("reopen_council_division_partitions_v1", { p_competition_id: competitionId });
   if (result.error) return { error: "เปิดการแบ่งดิวิชั่นเพื่อแก้ไขไม่ได้ เพราะมีสายหรือแมตช์เริ่มแล้ว", ok: false };
   revalidatePath(`/admin/competitions/${competitionId}`);

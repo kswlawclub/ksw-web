@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireAdminSession } from "@/lib/admin-server-auth";
 import { isCupCompetition, normalizeCompetitionType } from "@/lib/competition-format";
 import { buildCompetitionTree, type CompetitionTreeNode, type CompetitionTreeSource, validateCompetitionTree } from "@/lib/competition-tree";
+import { getCouncilKnockoutResetPlan, hasExactCouncilKnockoutResetTargets, type CouncilKnockoutResetInspection } from "@/lib/council-knockout-runtime-reset";
 import { deriveKnockoutRoundRuntime, getPrematureKnockoutFixtureDrafts, isKnockoutMatchReadyForEditing } from "@/lib/knockout-round-readiness";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
@@ -57,6 +58,68 @@ function text(row: Row | null | undefined, key: string) {
 function numeric(row: Row | null | undefined, key: string) {
   const value = row?.[key];
   return typeof value === "number" ? value : null;
+}
+
+async function inspectCouncilKnockoutReset(competitionId: string) {
+  await requireAdminSession();
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return { error: "ไม่สามารถเชื่อมต่อข้อมูลผู้ดูแล", inspection: null as CouncilKnockoutResetInspection | null, supabase: null };
+  const [competitionResult, configResult, partitionsResult, nodesResult, matchesResult] = await Promise.all([
+    supabase.from("leagues").select("competition_type, season_status").eq("id", competitionId).maybeSingle(),
+    supabase.from("competition_knockout_configs").select("template_key").eq("competition_id", competitionId).maybeSingle(),
+    supabase.from("competition_knockout_partitions").select("partition_key, champion_team_id").eq("competition_id", competitionId).in("partition_key", partitionKeys),
+    supabase.from("competition_bracket_nodes").select("id, linked_match_id").eq("competition_id", competitionId).in("partition_key", partitionKeys),
+    supabase.from("matches").select("id, home_score, away_score, penalty_home_score, penalty_away_score, manual_winner_team_id, winner_team_id, status").eq("league_id", competitionId).eq("competition_stage", "knockout").in("knockout_partition_key", partitionKeys),
+  ]);
+  if (competitionResult.error || configResult.error || partitionsResult.error || nodesResult.error || matchesResult.error || !competitionResult.data) return { error: "ไม่สามารถตรวจสอบข้อมูลรอบน็อกเอาต์ได้", inspection: null as CouncilKnockoutResetInspection | null, supabase: null };
+  if (!isCupCompetition(normalizeCompetitionType(competitionResult.data.competition_type)) || configResult.data?.template_key !== "council_two_division") return { error: "รายการนี้ไม่ได้ใช้คัพสภา – สองดิวิชั่น", inspection: null as CouncilKnockoutResetInspection | null, supabase: null };
+  const inspection = getCouncilKnockoutResetPlan({
+    matches: (matchesResult.data ?? []).map((match) => ({
+      awayScore: match.away_score,
+      homeScore: match.home_score,
+      id: match.id,
+      manualWinnerTeamId: match.manual_winner_team_id,
+      penaltyAwayScore: match.penalty_away_score,
+      penaltyHomeScore: match.penalty_home_score,
+      status: match.status,
+      winnerTeamId: match.winner_team_id,
+    })),
+    nodes: (nodesResult.data ?? []).map((node) => ({ id: node.id, linkedMatchId: node.linked_match_id })),
+    partitions: (partitionsResult.data ?? []).map((partition) => ({ championTeamId: partition.champion_team_id, partitionKey: partition.partition_key })),
+    seasonStatus: competitionResult.data.season_status,
+  });
+  return { error: "", inspection, supabase };
+}
+
+export async function inspectCouncilKnockoutRuntimeResetV2(competitionId: string) {
+  const result = await inspectCouncilKnockoutReset(competitionId);
+  return result.inspection ? { ok: true, inspection: result.inspection } : { error: result.error, ok: false };
+}
+
+export async function resetCouncilKnockoutRuntimeV2(competitionId: string) {
+  const result = await inspectCouncilKnockoutReset(competitionId);
+  if (!result.supabase || !result.inspection) return { error: result.error, ok: false };
+  if (!result.inspection.canReset) return { error: result.inspection.blockingReasons.join(" · "), inspection: result.inspection, ok: false };
+  const plan = result.inspection.plan;
+  if (!plan) return { error: "ไม่พบแผนการล้างข้อมูลน็อกเอาต์ที่ปลอดภัย", ok: false };
+  if (plan.linkedNodeIds.length) {
+    const unlink = await result.supabase.from("competition_bracket_nodes").update({ linked_match_id: null }).in("id", plan.linkedNodeIds).select("id");
+    if (unlink.error || !hasExactCouncilKnockoutResetTargets(unlink.data?.map((node) => node.id), plan.linkedNodeIds)) return { error: "ข้อมูลการเชื่อมโยงโปรแกรมน็อกเอาต์เปลี่ยนไประหว่างการล้าง โปรดลองใหม่", ok: false };
+  }
+  if (plan.matchIds.length) {
+    const removeMatches = await result.supabase.from("matches").delete().in("id", plan.matchIds).select("id");
+    if (removeMatches.error || !hasExactCouncilKnockoutResetTargets(removeMatches.data?.map((match) => match.id), plan.matchIds)) return { error: "ข้อมูลโปรแกรมน็อกเอาต์เปลี่ยนไประหว่างการล้าง โปรดลองใหม่", ok: false };
+  }
+  if (plan.nodeIds.length) {
+    const removeNodes = await result.supabase.from("competition_bracket_nodes").delete().in("id", plan.nodeIds).select("id");
+    if (removeNodes.error || !hasExactCouncilKnockoutResetTargets(removeNodes.data?.map((node) => node.id), plan.nodeIds)) return { error: "ข้อมูลสายการแข่งขันน็อกเอาต์เปลี่ยนไประหว่างการล้าง โปรดลองใหม่", ok: false };
+  }
+  if (plan.partitionKeys.length) {
+    const resetPartitions = await result.supabase.from("competition_knockout_partitions").update({ pairing_snapshot: [], status: "draft", updated_at: new Date().toISOString() }).eq("competition_id", competitionId).in("partition_key", plan.partitionKeys).select("partition_key");
+    if (resetPartitions.error || !hasExactCouncilKnockoutResetTargets(resetPartitions.data?.map((partition) => partition.partition_key), plan.partitionKeys)) return { error: "ข้อมูลดิวิชั่นเปลี่ยนไประหว่างการล้าง โปรดลองใหม่", ok: false };
+  }
+  revalidatePath(`/admin/competitions/${competitionId}`);
+  return { ok: true, reset: result.inspection };
 }
 
 function sourceFromSnapshot(entry: Row): CompetitionTreeSource | null {
