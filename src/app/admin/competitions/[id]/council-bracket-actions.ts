@@ -6,6 +6,7 @@ import { requireAdminSession } from "@/lib/admin-server-auth";
 import { isCupCompetition, normalizeCompetitionType } from "@/lib/competition-format";
 import { buildCompetitionTree, type CompetitionTreeNode, type CompetitionTreeSource, validateCompetitionTree } from "@/lib/competition-tree";
 import { getCouncilKnockoutResetPlan, hasExactCouncilKnockoutResetTargets, type CouncilKnockoutResetInspection } from "@/lib/council-knockout-runtime-reset";
+import { analyzeKnockoutMatchCorrectionImpact } from "@/lib/knockout-match-correction";
 import { deriveKnockoutRoundRuntime, getPrematureKnockoutFixtureDrafts, isKnockoutMatchReadyForEditing } from "@/lib/knockout-round-readiness";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
@@ -65,7 +66,7 @@ async function inspectCouncilKnockoutReset(competitionId: string) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return { error: "ไม่สามารถเชื่อมต่อข้อมูลผู้ดูแล", inspection: null as CouncilKnockoutResetInspection | null, supabase: null };
   const [competitionResult, configResult, partitionsResult, nodesResult, matchesResult] = await Promise.all([
-    supabase.from("leagues").select("competition_type, season_status").eq("id", competitionId).maybeSingle(),
+    supabase.from("leagues").select("competition_type, season_status, slug").eq("id", competitionId).maybeSingle(),
     supabase.from("competition_knockout_configs").select("template_key").eq("competition_id", competitionId).maybeSingle(),
     supabase.from("competition_knockout_partitions").select("partition_key, champion_team_id").eq("competition_id", competitionId).in("partition_key", partitionKeys),
     supabase.from("competition_bracket_nodes").select("id, linked_match_id").eq("competition_id", competitionId).in("partition_key", partitionKeys),
@@ -252,7 +253,7 @@ async function verifyCouncilPartition(competitionId: string, partitionKey: strin
   const supabase = getSupabaseAdmin();
   if (!supabase) return { error: "ไม่สามารถเชื่อมต่อข้อมูลผู้ดูแล", supabase: null as SupabaseClient | null };
   const [competitionResult, configResult, partitionResult] = await Promise.all([
-    supabase.from("leagues").select("competition_type, season_status").eq("id", competitionId).maybeSingle(),
+    supabase.from("leagues").select("competition_type, season_status, slug").eq("id", competitionId).maybeSingle(),
     supabase.from("competition_knockout_configs").select("template_key").eq("competition_id", competitionId).maybeSingle(),
     supabase.from("competition_knockout_partitions").select("partition_key, partition_label, entrant_count, bracket_capacity, qualification_snapshot, pairing_snapshot, champion_team_id, champion_at, approval_status, status, updated_at").eq("competition_id", competitionId).eq("partition_key", partitionKey).maybeSingle(),
   ]);
@@ -444,6 +445,56 @@ export async function saveCouncilPartitionMatchV2(payload: { awayScore: number |
   if (update.error) return { error: "ไม่สามารถบันทึกผลการแข่งขันได้", ok: false };
   revalidatePath(`/admin/competitions/${payload.competitionId}`);
   return loadState(verified.supabase, payload.competitionId, verified.partitionKey, partitionForState);
+}
+
+export async function correctCouncilPartitionMatchV2(payload: { awayScore: number | null; competitionId: string; homeScore: number | null; matchDate: string | null; matchId: string; partitionKey: string; penaltyAwayScore: number | null; penaltyHomeScore: number | null; reason: string; status: "finished" | "scheduled"; venue: string | null }) {
+  const verified = await verifyCouncilPartition(payload.competitionId, payload.partitionKey);
+  if (!verified.supabase || !verified.partition || !verified.partitionKey) return { error: verified.error, ok: false };
+  if (payload.reason.trim().length < 8) return { error: "กรุณาระบุเหตุผลการแก้ไขย้อนหลังอย่างน้อย 8 ตัวอักษร", ok: false };
+  if (![payload.homeScore, payload.awayScore, payload.penaltyHomeScore, payload.penaltyAwayScore].every(validScore)) return { error: "คะแนนต้องเป็นจำนวนเต็มตั้งแต่ 0 ถึง 999", ok: false };
+  const state = await loadState(verified.supabase, payload.competitionId, verified.partitionKey, verified.partition);
+  if (!state.ok) return state;
+  const target = state.matches.find((match) => match.id === payload.matchId);
+  if (!target || !state.nodes.some((node) => node.linkedMatchId === payload.matchId)) return { error: "ไม่พบแมตช์ของดิวิชั่นนี้", ok: false };
+  let winnerTeamId: string | null = null;
+  if (payload.status === "finished") {
+    if (payload.homeScore === null || payload.awayScore === null) return { error: "กรุณากรอกคะแนนทั้งสองทีมก่อนบันทึกผล", ok: false };
+    if (payload.homeScore !== payload.awayScore) winnerTeamId = payload.homeScore > payload.awayScore ? target.home_team_id : target.away_team_id;
+    else if (payload.penaltyHomeScore === null || payload.penaltyAwayScore === null || payload.penaltyHomeScore === payload.penaltyAwayScore) return { error: "ผลเสมอต้องระบุจุดโทษที่ไม่เสมอ", ok: false };
+    else winnerTeamId = payload.penaltyHomeScore > payload.penaltyAwayScore ? target.home_team_id : target.away_team_id;
+  }
+  const plan = analyzeKnockoutMatchCorrectionImpact({
+    matches: state.matches.map((match) => ({ awayScore: match.away_score, awayTeamId: match.away_team_id, homeScore: match.home_score, homeTeamId: match.home_team_id, id: match.id, manualWinnerTeamId: match.manual_winner_team_id, penaltyAwayScore: match.penalty_away_score, penaltyHomeScore: match.penalty_home_score, status: match.status, venue: match.venue, winnerTeamId: match.winner_team_id })),
+    nodes: state.nodes,
+    proposed: { awayScore: payload.awayScore, homeScore: payload.homeScore, matchDate: payload.matchDate, penaltyAwayScore: payload.penaltyAwayScore, penaltyHomeScore: payload.penaltyHomeScore, status: payload.status, venue: payload.venue, winnerTeamId },
+    targetMatchId: payload.matchId,
+  });
+  if (!plan.allowed) return { error: plan.message, ok: false };
+  const affectedNodes = state.nodes.filter((node) => plan.affectedNodeIds.includes(node.id) && node.linkedMatchId);
+  const affectedMatchIds = affectedNodes.flatMap((node) => node.linkedMatchId ? [node.linkedMatchId] : []);
+  if (plan.winnerChanged && affectedNodes.length) {
+    const unlink = await verified.supabase.from("competition_bracket_nodes").update({ linked_match_id: null }).in("id", affectedNodes.map((node) => node.id)).select("id");
+    if (unlink.error || unlink.data?.length !== affectedNodes.length) return { error: "ข้อมูลสายถัดไปเปลี่ยนระหว่างการแก้ไขย้อนหลัง โปรดลองใหม่", ok: false };
+  }
+  if (plan.winnerChanged && affectedMatchIds.length) {
+    const remove = await verified.supabase.from("matches").delete().in("id", affectedMatchIds).select("id");
+    if (remove.error || remove.data?.length !== affectedMatchIds.length) return { error: "ข้อมูลโปรแกรมสายถัดไปเปลี่ยนระหว่างการแก้ไขย้อนหลัง โปรดลองใหม่", ok: false };
+  }
+  const update = await verified.supabase.from("matches").update({ away_score: payload.awayScore, home_score: payload.homeScore, match_date: payload.matchDate, penalty_away_score: payload.status === "finished" && payload.homeScore === payload.awayScore ? payload.penaltyAwayScore : null, penalty_home_score: payload.status === "finished" && payload.homeScore === payload.awayScore ? payload.penaltyHomeScore : null, status: payload.status, venue: payload.venue, winner_team_id: winnerTeamId }).eq("id", payload.matchId).eq("league_id", payload.competitionId).select("id");
+  if (update.error || update.data?.length !== 1) return { error: "ไม่สามารถบันทึกการแก้ไขย้อนหลังได้", ok: false };
+  if (plan.championAffected) {
+    const clearChampion = await verified.supabase.from("competition_knockout_partitions").update({ champion_at: null, champion_team_id: null, status: "fixtures_created", updated_at: new Date().toISOString() }).eq("competition_id", payload.competitionId).eq("partition_key", verified.partitionKey).select("partition_key");
+    if (clearChampion.error || clearChampion.data?.length !== 1) return { error: "บันทึกผลแล้ว แต่ไม่สามารถล้างแชมป์ดิวิชั่นเดิมได้", ok: false };
+  }
+  if (verified.competition?.season_status === "completed" && plan.winnerChanged) {
+    const reopen = await verified.supabase.from("leagues").update({ season_status: "active" }).eq("id", payload.competitionId).select("id");
+    if (reopen.error || reopen.data?.length !== 1) return { error: "บันทึกผลแล้ว แต่ไม่สามารถเปิดการแข่งขันเพื่อจัดรอบถัดไปใหม่ได้", ok: false };
+  }
+  console.info("council knockout historical correction applied", { affectedMatchIds, competitionId: payload.competitionId, correctionType: plan.correctionType, matchId: payload.matchId, partitionKey: verified.partitionKey, reason: payload.reason.trim(), winnerChanged: plan.winnerChanged });
+  revalidatePath(`/admin/competitions/${payload.competitionId}`);
+  revalidatePath("/competitions");
+  if (typeof verified.competition?.slug === "string" && verified.competition.slug) revalidatePath(`/competitions/${verified.competition.slug}`);
+  return loadState(verified.supabase, payload.competitionId, verified.partitionKey, verified.partition);
 }
 
 export async function completeCouncilCupCompetitionV2(competitionId: string) {

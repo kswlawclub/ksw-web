@@ -31,6 +31,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { buildKnockoutTemplatePreview, getKnockoutTemplate, isKnockoutTemplateKey } from "@/lib/knockout-templates/registry";
 import { getKnockoutTemplateSwitchGuard, topologySourceTeamId } from "@/lib/knockout-template-switching";
 import { deriveKnockoutRoundState, type KnockoutRoundEngineState } from "@/lib/knockout-round-engine";
+import { analyzeKnockoutMatchCorrectionImpact } from "@/lib/knockout-match-correction";
 import type { KnockoutTemplateKey } from "@/lib/knockout-templates/types";
 import type { ApprovedQualificationSummary } from "@/app/admin/competitions/[id]/qualification-actions";
 
@@ -145,6 +146,19 @@ export type SaveCompetitionKnockoutMatchV2Result = {
   ok: boolean;
 };
 
+export type CorrectCompetitionKnockoutMatchV2Payload = {
+  awayScore: number | null;
+  competitionId: string;
+  homeScore: number | null;
+  matchDate: string | null;
+  matchId: string;
+  penaltyAwayScore: number | null;
+  penaltyHomeScore: number | null;
+  reason: string;
+  status: "finished" | "scheduled";
+  venue: string | null;
+};
+
 export type CompleteCupCompetitionV2Result = {
   error?: string;
   ok: boolean;
@@ -169,7 +183,7 @@ async function verifyCupCompetition(competitionId: string) {
 
   const result = await supabase
     .from("leagues")
-    .select("id, competition_type, season_status")
+    .select("id, competition_type, season_status, slug")
     .eq("id", competitionId)
     .limit(1)
     .maybeSingle();
@@ -187,7 +201,7 @@ async function verifyCupCompetition(competitionId: string) {
     return { error: "Knockout competition management is available for cup competitions only.", seasonStatus: null, supabase };
   }
 
-  return { error: "", seasonStatus: typeof result.data.season_status === "string" ? result.data.season_status : null, supabase };
+  return { error: "", seasonStatus: typeof result.data.season_status === "string" ? result.data.season_status : null, slug: typeof result.data.slug === "string" ? result.data.slug : null, supabase };
 }
 
 export async function completeCupCompetitionV2(competitionId: string): Promise<CompleteCupCompetitionV2Result> {
@@ -1234,6 +1248,59 @@ export async function saveCompetitionKnockoutMatchV2(payload: {
   if (matches.error) return { error: matches.error, ok: false };
   revalidatePath(`/admin/competitions/${payload.competitionId}`);
   return { matches: matches.matches, ok: true };
+}
+
+export async function correctCompetitionKnockoutMatchV2(payload: CorrectCompetitionKnockoutMatchV2Payload): Promise<SaveCompetitionKnockoutMatchV2Result> {
+  const verified = await verifyCupCompetition(payload.competitionId);
+  if (verified.error || !verified.supabase) return { error: verified.error, ok: false };
+  if (payload.reason.trim().length < 8) return { error: "กรุณาระบุเหตุผลการแก้ไขย้อนหลังอย่างน้อย 8 ตัวอักษร", ok: false };
+  if (!uuidPattern.test(payload.matchId) || ![payload.homeScore, payload.awayScore, payload.penaltyHomeScore, payload.penaltyAwayScore].every(validScore)) return { error: "ข้อมูลการแก้ไขไม่ถูกต้อง", ok: false };
+
+  const [nodesResult, matchesResult] = await Promise.all([
+    verified.supabase.from("competition_bracket_nodes").select("id, competition_id, round_index, round_label, match_order, bracket_position, linked_match_id, home_source_type, away_source_type, home_source_group_id, home_source_rank, home_source_team_id, home_source_node_id, home_source_best_order, away_source_group_id, away_source_rank, away_source_team_id, away_source_node_id, away_source_best_order").eq("competition_id", payload.competitionId),
+    verified.supabase.from("matches").select("id, league_id, competition_stage, home_team_id, away_team_id, home_score, away_score, penalty_home_score, penalty_away_score, manual_winner_team_id, winner_team_id, match_date, venue, status").eq("league_id", payload.competitionId).eq("competition_stage", "knockout"),
+  ]);
+  if (nodesResult.error || matchesResult.error) return { error: "ไม่สามารถโหลดข้อมูลรอบน็อกเอาต์ล่าสุดเพื่อแก้ไขย้อนหลัง", ok: false };
+  const nodes = (nodesResult.data ?? []).map((node) => nodeFromDatabase(node as Record<string, unknown>));
+  const matches = (matchesResult.data ?? []).map((match) => ({
+    awayScore: match.away_score, awayTeamId: match.away_team_id, homeScore: match.home_score, homeTeamId: match.home_team_id, id: match.id,
+    manualWinnerTeamId: match.manual_winner_team_id, penaltyAwayScore: match.penalty_away_score, penaltyHomeScore: match.penalty_home_score, status: match.status, venue: match.venue, winnerTeamId: match.winner_team_id,
+  }));
+  const target = matches.find((match) => match.id === payload.matchId);
+  if (!target) return { error: "ไม่พบแมตช์รอบน็อกเอาต์ของรายการนี้", ok: false };
+  let winnerTeamId: string | null = null;
+  if (payload.status === "finished") {
+    if (payload.homeScore === null || payload.awayScore === null) return { error: "กรุณากรอกคะแนนทั้งสองทีมก่อนบันทึกผล", ok: false };
+    if (payload.homeScore !== payload.awayScore) winnerTeamId = payload.homeScore > payload.awayScore ? target.homeTeamId : target.awayTeamId;
+    else if (payload.penaltyHomeScore === null || payload.penaltyAwayScore === null || payload.penaltyHomeScore === payload.penaltyAwayScore) return { error: "ผลเสมอต้องระบุจุดโทษที่ไม่เสมอ", ok: false };
+    else winnerTeamId = payload.penaltyHomeScore > payload.penaltyAwayScore ? target.homeTeamId : target.awayTeamId;
+  }
+  const plan = analyzeKnockoutMatchCorrectionImpact({ matches, nodes, proposed: { awayScore: payload.awayScore, homeScore: payload.homeScore, matchDate: payload.matchDate, penaltyAwayScore: payload.penaltyAwayScore, penaltyHomeScore: payload.penaltyHomeScore, status: payload.status, venue: payload.venue, winnerTeamId }, targetMatchId: payload.matchId });
+  if (!plan.allowed) return { error: plan.message, ok: false };
+
+  const affectedNodes = nodes.filter((node) => plan.affectedNodeIds.includes(node.id) && node.linkedMatchId);
+  const affectedMatchIds = affectedNodes.flatMap((node) => node.linkedMatchId ? [node.linkedMatchId] : []);
+  if (plan.winnerChanged && affectedNodes.length) {
+    const unlink = await verified.supabase.from("competition_bracket_nodes").update({ linked_match_id: null }).in("id", affectedNodes.map((node) => node.id)).select("id");
+    if (unlink.error || unlink.data?.length !== affectedNodes.length) return { error: "ข้อมูลสายถัดไปเปลี่ยนระหว่างการแก้ไขย้อนหลัง โปรดลองใหม่", ok: false };
+  }
+  if (plan.winnerChanged && affectedMatchIds.length) {
+    const remove = await verified.supabase.from("matches").delete().in("id", affectedMatchIds).select("id");
+    if (remove.error || remove.data?.length !== affectedMatchIds.length) return { error: "ข้อมูลโปรแกรมสายถัดไปเปลี่ยนระหว่างการแก้ไขย้อนหลัง โปรดลองใหม่", ok: false };
+  }
+  const update = await verified.supabase.from("matches").update({ away_score: payload.awayScore, home_score: payload.homeScore, manual_winner_team_id: null, match_date: payload.matchDate, penalty_away_score: payload.status === "finished" && payload.homeScore === payload.awayScore ? payload.penaltyAwayScore : null, penalty_home_score: payload.status === "finished" && payload.homeScore === payload.awayScore ? payload.penaltyHomeScore : null, status: payload.status, venue: payload.venue, winner_team_id: winnerTeamId }).eq("id", payload.matchId).eq("league_id", payload.competitionId).select("id");
+  if (update.error || update.data?.length !== 1) return { error: "ไม่สามารถบันทึกการแก้ไขย้อนหลังได้", ok: false };
+  if (verified.seasonStatus === "completed" && plan.winnerChanged) {
+    const reopen = await verified.supabase.from("leagues").update({ season_status: "active" }).eq("id", payload.competitionId).select("id");
+    if (reopen.error || reopen.data?.length !== 1) return { error: "บันทึกผลแล้ว แต่ไม่สามารถเปิดการแข่งขันเพื่อจัดรอบถัดไปใหม่ได้", ok: false };
+  }
+  console.info("knockout historical correction applied", { affectedMatchIds, competitionId: payload.competitionId, correctionType: plan.correctionType, matchId: payload.matchId, reason: payload.reason.trim(), winnerChanged: plan.winnerChanged });
+  const refreshed = await loadKnockoutMatchesForClient(verified.supabase, payload.competitionId);
+  if (refreshed.error) return { error: refreshed.error, ok: false };
+  revalidatePath(`/admin/competitions/${payload.competitionId}`);
+  revalidatePath("/competitions");
+  if (verified.slug) revalidatePath(`/competitions/${verified.slug}`);
+  return { matches: refreshed.matches, ok: true };
 }
 
 export async function saveCompetitionEngineV2Config(

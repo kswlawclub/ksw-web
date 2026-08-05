@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeftRight, Check, TriangleAlert, X } from "lucide-react";
 import {
   completeCupCompetitionV2,
+  correctCompetitionKnockoutMatchV2,
   generateCompetitionTreeV2,
   createCompetitionFixturesV2,
   previewCompetitionFixturesV2,
@@ -18,6 +19,7 @@ import { approveCouncilDivisionsV2, getCouncilDivisionStateV2, getCouncilTemplat
 import type { CouncilDivisionExtraSelections, CouncilDivisionState, CouncilTemplatePreflightResult } from "@/app/admin/competitions/[id]/council-division-actions";
 import {
   completeCouncilCupCompetitionV2,
+  correctCouncilPartitionMatchV2,
   confirmCouncilBracketV2,
   createCouncilPartitionFixturesV2,
   getCouncilBracketStateV2,
@@ -37,6 +39,7 @@ import { buildCompetitionTree, type CompetitionTreeEntryMode, type CompetitionTr
 import { buildKnockoutTemplatePreview, getKnockoutTemplate, listKnockoutTemplates, validateKnockoutTemplateSources } from "@/lib/knockout-templates/registry";
 import { getKnockoutTemplateSwitchGuard } from "@/lib/knockout-template-switching";
 import { deriveKnockoutRoundState } from "@/lib/knockout-round-engine";
+import { analyzeKnockoutMatchCorrectionImpact } from "@/lib/knockout-match-correction";
 import { buildKnockoutMatchReadinessByMatchId, deriveKnockoutRoundRuntime, getKnockoutMatchPresentation, getPrematureKnockoutFixtureDrafts, type KnockoutNodeReadiness } from "@/lib/knockout-round-readiness";
 import type { KnockoutTemplateDiagram, KnockoutTemplateKey } from "@/lib/knockout-templates/types";
 import type { KswQualificationSource } from "@/lib/ksw-knockout-template";
@@ -85,65 +88,6 @@ function knockoutRoundTitle(label: string) {
   if (label === "Preliminary") return "รอบคัดเลือก";
   const roundOf = /^Round of (\d+)$/.exec(label);
   return roundOf ? `รอบ ${roundOf[1]} ทีม` : label;
-}
-
-function KnockoutStateDiagnostic({ matches, nodes, qualificationSnapshot, templateKey }: { matches: CompetitionKnockoutMatchV2[]; nodes: CompetitionTreeNode[]; qualificationSnapshot: CompetitionTreeSource[]; templateKey: KnockoutTemplateKey | null }) {
-  const guard = getKnockoutTemplateSwitchGuard({
-    matches: matches.map((match) => ({ awayScore: match.away_score, homeScore: match.home_score, id: match.id, penaltyAwayScore: match.penalty_away_score, penaltyHomeScore: match.penalty_home_score, status: match.status, winnerTeamId: match.winner_team_id })),
-    nodes,
-    qualificationSnapshot,
-  });
-  const nodeStates = new Map(guard.nodeStates.map((entry) => [entry.nodeId, entry]));
-  const diagnostic = {
-    allowed: guard.allowed,
-    blockingNodes: guard.blockingNodeIds,
-    code: guard.reasonCode,
-    fixtures: matches.map((match) => ({ code: match.status === "finished" || match.winner_team_id ? "knockout_result_exists" : "linked_knockout_match", match: { awayScore: match.away_score, awayTeamId: match.away_team_id, homeScore: match.home_score, homeTeamId: match.home_team_id, id: match.id, status: match.status, winnerTeamId: match.winner_team_id }, reason: match.status === "finished" || match.winner_team_id ? "มีผลการแข่งขันรอบน็อกเอาต์แล้ว" : "สร้างโปรแกรมรอบน็อกเอาต์แล้ว" })),
-    nodeDiagnostics: nodes.map((node) => {
-      const state = nodeStates.get(node.id)?.state ?? "draft";
-      const blocking = state === "materialized" || state === "played";
-      return { blocking, code: nodeStates.get(node.id)?.reasonCode ?? null, node, reason: nodeStates.get(node.id)?.reasonCode ?? null, resettable: guard.resettableNodeIds.includes(node.id), resolvedPairing: blocking, topologyOnly: state === "draft" };
-    }),
-    reason: guard.message,
-    resettableNodes: guard.resettableNodeIds,
-  };
-  const linkedNodeIds = new Map(nodes.filter((node) => node.linkedMatchId).map((node) => [node.linkedMatchId, node.id]));
-  const matchesById = new Map(matches.map((match) => [match.id, match]));
-  const linkedMatchCount = nodes.filter((node) => node.linkedMatchId).length;
-  const sourceText = (source: { groupId?: string | null; nodeId?: string | null; rank?: number | null; teamId?: string | null; type?: string | null }) => `type=${source.type ?? "—"} group=${source.groupId ?? "—"} rank=${source.rank ?? "—"} node=${source.nodeId ?? "—"} team=${source.teamId ?? "—"}`;
-
-  return (
-    <details className="mt-4 rounded-md border border-dashed border-slate-300 bg-slate-50/70 p-3 text-xs text-slate-700">
-      <summary className="cursor-pointer font-black text-[#061426]">ตรวจสอบสถานะ Knockout</summary>
-      <div className="mt-3 grid gap-4">
-        <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded border border-slate-200 bg-white p-2"><dt className="font-bold text-slate-500">ผล Guard</dt><dd className={diagnostic.allowed ? "mt-0.5 font-black text-emerald-800" : "mt-0.5 font-black text-red-800"}>{diagnostic.allowed ? "Allowed" : "Blocked"} · {diagnostic.code}</dd></div>
-          <div className="rounded border border-slate-200 bg-white p-2"><dt className="font-bold text-slate-500">Bracket nodes</dt><dd className="mt-0.5 font-black text-[#061426]">{nodes.length}</dd></div>
-          <div className="rounded border border-slate-200 bg-white p-2"><dt className="font-bold text-slate-500">Blocking nodes</dt><dd className="mt-0.5 font-black text-red-800">{diagnostic.blockingNodes.length}</dd></div>
-          <div className="rounded border border-slate-200 bg-white p-2"><dt className="font-bold text-slate-500">Linked matches</dt><dd className="mt-0.5 font-black text-[#061426]">{linkedMatchCount}</dd></div>
-          <div className="rounded border border-slate-200 bg-white p-2"><dt className="font-bold text-slate-500">Knockout fixtures</dt><dd className="mt-0.5 font-black text-[#061426]">{matches.length}</dd></div>
-          <div className="rounded border border-slate-200 bg-white p-2"><dt className="font-bold text-slate-500">Template</dt><dd className="mt-0.5 break-all font-mono">{templateKey ?? "—"}</dd></div>
-        </dl>
-        <div className={diagnostic.allowed ? "rounded border border-emerald-200 bg-emerald-50 px-3 py-2 font-bold text-emerald-900" : "rounded border border-red-200 bg-red-50 px-3 py-2 font-bold text-red-900"}>เหตุผล Guard: {diagnostic.reason ?? "ไม่มี node หรือ fixture ที่ block การเปลี่ยนรูปแบบ"}</div>
-        <div className="grid gap-2">
-          <p className="font-black text-[#061426]">Bracket nodes</p>
-          {diagnostic.nodeDiagnostics.length ? diagnostic.nodeDiagnostics.map(({ blocking, code, node, reason, resettable, resolvedPairing, topologyOnly }) => {
-            const linkedMatch = node.linkedMatchId ? matchesById.get(node.linkedMatchId) : undefined;
-            const classification = nodeStates.get(node.id)?.state ?? "draft";
-            return <article className={blocking ? "min-w-0 rounded border border-red-300 bg-red-50 p-3 text-red-950" : resettable ? "min-w-0 rounded border border-emerald-200 bg-emerald-50/60 p-3 text-emerald-950" : "min-w-0 rounded border border-slate-200 bg-white p-3"} key={node.id}>
-              <div className="flex flex-wrap items-start justify-between gap-2"><p className="break-all font-mono font-bold">node id: {node.id}</p><span className={blocking ? "rounded border border-red-300 bg-white px-2 py-0.5 font-black text-red-800" : "rounded border border-emerald-300 bg-white px-2 py-0.5 font-black text-emerald-800"}>{blocking ? "BLOCKING" : "ALLOW"}</span></div>
-              <dl className="mt-2 grid gap-x-4 gap-y-1 break-words sm:grid-cols-2"><div><dt className="font-bold opacity-70">Round</dt><dd>{node.roundLabel} · index {node.roundIndex}</dd></div><div><dt className="font-bold opacity-70">Match order / position</dt><dd>{node.matchOrder} / {node.bracketPosition}</dd></div><div><dt className="font-bold opacity-70">Home source</dt><dd>{sourceText(node.homeSource)}</dd></div><div><dt className="font-bold opacity-70">Away source</dt><dd>{sourceText(node.awaySource)}</dd></div><div><dt className="font-bold opacity-70">Linked match</dt><dd className="break-all font-mono">{node.linkedMatchId ?? "—"}</dd></div><div><dt className="font-bold opacity-70">Classification</dt><dd className="font-black">{classification}</dd></div><div><dt className="font-bold opacity-70">Guard flags</dt><dd>topologyOnly={String(topologyOnly)} · resolvedPairing={String(resolvedPairing)} · resettable={String(resettable)}</dd></div><div><dt className="font-bold opacity-70">Block reason</dt><dd>{reason ?? "—"}{code ? ` (${code})` : ""}</dd></div></dl>
-              {linkedMatch ? <p className="mt-2 border-t border-current/15 pt-2">Fixture: status={linkedMatch.status} · score={linkedMatch.home_score ?? "—"}-{linkedMatch.away_score ?? "—"} · winner={linkedMatch.winner_team_id ?? "—"}</p> : null}
-            </article>;
-          }) : <p>ไม่มี bracket node</p>}
-        </div>
-        <div className="grid gap-2">
-          <p className="font-black text-[#061426]">Knockout fixtures</p>
-          {diagnostic.fixtures.length ? diagnostic.fixtures.map(({ code, match, reason }) => <article className="min-w-0 rounded border border-slate-200 bg-white p-3" key={match.id}><p className="break-all font-mono font-bold">fixture id: {match.id ?? "—"}</p><p className="mt-1 break-words">linked node={linkedNodeIds.get(match.id) ?? "—"} · status={match.status ?? "—"} · score={match.homeScore ?? "—"}-{match.awayScore ?? "—"} · winner={match.winnerTeamId ?? "—"}</p><p className="mt-1 font-bold">{reason} ({code})</p></article>) : <p>ไม่มี knockout fixture</p>}
-        </div>
-      </div>
-    </details>
-  );
 }
 
 function dateValue(value: string | null) {
@@ -256,6 +200,8 @@ function KnockoutMatchCard({
   match,
   onEditingChange,
   onSave,
+  onCorrect,
+  correctionContext,
   teamsById,
   readinessState = "ready",
   waitingSources = [],
@@ -264,6 +210,8 @@ function KnockoutMatchCard({
   match: CompetitionKnockoutMatchV2;
   onEditingChange?: (editing: boolean) => void;
   onSave: (match: CompetitionKnockoutMatchV2, draft: ResultForm) => Promise<{ error?: string; ok: boolean }>;
+  onCorrect?: (match: CompetitionKnockoutMatchV2, draft: ResultForm, reason: string) => Promise<{ error?: string; ok: boolean }>;
+  correctionContext?: { matches: CompetitionKnockoutMatchV2[]; nodes: CompetitionTreeNode[] };
   teamsById: Map<string, { id: string; logo_url: string | null; name: string; short_name: string | null }>;
   readinessState?: "missing" | "ready" | "waiting";
   waitingSources?: string[];
@@ -273,6 +221,9 @@ function KnockoutMatchCard({
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [correctionOpen, setCorrectionOpen] = useState(false);
+  const [correctionReason, setCorrectionReason] = useState("");
+  const [correcting, setCorrecting] = useState(false);
   const home = teamsById.get(match.home_team_id);
   const away = teamsById.get(match.away_team_id);
   const normalScoreDraw = draft.homeScore !== "" && draft.awayScore !== "" && score(draft.homeScore) === score(draft.awayScore);
@@ -280,6 +231,19 @@ function KnockoutMatchCard({
   const hasScore = match.home_score !== null && match.away_score !== null;
   const compactDraw = hasScore && match.home_score === match.away_score;
   const winner = match.winner_team_id ? teamsById.get(match.winner_team_id) : undefined;
+  const proposedWinner = draft.status !== "finished" || score(draft.homeScore) === null || score(draft.awayScore) === null
+    ? null
+    : score(draft.homeScore) !== score(draft.awayScore)
+      ? score(draft.homeScore)! > score(draft.awayScore)! ? match.home_team_id : match.away_team_id
+      : score(draft.penaltyHomeScore) !== null && score(draft.penaltyAwayScore) !== null && score(draft.penaltyHomeScore) !== score(draft.penaltyAwayScore)
+        ? score(draft.penaltyHomeScore)! > score(draft.penaltyAwayScore)! ? match.home_team_id : match.away_team_id
+        : null;
+  const correctionPlan = correctionContext ? analyzeKnockoutMatchCorrectionImpact({
+    matches: correctionContext.matches.map((entry) => ({ awayScore: entry.away_score, awayTeamId: entry.away_team_id, homeScore: entry.home_score, homeTeamId: entry.home_team_id, id: entry.id, manualWinnerTeamId: entry.manual_winner_team_id, penaltyAwayScore: entry.penalty_away_score, penaltyHomeScore: entry.penalty_home_score, status: entry.status, venue: entry.venue, winnerTeamId: entry.winner_team_id })),
+    nodes: correctionContext.nodes,
+    proposed: { awayScore: score(draft.awayScore), homeScore: score(draft.homeScore), matchDate: draft.matchDate ? new Date(draft.matchDate).toISOString() : null, penaltyAwayScore: score(draft.penaltyAwayScore), penaltyHomeScore: score(draft.penaltyHomeScore), status: draft.status, venue: draft.venue.trim() || null, winnerTeamId: proposedWinner },
+    targetMatchId: match.id,
+  }) : null;
 
   if (!editable) {
     return (
@@ -302,6 +266,16 @@ function KnockoutMatchCard({
     setSaved(false);
     setEditing(false);
     onEditingChange?.(false);
+  }
+
+  async function submitCorrection() {
+    if (!onCorrect || correctionReason.trim().length < 8) return setError("กรุณาระบุเหตุผลการแก้ไขย้อนหลังอย่างน้อย 8 ตัวอักษร");
+    setCorrecting(true);
+    const result = await onCorrect(match, draft, correctionReason);
+    setCorrecting(false);
+    if (!result.ok) return setError(result.error ?? "ไม่สามารถแก้ไขย้อนหลังได้");
+    setCorrectionOpen(false);
+    setSaved(true);
   }
 
   function updateDraft(patch: Partial<ResultForm>) {
@@ -379,7 +353,8 @@ function KnockoutMatchCard({
       {showPenaltyInputs ? <div className="mt-3 grid gap-3 rounded-md border border-[#d8ad45]/35 bg-[#fff7e6] p-3 sm:grid-cols-2"><p className="text-xs font-bold text-[#8a6418] sm:col-span-2">เสมอในเวลาปกติ กรุณากรอกผลการดวลจุดโทษ</p><label className="grid gap-1 text-xs font-black">จุดโทษ ทีมเหย้า<input className="min-h-11 rounded-md border border-slate-200 px-3" max="999" min="0" onChange={(event) => updateDraft({ penaltyHomeScore: event.target.value })} step="1" type="number" value={draft.penaltyHomeScore} /></label><label className="grid gap-1 text-xs font-black">จุดโทษ ทีมเยือน<input className="min-h-11 rounded-md border border-slate-200 px-3" max="999" min="0" onChange={(event) => updateDraft({ penaltyAwayScore: event.target.value })} step="1" type="number" value={draft.penaltyAwayScore} /></label></div> : null}
       {error ? <p className="mt-3 rounded-md border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-3 py-2 text-sm font-bold text-[#9b1c1f]">{error}</p> : null}
       {saved ? <p className="mt-3 rounded-md border border-emerald-700/20 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">{draft.status === "finished" ? "บันทึกแล้ว ผู้ชนะจะเข้าสู่รอบถัดไปเมื่อคู่แข่งขันพร้อม" : "บันทึกแล้ว"}</p> : null}
-      <div className="mt-4 flex flex-wrap justify-end gap-2">{match.status === "finished" ? <button className="min-h-11 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-black text-[#061426]" disabled={saving} onClick={cancelEdit} type="button">ยกเลิก</button> : null}<button className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={saving} type="submit">{saving ? "กำลังบันทึก..." : saved ? "บันทึกแล้ว" : "บันทึกแมตช์"}</button></div>
+      <div className="mt-4 flex flex-wrap justify-end gap-2">{match.status === "finished" && onCorrect ? <button className="min-h-11 rounded-md border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-black text-amber-900" disabled={saving || correcting} onClick={() => setCorrectionOpen(true)} type="button">แก้ไขผลย้อนหลัง</button> : null}{match.status === "finished" ? <button className="min-h-11 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-black text-[#061426]" disabled={saving || correcting} onClick={cancelEdit} type="button">ยกเลิก</button> : null}<button className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={saving || correcting} type="submit">{saving ? "กำลังบันทึก..." : saved ? "บันทึกแล้ว" : "บันทึกแมตช์"}</button></div>
+      {correctionOpen ? <div aria-modal="true" className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4" onKeyDown={(event) => { if (event.key === "Escape" && !correcting) setCorrectionOpen(false); }} role="dialog"><div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white p-5 shadow-xl"><h3 className="text-xl font-black text-[#061426]">ยืนยันการแก้ไขผลย้อนหลัง</h3><p className="mt-2 text-sm font-semibold text-slate-600">{correctionPlan?.message}</p><div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm"><p>ผู้ชนะเดิม: {winner?.name ?? "—"}</p><p>ผู้ชนะใหม่: {proposedWinner ? teamsById.get(proposedWinner)?.name ?? "—" : "ยังไม่สมบูรณ์"}</p><p>ผลปลายทางที่จะล้าง: {correctionPlan?.resultsToClear.length ?? 0} แมตช์</p>{correctionPlan?.championAffected ? <p className="mt-1 font-bold text-amber-900">แชมป์ของดิวิชั่น/รายการนี้จะถูกยกเลิกเพื่อยืนยันใหม่</p> : null}</div><label className="mt-4 grid gap-1 text-sm font-black">เหตุผลการแก้ไข<textarea autoFocus className="min-h-24 rounded-md border border-slate-300 p-3" disabled={correcting} onChange={(event) => setCorrectionReason(event.target.value)} value={correctionReason} /></label>{correctionPlan?.winnerChanged ? <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-950">การแก้ไขนี้จะเปลี่ยนผู้ชนะและล้างผลการแข่งขันปลายทางที่ได้รับผลกระทบ คุณต้องการดำเนินการต่อหรือไม่</p> : null}<div className="mt-5 flex flex-wrap justify-end gap-2"><button className="min-h-11 rounded-md border border-slate-300 px-4 py-2 text-sm font-black" disabled={correcting} onClick={() => setCorrectionOpen(false)} type="button">ยกเลิก</button><button className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={correcting || !correctionPlan?.allowed || correctionReason.trim().length < 8} onClick={submitCorrection} type="button">{correcting ? "กำลังแก้ไขและปรับสายการแข่งขัน..." : "ยืนยันการแก้ไขย้อนหลัง"}</button></div></div></div> : null}
     </form>
   );
 }
@@ -390,6 +365,8 @@ function KnockoutRoundMatches({
   matches,
   matchReadiness,
   onSave,
+  onCorrect,
+  correctionContext,
   roundComplete,
   roundLabel,
   teamsById,
@@ -399,6 +376,8 @@ function KnockoutRoundMatches({
   matches: CompetitionKnockoutMatchV2[];
   matchReadiness?: Map<string, { readiness: KnockoutNodeReadiness; waitingSources: string[] }>;
   onSave: (match: CompetitionKnockoutMatchV2, draft: ResultForm) => Promise<{ error?: string; ok: boolean }>;
+  onCorrect?: (match: CompetitionKnockoutMatchV2, draft: ResultForm, reason: string) => Promise<{ error?: string; ok: boolean }>;
+  correctionContext?: { matches: CompetitionKnockoutMatchV2[]; nodes: CompetitionTreeNode[] };
   roundComplete: boolean;
   roundLabel: string;
   teamsById: Map<string, { id: string; logo_url: string | null; name: string; short_name: string | null }>;
@@ -417,7 +396,7 @@ function KnockoutRoundMatches({
       <div className="mt-4 grid gap-3">{displayedMatches.map((match) => {
         const readiness = matchReadiness?.get(match.id);
         const presentation = enforceReadiness ? getKnockoutMatchPresentation(readiness?.readiness) : { editable: true, state: "ready" as const };
-        return <KnockoutMatchCard editable={presentation.editable} key={match.id} match={match} onEditingChange={(editing) => setEditingMatchId(editing ? match.id : "")} onSave={onSave} readinessState={presentation.state} teamsById={teamsById} waitingSources={readiness?.waitingSources} />;
+        return <KnockoutMatchCard correctionContext={correctionContext} editable={presentation.editable} key={match.id} match={match} onCorrect={onCorrect} onEditingChange={(editing) => setEditingMatchId(editing ? match.id : "")} onSave={onSave} readinessState={presentation.state} teamsById={teamsById} waitingSources={readiness?.waitingSources} />;
       })}</div>
     </section>
   );
@@ -492,39 +471,6 @@ function CouncilPartitionBracket({
   }, [state]);
   const roundReadiness = useMemo(() => new Map((roundRuntime?.rounds ?? []).map((round) => [round.roundIndex, round.playable])), [roundRuntime]);
   const prematureFixtureDrafts = useMemo(() => state ? getPrematureKnockoutFixtureDrafts({ matches: state.matches, nodes: state.nodes }) : { matchIds: [], nodeIds: [] }, [state]);
-  const readinessDiagnostics = useMemo(() => {
-    if (!state) return [];
-    const nodesById = new Map(state.nodes.map((node) => [node.id, node]));
-    const matchesById = new Map(state.matches.map((match) => [match.id, match]));
-    const sourceDetail = (source: CompetitionTreeSource) => {
-      const sourceNode = source.nodeId ? nodesById.get(source.nodeId) : undefined;
-      const sourceMatch = sourceNode?.linkedMatchId ? matchesById.get(sourceNode.linkedMatchId) : undefined;
-      return {
-        groupId: source.groupId ?? null,
-        nodeId: source.nodeId ?? null,
-        rank: source.rank ?? null,
-        sourceMatchStatus: sourceMatch?.status ?? null,
-        sourceMatchWinnerTeamId: sourceMatch?.winner_team_id ?? null,
-        teamId: source.teamId ?? null,
-        type: source.type,
-      };
-    };
-    return state.nodes.map((node) => {
-      const readiness = node.linkedMatchId ? matchReadiness.get(node.linkedMatchId)?.readiness : undefined;
-      const presentation = getKnockoutMatchPresentation(readiness);
-      const mappedReadiness = node.linkedMatchId ? matchReadiness.get(node.linkedMatchId) : undefined;
-      return {
-        away: sourceDetail(node.awaySource),
-        branch: !node.linkedMatchId ? "topology-placeholder" : presentation.state === "missing" ? "readiness-map-missing" : presentation.state === "waiting" ? "waiting-placeholder" : "editable-form",
-        home: sourceDetail(node.homeSource),
-        linkedMatchId: node.linkedMatchId ?? null,
-        mappedReadiness: Boolean(mappedReadiness),
-        node,
-        readiness: readiness ?? { away: { ready: false, teamId: null, waitingNodeId: null }, home: { ready: false, teamId: null, waitingNodeId: null }, ready: false, waitingNodeIds: [] },
-      };
-    });
-  }, [matchReadiness, state]);
-
   function swapSource(currentIndex: number, nextIndex: number) {
     if (currentIndex === nextIndex) return;
     setDraftSources((current) => current.map((source, index) => index === currentIndex ? current[nextIndex] : index === nextIndex ? current[currentIndex] : source));
@@ -578,18 +524,26 @@ function CouncilPartitionBracket({
     return { ok: true };
   }
 
+  async function correctMatch(match: CompetitionKnockoutMatchV2, draft: ResultForm, reason: string) {
+    const result = await correctCouncilPartitionMatchV2({ awayScore: score(draft.awayScore), competitionId, homeScore: score(draft.homeScore), matchDate: draft.matchDate ? new Date(draft.matchDate).toISOString() : null, matchId: match.id, partitionKey, penaltyAwayScore: score(draft.penaltyAwayScore), penaltyHomeScore: score(draft.penaltyHomeScore), reason, status: draft.status, venue: draft.venue.trim() || null });
+    if (!result.ok || !("nodes" in result)) return { error: result.error, ok: false };
+    setState(result);
+    window.dispatchEvent(new CustomEvent("council-bracket-updated"));
+    router.refresh();
+    return { ok: true };
+  }
+
   const firstRoundPairs = useMemo(() => Array.from({ length: Math.floor(draftSources.length / 2) }, (_, index) => [draftSources[index * 2], draftSources[index * 2 + 1]] as const), [draftSources]);
   const label = partitionKey === "division_1" ? "Knockout Division 1" : "Knockout Division 2";
   return <section className={`mt-5 min-w-0 scroll-mt-28 rounded-lg border ${theme.accent} ${theme.surface} p-4 sm:p-5`} id={partitionKey === "division_1" ? "cup-knockout-d1" : "cup-knockout-d2"}>
     <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className={`text-xl font-black ${theme.heading}`}>{label}</h3><p className="mt-1 text-sm font-semibold text-slate-600">จัดสาย สร้างโปรแกรม และบันทึกผลของดิวิชั่นนี้อย่างอิสระ</p></div><span className={`rounded-full border px-3 py-1.5 text-xs font-black ${theme.badge}`}>{state?.status === "completed" ? "ได้แชมป์แล้ว" : state?.nodes.length ? "จัดสายแล้ว" : "รอจัดสาย"}</span></div>
-    {state ? <details className="mt-4 rounded-md border border-dashed border-slate-300 bg-white/75 p-3 text-xs text-slate-700"><summary className="cursor-pointer font-black text-[#061426]">ตรวจสอบความพร้อมของรอบน็อกเอาต์</summary><div className="mt-3 grid gap-2"><p className="font-bold">รอบปัจจุบัน: {currentRound ? `${currentRound.roundIndex} · ${currentRound.state}` : "ไม่มี"} · โปรแกรมร่างผิดลำดับที่ล้างได้: {prematureFixtureDrafts.nodeIds.length}</p>{readinessDiagnostics.map(({ away, branch, home, linkedMatchId, mappedReadiness, node, readiness }) => <article className={readiness.ready ? "min-w-0 rounded border border-emerald-200 bg-emerald-50/60 p-3" : "min-w-0 rounded border border-amber-200 bg-amber-50/60 p-3"} key={node.id}><div className="flex flex-wrap items-start justify-between gap-2"><p className="break-all font-mono font-bold">node: {node.id}</p><span className="rounded border border-slate-300 bg-white px-2 py-0.5 font-black">{branch}</span></div><dl className="mt-2 grid gap-x-4 gap-y-1 break-words sm:grid-cols-2"><div><dt className="font-bold opacity-70">Round / order</dt><dd>{node.roundLabel} · {node.roundIndex} / {node.matchOrder}</dd></div><div><dt className="font-bold opacity-70">Linked match</dt><dd className="font-mono">{linkedMatchId ?? "—"}</dd></div><div><dt className="font-bold opacity-70">Home</dt><dd>type={home.type} · team={home.teamId ?? "—"} · source node={home.nodeId ?? "—"} · status={home.sourceMatchStatus ?? "—"} · winner={home.sourceMatchWinnerTeamId ?? "—"}</dd></div><div><dt className="font-bold opacity-70">Away</dt><dd>type={away.type} · team={away.teamId ?? "—"} · source node={away.nodeId ?? "—"} · status={away.sourceMatchStatus ?? "—"} · winner={away.sourceMatchWinnerTeamId ?? "—"}</dd></div><div><dt className="font-bold opacity-70">Readiness map</dt><dd>{mappedReadiness ? "found" : "missing"}</dd></div><div><dt className="font-bold opacity-70">readyForEditing</dt><dd className="font-black">{String(readiness.ready)}{readiness.waitingNodeIds.length ? ` · waiting=${readiness.waitingNodeIds.join(", ")}` : ""}</dd></div></dl></article>)}</div></details> : null}
     {prematureFixtureDrafts.nodeIds.length ? <button className="mt-3 min-h-10 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-black text-amber-900 disabled:opacity-60" disabled={pending} onClick={repairPrematureFixtures} type="button">ล้างโปรแกรมรอบถัดไปที่สร้างผิดลำดับ</button> : null}
     {error ? <p className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-800">{error}</p> : null}
     {message ? <p className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">{message}</p> : null}
     {!state ? <p className="mt-4 text-sm font-bold text-slate-600">กำลังโหลด...</p> : !state.nodes.length ? <><div className="mt-4 flex flex-wrap gap-2"><button className="min-h-10 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-black text-[#061426]" onClick={() => { setDraftSources(state.pairingSources); setEditing(false); }} type="button">ใช้การจัดสายอัตโนมัติ</button><button className="min-h-10 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-black text-[#061426]" onClick={() => setEditing((value) => !value)} type="button">{editing ? "ดูตัวอย่างคู่" : "แก้ไขคู่ก่อนยืนยัน"}</button></div><div className="mt-4 grid gap-2 sm:grid-cols-2">{firstRoundPairs.map(([home, away], pairIndex) => <article className="min-w-0 rounded-md border border-slate-200 bg-white p-3" key={pairIndex}><p className={`text-xs font-black ${theme.heading}`}>คู่ที่ {pairIndex + 1}</p>{[home, away].map((source, side) => <div className="mt-2" key={`${pairIndex}-${side}`}>{editing ? <select className="min-h-10 w-full rounded-md border border-slate-200 px-2 text-sm font-bold" onChange={(event) => swapSource(pairIndex * 2 + side, Number(event.target.value))} value={pairIndex * 2 + side}>{draftSources.map((candidate, candidateIndex) => <option key={`${candidate.teamId}-${candidateIndex}`} value={candidateIndex}>{teamsById.get(candidate.teamId ?? "")?.name ?? "ทีม"} · {councilSourceLabel(candidate, groupsById)}</option>)}</select> : <p className="break-words text-sm font-black text-[#061426]">{teamsById.get(source?.teamId ?? "")?.name ?? "ทีม"} <span className="text-xs text-slate-500">{source ? councilSourceLabel(source, groupsById) : ""}</span></p>}{side === 0 ? <p className="py-1 text-center text-xs font-bold text-slate-400">พบ</p> : null}</div>)}</article>)}</div><button className="mt-4 min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={pending || draftSources.length !== state.entrantCount} onClick={confirmBracket} type="button">{pending ? "กำลังยืนยัน..." : "ยืนยันการจัดสาย"}</button></> : <div className="mt-5 grid gap-4">{rounds.map((round, index) => {
       const previous = rounds[index - 1];
       const current = currentRound?.roundIndex === round.roundIndex;
-      if (round.complete || (current && round.matches.length === round.nodes.length) || (!current && round.matches.length > 0)) return <KnockoutRoundMatches current={current} enforceReadiness key={round.roundIndex} matchReadiness={matchReadiness} matches={round.matches as CompetitionKnockoutMatchV2[]} onSave={saveMatch} roundComplete={round.complete} roundLabel={round.label} teamsById={teamsById} />;
+      if (round.complete || (current && round.matches.length === round.nodes.length) || (!current && round.matches.length > 0)) return <KnockoutRoundMatches correctionContext={{ matches: state.matches, nodes: state.nodes }} current={current} enforceReadiness key={round.roundIndex} matchReadiness={matchReadiness} matches={round.matches as CompetitionKnockoutMatchV2[]} onCorrect={correctMatch} onSave={saveMatch} roundComplete={round.complete} roundLabel={round.label} teamsById={teamsById} />;
       const readyForFixtures = roundReadiness.get(round.roundIndex) ?? false;
       return <section className="rounded-md border border-slate-200 bg-white p-4" key={round.roundIndex}><h4 className="text-lg font-black text-[#061426]">{round.label}</h4>{current ? <><p className="mt-1 text-sm font-semibold text-slate-600">{readyForFixtures ? "ทีมพร้อมแล้ว กรุณาสร้างโปรแกรมการแข่งขันรอบนี้" : "รอผู้ชนะจากรอบก่อนหน้าให้ครบก่อนสร้างโปรแกรม"}</p><button className="mt-3 min-h-10 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={pending || !readyForFixtures} onClick={() => createFixtures(round.roundIndex, round.label)} type="button">{pending ? "กำลังสร้าง..." : `สร้างโปรแกรม${round.label}`}</button></> : <><p className="mt-1 text-sm font-semibold text-slate-600">รอผลการแข่งขัน${previous?.label ?? "รอบก่อนหน้า"}</p><p className="mt-1 text-xs font-bold text-slate-500">{round.nodes.length} คู่ รอผู้ชนะจากรอบก่อน</p></>}</section>;
     })}</div>}
@@ -1024,6 +978,14 @@ export function AdminCompetitionTreeEngineV2({
     return { ok: true };
   }
 
+  async function correctMatch(match: CompetitionKnockoutMatchV2, form: ResultForm, reason: string) {
+    const result = await correctCompetitionKnockoutMatchV2({ awayScore: score(form.awayScore), competitionId, homeScore: score(form.homeScore), matchDate: form.matchDate ? new Date(`${form.matchDate}:00+07:00`).toISOString() : null, matchId: match.id, penaltyAwayScore: score(form.penaltyAwayScore), penaltyHomeScore: score(form.penaltyHomeScore), reason, status: form.status, venue: form.venue.trim() || null });
+    if (!result.ok || !result.matches) return { error: result.error ?? "ไม่สามารถแก้ไขย้อนหลังได้", ok: false };
+    setKnockoutMatches(result.matches);
+    router.refresh();
+    return { ok: true };
+  }
+
   function completeCompetition() {
     if (!champion) return;
     if (!window.confirm(`ตรวจสอบผลแล้วปิดการแข่งขัน โดยประกาศ ${champion.name} เป็นแชมป์?`)) return;
@@ -1068,7 +1030,6 @@ export function AdminCompetitionTreeEngineV2({
               <a className="inline-flex min-h-10 items-center rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-black text-[#061426]" href="#cup-workspace-nav">กลับเมนูลัด</a>
               {selectedTemplate === "ksw_standard" ? <button className="min-h-10 rounded-md border border-[#d8ad45] bg-white px-3 py-2 text-sm font-black text-[#8a6418]" onClick={openTemplateSelection} type="button">เปลี่ยนรูปแบบการแข่งขัน</button> : null}
             </div>
-            <KnockoutStateDiagnostic matches={visibleKnockoutMatches} nodes={effectiveNodes} qualificationSnapshot={qualificationSnapshot} templateKey={selectedTemplate} />
           </div>
           <span className="inline-flex w-fit shrink-0 rounded-full bg-[#fff7e6] px-3 py-2 text-sm font-black text-[#8a6418]">
             {statusLabel.th} / {statusLabel.en}
@@ -1216,7 +1177,7 @@ export function AdminCompetitionTreeEngineV2({
               const current = round.roundIndex === currentRoundIndex;
               const previousRound = knockoutRounds[index - 1];
               if (round.complete || (current && round.allMatchesReady)) {
-                return <KnockoutRoundMatches current={current} key={`${round.roundIndex}-${round.complete ? "complete" : "active"}`} matches={round.matches} onSave={saveMatch} roundComplete={round.complete} roundLabel={round.label} teamsById={teamsById} />;
+                return <KnockoutRoundMatches correctionContext={{ matches: visibleKnockoutMatches, nodes: effectiveNodes }} current={current} key={`${round.roundIndex}-${round.complete ? "complete" : "active"}`} matches={round.matches} onCorrect={correctMatch} onSave={saveMatch} roundComplete={round.complete} roundLabel={round.label} teamsById={teamsById} />;
               }
               return (
                 <section className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4" key={round.roundIndex}>
