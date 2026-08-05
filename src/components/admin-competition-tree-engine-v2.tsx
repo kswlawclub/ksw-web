@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowLeftRight, Check, TriangleAlert, X } from "lucide-react";
 import {
   completeCupCompetitionV2,
   generateCompetitionTreeV2,
@@ -564,6 +565,7 @@ export function AdminCompetitionTreeEngineV2({
   const [councilPreflight, setCouncilPreflight] = useState<CouncilTemplatePreflightResult | null>(null);
   const [councilExtras, setCouncilExtras] = useState<CouncilDivisionExtraSelections>({ division1: [], division2: [] });
   const [templateSelectionOpen, setTemplateSelectionOpen] = useState(false);
+  const [templateConfirmationKey, setTemplateConfirmationKey] = useState<KnockoutTemplateKey | null>(null);
   const selectedTemplateDefinition = selectedTemplate ? getKnockoutTemplate(selectedTemplate) : undefined;
   const defaultPairing = useMemo(
     () => selectedTemplateDefinition ? buildKnockoutTemplatePreview(selectedTemplateDefinition.key, qualifiedSources) : null,
@@ -572,6 +574,7 @@ export function AdminCompetitionTreeEngineV2({
   const [draftSources, setDraftSources] = useState<KswQualificationSource[]>(() => (defaultPairing?.sources as KswQualificationSource[] | undefined) ?? []);
   const [editingPairing, setEditingPairing] = useState(false);
   const activeCardRef = useRef("");
+  const templateConfirmationButtonRef = useRef<HTMLButtonElement>(null);
   const summary = generatedSummary ?? initialSummary;
   const status = currentWorkflow?.status ?? "draft";
   const teamsById = useMemo(() => new Map(teams.map((team) => [team.id, team])), [teams]);
@@ -589,6 +592,17 @@ export function AdminCompetitionTreeEngineV2({
     nodes: effectiveNodes,
     qualificationSnapshot,
   });
+  const confirmationTemplate = templateConfirmationKey ? getKnockoutTemplate(templateConfirmationKey) : undefined;
+
+  useEffect(() => {
+    if (!templateConfirmationKey) return;
+    templateConfirmationButtonRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !isPending) setTemplateConfirmationKey(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isPending, templateConfirmationKey]);
   const knockoutRounds = useMemo<KnockoutRoundView[]>(() => {
     const matchesById = new Map(visibleKnockoutMatches.map((match) => [match.id, match]));
     const grouped = new Map<number, CompetitionTreeNode[]>();
@@ -715,9 +729,20 @@ export function AdminCompetitionTreeEngineV2({
       setTemplateSelectionOpen(false);
       setDraftSources(buildKnockoutTemplatePreview(template.key, qualifiedSources).sources as KswQualificationSource[]);
       setEditingPairing(false);
+      setTemplateConfirmationKey(null);
       setMessage(`เลือก ${template.name} แล้ว`);
       router.refresh();
     });
+  }
+
+  function requestTemplateChange(templateKey: KnockoutTemplateKey) {
+    if (templateKey === selectedTemplate || isPending) return;
+    if (!templateSwitchGuard.allowed) {
+      setError(templateSwitchGuard.message);
+      return;
+    }
+    setError("");
+    setTemplateConfirmationKey(templateKey);
   }
 
   function saveCouncilDraft() {
@@ -958,9 +983,32 @@ export function AdminCompetitionTreeEngineV2({
                   const className = `min-w-0 rounded-md border p-4 text-left ${selectable ? "transition hover:border-[#d8ad45] disabled:cursor-wait disabled:opacity-60" : "border-dashed opacity-75"} ${selected ? "border-[#d8ad45] bg-[#fffdf7] ring-1 ring-[#d8ad45]/30" : "border-slate-200 bg-white"}`;
                   const statusLabel = selected ? "เลือกแล้ว" : template.statusLabel;
                   const content = <><div className="flex flex-wrap items-start justify-between gap-2"><span className="text-base font-black text-[#061426]">{template.name}</span><span className={`rounded-full border px-2 py-1 text-[11px] font-black ${selectable ? "border-[#d8ad45]/40 bg-white text-[#8a6418]" : "border-slate-200 bg-white text-slate-600"}`}>{statusLabel}</span></div><p className="mt-2 text-sm font-semibold text-slate-600">{template.description}</p>{!validation?.valid ? <p className="mt-2 text-xs font-bold leading-5 text-slate-500">เลือกได้ทันที · สร้างสายเมื่อ {validation?.errors[0]}</p> : null}<div className="mt-3 flex flex-wrap gap-1.5">{template.featureBullets.map((feature) => <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-black text-slate-600" key={feature}>{feature}</span>)}</div><TemplateMiniDiagram diagram={template.diagram} /></>;
-                  return selectable ? <button aria-pressed={selected} className={className} disabled={isPending} key={template.key} onClick={() => chooseTemplate(template.key)} type="button">{content}</button> : <article className={className} data-disabled="true" key={template.key}>{content}</article>;
+                  return selectable ? <button aria-pressed={selected} className={className} disabled={isPending || selected} key={template.key} onClick={() => requestTemplateChange(template.key)} type="button">{content}</button> : <article className={className} data-disabled="true" key={template.key}>{content}</article>;
                 })}
               </div>
+              {confirmationTemplate ? <div aria-modal="true" aria-labelledby="template-change-title" className="fixed inset-0 z-50 flex items-end bg-slate-950/45 p-3 sm:items-center sm:justify-center" onKeyDown={(event) => {
+                if (event.key !== "Tab") return;
+                const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not([disabled])"));
+                const first = buttons[0];
+                const last = buttons.at(-1);
+                if (!first || !last) return;
+                if (event.shiftKey && document.activeElement === first) {
+                  event.preventDefault();
+                  last.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                  event.preventDefault();
+                  first.focus();
+                }
+              }} role="dialog">
+                <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white p-5 shadow-xl" role="document">
+                  <div className="flex items-start gap-3">
+                    <ArrowLeftRight aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-[#8a6418]" />
+                    <div className="min-w-0"><h4 className="text-lg font-black text-[#061426]" id="template-change-title">ยืนยันการเปลี่ยนรูปแบบการแข่งขัน</h4><p className="mt-2 text-sm font-semibold leading-6 text-slate-700">คุณต้องการเปลี่ยนรูปแบบการแข่งขันเป็น “{confirmationTemplate.name}” ใช่หรือไม่</p></div>
+                  </div>
+                  {templateSwitchGuard.reasonCode === "allowed_confirmed_draft" ? <div className="mt-4 flex gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-sm font-semibold leading-6 text-amber-950"><TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-amber-800" />การเปลี่ยนรูปแบบจะล้างโครงสร้างและการจัดสายรอบน็อกเอาต์ที่ยืนยันไว้ แต่จะไม่ลบทีมผ่านเข้ารอบหรือผลการแข่งขันรอบแบ่งกลุ่ม</div> : null}
+                  <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-black text-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#061426] disabled:cursor-not-allowed disabled:opacity-60" disabled={isPending} onClick={() => setTemplateConfirmationKey(null)} type="button"><X aria-hidden="true" className="size-4 shrink-0" />ยกเลิก</button><button className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d8ad45] disabled:cursor-not-allowed disabled:opacity-60" disabled={isPending} onClick={() => chooseTemplate(confirmationTemplate.key)} ref={templateConfirmationButtonRef} type="button"><Check aria-hidden="true" className="size-4 shrink-0" />{isPending ? "กำลังเปลี่ยนรูปแบบ..." : "ยืนยันการเปลี่ยนรูปแบบ"}</button></div>
+                </div>
+              </div> : null}
             </section>
             {selectedTemplate === "council_two_division" && qualificationApproved ? <><CouncilDivisionApproval error={error} extras={councilExtras} onApprove={approveCouncilDivisions} onExtrasChange={setCouncilExtras} onReopen={reopenCouncilDivisions} onSaveDraft={saveCouncilDraft} pending={isPending} state={councilState} />{councilPreflight && !councilPreflight.ok ? <section className="mt-5 min-w-0 rounded-md border border-[#8a6418]/25 bg-[#fff7e6] p-4"><p className="font-black text-[#8a6418]">{councilPreflight.message}</p>{councilPreflight.missingRequirements.length ? <ul className="mt-2 list-disc space-y-1 pl-5 text-sm font-semibold text-slate-700">{councilPreflight.missingRequirements.map((requirement) => <li key={requirement}>{requirement}</li>)}</ul> : null}</section> : null}</> : selectedTemplate === "council_two_division" ? <section className="mt-5 min-w-0 rounded-md border border-[#d8ad45]/40 bg-[#fffdf7] p-4"><h3 className="font-black text-[#061426]">เลือกคัพสภา – สองดิวิชั่นแล้ว</h3><p className="mt-1 text-sm font-semibold text-slate-600">ยังสร้างโครงสร้างการแข่งขันไม่ได้จนกว่าข้อมูลด้านล่างจะพร้อม</p>{councilPreflight ? councilPreflight.ok ? <p className="mt-3 text-sm font-bold text-emerald-800">{councilPreflight.message}</p> : <div className="mt-3 rounded-md border border-[#8a6418]/25 bg-white px-3 py-3 text-sm font-semibold text-slate-700"><p className="font-black text-[#8a6418]">{councilPreflight.message}</p>{councilPreflight.missingRequirements.length ? <ul className="mt-2 list-disc space-y-1 pl-5">{councilPreflight.missingRequirements.map((requirement) => <li key={requirement}>{requirement}</li>)}</ul> : null}</div> : <p className="mt-3 text-sm font-semibold text-slate-600">กำลังตรวจสอบความพร้อมของข้อมูล</p>}</section> : selectedTemplate === "ksw_standard" && selectedTemplateDefinition && defaultPairing ? <section className="mt-5 min-w-0 rounded-md border border-[#d8ad45]/40 bg-[#fffdf7] p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
