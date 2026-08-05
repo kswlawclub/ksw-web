@@ -291,7 +291,7 @@ function CompetitionVisual({ competition, className = "" }: { competition: Row; 
   );
 }
 
-function CompetitionCard({ competition }: { competition: Row }) {
+function CompetitionCard({ competition, horizontal = false }: { competition: Row; horizontal?: boolean }) {
   const slug = text(competition, ["slug"], "");
   const competitionType = normalizeCompetitionType(text(competition, ["competition_type"], ""));
   const description = text(
@@ -316,7 +316,7 @@ function CompetitionCard({ competition }: { competition: Row }) {
 
   const cardContent = (
     <>
-      <CompetitionVisual className="aspect-[16/9]" competition={competition} />
+      <CompetitionVisual className={horizontal ? "aspect-[16/10] lg:aspect-auto" : "aspect-[16/9]"} competition={competition} />
       <div className="flex min-w-0 flex-1 flex-col p-4 sm:p-5">
         <div>
           <h2 className="break-words text-xl font-black leading-tight text-[#061426]">{text(competition, ["name"], "Competition")}</h2>
@@ -343,7 +343,7 @@ function CompetitionCard({ competition }: { competition: Row }) {
   if (slug) {
     return (
       <Link
-        className="group flex min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-900/5 transition-all hover:border-[#d8ad45]/55 hover:shadow-md hover:shadow-slate-900/10"
+        className={`group min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-900/5 transition-all hover:border-[#d8ad45]/55 hover:shadow-md hover:shadow-slate-900/10 ${horizontal ? "grid lg:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)]" : "flex flex-col"}`}
         href={`/competitions/${slug}`}
       >
         {cardContent}
@@ -352,7 +352,7 @@ function CompetitionCard({ competition }: { competition: Row }) {
   }
 
   return (
-    <article className="group flex min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-900/5">
+    <article className={`group min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-900/5 ${horizontal ? "grid lg:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)]" : "flex flex-col"}`}>
       {cardContent}
     </article>
   );
@@ -373,7 +373,7 @@ function CurrentCompetitionFeature({ items }: { items: Row[] }) {
     <section className="mx-auto w-full max-w-7xl px-4 pb-12 pt-8 sm:px-6 sm:pt-10 lg:px-10" aria-labelledby="current-competitions-heading">
       <div className="mb-4 flex items-center gap-2"><Radio aria-hidden="true" className="size-5 shrink-0 text-emerald-800" /><h2 className="text-2xl font-black text-[#061426]" id="current-competitions-heading">กำลังดำเนินการแข่งขัน</h2></div>
       <article className="group grid min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-900/10 lg:grid-cols-[minmax(0,1.22fr)_minmax(0,1fr)]">
-        <CompetitionVisual className="aspect-[16/10] min-h-56 lg:aspect-auto lg:min-h-full" competition={featured} />
+        <CompetitionVisual className="aspect-[16/10] lg:aspect-auto" competition={featured} />
         <div className="flex min-w-0 flex-col p-5 sm:p-6 lg:p-7">
           <h3 className="break-words text-3xl font-black leading-tight text-[#061426]">{text(featured, ["name"], "Competition")}</h3>
           {metadata.length ? <div className="mt-4 grid gap-2 text-sm font-bold text-slate-600">{metadata.map(({ icon: Icon, value }) => <p className="flex min-w-0 items-start gap-2" key={value}><Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-[#8a6418]" /><span className="break-words">{value}</span></p>)}</div> : null}
@@ -381,7 +381,7 @@ function CurrentCompetitionFeature({ items }: { items: Row[] }) {
           {slug ? <Link className="mt-6 inline-flex min-h-11 w-fit items-center gap-2 border-t border-slate-200 pt-4 text-sm font-black text-[#061426] hover:text-[#8a6418]" href={`/competitions/${slug}`}><span>ดูรายละเอียดการแข่งขัน</span><ArrowRight aria-hidden="true" className="size-4 shrink-0 text-[#8a6418] transition-transform group-hover:translate-x-1" /></Link> : <p className="mt-6 border-t border-slate-200 pt-4 text-sm font-black text-slate-500">กำลังจัดเตรียมรายละเอียดการแข่งขัน</p>}
         </div>
       </article>
-      {secondary.length ? <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{secondary.map((competition) => <CompetitionCard competition={competition} key={text(competition, ["id", "slug", "name"])} />)}</div> : null}
+      {secondary.length ? <div className="mt-4 grid gap-4">{secondary.map((competition) => <CompetitionCard competition={competition} horizontal key={text(competition, ["id", "slug", "name"])} />)}</div> : null}
     </section>
   );
 }
@@ -462,7 +462,7 @@ function ChronicleCard({ entry }: { entry: ChronicleViewModel }) {
     </>
   );
 
-  const className = `group grid min-w-0 overflow-hidden rounded-2xl border bg-white shadow-sm shadow-slate-900/5 transition-all ${accent} hover:border-[#d8ad45]/55 hover:bg-[#fffdf7] hover:shadow-md hover:shadow-slate-900/10 sm:grid-cols-[minmax(12rem,0.78fr)_minmax(0,1.22fr)]`;
+  const className = `group grid min-w-0 overflow-hidden rounded-2xl border bg-white shadow-sm shadow-slate-900/5 transition-all ${accent} hover:border-[#d8ad45]/55 hover:bg-[#fffdf7] hover:shadow-md hover:shadow-slate-900/10 lg:grid-cols-[minmax(12rem,0.78fr)_minmax(0,1.22fr)]`;
   if (!entry.slug) return <article className={className}>{content}</article>;
   return <Link className={className} href={`/competitions/${entry.slug}`}>{content}</Link>;
 }
@@ -479,7 +479,7 @@ function ChronicleSection({ groups }: { groups: ChronicleGroup[] }) {
   }
 
   return (
-    <section className="mx-auto w-full max-w-7xl px-4 pb-16 pt-4 sm:px-6 lg:px-10">
+    <section className="mx-auto w-full max-w-7xl px-4 pb-16 pt-8 sm:px-6 lg:px-10">
       <div className="mb-8 max-w-2xl">
         <div className="mb-3 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
         <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.22em] text-[#8a6418]"><Archive aria-hidden="true" className="size-4 shrink-0" />บันทึกที่ผ่านมา</p>
@@ -499,7 +499,7 @@ function ChronicleSection({ groups }: { groups: ChronicleGroup[] }) {
               <div className={`h-px min-w-0 flex-1 ${group.year === null ? "bg-slate-200" : "bg-[#d8ad45]/45"}`} />
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
-              {group.entries.map((entry) => <div className={group.entries.length === 1 ? "max-w-[51rem]" : ""} key={entry.competitionId}><ChronicleCard entry={entry} /></div>)}
+              {group.entries.map((entry) => <div className={group.entries.length === 1 ? "lg:col-span-2" : ""} key={entry.competitionId}><ChronicleCard entry={entry} /></div>)}
             </div>
           </div>
         ))}
