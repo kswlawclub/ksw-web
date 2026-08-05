@@ -2,6 +2,7 @@
 
 import { FormEvent, type ReactNode, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Check } from "lucide-react";
 import { TeamLogo } from "@/components/team-logo";
 import {
   assignCompetitionTeamToGroup,
@@ -72,9 +73,11 @@ function unassignedFirst(groups: AdminCompetitionGroup[]) {
 }
 
 function WorkflowStep({
+  completedPresentation = false,
   label,
   status,
 }: {
+  completedPresentation?: boolean;
   label: string;
   status: "available" | "coming" | "done";
 }) {
@@ -89,13 +92,14 @@ function WorkflowStep({
     <li className={`rounded-md border px-3 py-2 text-xs font-black ${className}`}>
       {label}
       <span className="ml-2 rounded-full bg-white/70 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em]">
-        {status === "coming" ? "Coming next" : "Available"}
+        {completedPresentation ? <span className="inline-flex items-center gap-1"><Check aria-hidden="true" className="size-3 shrink-0" />COMPLETED</span> : status === "coming" ? "Coming next" : "Available"}
       </span>
     </li>
   );
 }
 
 export function AdminCompetitionGroupsManager({
+  competitionStatus,
   competitionId,
   groups,
   matches,
@@ -104,6 +108,7 @@ export function AdminCompetitionGroupsManager({
   schemaReady,
   teams,
 }: {
+  competitionStatus?: string | null;
   competitionId: string;
   groups: AdminCompetitionGroup[];
   matches: CupGroupRow[];
@@ -177,6 +182,7 @@ export function AdminCompetitionGroupsManager({
   const [showAllUnassignedTeams, setShowAllUnassignedTeams] = useState(false);
   const visibleUnassignedTeams = showAllUnassignedTeams ? unassignedTeams : unassignedTeams.slice(0, 16);
   const requestedGroupCount = Number(groupCount);
+  const isCompetitionCompleted = competitionStatus === "completed";
   const groupsToAdd = Number.isInteger(requestedGroupCount) && requestedGroupCount > localGroups.length
     ? nextAvailableCompetitionGroupNames(localGroups.map((group) => group.name), requestedGroupCount - localGroups.length)
     : [];
@@ -511,12 +517,12 @@ export function AdminCompetitionGroupsManager({
         ) : null}
 
         <ol className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          <WorkflowStep label="1. เพิ่มทีม" status={teams.length ? "done" : "available"} />
-          <WorkflowStep label="2. สร้างกลุ่ม" status={localGroups.length ? "done" : "available"} />
-          <WorkflowStep label="3. จัดทีมลงกลุ่ม" status={assignedCount ? "done" : "available"} />
-          <WorkflowStep label="4. สร้างการแข่งขันรอบแบ่งกลุ่ม" status={assignedCount ? "available" : "coming"} />
-          <WorkflowStep label="5. ตารางคะแนนและทีมเข้ารอบ" status="coming" />
-          <WorkflowStep label="6. Knockout bracket" status="coming" />
+          <WorkflowStep completedPresentation={isCompetitionCompleted} label="1. เพิ่มทีม" status={isCompetitionCompleted ? "done" : teams.length ? "done" : "available"} />
+          <WorkflowStep completedPresentation={isCompetitionCompleted} label="2. สร้างกลุ่ม" status={isCompetitionCompleted ? "done" : localGroups.length ? "done" : "available"} />
+          <WorkflowStep completedPresentation={isCompetitionCompleted} label="3. จัดทีมลงกลุ่ม" status={isCompetitionCompleted ? "done" : assignedCount ? "done" : "available"} />
+          <WorkflowStep completedPresentation={isCompetitionCompleted} label="4. สร้างการแข่งขันรอบแบ่งกลุ่ม" status={isCompetitionCompleted ? "done" : assignedCount ? "available" : "coming"} />
+          <WorkflowStep completedPresentation={isCompetitionCompleted} label="5. ตารางคะแนนและทีมเข้ารอบ" status={isCompetitionCompleted ? "done" : "coming"} />
+          <WorkflowStep completedPresentation={isCompetitionCompleted} label="6. Knockout bracket" status={isCompetitionCompleted ? "done" : "coming"} />
         </ol>
 
         {form.id ? <form className="mt-6 grid gap-3 rounded-lg border border-[#d8ad45]/30 bg-[#fffaf0] p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_140px_auto] lg:items-end" onSubmit={saveGroup}>
