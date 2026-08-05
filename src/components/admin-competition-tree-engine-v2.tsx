@@ -31,7 +31,7 @@ import {
 } from "@/lib/competition-engine-v2-state";
 import { buildCompetitionTree, type CompetitionTreeEntryMode, type CompetitionTreeNode, type CompetitionTreeSource, type CompetitionTreeSummary } from "@/lib/competition-tree";
 import { buildKnockoutTemplatePreview, getKnockoutTemplate, listKnockoutTemplates, validateKnockoutTemplateSources } from "@/lib/knockout-templates/registry";
-import { getKnockoutTemplateSwitchGuard, inspectKnockoutTemplateSwitchState } from "@/lib/knockout-template-switching";
+import { classifyKnockoutNodeState, getKnockoutTemplateSwitchGuard, inspectKnockoutTemplateSwitchState } from "@/lib/knockout-template-switching";
 import type { KnockoutTemplateDiagram, KnockoutTemplateKey } from "@/lib/knockout-templates/types";
 import type { KswQualificationSource } from "@/lib/ksw-knockout-template";
 import { TeamLogo } from "@/components/team-logo";
@@ -88,9 +88,42 @@ function KnockoutStateDiagnostic({ matches, nodes, qualificationSnapshot, templa
     nodes,
   });
   const linkedNodeIds = new Map(nodes.filter((node) => node.linkedMatchId).map((node) => [node.linkedMatchId, node.id]));
+  const matchesById = new Map(matches.map((match) => [match.id, match]));
+  const linkedMatchCount = nodes.filter((node) => node.linkedMatchId).length;
   const sourceText = (source: { groupId?: string | null; nodeId?: string | null; rank?: number | null; teamId?: string | null; type?: string | null }) => `type=${source.type ?? "—"} group=${source.groupId ?? "—"} rank=${source.rank ?? "—"} node=${source.nodeId ?? "—"} team=${source.teamId ?? "—"}`;
 
-  return <details className="mt-4 rounded-md border border-dashed border-slate-300 bg-slate-50/70 p-3 text-xs text-slate-700"><summary className="cursor-pointer font-black text-[#061426]">ตรวจสอบสถานะ Knockout</summary><div className="mt-3 grid gap-3"><dl className="grid gap-2 sm:grid-cols-3"><div><dt className="font-bold text-slate-500">Template</dt><dd className="mt-0.5 break-all font-mono">{templateKey ?? "—"}</dd></div><div><dt className="font-bold text-slate-500">Guard</dt><dd className="mt-0.5 font-black">{String(diagnostic.allowed)} · {diagnostic.code}</dd></div><div><dt className="font-bold text-slate-500">Reason</dt><dd className="mt-0.5 break-words">{diagnostic.reason ?? "—"}</dd></div><div><dt className="font-bold text-slate-500">Bracket nodes</dt><dd className="mt-0.5 font-black">{nodes.length}</dd></div><div><dt className="font-bold text-slate-500">Knockout fixtures</dt><dd className="mt-0.5 font-black">{matches.length}</dd></div><div><dt className="font-bold text-slate-500">Resettable / blocking</dt><dd className="mt-0.5 font-black">{diagnostic.resettableNodes.length} / {diagnostic.blockingNodes.length}</dd></div></dl><div className="grid gap-2"><p className="font-black text-[#061426]">Bracket nodes</p>{diagnostic.nodeDiagnostics.length ? diagnostic.nodeDiagnostics.map(({ blocking, code, node, reason, resettable, resolvedPairing, topologyOnly }) => <article className="min-w-0 rounded border border-slate-200 bg-white p-2" key={node.id}><p className="break-all font-mono font-bold">{node.id}</p><p className="mt-1">round={node.roundLabel} ({node.roundIndex}) · order={node.matchOrder} · position={node.bracketPosition} · linkedMatch={node.linkedMatchId ?? "—"}</p><p className="mt-1 break-words">home: {sourceText(node.homeSource)}</p><p className="break-words">away: {sourceText(node.awaySource)}</p><p className="mt-1 font-bold">topologyOnly={String(topologyOnly)} · resolvedPairing={String(resolvedPairing)} · resettable={String(resettable)} · blocking={String(blocking)}{code ? ` (${code})` : ""}{reason ? ` · ${reason}` : ""}</p></article>) : <p>ไม่มี bracket node</p>}</div><div className="grid gap-2"><p className="font-black text-[#061426]">Knockout fixtures</p>{diagnostic.fixtures.length ? diagnostic.fixtures.map(({ code, match, reason }) => <article className="min-w-0 rounded border border-slate-200 bg-white p-2" key={match.id}><p className="break-all font-mono font-bold">{match.id ?? "—"}</p><p className="mt-1">round node={linkedNodeIds.get(match.id) ?? "—"} · status={match.status ?? "—"} · code={code}</p><p>home={match.homeTeamId ?? "—"} away={match.awayTeamId ?? "—"} · score={match.homeScore ?? "—"}-{match.awayScore ?? "—"} · winner={match.winnerTeamId ?? "—"}</p><p className="mt-1 font-bold">{reason}</p></article>) : <p>ไม่มี knockout fixture</p>}</div></div></details>;
+  return (
+    <details className="mt-4 rounded-md border border-dashed border-slate-300 bg-slate-50/70 p-3 text-xs text-slate-700">
+      <summary className="cursor-pointer font-black text-[#061426]">ตรวจสอบสถานะ Knockout</summary>
+      <div className="mt-3 grid gap-4">
+        <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="rounded border border-slate-200 bg-white p-2"><dt className="font-bold text-slate-500">ผล Guard</dt><dd className={diagnostic.allowed ? "mt-0.5 font-black text-emerald-800" : "mt-0.5 font-black text-red-800"}>{diagnostic.allowed ? "Allowed" : "Blocked"} · {diagnostic.code}</dd></div>
+          <div className="rounded border border-slate-200 bg-white p-2"><dt className="font-bold text-slate-500">Bracket nodes</dt><dd className="mt-0.5 font-black text-[#061426]">{nodes.length}</dd></div>
+          <div className="rounded border border-slate-200 bg-white p-2"><dt className="font-bold text-slate-500">Blocking nodes</dt><dd className="mt-0.5 font-black text-red-800">{diagnostic.blockingNodes.length}</dd></div>
+          <div className="rounded border border-slate-200 bg-white p-2"><dt className="font-bold text-slate-500">Linked matches</dt><dd className="mt-0.5 font-black text-[#061426]">{linkedMatchCount}</dd></div>
+          <div className="rounded border border-slate-200 bg-white p-2"><dt className="font-bold text-slate-500">Knockout fixtures</dt><dd className="mt-0.5 font-black text-[#061426]">{matches.length}</dd></div>
+          <div className="rounded border border-slate-200 bg-white p-2"><dt className="font-bold text-slate-500">Template</dt><dd className="mt-0.5 break-all font-mono">{templateKey ?? "—"}</dd></div>
+        </dl>
+        <div className={diagnostic.allowed ? "rounded border border-emerald-200 bg-emerald-50 px-3 py-2 font-bold text-emerald-900" : "rounded border border-red-200 bg-red-50 px-3 py-2 font-bold text-red-900"}>เหตุผล Guard: {diagnostic.reason ?? "ไม่มี node หรือ fixture ที่ block การเปลี่ยนรูปแบบ"}</div>
+        <div className="grid gap-2">
+          <p className="font-black text-[#061426]">Bracket nodes</p>
+          {diagnostic.nodeDiagnostics.length ? diagnostic.nodeDiagnostics.map(({ blocking, code, node, reason, resettable, resolvedPairing, topologyOnly }) => {
+            const linkedMatch = node.linkedMatchId ? matchesById.get(node.linkedMatchId) : undefined;
+            const classification = linkedMatch?.status === "finished" || linkedMatch?.winner_team_id ? "played" : classifyKnockoutNodeState(node, qualificationSnapshot);
+            return <article className={blocking ? "min-w-0 rounded border border-red-300 bg-red-50 p-3 text-red-950" : resettable ? "min-w-0 rounded border border-emerald-200 bg-emerald-50/60 p-3 text-emerald-950" : "min-w-0 rounded border border-slate-200 bg-white p-3"} key={node.id}>
+              <div className="flex flex-wrap items-start justify-between gap-2"><p className="break-all font-mono font-bold">node id: {node.id}</p><span className={blocking ? "rounded border border-red-300 bg-white px-2 py-0.5 font-black text-red-800" : "rounded border border-emerald-300 bg-white px-2 py-0.5 font-black text-emerald-800"}>{blocking ? "BLOCKING" : "ALLOW"}</span></div>
+              <dl className="mt-2 grid gap-x-4 gap-y-1 break-words sm:grid-cols-2"><div><dt className="font-bold opacity-70">Round</dt><dd>{node.roundLabel} · index {node.roundIndex}</dd></div><div><dt className="font-bold opacity-70">Match order / position</dt><dd>{node.matchOrder} / {node.bracketPosition}</dd></div><div><dt className="font-bold opacity-70">Home source</dt><dd>{sourceText(node.homeSource)}</dd></div><div><dt className="font-bold opacity-70">Away source</dt><dd>{sourceText(node.awaySource)}</dd></div><div><dt className="font-bold opacity-70">Linked match</dt><dd className="break-all font-mono">{node.linkedMatchId ?? "—"}</dd></div><div><dt className="font-bold opacity-70">Classification</dt><dd className="font-black">{classification}</dd></div><div><dt className="font-bold opacity-70">Guard flags</dt><dd>topologyOnly={String(topologyOnly)} · resolvedPairing={String(resolvedPairing)} · resettable={String(resettable)}</dd></div><div><dt className="font-bold opacity-70">Block reason</dt><dd>{reason ?? "—"}{code ? ` (${code})` : ""}</dd></div></dl>
+              {linkedMatch ? <p className="mt-2 border-t border-current/15 pt-2">Fixture: status={linkedMatch.status} · score={linkedMatch.home_score ?? "—"}-{linkedMatch.away_score ?? "—"} · winner={linkedMatch.winner_team_id ?? "—"}</p> : null}
+            </article>;
+          }) : <p>ไม่มี bracket node</p>}
+        </div>
+        <div className="grid gap-2">
+          <p className="font-black text-[#061426]">Knockout fixtures</p>
+          {diagnostic.fixtures.length ? diagnostic.fixtures.map(({ code, match, reason }) => <article className="min-w-0 rounded border border-slate-200 bg-white p-3" key={match.id}><p className="break-all font-mono font-bold">fixture id: {match.id ?? "—"}</p><p className="mt-1 break-words">linked node={linkedNodeIds.get(match.id) ?? "—"} · status={match.status ?? "—"} · score={match.homeScore ?? "—"}-{match.awayScore ?? "—"} · winner={match.winnerTeamId ?? "—"}</p><p className="mt-1 font-bold">{reason} ({code})</p></article>) : <p>ไม่มี knockout fixture</p>}
+        </div>
+      </div>
+    </details>
+  );
 }
 
 function dateValue(value: string | null) {
