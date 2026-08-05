@@ -19,15 +19,28 @@ function node(input: Partial<PublicCupV2Node>): PublicCupV2Node {
   };
 }
 
+function resolvedNode(input: Partial<PublicCupV2Node>): PublicCupV2Node {
+  return node({
+    awaySource: { bestOrder: null, groupId: null, groupLabel: null, rank: null, team: { id: "away", logoUrl: null, name: "ทีมเยือน", shortName: null }, type: "manual_team", winnerNodeId: null },
+    homeSource: { bestOrder: null, groupId: null, groupLabel: null, rank: null, team: { id: "home", logoUrl: null, name: "ทีมเหย้า", shortName: null }, type: "manual_team", winnerNodeId: null },
+    ...input,
+  });
+}
+
 test("groups 16- and 32-team KSW topology dynamically by round and order", () => {
   const rounds = groupPublicCupV2Rounds([
-    node({ id: "r1-2", matchOrder: 2, roundIndex: 0, roundLabel: "Round of 32" }),
-    node({ id: "r1-1", matchOrder: 1, roundIndex: 0, roundLabel: "Round of 32" }),
-    node({ id: "r2-1", roundIndex: 1, roundLabel: "Round of 16" }),
+    resolvedNode({ id: "r1-2", matchOrder: 2, roundIndex: 0, roundLabel: "Round of 32" }),
+    resolvedNode({ id: "r1-1", matchOrder: 1, roundIndex: 0, roundLabel: "Round of 32" }),
+    resolvedNode({ id: "r2-1", roundIndex: 1, roundLabel: "Round of 16" }),
   ]);
   assert.equal(rounds[0]?.roundLabel, "Round of 32");
   assert.equal(rounds[0]?.nodes[0]?.id, "r1-1");
   assert.equal(rounds[0]?.current, true);
+});
+
+test("does not render topology-only nodes as public match rounds", () => {
+  assert.equal(groupPublicCupV2Rounds([node({ roundLabel: "Quarterfinal" })]).length, 0);
+  assert.equal(groupPublicCupV2Rounds([resolvedNode({ roundLabel: "Quarterfinal" })]).length, 1);
 });
 
 test("keeps unresolved nodes locked and renders normal and penalty scores", () => {
@@ -38,15 +51,15 @@ test("keeps unresolved nodes locked and renders normal and penalty scores", () =
 });
 
 test("does not include Council nodes in the KSW main bracket", () => {
-  const rounds = groupPublicCupV2Rounds([node({ partitionKey: "division_1" })]);
+  const rounds = groupPublicCupV2Rounds([resolvedNode({ partitionKey: "division_1" })]);
   assert.equal(rounds.length, 0);
 });
 
 test("keeps Council division topologies separate even when their sizes differ", () => {
   const nodes = [
-    node({ id: "d1-r1", partitionKey: "division_1", roundIndex: 0, roundLabel: "Quarterfinal" }),
-    node({ id: "d1-r2", partitionKey: "division_1", roundIndex: 1, roundLabel: "Semifinal" }),
-    node({ id: "d2-r1", partitionKey: "division_2", roundIndex: 0, roundLabel: "Round of 16" }),
+    resolvedNode({ id: "d1-r1", partitionKey: "division_1", roundIndex: 0, roundLabel: "Quarterfinal" }),
+    resolvedNode({ id: "d1-r2", partitionKey: "division_1", roundIndex: 1, roundLabel: "Semifinal" }),
+    resolvedNode({ id: "d2-r1", partitionKey: "division_2", roundIndex: 0, roundLabel: "Round of 16" }),
   ];
   assert.deepEqual(groupPublicCupV2Rounds(nodes, "division_1").map((round) => round.nodes.map((entry) => entry.id)), [["d1-r1"], ["d1-r2"]]);
   assert.deepEqual(groupPublicCupV2Rounds(nodes, "division_2").map((round) => round.nodes.map((entry) => entry.id)), [["d2-r1"]]);
@@ -54,9 +67,9 @@ test("keeps Council division topologies separate even when their sizes differ", 
 
 test("preserves Quarterfinal, Semifinal, and Final as ordered round sections", () => {
   const nodes = [
-    ...Array.from({ length: 4 }, (_, index) => node({ id: `quarter-${index}`, matchOrder: index + 1, partitionKey: "division_1", roundIndex: 0, roundLabel: "Quarterfinal" })),
-    ...Array.from({ length: 2 }, (_, index) => node({ id: `semi-${index}`, matchOrder: index + 1, partitionKey: "division_1", roundIndex: 1, roundLabel: "Semifinal" })),
-    node({ id: "final", partitionKey: "division_1", roundIndex: 2, roundLabel: "Final" }),
+    ...Array.from({ length: 4 }, (_, index) => resolvedNode({ id: `quarter-${index}`, matchOrder: index + 1, partitionKey: "division_1", roundIndex: 0, roundLabel: "Quarterfinal" })),
+    ...Array.from({ length: 2 }, (_, index) => resolvedNode({ id: `semi-${index}`, matchOrder: index + 1, partitionKey: "division_1", roundIndex: 1, roundLabel: "Semifinal" })),
+    resolvedNode({ id: "final", partitionKey: "division_1", roundIndex: 2, roundLabel: "Final" }),
   ];
   const rounds = groupPublicCupV2Rounds(nodes, "division_1");
 

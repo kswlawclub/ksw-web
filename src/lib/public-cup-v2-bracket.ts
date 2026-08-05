@@ -1,4 +1,5 @@
 import type { PublicCupV2Node, PublicCupV2Source } from "@/lib/public-cup-v2-types";
+import { hasResolvedBracketPairing } from "@/lib/knockout-template-switching";
 
 export type PublicCupV2Round = {
   completed: boolean;
@@ -20,7 +21,11 @@ function isByeNode(node: PublicCupV2Node) {
 export function groupPublicCupV2Rounds(nodes: PublicCupV2Node[], partitionKey = "main"): PublicCupV2Round[] {
   const groups = new Map<number, PublicCupV2Node[]>();
   nodes
-    .filter((node) => node.partitionKey === partitionKey)
+    .filter((node) => node.partitionKey === partitionKey && hasResolvedBracketPairing({
+      linkedMatchId: node.linkedMatch?.id ?? null,
+      awaySource: { teamId: node.awaySource.team?.id },
+      homeSource: { teamId: node.homeSource.team?.id },
+    }))
     .forEach((node) => groups.set(node.roundIndex, [...(groups.get(node.roundIndex) ?? []), node]));
   const rounds = Array.from(groups.entries())
     .sort(([left], [right]) => left - right)
