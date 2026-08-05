@@ -28,10 +28,9 @@ import {
 import { requireAdminSession } from "@/lib/admin-server-auth";
 import { isCupCompetition, normalizeCompetitionType } from "@/lib/competition-format";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { buildKnockoutTemplatePreview, getKnockoutTemplate, isKnockoutTemplateKey, validateKnockoutTemplateSources } from "@/lib/knockout-templates/registry";
+import { buildKnockoutTemplatePreview, getKnockoutTemplate, isKnockoutTemplateKey } from "@/lib/knockout-templates/registry";
 import type { KnockoutTemplateKey } from "@/lib/knockout-templates/types";
 import type { ApprovedQualificationSummary } from "@/app/admin/competitions/[id]/qualification-actions";
-import { validateCouncilTemplateSelectionV2 } from "@/app/admin/competitions/[id]/council-division-actions";
 
 export type CompetitionEngineV2Config = {
   bracketCapacity: number | null;
@@ -362,24 +361,6 @@ async function loadCompetitionEngineV2Workflow(
   };
 }
 
-function qualificationSourcesFromConfig(snapshot: unknown): CompetitionTreeSource[] {
-  if (!Array.isArray(snapshot)) return [];
-
-  return snapshot.flatMap((entry) => {
-    if (!entry || typeof entry !== "object") return [];
-    const source = entry as Record<string, unknown>;
-    const type = source.type === "best_ranked" ? "best_ranked" : source.type === "group_rank" ? "group_rank" : null;
-    if (!type) return [];
-    return [{
-      bestOrder: typeof source.bestOrder === "number" ? source.bestOrder : undefined,
-      groupId: typeof source.groupId === "string" ? source.groupId : undefined,
-      rank: typeof source.rank === "number" ? source.rank : undefined,
-      teamId: typeof source.teamId === "string" ? source.teamId : undefined,
-      type,
-    }];
-  });
-}
-
 export async function selectCompetitionKnockoutTemplateV2(
   competitionId: string,
   templateKey: unknown,
@@ -395,7 +376,7 @@ export async function selectCompetitionKnockoutTemplateV2(
   const [configResult, nodesResult, matchesResult] = await Promise.all([
     verified.supabase
       .from("competition_knockout_configs")
-      .select("qualification_status, qualification_snapshot")
+      .select("competition_id")
       .eq("competition_id", competitionId)
       .maybeSingle(),
     verified.supabase.from("competition_bracket_nodes").select("id").eq("competition_id", competitionId).limit(1),
@@ -406,18 +387,11 @@ export async function selectCompetitionKnockoutTemplateV2(
     console.error("knockout template selection lookup failed", { config: configResult.error, matches: matchesResult.error, nodes: nodesResult.error });
     return { error: "ไม่สามารถตรวจสอบการตั้งค่ารอบน็อกเอาต์ได้", ok: false };
   }
-  if (!configResult.data || configResult.data.qualification_status !== "approved") {
-    return { error: "ยืนยันทีมผ่านเข้ารอบก่อนเลือกรูปแบบการแข่งขัน", ok: false };
+  if (!configResult.data) {
+    return { error: "ยังไม่ได้ตั้งค่ารอบน็อกเอาต์", ok: false };
   }
   if (nodesResult.data?.length || matchesResult.data?.length) {
     return { error: "เปลี่ยนรูปแบบการแข่งขันไม่ได้ เพราะมีโครงสร้างหรือแมตช์รอบน็อกเอาต์แล้ว", ok: false };
-  }
-
-  const validation = validateKnockoutTemplateSources(templateKey, qualificationSourcesFromConfig(configResult.data.qualification_snapshot));
-  if (!validation.valid) return { error: validation.errors[0] ?? "ข้อมูลทีมผ่านเข้ารอบยังไม่พร้อมสำหรับรูปแบบนี้", ok: false };
-  if (templateKey === "council_two_division") {
-    const councilValidation = await validateCouncilTemplateSelectionV2(competitionId);
-    if (!councilValidation.ok) return { error: councilValidation.error ?? "ข้อมูลสำหรับคัพสภา – สองดิวิชั่นยังไม่พร้อม", ok: false };
   }
 
   const update = await verified.supabase

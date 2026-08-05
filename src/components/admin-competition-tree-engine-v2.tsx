@@ -13,8 +13,8 @@ import {
   selectCompetitionKnockoutTemplateV2,
 } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
 import type { CompetitionFixturesV2Result, CompetitionKnockoutMatchV2 } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
-import { approveCouncilDivisionsV2, getCouncilDivisionStateV2, reopenCouncilDivisionsV2, saveCouncilDivisionDraftV2 } from "@/app/admin/competitions/[id]/council-division-actions";
-import type { CouncilDivisionEntry, CouncilDivisionState } from "@/app/admin/competitions/[id]/council-division-actions";
+import { approveCouncilDivisionsV2, getCouncilDivisionStateV2, getCouncilTemplatePreflightV2, reopenCouncilDivisionsV2, saveCouncilDivisionDraftV2 } from "@/app/admin/competitions/[id]/council-division-actions";
+import type { CouncilDivisionEntry, CouncilDivisionState, CouncilTemplatePreflightResult } from "@/app/admin/competitions/[id]/council-division-actions";
 import {
   completeCouncilCupCompetitionV2,
   confirmCouncilBracketV2,
@@ -500,6 +500,7 @@ export function AdminCompetitionTreeEngineV2({
   );
   const [selectedTemplate, setSelectedTemplate] = useState<KnockoutTemplateKey | null>(templateKey);
   const [councilState, setCouncilState] = useState<CouncilDivisionState | null>(null);
+  const [councilPreflight, setCouncilPreflight] = useState<CouncilTemplatePreflightResult | null>(null);
   const [councilExtraTeamIds, setCouncilExtraTeamIds] = useState<string[]>([]);
   const selectedTemplateDefinition = selectedTemplate ? getKnockoutTemplate(selectedTemplate) : undefined;
   const defaultPairing = useMemo(
@@ -604,6 +605,15 @@ export function AdminCompetitionTreeEngineV2({
     return () => { active = false; };
   }, [competitionId, qualificationApproved, selectedTemplate]);
 
+  useEffect(() => {
+    if (selectedTemplate !== "council_two_division") return;
+    let active = true;
+    void getCouncilTemplatePreflightV2(competitionId).then((result) => {
+      if (active) setCouncilPreflight(result);
+    });
+    return () => { active = false; };
+  }, [competitionId, selectedTemplate]);
+
   function generateTree() {
     setError("");
     setMessage("");
@@ -633,6 +643,7 @@ export function AdminCompetitionTreeEngineV2({
       }
       setSelectedTemplate(templateKey);
       setCouncilState(null);
+      setCouncilPreflight(null);
       setCouncilExtraTeamIds([]);
       setDraftSources(buildKnockoutTemplatePreview(template.key, qualifiedSources).sources as KswQualificationSource[]);
       setEditingPairing(false);
@@ -849,7 +860,7 @@ export function AdminCompetitionTreeEngineV2({
           <p className="mt-4 rounded-md border border-[#8a6418]/25 bg-[#fff7e6] px-3 py-2 text-sm font-bold text-[#8a6418]">{currentWorkflow.warning}</p>
         ) : null}
 
-        {qualificationApproved && !summary && qualifiedSources.length ? (
+        {configReady && !summary ? (
           <>
             <section className="mt-5 min-w-0 rounded-md border border-slate-200 bg-white p-4">
               <div>
@@ -860,15 +871,15 @@ export function AdminCompetitionTreeEngineV2({
                 {listKnockoutTemplates().map((template) => {
                   const selected = selectedTemplate === template.key;
                   const validation = templateValidation.get(template.key);
-                  const selectable = template.enabled && Boolean(validation?.valid);
+                  const selectable = template.enabled;
                   const className = `min-w-0 rounded-md border p-4 text-left ${selectable ? "transition hover:border-[#d8ad45] disabled:cursor-wait disabled:opacity-60" : "border-dashed opacity-75"} ${selected ? "border-[#d8ad45] bg-[#fffdf7] ring-1 ring-[#d8ad45]/30" : "border-slate-200 bg-white"}`;
-                  const statusLabel = selectable ? template.statusLabel : validation?.errors[0] ?? "รอข้อมูลกลุ่มพร้อม";
-                  const content = <><div className="flex flex-wrap items-start justify-between gap-2"><span className="text-base font-black text-[#061426]">{template.name}</span><span className={`rounded-full border px-2 py-1 text-[11px] font-black ${selectable ? "border-[#d8ad45]/40 bg-white text-[#8a6418]" : "border-slate-200 bg-white text-slate-600"}`}>{statusLabel}</span></div><p className="mt-2 text-sm font-semibold text-slate-600">{template.description}</p><div className="mt-3 flex flex-wrap gap-1.5">{template.featureBullets.map((feature) => <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-black text-slate-600" key={feature}>{feature}</span>)}</div><TemplateMiniDiagram diagram={template.diagram} /></>;
+                  const statusLabel = selected ? "เลือกแล้ว" : template.statusLabel;
+                  const content = <><div className="flex flex-wrap items-start justify-between gap-2"><span className="text-base font-black text-[#061426]">{template.name}</span><span className={`rounded-full border px-2 py-1 text-[11px] font-black ${selectable ? "border-[#d8ad45]/40 bg-white text-[#8a6418]" : "border-slate-200 bg-white text-slate-600"}`}>{statusLabel}</span></div><p className="mt-2 text-sm font-semibold text-slate-600">{template.description}</p>{!validation?.valid ? <p className="mt-2 text-xs font-bold leading-5 text-slate-500">เลือกได้ทันที · สร้างสายเมื่อ {validation?.errors[0]}</p> : null}<div className="mt-3 flex flex-wrap gap-1.5">{template.featureBullets.map((feature) => <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-black text-slate-600" key={feature}>{feature}</span>)}</div><TemplateMiniDiagram diagram={template.diagram} /></>;
                   return selectable ? <button aria-pressed={selected} className={className} disabled={isPending} key={template.key} onClick={() => chooseTemplate(template.key)} type="button">{content}</button> : <article className={className} data-disabled="true" key={template.key}>{content}</article>;
                 })}
               </div>
             </section>
-            {selectedTemplate === "council_two_division" ? <CouncilDivisionApproval error={error} extraTeamIds={councilExtraTeamIds} onApprove={approveCouncilDivisions} onExtrasChange={setCouncilExtraTeamIds} onReopen={reopenCouncilDivisions} onSaveDraft={saveCouncilDraft} pending={isPending} state={councilState} /> : selectedTemplate === "ksw_standard" && selectedTemplateDefinition && defaultPairing ? <section className="mt-5 min-w-0 rounded-md border border-[#d8ad45]/40 bg-[#fffdf7] p-4">
+            {selectedTemplate === "council_two_division" && qualificationApproved ? <><CouncilDivisionApproval error={error} extraTeamIds={councilExtraTeamIds} onApprove={approveCouncilDivisions} onExtrasChange={setCouncilExtraTeamIds} onReopen={reopenCouncilDivisions} onSaveDraft={saveCouncilDraft} pending={isPending} state={councilState} />{councilPreflight && !councilPreflight.ok ? <section className="mt-5 min-w-0 rounded-md border border-[#8a6418]/25 bg-[#fff7e6] p-4"><p className="font-black text-[#8a6418]">{councilPreflight.message}</p>{councilPreflight.missingRequirements.length ? <ul className="mt-2 list-disc space-y-1 pl-5 text-sm font-semibold text-slate-700">{councilPreflight.missingRequirements.map((requirement) => <li key={requirement}>{requirement}</li>)}</ul> : null}</section> : null}</> : selectedTemplate === "council_two_division" ? <section className="mt-5 min-w-0 rounded-md border border-[#d8ad45]/40 bg-[#fffdf7] p-4"><h3 className="font-black text-[#061426]">เลือกคัพสภา – สองดิวิชั่นแล้ว</h3><p className="mt-1 text-sm font-semibold text-slate-600">ยังสร้างโครงสร้างการแข่งขันไม่ได้จนกว่าข้อมูลด้านล่างจะพร้อม</p>{councilPreflight ? councilPreflight.ok ? <p className="mt-3 text-sm font-bold text-emerald-800">{councilPreflight.message}</p> : <div className="mt-3 rounded-md border border-[#8a6418]/25 bg-white px-3 py-3 text-sm font-semibold text-slate-700"><p className="font-black text-[#8a6418]">{councilPreflight.message}</p>{councilPreflight.missingRequirements.length ? <ul className="mt-2 list-disc space-y-1 pl-5">{councilPreflight.missingRequirements.map((requirement) => <li key={requirement}>{requirement}</li>)}</ul> : null}</div> : <p className="mt-3 text-sm font-semibold text-slate-600">กำลังตรวจสอบความพร้อมของข้อมูล</p>}</section> : selectedTemplate === "ksw_standard" && selectedTemplateDefinition && defaultPairing ? <section className="mt-5 min-w-0 rounded-md border border-[#d8ad45]/40 bg-[#fffdf7] p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div><h3 className="font-black text-[#061426]">ตัวอย่างการจัดสาย: {selectedTemplateDefinition.name}</h3><p className="mt-1 text-sm font-semibold text-slate-600">{selectedTemplateDefinition.description}</p></div>
               <div className="flex flex-wrap gap-2"><button className="min-h-10 rounded-md border border-[#d8ad45] bg-white px-3 py-2 text-sm font-black text-[#8a6418]" onClick={() => setDraftSources(defaultPairing.sources)} type="button">ใช้การจัดสายอัตโนมัติ</button><button className="min-h-10 rounded-md border border-[#d8ad45] bg-white px-3 py-2 text-sm font-black text-[#8a6418]" onClick={() => setEditingPairing((current) => !current)} type="button">{editingPairing ? "ดูตัวอย่างคู่" : "แก้ไขคู่ก่อนยืนยัน"}</button></div>

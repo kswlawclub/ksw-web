@@ -32,6 +32,13 @@ export type CouncilDivisionState = {
   recommendedExtraTeamIds: string[];
 };
 
+export type CouncilTemplatePreflightResult = {
+  code: "council_data_unavailable" | "division_1_not_ready" | "division_2_not_ready" | "qualification_not_approved" | "ready";
+  message: string;
+  missingRequirements: string[];
+  ok: boolean;
+};
+
 function asText(value: unknown) {
   return typeof value === "string" ? value : "";
 }
@@ -147,17 +154,30 @@ function buildState(data: Exclude<Awaited<ReturnType<typeof loadCouncilData>>, {
   };
 }
 
-export async function validateCouncilTemplateSelectionV2(competitionId: string) {
+export async function getCouncilTemplatePreflightV2(competitionId: string): Promise<CouncilTemplatePreflightResult> {
   const data = await loadCouncilData(competitionId);
-  if (!data.supabase) return { error: data.error, ok: false };
-  if (data.competition.season_status === "completed") return { error: "การแข่งขันปิดแล้ว ต้องเปิดการแข่งขันเพื่อแก้ไขก่อน", ok: false };
-
-  const state = buildState(data);
-  if (state.division1.error || state.division2.error) {
-    return { error: state.division1.error ?? state.division2.error, ok: false };
+  if (!data.supabase) {
+    const qualificationPending = data.error === "ยืนยันทีมผ่านเข้ารอบก่อนเลือกคัพสภา";
+    return {
+      code: qualificationPending ? "qualification_not_approved" : "council_data_unavailable",
+      message: qualificationPending ? "เลือกคัพสภา – สองดิวิชั่นแล้ว แต่ยังยืนยันทีมผ่านเข้ารอบไม่ครบ" : data.error ?? "ไม่สามารถตรวจสอบความพร้อมของคัพสภา – สองดิวิชั่นได้",
+      missingRequirements: qualificationPending ? ["ยืนยันทีมผ่านเข้ารอบ"] : [],
+      ok: false,
+    };
   }
 
-  return { ok: true };
+  const state = buildState(data);
+  const missingRequirements = [state.division1.error, state.division2.error].filter((error): error is string => Boolean(error));
+  if (missingRequirements.length) {
+    return {
+      code: state.division1.error ? "division_1_not_ready" : "division_2_not_ready",
+      message: "เลือกคัพสภา – สองดิวิชั่นแล้ว แต่ยังสร้างโครงสร้างไม่ได้",
+      missingRequirements,
+      ok: false,
+    };
+  }
+
+  return { code: "ready", message: "ข้อมูลพร้อมสำหรับจัดสาย Division 1 และ Division 2", missingRequirements: [], ok: true };
 }
 
 export async function getCouncilDivisionStateV2(competitionId: string) {
