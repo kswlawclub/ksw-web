@@ -33,7 +33,7 @@ import {
 import { buildCompetitionTree, type CompetitionTreeEntryMode, type CompetitionTreeNode, type CompetitionTreeSource, type CompetitionTreeSummary } from "@/lib/competition-tree";
 import { buildKnockoutTemplatePreview, getKnockoutTemplate, listKnockoutTemplates, validateKnockoutTemplateSources } from "@/lib/knockout-templates/registry";
 import { getKnockoutTemplateSwitchGuard } from "@/lib/knockout-template-switching";
-import { isKnockoutMatchReadyForEditing, isKnockoutRoundReadyForFixtures, type KnockoutNodeReadiness } from "@/lib/knockout-round-readiness";
+import { buildKnockoutMatchReadinessByMatchId, getKnockoutMatchPresentation, isKnockoutRoundReadyForFixtures, type KnockoutNodeReadiness } from "@/lib/knockout-round-readiness";
 import type { KnockoutTemplateDiagram, KnockoutTemplateKey } from "@/lib/knockout-templates/types";
 import type { KswQualificationSource } from "@/lib/ksw-knockout-template";
 import { TeamLogo } from "@/components/team-logo";
@@ -247,6 +247,7 @@ function KnockoutMatchCard({
   onEditingChange,
   onSave,
   teamsById,
+  readinessState = "ready",
   waitingSources = [],
 }: {
   editable?: boolean;
@@ -254,6 +255,7 @@ function KnockoutMatchCard({
   onEditingChange?: (editing: boolean) => void;
   onSave: (match: CompetitionKnockoutMatchV2, draft: ResultForm) => Promise<{ error?: string; ok: boolean }>;
   teamsById: Map<string, { id: string; logo_url: string | null; name: string; short_name: string | null }>;
+  readinessState?: "missing" | "ready" | "waiting";
   waitingSources?: string[];
 }) {
   const [draft, setDraft] = useState(() => formFromMatch(match));
@@ -274,8 +276,8 @@ function KnockoutMatchCard({
       <article className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4" id={`knockout-match-${match.id}`}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <p className="text-sm font-black text-[#061426]">รอผู้ชนะจากรอบก่อนหน้า</p>
-            <p className="mt-1 text-sm font-semibold text-slate-600">แมตช์นี้จะเปิดให้กำหนดวันเวลา สนาม และบันทึกผลเมื่อทั้งสองทีมเข้ารอบครบแล้ว</p>
+            <p className="text-sm font-black text-[#061426]">{readinessState === "missing" ? "ยังตรวจสอบความพร้อมของแมตช์นี้ไม่ได้" : "รอผู้ชนะจากรอบก่อนหน้า"}</p>
+            <p className="mt-1 text-sm font-semibold text-slate-600">{readinessState === "missing" ? "ระบบยังไม่พบสถานะความพร้อมของแมตช์นี้ จึงไม่อนุญาตให้บันทึกผล" : "แมตช์นี้จะเปิดให้กำหนดวันเวลา สนาม และบันทึกผลเมื่อทั้งสองทีมเข้ารอบครบแล้ว"}</p>
           </div>
           <span className="shrink-0 rounded-full border border-slate-300 bg-white px-2.5 py-1 text-xs font-black text-slate-600">รอทีมเข้ารอบ</span>
         </div>
@@ -374,6 +376,7 @@ function KnockoutMatchCard({
 
 function KnockoutRoundMatches({
   current,
+  enforceReadiness = false,
   matches,
   matchReadiness,
   onSave,
@@ -382,6 +385,7 @@ function KnockoutRoundMatches({
   teamsById,
 }: {
   current: boolean;
+  enforceReadiness?: boolean;
   matches: CompetitionKnockoutMatchV2[];
   matchReadiness?: Map<string, { readiness: KnockoutNodeReadiness; waitingSources: string[] }>;
   onSave: (match: CompetitionKnockoutMatchV2, draft: ResultForm) => Promise<{ error?: string; ok: boolean }>;
@@ -394,7 +398,7 @@ function KnockoutRoundMatches({
   const finishedMatches = matches.filter((match) => match.status === "finished");
   const displayedMatches = finishedCollapsed ? matches.filter((match) => match.status !== "finished") : matches;
   const finishedGoals = finishedMatches.reduce((total, match) => total + (match.home_score ?? 0) + (match.away_score ?? 0), 0);
-  const hasWaitingMatches = matches.some((match) => matchReadiness?.get(match.id)?.readiness.ready === false);
+  const hasWaitingMatches = enforceReadiness && matches.some((match) => getKnockoutMatchPresentation(matchReadiness?.get(match.id)?.readiness).state !== "ready");
 
   return (
     <section className="min-w-0 rounded-lg border border-slate-200 p-4">
@@ -402,7 +406,8 @@ function KnockoutRoundMatches({
       {finishedCollapsed ? <p className="mt-2 text-xs font-bold text-slate-600">จบแล้ว {finishedMatches.length} นัด · รวม {finishedGoals} ประตู</p> : null}
       <div className="mt-4 grid gap-3">{displayedMatches.map((match) => {
         const readiness = matchReadiness?.get(match.id);
-        return <KnockoutMatchCard editable={readiness?.readiness.ready ?? true} key={match.id} match={match} onEditingChange={(editing) => setEditingMatchId(editing ? match.id : "")} onSave={onSave} teamsById={teamsById} waitingSources={readiness?.waitingSources} />;
+        const presentation = enforceReadiness ? getKnockoutMatchPresentation(readiness?.readiness) : { editable: true, state: "ready" as const };
+        return <KnockoutMatchCard editable={presentation.editable} key={match.id} match={match} onEditingChange={(editing) => setEditingMatchId(editing ? match.id : "")} onSave={onSave} readinessState={presentation.state} teamsById={teamsById} waitingSources={readiness?.waitingSources} />;
       })}</div>
     </section>
   );
@@ -467,9 +472,11 @@ function CouncilPartitionBracket({
   const matchReadiness = useMemo(() => {
     if (!state) return new Map<string, { readiness: KnockoutNodeReadiness; waitingSources: string[] }>();
     const nodesById = new Map(state.nodes.map((node) => [node.id, node]));
+    const readinessByMatchId = buildKnockoutMatchReadinessByMatchId({ matches: state.matches, nodes: state.nodes });
     return new Map(state.nodes.flatMap((node) => {
       if (!node.linkedMatchId) return [];
-      const readiness = isKnockoutMatchReadyForEditing(node, { matches: state.matches, nodes: state.nodes });
+      const readiness = readinessByMatchId.get(node.linkedMatchId);
+      if (!readiness) return [];
       const waitingSources = readiness.waitingNodeIds.map((nodeId) => {
         const sourceNode = nodesById.get(nodeId);
         return sourceNode ? `รอผู้ชนะจากคู่ ${sourceNode.matchOrder}` : "รอผู้ชนะจากรอบก่อนหน้า";
@@ -483,6 +490,38 @@ function CouncilPartitionBracket({
     state.nodes.forEach((node) => grouped.set(node.roundIndex, [...(grouped.get(node.roundIndex) ?? []), node]));
     return new Map(Array.from(grouped, ([roundIndex, nodes]) => [roundIndex, isKnockoutRoundReadyForFixtures(nodes, { matches: state.matches, nodes: state.nodes }).ready]));
   }, [state]);
+  const readinessDiagnostics = useMemo(() => {
+    if (!state) return [];
+    const nodesById = new Map(state.nodes.map((node) => [node.id, node]));
+    const matchesById = new Map(state.matches.map((match) => [match.id, match]));
+    const sourceDetail = (source: CompetitionTreeSource) => {
+      const sourceNode = source.nodeId ? nodesById.get(source.nodeId) : undefined;
+      const sourceMatch = sourceNode?.linkedMatchId ? matchesById.get(sourceNode.linkedMatchId) : undefined;
+      return {
+        groupId: source.groupId ?? null,
+        nodeId: source.nodeId ?? null,
+        rank: source.rank ?? null,
+        sourceMatchStatus: sourceMatch?.status ?? null,
+        sourceMatchWinnerTeamId: sourceMatch?.winner_team_id ?? null,
+        teamId: source.teamId ?? null,
+        type: source.type,
+      };
+    };
+    return state.nodes.map((node) => {
+      const readiness = node.linkedMatchId ? matchReadiness.get(node.linkedMatchId)?.readiness : undefined;
+      const presentation = getKnockoutMatchPresentation(readiness);
+      const mappedReadiness = node.linkedMatchId ? matchReadiness.get(node.linkedMatchId) : undefined;
+      return {
+        away: sourceDetail(node.awaySource),
+        branch: !node.linkedMatchId ? "topology-placeholder" : presentation.state === "missing" ? "readiness-map-missing" : presentation.state === "waiting" ? "waiting-placeholder" : "editable-form",
+        home: sourceDetail(node.homeSource),
+        linkedMatchId: node.linkedMatchId ?? null,
+        mappedReadiness: Boolean(mappedReadiness),
+        node,
+        readiness: readiness ?? { away: { ready: false, teamId: null, waitingNodeId: null }, home: { ready: false, teamId: null, waitingNodeId: null }, ready: false, waitingNodeIds: [] },
+      };
+    });
+  }, [matchReadiness, state]);
 
   function swapSource(currentIndex: number, nextIndex: number) {
     if (currentIndex === nextIndex) return;
@@ -529,12 +568,13 @@ function CouncilPartitionBracket({
   const label = partitionKey === "division_1" ? "Knockout Division 1" : "Knockout Division 2";
   return <section className={`mt-5 min-w-0 scroll-mt-28 rounded-lg border ${theme.accent} ${theme.surface} p-4 sm:p-5`} id={partitionKey === "division_1" ? "cup-knockout-d1" : "cup-knockout-d2"}>
     <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className={`text-xl font-black ${theme.heading}`}>{label}</h3><p className="mt-1 text-sm font-semibold text-slate-600">จัดสาย สร้างโปรแกรม และบันทึกผลของดิวิชั่นนี้อย่างอิสระ</p></div><span className={`rounded-full border px-3 py-1.5 text-xs font-black ${theme.badge}`}>{state?.status === "completed" ? "ได้แชมป์แล้ว" : state?.nodes.length ? "จัดสายแล้ว" : "รอจัดสาย"}</span></div>
+    {state ? <details className="mt-4 rounded-md border border-dashed border-slate-300 bg-white/75 p-3 text-xs text-slate-700"><summary className="cursor-pointer font-black text-[#061426]">ตรวจสอบความพร้อมของรอบน็อกเอาต์</summary><div className="mt-3 grid gap-2">{readinessDiagnostics.map(({ away, branch, home, linkedMatchId, mappedReadiness, node, readiness }) => <article className={readiness.ready ? "min-w-0 rounded border border-emerald-200 bg-emerald-50/60 p-3" : "min-w-0 rounded border border-amber-200 bg-amber-50/60 p-3"} key={node.id}><div className="flex flex-wrap items-start justify-between gap-2"><p className="break-all font-mono font-bold">node: {node.id}</p><span className="rounded border border-slate-300 bg-white px-2 py-0.5 font-black">{branch}</span></div><dl className="mt-2 grid gap-x-4 gap-y-1 break-words sm:grid-cols-2"><div><dt className="font-bold opacity-70">Round / order</dt><dd>{node.roundLabel} · {node.roundIndex} / {node.matchOrder}</dd></div><div><dt className="font-bold opacity-70">Linked match</dt><dd className="font-mono">{linkedMatchId ?? "—"}</dd></div><div><dt className="font-bold opacity-70">Home</dt><dd>type={home.type} · team={home.teamId ?? "—"} · source node={home.nodeId ?? "—"} · status={home.sourceMatchStatus ?? "—"} · winner={home.sourceMatchWinnerTeamId ?? "—"}</dd></div><div><dt className="font-bold opacity-70">Away</dt><dd>type={away.type} · team={away.teamId ?? "—"} · source node={away.nodeId ?? "—"} · status={away.sourceMatchStatus ?? "—"} · winner={away.sourceMatchWinnerTeamId ?? "—"}</dd></div><div><dt className="font-bold opacity-70">Readiness map</dt><dd>{mappedReadiness ? "found" : "missing"}</dd></div><div><dt className="font-bold opacity-70">readyForEditing</dt><dd className="font-black">{String(readiness.ready)}{readiness.waitingNodeIds.length ? ` · waiting=${readiness.waitingNodeIds.join(", ")}` : ""}</dd></div></dl></article>)}</div></details> : null}
     {error ? <p className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-800">{error}</p> : null}
     {message ? <p className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">{message}</p> : null}
     {!state ? <p className="mt-4 text-sm font-bold text-slate-600">กำลังโหลด...</p> : !state.nodes.length ? <><div className="mt-4 flex flex-wrap gap-2"><button className="min-h-10 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-black text-[#061426]" onClick={() => { setDraftSources(state.pairingSources); setEditing(false); }} type="button">ใช้การจัดสายอัตโนมัติ</button><button className="min-h-10 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-black text-[#061426]" onClick={() => setEditing((value) => !value)} type="button">{editing ? "ดูตัวอย่างคู่" : "แก้ไขคู่ก่อนยืนยัน"}</button></div><div className="mt-4 grid gap-2 sm:grid-cols-2">{firstRoundPairs.map(([home, away], pairIndex) => <article className="min-w-0 rounded-md border border-slate-200 bg-white p-3" key={pairIndex}><p className={`text-xs font-black ${theme.heading}`}>คู่ที่ {pairIndex + 1}</p>{[home, away].map((source, side) => <div className="mt-2" key={`${pairIndex}-${side}`}>{editing ? <select className="min-h-10 w-full rounded-md border border-slate-200 px-2 text-sm font-bold" onChange={(event) => swapSource(pairIndex * 2 + side, Number(event.target.value))} value={pairIndex * 2 + side}>{draftSources.map((candidate, candidateIndex) => <option key={`${candidate.teamId}-${candidateIndex}`} value={candidateIndex}>{teamsById.get(candidate.teamId ?? "")?.name ?? "ทีม"} · {councilSourceLabel(candidate, groupsById)}</option>)}</select> : <p className="break-words text-sm font-black text-[#061426]">{teamsById.get(source?.teamId ?? "")?.name ?? "ทีม"} <span className="text-xs text-slate-500">{source ? councilSourceLabel(source, groupsById) : ""}</span></p>}{side === 0 ? <p className="py-1 text-center text-xs font-bold text-slate-400">พบ</p> : null}</div>)}</article>)}</div><button className="mt-4 min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={pending || draftSources.length !== state.entrantCount} onClick={confirmBracket} type="button">{pending ? "กำลังยืนยัน..." : "ยืนยันการจัดสาย"}</button></> : <div className="mt-5 grid gap-4">{rounds.map((round, index) => {
       const previous = rounds[index - 1];
       const current = currentRound?.roundIndex === round.roundIndex;
-      if (round.complete || (current && round.matches.length === round.nodes.length) || (!current && round.matches.length > 0)) return <KnockoutRoundMatches current={current} key={round.roundIndex} matchReadiness={matchReadiness} matches={round.matches as CompetitionKnockoutMatchV2[]} onSave={saveMatch} roundComplete={round.complete} roundLabel={round.label} teamsById={teamsById} />;
+      if (round.complete || (current && round.matches.length === round.nodes.length) || (!current && round.matches.length > 0)) return <KnockoutRoundMatches current={current} enforceReadiness key={round.roundIndex} matchReadiness={matchReadiness} matches={round.matches as CompetitionKnockoutMatchV2[]} onSave={saveMatch} roundComplete={round.complete} roundLabel={round.label} teamsById={teamsById} />;
       const readyForFixtures = roundReadiness.get(round.roundIndex) ?? false;
       return <section className="rounded-md border border-slate-200 bg-white p-4" key={round.roundIndex}><h4 className="text-lg font-black text-[#061426]">{round.label}</h4>{current ? <><p className="mt-1 text-sm font-semibold text-slate-600">{readyForFixtures ? "ทีมพร้อมแล้ว กรุณาสร้างโปรแกรมการแข่งขันรอบนี้" : "รอผู้ชนะจากรอบก่อนหน้าให้ครบก่อนสร้างโปรแกรม"}</p><button className="mt-3 min-h-10 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] disabled:opacity-60" disabled={pending || !readyForFixtures} onClick={() => createFixtures(round.roundIndex, round.label)} type="button">{pending ? "กำลังสร้าง..." : `สร้างโปรแกรม${round.label}`}</button></> : <><p className="mt-1 text-sm font-semibold text-slate-600">รอผลการแข่งขัน${previous?.label ?? "รอบก่อนหน้า"}</p><p className="mt-1 text-xs font-bold text-slate-500">{round.nodes.length} คู่ รอผู้ชนะจากรอบก่อน</p></>}</section>;
     })}</div>}

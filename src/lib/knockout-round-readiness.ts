@@ -24,6 +24,11 @@ export type KnockoutReadinessContext = {
   nodes: CompetitionTreeNode[];
 };
 
+export type KnockoutMatchPresentation = {
+  editable: boolean;
+  state: "missing" | "ready" | "waiting";
+};
+
 function resolvedWinner(match: KnockoutReadinessMatch | undefined) {
   return match && ["finished", "completed"].includes(match.status ?? "")
     ? match.winner_team_id ?? null
@@ -71,4 +76,19 @@ export function isKnockoutRoundReadyForFixtures(
 ) {
   const nodeReadiness = nodes.map((node) => ({ node, readiness: isKnockoutMatchReadyForEditing(node, context) }));
   return { nodeReadiness, ready: nodeReadiness.length > 0 && nodeReadiness.every(({ readiness }) => readiness.ready) };
+}
+
+export function buildKnockoutMatchReadinessByMatchId(context: KnockoutReadinessContext) {
+  return new Map(
+    context.nodes.flatMap((node) => node.linkedMatchId
+      ? [[node.linkedMatchId, isKnockoutMatchReadyForEditing(node, context)] as const]
+      : []),
+  );
+}
+
+export function getKnockoutMatchPresentation(readiness: KnockoutNodeReadiness | undefined): KnockoutMatchPresentation {
+  if (!readiness) return { editable: false, state: "missing" };
+  return readiness.ready
+    ? { editable: true, state: "ready" }
+    : { editable: false, state: "waiting" };
 }

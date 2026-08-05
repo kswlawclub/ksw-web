@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildKnockoutMatchReadinessByMatchId,
+  getKnockoutMatchPresentation,
   isKnockoutMatchReadyForEditing,
   isKnockoutRoundReadyForFixtures,
 } from "./knockout-round-readiness.ts";
@@ -69,4 +71,29 @@ test("a scheduled upstream fixture never makes the next Council division round r
   assert.equal(isKnockoutMatchReadyForEditing(division1Semifinal, context).ready, true);
   assert.equal(isKnockoutMatchReadyForEditing(division2Semifinal, context).ready, false);
   assert.equal(isKnockoutRoundReadyForFixtures([division2Semifinal], context).ready, false);
+});
+
+test("a missing readiness entry is fail-safe while waiting and ready entries retain their presentation", () => {
+  assert.deepEqual(getKnockoutMatchPresentation(undefined), { editable: false, state: "missing" });
+  assert.deepEqual(getKnockoutMatchPresentation({ away: { ready: true, teamId: "away", waitingNodeId: null }, home: { ready: false, teamId: null, waitingNodeId: "quarter" }, ready: false, waitingNodeIds: ["quarter"] }), { editable: false, state: "waiting" });
+  assert.deepEqual(getKnockoutMatchPresentation({ away: { ready: true, teamId: "away", waitingNodeId: null }, home: { ready: true, teamId: "home", waitingNodeId: null }, ready: true, waitingNodeIds: [] }), { editable: true, state: "ready" });
+});
+
+test("a linked fixture without a matching readiness entry remains read-only", () => {
+  const readinessByMatchId = buildKnockoutMatchReadinessByMatchId({
+    matches: [{ id: "linked-fixture", status: "scheduled", winner_team_id: null }],
+    nodes: [],
+  });
+
+  assert.deepEqual(getKnockoutMatchPresentation(readinessByMatchId.get("linked-fixture")), { editable: false, state: "missing" });
+});
+
+test("readiness is keyed by linked match id without crossing Council divisions", () => {
+  const division1 = node({ id: "d1-node", linkedMatchId: "d1-match", partitionKey: "division_1" });
+  const division2 = node({ id: "d2-node", linkedMatchId: "d2-match", partitionKey: "division_2" });
+  const readinessByMatchId = buildKnockoutMatchReadinessByMatchId({ matches: [], nodes: [division1, division2] });
+
+  assert.equal(readinessByMatchId.get("d1-match")?.ready, true);
+  assert.equal(readinessByMatchId.get("d2-match")?.ready, true);
+  assert.equal(readinessByMatchId.get("missing-match"), undefined);
 });
