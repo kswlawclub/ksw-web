@@ -270,7 +270,7 @@ function CompetitionVisual({ competition, className = "" }: { competition: Row; 
       {coverImageUrl ? (
         <Image
           alt=""
-          className="object-cover opacity-90 transition-transform duration-300 group-hover:scale-[1.02]"
+          className="object-cover object-center opacity-90 transition-transform duration-300 group-hover:scale-[1.02]"
           fill
           sizes="(max-width: 767px) 100vw, (max-width: 1279px) 55vw, 39vw"
           src={coverImageUrl}
@@ -317,7 +317,7 @@ function CompetitionCard({ competition, horizontal = false }: { competition: Row
   const cardContent = (
     <>
       <CompetitionVisual className={horizontal ? "aspect-[16/10] lg:aspect-auto" : "aspect-[16/9]"} competition={competition} />
-      <div className="flex min-w-0 flex-1 flex-col p-4 sm:p-5">
+      <div className="flex min-w-0 flex-1 flex-col p-5 sm:p-6">
         <div>
           <h2 className="break-words text-xl font-black leading-tight text-[#061426]">{text(competition, ["name"], "Competition")}</h2>
           {metadata.length ? <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold text-slate-500"><CalendarDays aria-hidden="true" className="size-3.5 shrink-0 text-[#8a6418]" />{metadata.join(" • ")}</p> : null}
@@ -343,7 +343,7 @@ function CompetitionCard({ competition, horizontal = false }: { competition: Row
   if (slug) {
     return (
       <Link
-        className={`group min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-900/5 transition-all hover:border-[#d8ad45]/55 hover:shadow-md hover:shadow-slate-900/10 ${horizontal ? "grid lg:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)]" : "flex flex-col"}`}
+        className={`group min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-900/5 transition-all hover:border-[#d8ad45]/55 hover:shadow-md hover:shadow-slate-900/10 ${horizontal ? "grid lg:grid-cols-[22rem_minmax(0,1fr)]" : "flex flex-col"}`}
         href={`/competitions/${slug}`}
       >
         {cardContent}
@@ -352,7 +352,7 @@ function CompetitionCard({ competition, horizontal = false }: { competition: Row
   }
 
   return (
-    <article className={`group min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-900/5 ${horizontal ? "grid lg:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)]" : "flex flex-col"}`}>
+    <article className={`group min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-900/5 ${horizontal ? "grid lg:grid-cols-[22rem_minmax(0,1fr)]" : "flex flex-col"}`}>
       {cardContent}
     </article>
   );
@@ -372,9 +372,9 @@ function CurrentCompetitionFeature({ items }: { items: Row[] }) {
   return (
     <section className="mx-auto w-full max-w-7xl px-4 pb-12 pt-8 sm:px-6 sm:pt-10 lg:px-10" aria-labelledby="current-competitions-heading">
       <div className="mb-4 flex items-center gap-2"><Radio aria-hidden="true" className="size-5 shrink-0 text-emerald-800" /><h2 className="text-2xl font-black text-[#061426]" id="current-competitions-heading">กำลังดำเนินการแข่งขัน</h2></div>
-      <article className="group grid min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-900/10 lg:grid-cols-[minmax(0,1.22fr)_minmax(0,1fr)]">
+      <article className="group grid min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-900/10 lg:grid-cols-[22rem_minmax(0,1fr)]">
         <CompetitionVisual className="aspect-[16/10] lg:aspect-auto" competition={featured} />
-        <div className="flex min-w-0 flex-col p-5 sm:p-6 lg:p-7">
+        <div className="flex min-w-0 flex-col p-5 sm:p-6">
           <h3 className="break-words text-3xl font-black leading-tight text-[#061426]">{text(featured, ["name"], "Competition")}</h3>
           {metadata.length ? <div className="mt-4 grid gap-2 text-sm font-bold text-slate-600">{metadata.map(({ icon: Icon, value }) => <p className="flex min-w-0 items-start gap-2" key={value}><Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-[#8a6418]" /><span className="break-words">{value}</span></p>)}</div> : null}
           <p className="mt-5 text-sm leading-6 text-slate-700">{description}</p>
@@ -413,11 +413,11 @@ function ChronicleCard({ entry }: { entry: ChronicleViewModel }) {
   ].filter(Boolean);
   const content = (
     <>
-      <div className="relative min-h-56 overflow-hidden bg-[#061426] sm:min-h-full">
+      <div className="relative aspect-[16/10] overflow-hidden bg-[#061426] lg:aspect-auto">
         {entry.coverImageUrl ? (
           <Image
             alt=""
-            className="object-cover opacity-85 transition-transform duration-500 group-hover:scale-[1.03]"
+            className="object-cover object-center opacity-85 transition-transform duration-300 group-hover:scale-[1.02]"
             fill
             sizes="(max-width: 639px) 100vw, (max-width: 1279px) 50vw, 39vw"
             src={entry.coverImageUrl}
@@ -462,7 +462,7 @@ function ChronicleCard({ entry }: { entry: ChronicleViewModel }) {
     </>
   );
 
-  const className = `group grid min-w-0 overflow-hidden rounded-2xl border bg-white shadow-sm shadow-slate-900/5 transition-all ${accent} hover:border-[#d8ad45]/55 hover:bg-[#fffdf7] hover:shadow-md hover:shadow-slate-900/10 lg:grid-cols-[minmax(12rem,0.78fr)_minmax(0,1.22fr)]`;
+  const className = `group grid min-w-0 overflow-hidden rounded-2xl border bg-white shadow-sm shadow-slate-900/5 transition-all ${accent} hover:border-[#d8ad45]/55 hover:bg-[#fffdf7] hover:shadow-md hover:shadow-slate-900/10 lg:grid-cols-[22rem_minmax(0,1fr)]`;
   if (!entry.slug) return <article className={className}>{content}</article>;
   return <Link className={className} href={`/competitions/${entry.slug}`}>{content}</Link>;
 }
