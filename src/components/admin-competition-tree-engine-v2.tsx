@@ -31,6 +31,7 @@ import {
 } from "@/lib/competition-engine-v2-state";
 import { buildCompetitionTree, type CompetitionTreeEntryMode, type CompetitionTreeNode, type CompetitionTreeSource, type CompetitionTreeSummary } from "@/lib/competition-tree";
 import { buildKnockoutTemplatePreview, getKnockoutTemplate, listKnockoutTemplates, validateKnockoutTemplateSources } from "@/lib/knockout-templates/registry";
+import { getKnockoutTemplateSwitchGuard } from "@/lib/knockout-template-switching";
 import type { KnockoutTemplateDiagram, KnockoutTemplateKey } from "@/lib/knockout-templates/types";
 import type { KswQualificationSource } from "@/lib/ksw-knockout-template";
 import { TeamLogo } from "@/components/team-logo";
@@ -524,7 +525,10 @@ export function AdminCompetitionTreeEngineV2({
     () => nodes.map((node) => localNodeLinks[node.id] ? { ...node, linkedMatchId: localNodeLinks[node.id] } : node),
     [localNodeLinks, nodes],
   );
-  const canChangeTemplate = effectiveNodes.length === 0 && visibleKnockoutMatches.length === 0;
+  const templateSwitchGuard = getKnockoutTemplateSwitchGuard({
+    matches: visibleKnockoutMatches.map((match) => ({ status: match.status, winnerTeamId: match.winner_team_id })),
+    nodes: effectiveNodes,
+  });
   const knockoutRounds = useMemo<KnockoutRoundView[]>(() => {
     const matchesById = new Map(visibleKnockoutMatches.map((match) => [match.id, match]));
     const grouped = new Map<number, CompetitionTreeNode[]>();
@@ -692,11 +696,11 @@ export function AdminCompetitionTreeEngineV2({
   }
 
   function openTemplateSelection() {
-    if (!canChangeTemplate) {
-      setError("เปลี่ยนรูปแบบการแข่งขันไม่ได้ เพราะมีโครงสร้างหรือแมตช์รอบน็อกเอาต์แล้ว");
+    if (!templateSwitchGuard.allowed) {
+      setError(templateSwitchGuard.reason ?? "เปลี่ยนรูปแบบการแข่งขันไม่ได้");
       return;
     }
-    if (!window.confirm("เปลี่ยนรูปแบบการแข่งขัน? ร่างการแบ่งดิวิชั่นหรือการจัดสายอัตโนมัติที่ยังไม่มี bracket จะถูกล้างเมื่อยืนยันรูปแบบใหม่")) return;
+    if (!window.confirm("เปลี่ยนรูปแบบการแข่งขัน? โครงร่างรอบน็อกเอาต์ที่ยังไม่มีคู่แข่งขันจะถูกล้างเมื่อยืนยันรูปแบบใหม่")) return;
     setError("");
     setMessage("");
     setTemplateSelectionOpen(true);

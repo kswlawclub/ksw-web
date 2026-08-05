@@ -29,6 +29,7 @@ import { requireAdminSession } from "@/lib/admin-server-auth";
 import { isCupCompetition, normalizeCompetitionType } from "@/lib/competition-format";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { buildKnockoutTemplatePreview, getKnockoutTemplate, isKnockoutTemplateKey } from "@/lib/knockout-templates/registry";
+import { getKnockoutTemplateSwitchGuard } from "@/lib/knockout-template-switching";
 import type { KnockoutTemplateKey } from "@/lib/knockout-templates/types";
 import type { ApprovedQualificationSummary } from "@/app/admin/competitions/[id]/qualification-actions";
 
@@ -379,8 +380,11 @@ export async function selectCompetitionKnockoutTemplateV2(
       .select("competition_id, template_key")
       .eq("competition_id", competitionId)
       .maybeSingle(),
-    verified.supabase.from("competition_bracket_nodes").select("id").eq("competition_id", competitionId).limit(1),
-    verified.supabase.from("matches").select("id").eq("league_id", competitionId).eq("competition_stage", "knockout").limit(1),
+    verified.supabase
+      .from("competition_bracket_nodes")
+      .select("id, competition_id, round_index, round_label, match_order, bracket_position, linked_match_id, home_source_type, away_source_type, home_source_group_id, home_source_rank, home_source_team_id, home_source_node_id, home_source_best_order, away_source_group_id, away_source_rank, away_source_team_id, away_source_node_id, away_source_best_order")
+      .eq("competition_id", competitionId),
+    verified.supabase.from("matches").select("id, status, winner_team_id").eq("league_id", competitionId).eq("competition_stage", "knockout"),
   ]);
 
   if (configResult.error || nodesResult.error || matchesResult.error) {
@@ -390,11 +394,23 @@ export async function selectCompetitionKnockoutTemplateV2(
   if (!configResult.data) {
     return { error: "ยังไม่ได้ตั้งค่ารอบน็อกเอาต์", ok: false };
   }
-  if (nodesResult.data?.length || matchesResult.data?.length) {
-    return { error: "เปลี่ยนรูปแบบการแข่งขันไม่ได้ เพราะมีโครงสร้างหรือแมตช์รอบน็อกเอาต์แล้ว", ok: false };
+  const templateSwitchGuard = getKnockoutTemplateSwitchGuard({
+    matches: (matchesResult.data ?? []).map((match) => ({ status: match.status, winnerTeamId: match.winner_team_id })),
+    nodes: (nodesResult.data ?? []).map((row) => nodeFromDatabase(row as Record<string, unknown>)),
+  });
+  if (!templateSwitchGuard.allowed) {
+    return { error: templateSwitchGuard.reason ?? "เปลี่ยนรูปแบบการแข่งขันไม่ได้", ok: false };
   }
 
   if (configResult.data.template_key && configResult.data.template_key !== templateKey) {
+    const resetNodes = await verified.supabase
+      .from("competition_bracket_nodes")
+      .delete()
+      .eq("competition_id", competitionId);
+    if (resetNodes.error) {
+      console.error("knockout template skeleton reset failed", resetNodes.error);
+      return { error: "ไม่สามารถล้างโครงร่างรอบน็อกเอาต์เดิม", ok: false };
+    }
     const resetPartitions = await verified.supabase
       .from("competition_knockout_partitions")
       .delete()
