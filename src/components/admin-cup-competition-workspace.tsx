@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, type MouseEvent, useEffect, useMemo, useState, useTransition } from "react";
-import { CheckCircle2, Circle, ListChecks, LockKeyhole } from "lucide-react";
+import { Boxes, CalendarDays, CheckCircle2, Circle, Crown, Flag, ListChecks, LockKeyhole, ShieldCheck, Swords, Trophy, UsersRound } from "lucide-react";
 import { updateMatch } from "@/app/admin/matches/actions";
 import { approveCupQualification, reopenCupQualification, saveCupQualificationSettings, type ApprovedQualificationSummary } from "@/app/admin/competitions/[id]/qualification-actions";
 import { AdminCompetitionGroupsManager, type AdminCompetitionGroup, type AdminCompetitionGroupTeam } from "@/components/admin-competition-groups-manager";
@@ -339,20 +339,24 @@ function CupCompetitionProgress({ steps }: { steps: CupCompetitionWorkflowStep[]
     locked: { className: "border-slate-300 bg-slate-100 text-slate-600" },
     upcoming: { className: "border-slate-200 bg-slate-50 text-slate-600" },
   } as const;
+  const icons = {
+    champion: Crown,
+    completed: Flag,
+    group_matches: CalendarDays,
+    groups: Boxes,
+    knockout_matches: Trophy,
+    knockout_setup: Swords,
+    qualification: ShieldCheck,
+    teams: UsersRound,
+  } as const;
 
   return (
-    <section className="mx-auto w-full max-w-7xl px-4 pb-5 sm:px-6 lg:px-10">
-      <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-3.5 shadow-sm shadow-slate-900/5 sm:p-4">
-        <h2 className="inline-flex items-center gap-2 text-lg font-black text-[#061426]"><ListChecks aria-hidden="true" className="size-5 shrink-0 text-[#8a6418]" />ลำดับการจัดการแข่งขัน</h2>
-        <ol className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
-          {steps.map((step) => {
-            const style = presentation[step.state];
-            const isOpen = openStep === step.id;
-            return <li className="min-w-0" key={step.id}><button aria-current={step.state === "current" ? "step" : undefined} aria-expanded={isOpen} className={`relative flex min-h-28 w-full flex-col justify-center rounded-md border px-3 py-3 text-center text-sm font-black ${style.className}`} onClick={() => setOpenStep((current) => current === step.id ? null : step.id)} title={step.description} type="button">{step.state === "complete" ? <CheckCircle2 aria-hidden="true" className="absolute right-2 top-2 size-4 shrink-0" /> : step.state === "locked" ? <LockKeyhole aria-hidden="true" className="absolute right-2 top-2 size-3.5 shrink-0 opacity-70" /> : <Circle aria-hidden="true" className="absolute right-2 top-2 size-3.5 shrink-0 opacity-70" />}<span className="min-w-0 break-words leading-5">{step.label}</span>{step.subStatus ? <span className="mt-1 inline-flex items-center justify-center gap-1 break-words text-[10px] font-bold leading-4 opacity-80">{step.state === "complete" ? <CheckCircle2 aria-hidden="true" className="size-3 shrink-0" /> : null}{step.subStatus}</span> : null}{isOpen ? <span className="mt-2 block border-t border-current/15 pt-2 text-left text-xs font-semibold leading-5">{step.description}</span> : null}</button></li>;
-          })}
-        </ol>
-      </article>
-    </section>
+    <><h2 className="inline-flex items-center gap-2 text-lg font-black text-[#061426]"><ListChecks aria-hidden="true" className="size-5 shrink-0 text-[#8a6418]" />ลำดับการจัดการแข่งขัน</h2><ol className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">{steps.map((step) => {
+      const style = presentation[step.state];
+      const isOpen = openStep === step.id;
+      const StepIcon = icons[step.id];
+      return <li className="min-w-0" key={step.id}><button aria-current={step.state === "current" ? "step" : undefined} aria-expanded={isOpen} className={`relative flex min-h-32 w-full flex-col items-center justify-center rounded-md border px-3 py-4 text-center text-sm font-black ${style.className}`} onClick={() => setOpenStep((current) => current === step.id ? null : step.id)} title={step.description} type="button">{step.state === "complete" ? <CheckCircle2 aria-hidden="true" className="absolute right-2 top-2 size-4 shrink-0" /> : step.state === "locked" ? <LockKeyhole aria-hidden="true" className="absolute right-2 top-2 size-3.5 shrink-0 opacity-70" /> : <Circle aria-hidden="true" className="absolute right-2 top-2 size-3.5 shrink-0 opacity-70" />}<StepIcon aria-hidden="true" className="mb-2 size-5 shrink-0" /><span className="min-w-0 break-words leading-5">{step.label}</span>{step.subStatus ? <span className="mt-1 inline-flex items-center justify-center gap-1 break-words text-[10px] font-bold leading-4 opacity-80">{step.state === "complete" ? <CheckCircle2 aria-hidden="true" className="size-3 shrink-0" /> : null}{step.subStatus}</span> : null}{isOpen ? <span className="mt-2 block w-full border-t border-current/15 pt-2 text-left text-xs font-semibold leading-5">{step.description}</span> : null}</button></li>;
+    })}</ol></>
   );
 }
 
@@ -385,11 +389,11 @@ function CupWorkspaceNavigation({ steps, templateKey }: { steps: CupCompetitionW
   }
 
   return (
-    <nav aria-label="เมนูลัดพื้นที่จัดการแข่งขัน" className="mx-auto w-full max-w-7xl px-4 pb-7 sm:px-6 lg:px-10" id="cup-workspace-nav">
-      <div className="overflow-x-auto pb-1"><div className="flex min-w-max gap-2">{shortcuts.map((shortcut) => {
+    <nav aria-label="เมนูลัดพื้นที่จัดการแข่งขัน" className="mt-3 border-t border-slate-200 pt-3" id="cup-workspace-nav">
+      <div className="flex flex-wrap gap-1.5">{shortcuts.map((shortcut) => {
         const state = steps.find((item) => item.id === shortcut.id)?.state ?? "locked";
         return <a className={`inline-flex min-h-9 items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-black ${statusClasses[state]}`} href={`#${shortcut.target}`} key={shortcut.target} onClick={(event) => jump(event, shortcut.target)}>{state === "complete" ? <CheckCircle2 aria-hidden="true" className="size-3.5 shrink-0" /> : <Circle aria-hidden="true" className="size-3 shrink-0 opacity-70" />}<span className="whitespace-nowrap">{shortcut.label}</span><span className="text-[10px] font-bold opacity-75">{statusLabels[state]}</span></a>;
-      })}</div></div>
+      })}</div>
     </nav>
   );
 }
@@ -466,9 +470,7 @@ export function AdminCupCompetitionWorkspace({
 
   return (
     <>
-      <CupCompetitionProgress steps={workflowSteps} />
-      <CupWorkspaceNavigation steps={workflowSteps} templateKey={engineConfig?.templateKey ?? null} />
-      {competitionStatus === "completed" ? <section className="mx-auto w-full max-w-7xl px-4 pb-5 sm:px-6 lg:px-10"><p className="flex min-w-0 items-start gap-2.5 rounded-md border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-sm font-bold leading-6 text-emerald-900"><CheckCircle2 aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-emerald-700" />การแข่งขันเสร็จสิ้นแล้ว หากต้องแก้ไขผล ต้องเปิดการแข่งขันเพื่อแก้ไขก่อน เพราะอาจกระทบแชมป์</p></section> : null}
+      <section className="mx-auto w-full max-w-7xl px-4 pb-5 sm:px-6 lg:px-10"><article className="min-w-0 rounded-lg border border-slate-200 bg-white p-3.5 shadow-sm shadow-slate-900/5 sm:p-4"><CupCompetitionProgress steps={workflowSteps} /><CupWorkspaceNavigation steps={workflowSteps} templateKey={engineConfig?.templateKey ?? null} />{competitionStatus === "completed" ? <p className="mt-3 flex min-w-0 items-start gap-2.5 rounded-md border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-sm font-bold leading-6 text-emerald-900"><CheckCircle2 aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-emerald-700" />การแข่งขันเสร็จสิ้นแล้ว หากต้องแก้ไขผล ต้องเปิดการแข่งขันเพื่อแก้ไขก่อน เพราะอาจกระทบแชมป์</p> : null}</article></section>
       <section className="mx-auto w-full max-w-7xl scroll-mt-28 px-4 pb-7 sm:px-6 lg:px-10" id="cup-teams">
         <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
