@@ -1,4 +1,21 @@
+import type { CompetitionTreeSource } from "@/lib/competition-tree";
 import type { KnockoutTemplateDefinition } from "@/lib/knockout-templates/types";
+
+const supportedEntrantCounts = [4, 8, 16, 32];
+
+function validateCouncilSources(sources: CompetitionTreeSource[]) {
+  const groupWinnerCount = sources.filter((source) => source.type === "group_rank" && source.rank === 1).length;
+  const runnerUpCount = sources.filter((source) => source.type === "group_rank" && source.rank === 2).length;
+  const hasSupportedDivision1 = supportedEntrantCounts.includes(groupWinnerCount);
+  const hasCapacityForDivision2 = supportedEntrantCounts.some((capacity) => capacity >= runnerUpCount);
+
+  if (hasSupportedDivision1 && hasCapacityForDivision2) return { errors: [], valid: true };
+
+  return {
+    errors: ["คัพสภา – สองดิวิชั่นต้องมีแชมป์กลุ่ม 4, 8, 16 หรือ 32 ทีม และรองแชมป์กลุ่มต้องจัดลงสายได้"],
+    valid: false,
+  };
+}
 
 export const councilTwoDivisionTemplate: KnockoutTemplateDefinition = {
   buildPreview: () => ({
@@ -32,8 +49,8 @@ export const councilTwoDivisionTemplate: KnockoutTemplateDefinition = {
   qualificationMode: "approved_snapshot",
   statusLabel: "พร้อมตั้งค่า",
   sourceLabel: (source) => source.type === "best_ranked" ? `อันดับเพิ่มเติม #${source.bestOrder ?? "?"}` : `${source.groupId ?? "?"}${source.rank ?? "?"}`,
-  supportedEntrantCounts: [4, 8, 16, 32],
+  supportedEntrantCounts,
   supportsManualPairing: true,
   supportsMultipleBrackets: true,
-  validateSources: () => ({ errors: [], valid: true }),
+  validateSources: validateCouncilSources,
 };

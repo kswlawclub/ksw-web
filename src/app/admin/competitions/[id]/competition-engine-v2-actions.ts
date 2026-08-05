@@ -28,9 +28,10 @@ import {
 import { requireAdminSession } from "@/lib/admin-server-auth";
 import { isCupCompetition, normalizeCompetitionType } from "@/lib/competition-format";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { buildKnockoutTemplatePreview } from "@/lib/knockout-templates/registry";
+import { buildKnockoutTemplatePreview, getKnockoutTemplate, isKnockoutTemplateKey, validateKnockoutTemplateSources } from "@/lib/knockout-templates/registry";
 import type { KnockoutTemplateKey } from "@/lib/knockout-templates/types";
 import type { ApprovedQualificationSummary } from "@/app/admin/competitions/[id]/qualification-actions";
+import { validateCouncilTemplateSelectionV2 } from "@/app/admin/competitions/[id]/council-division-actions";
 
 export type CompetitionEngineV2Config = {
   bracketCapacity: number | null;
@@ -47,7 +48,7 @@ export type CompetitionEngineV2Config = {
   qualificationSnapshot: CompetitionTreeSource[];
   qualificationSnapshotSummary: ApprovedQualificationSummary | null;
   status: CompetitionEngineV2Status;
-  templateKey: KnockoutTemplateKey;
+  templateKey: KnockoutTemplateKey | null;
 };
 
 export type CompetitionEngineV2WizardPayload = {
@@ -77,6 +78,11 @@ export type CompetitionEngineV2WorkflowResult = {
   error?: string;
   ok: boolean;
   workflow?: CompetitionEngineV2Integrity;
+};
+
+export type CompetitionKnockoutTemplateSelectionResult = {
+  error?: string;
+  ok: boolean;
 };
 
 export type CompetitionFixtureNodeV2 = {
@@ -356,6 +362,77 @@ async function loadCompetitionEngineV2Workflow(
   };
 }
 
+function qualificationSourcesFromConfig(snapshot: unknown): CompetitionTreeSource[] {
+  if (!Array.isArray(snapshot)) return [];
+
+  return snapshot.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const source = entry as Record<string, unknown>;
+    const type = source.type === "best_ranked" ? "best_ranked" : source.type === "group_rank" ? "group_rank" : null;
+    if (!type) return [];
+    return [{
+      bestOrder: typeof source.bestOrder === "number" ? source.bestOrder : undefined,
+      groupId: typeof source.groupId === "string" ? source.groupId : undefined,
+      rank: typeof source.rank === "number" ? source.rank : undefined,
+      teamId: typeof source.teamId === "string" ? source.teamId : undefined,
+      type,
+    }];
+  });
+}
+
+export async function selectCompetitionKnockoutTemplateV2(
+  competitionId: string,
+  templateKey: unknown,
+): Promise<CompetitionKnockoutTemplateSelectionResult> {
+  const verified = await verifyCupCompetition(competitionId);
+  if (verified.error || !verified.supabase) return { error: verified.error, ok: false };
+  if (verified.seasonStatus === "completed") return { error: "การแข่งขันปิดแล้ว ต้องเปิดการแข่งขันเพื่อแก้ไขก่อน", ok: false };
+  if (!isKnockoutTemplateKey(templateKey)) return { error: "รูปแบบการแข่งขันไม่ถูกต้อง", ok: false };
+
+  const template = getKnockoutTemplate(templateKey);
+  if (!template?.enabled) return { error: "รูปแบบการแข่งขันนี้ยังไม่พร้อมใช้งาน", ok: false };
+
+  const [configResult, nodesResult, matchesResult] = await Promise.all([
+    verified.supabase
+      .from("competition_knockout_configs")
+      .select("qualification_status, qualification_snapshot")
+      .eq("competition_id", competitionId)
+      .maybeSingle(),
+    verified.supabase.from("competition_bracket_nodes").select("id").eq("competition_id", competitionId).limit(1),
+    verified.supabase.from("matches").select("id").eq("league_id", competitionId).eq("competition_stage", "knockout").limit(1),
+  ]);
+
+  if (configResult.error || nodesResult.error || matchesResult.error) {
+    console.error("knockout template selection lookup failed", { config: configResult.error, matches: matchesResult.error, nodes: nodesResult.error });
+    return { error: "ไม่สามารถตรวจสอบการตั้งค่ารอบน็อกเอาต์ได้", ok: false };
+  }
+  if (!configResult.data || configResult.data.qualification_status !== "approved") {
+    return { error: "ยืนยันทีมผ่านเข้ารอบก่อนเลือกรูปแบบการแข่งขัน", ok: false };
+  }
+  if (nodesResult.data?.length || matchesResult.data?.length) {
+    return { error: "เปลี่ยนรูปแบบการแข่งขันไม่ได้ เพราะมีโครงสร้างหรือแมตช์รอบน็อกเอาต์แล้ว", ok: false };
+  }
+
+  const validation = validateKnockoutTemplateSources(templateKey, qualificationSourcesFromConfig(configResult.data.qualification_snapshot));
+  if (!validation.valid) return { error: validation.errors[0] ?? "ข้อมูลทีมผ่านเข้ารอบยังไม่พร้อมสำหรับรูปแบบนี้", ok: false };
+  if (templateKey === "council_two_division") {
+    const councilValidation = await validateCouncilTemplateSelectionV2(competitionId);
+    if (!councilValidation.ok) return { error: councilValidation.error ?? "ข้อมูลสำหรับคัพสภา – สองดิวิชั่นยังไม่พร้อม", ok: false };
+  }
+
+  const update = await verified.supabase
+    .from("competition_knockout_configs")
+    .update({ template_key: templateKey, updated_at: new Date().toISOString() })
+    .eq("competition_id", competitionId);
+  if (update.error) {
+    console.error("knockout template selection persistence failed", update.error);
+    return { error: "ไม่สามารถบันทึกรูปแบบการแข่งขัน", ok: false };
+  }
+
+  revalidatePath(`/admin/competitions/${competitionId}`);
+  return { ok: true };
+}
+
 export async function getCompetitionEngineV2WorkflowState(competitionId: string): Promise<CompetitionEngineV2WorkflowResult> {
   const verified = await verifyCupCompetition(competitionId);
   if (verified.error || !verified.supabase) return { error: verified.error, ok: false };
@@ -425,6 +502,9 @@ export async function generateCompetitionTreeV2(
   const config = configResult.data;
   if (!config || typeof config.entrant_count !== "number" || typeof config.bracket_capacity !== "number") {
     return { error: "Confirm qualification settings before creating the competition structure.", ok: false };
+  }
+  if (!isKnockoutTemplateKey(config.template_key)) {
+    return { error: "เลือกรูปแบบการแข่งขันรอบน็อกเอาต์ก่อนสร้างโครงสร้าง", ok: false };
   }
   if (config.template_key === "council_two_division") {
     return { error: "คัพสภา – สองดิวิชั่นยังอยู่ขั้นตรวจสอบและแบ่งดิวิชั่น จึงยังสร้างสายแข่งขันไม่ได้", ok: false };
@@ -499,7 +579,7 @@ export async function generateCompetitionTreeV2(
   }
 
   if (config.group_stage_enabled) {
-    const defaultSources = buildKnockoutTemplatePreview("ksw_standard", entrants).sources;
+    const defaultSources = buildKnockoutTemplatePreview(config.template_key, entrants).sources;
     if (previewSources && !hasSameSources(entrants, previewSources)) {
       return { error: "คู่แข่งขันที่เลือกไม่ตรงกับทีมผ่านเข้ารอบที่อนุมัติแล้ว", ok: false };
     }
@@ -1237,7 +1317,7 @@ export async function saveCompetitionEngineV2Config(
           qualificationSnapshot: [],
           qualificationSnapshotSummary: null,
           status: result.data.status,
-          templateKey: "ksw_standard",
+          templateKey: null,
         }
       : undefined,
     ok: true,

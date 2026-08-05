@@ -10,9 +10,10 @@ import {
   reopenCompetitionTreeV2,
   reviewCompetitionTreeV2,
   saveCompetitionKnockoutMatchV2,
+  selectCompetitionKnockoutTemplateV2,
 } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
 import type { CompetitionFixturesV2Result, CompetitionKnockoutMatchV2 } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
-import { approveCouncilDivisionsV2, getCouncilDivisionStateV2, reopenCouncilDivisionsV2, saveCouncilDivisionDraftV2, selectKnockoutTemplateV2 } from "@/app/admin/competitions/[id]/council-division-actions";
+import { approveCouncilDivisionsV2, getCouncilDivisionStateV2, reopenCouncilDivisionsV2, saveCouncilDivisionDraftV2 } from "@/app/admin/competitions/[id]/council-division-actions";
 import type { CouncilDivisionEntry, CouncilDivisionState } from "@/app/admin/competitions/[id]/council-division-actions";
 import {
   completeCouncilCupCompetitionV2,
@@ -29,7 +30,7 @@ import {
   type CompetitionEngineV2Integrity,
 } from "@/lib/competition-engine-v2-state";
 import { buildCompetitionTree, type CompetitionTreeEntryMode, type CompetitionTreeNode, type CompetitionTreeSource, type CompetitionTreeSummary } from "@/lib/competition-tree";
-import { buildKnockoutTemplatePreview, getDefaultKnockoutTemplate, getKnockoutTemplate, listKnockoutTemplates } from "@/lib/knockout-templates/registry";
+import { buildKnockoutTemplatePreview, getKnockoutTemplate, listKnockoutTemplates, validateKnockoutTemplateSources } from "@/lib/knockout-templates/registry";
 import type { KnockoutTemplateDiagram, KnockoutTemplateKey } from "@/lib/knockout-templates/types";
 import type { KswQualificationSource } from "@/lib/ksw-knockout-template";
 import { TeamLogo } from "@/components/team-logo";
@@ -47,7 +48,7 @@ type AdminCompetitionTreeEngineV2Props = {
   qualificationSnapshot: CompetitionTreeSource[];
   groupNames: Array<{ id: string; name: string }>;
   teams: Array<{ id: string; logo_url: string | null; name: string; short_name: string | null }>;
-  templateKey: KnockoutTemplateKey;
+  templateKey: KnockoutTemplateKey | null;
   workflow: CompetitionEngineV2Integrity | null;
 };
 
@@ -493,19 +494,19 @@ export function AdminCompetitionTreeEngineV2({
       teamName: source.teamId ? teamsById.get(source.teamId) : undefined,
     }));
   }, [groupNames, qualificationSnapshot, teams]);
-  const councilPrerequisitesReady = useMemo(() => {
-    const council = getKnockoutTemplate("council_two_division");
-    if (!council) return false;
-    const groupWinners = qualifiedSources.filter((source) => source.type === "group_rank" && source.rank === 1).length;
-    const runnersUp = qualifiedSources.filter((source) => source.type === "group_rank" && source.rank === 2).length;
-    return council.supportedEntrantCounts.includes(groupWinners) && council.supportedEntrantCounts.some((capacity) => capacity >= runnersUp);
-  }, [qualifiedSources]);
-  const [selectedTemplate, setSelectedTemplate] = useState<KnockoutTemplateKey>(templateKey ?? getDefaultKnockoutTemplate().key);
+  const templateValidation = useMemo(
+    () => new Map(listKnockoutTemplates().map((template) => [template.key, validateKnockoutTemplateSources(template.key, qualifiedSources)])),
+    [qualifiedSources],
+  );
+  const [selectedTemplate, setSelectedTemplate] = useState<KnockoutTemplateKey | null>(templateKey);
   const [councilState, setCouncilState] = useState<CouncilDivisionState | null>(null);
   const [councilExtraTeamIds, setCouncilExtraTeamIds] = useState<string[]>([]);
-  const selectedTemplateDefinition = getKnockoutTemplate(selectedTemplate) ?? getDefaultKnockoutTemplate();
-  const defaultPairing = useMemo(() => buildKnockoutTemplatePreview(selectedTemplateDefinition.key, qualifiedSources), [qualifiedSources, selectedTemplateDefinition.key]);
-  const [draftSources, setDraftSources] = useState<KswQualificationSource[]>(() => defaultPairing.sources as KswQualificationSource[]);
+  const selectedTemplateDefinition = selectedTemplate ? getKnockoutTemplate(selectedTemplate) : undefined;
+  const defaultPairing = useMemo(
+    () => selectedTemplateDefinition ? buildKnockoutTemplatePreview(selectedTemplateDefinition.key, qualifiedSources) : null,
+    [qualifiedSources, selectedTemplateDefinition],
+  );
+  const [draftSources, setDraftSources] = useState<KswQualificationSource[]>(() => (defaultPairing?.sources as KswQualificationSource[] | undefined) ?? []);
   const [editingPairing, setEditingPairing] = useState(false);
   const activeCardRef = useRef("");
   const summary = generatedSummary ?? initialSummary;
@@ -625,14 +626,14 @@ export function AdminCompetitionTreeEngineV2({
     setError("");
     setMessage("");
     startTransition(async () => {
-      const result = await selectKnockoutTemplateV2(competitionId, templateKey);
+      const result = await selectCompetitionKnockoutTemplateV2(competitionId, templateKey);
       if (!result.ok) {
         setError(result.error ?? "ไม่สามารถเลือกรูปแบบการแข่งขันได้");
         return;
       }
       setSelectedTemplate(templateKey);
-      setCouncilState(result.state ?? null);
-      setCouncilExtraTeamIds(result.state?.recommendedExtraTeamIds ?? []);
+      setCouncilState(null);
+      setCouncilExtraTeamIds([]);
       setDraftSources(buildKnockoutTemplatePreview(template.key, qualifiedSources).sources as KswQualificationSource[]);
       setEditingPairing(false);
       setMessage(`เลือก ${template.name} แล้ว`);
@@ -858,15 +859,16 @@ export function AdminCompetitionTreeEngineV2({
               <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2">
                 {listKnockoutTemplates().map((template) => {
                   const selected = selectedTemplate === template.key;
-                  const selectable = template.enabled && (!template.supportsMultipleBrackets || councilPrerequisitesReady);
-                  const className = `min-w-0 rounded-md border p-4 text-left ${selectable ? "transition" : "border-dashed opacity-75"} ${selected ? "border-[#d8ad45] bg-[#fffdf7] ring-1 ring-[#d8ad45]/30" : "border-slate-200 bg-white"}`;
-                  const statusLabel = selectable ? template.statusLabel : "รอข้อมูลกลุ่มพร้อม";
+                  const validation = templateValidation.get(template.key);
+                  const selectable = template.enabled && Boolean(validation?.valid);
+                  const className = `min-w-0 rounded-md border p-4 text-left ${selectable ? "transition hover:border-[#d8ad45] disabled:cursor-wait disabled:opacity-60" : "border-dashed opacity-75"} ${selected ? "border-[#d8ad45] bg-[#fffdf7] ring-1 ring-[#d8ad45]/30" : "border-slate-200 bg-white"}`;
+                  const statusLabel = selectable ? template.statusLabel : validation?.errors[0] ?? "รอข้อมูลกลุ่มพร้อม";
                   const content = <><div className="flex flex-wrap items-start justify-between gap-2"><span className="text-base font-black text-[#061426]">{template.name}</span><span className={`rounded-full border px-2 py-1 text-[11px] font-black ${selectable ? "border-[#d8ad45]/40 bg-white text-[#8a6418]" : "border-slate-200 bg-white text-slate-600"}`}>{statusLabel}</span></div><p className="mt-2 text-sm font-semibold text-slate-600">{template.description}</p><div className="mt-3 flex flex-wrap gap-1.5">{template.featureBullets.map((feature) => <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-black text-slate-600" key={feature}>{feature}</span>)}</div><TemplateMiniDiagram diagram={template.diagram} /></>;
-                  return selectable ? <button aria-pressed={selected} className={className} key={template.key} onClick={() => chooseTemplate(template.key)} type="button">{content}</button> : <article className={className} data-disabled="true" key={template.key}>{content}</article>;
+                  return selectable ? <button aria-pressed={selected} className={className} disabled={isPending} key={template.key} onClick={() => chooseTemplate(template.key)} type="button">{content}</button> : <article className={className} data-disabled="true" key={template.key}>{content}</article>;
                 })}
               </div>
             </section>
-            {selectedTemplate === "council_two_division" ? <CouncilDivisionApproval error={error} extraTeamIds={councilExtraTeamIds} onApprove={approveCouncilDivisions} onExtrasChange={setCouncilExtraTeamIds} onReopen={reopenCouncilDivisions} onSaveDraft={saveCouncilDraft} pending={isPending} state={councilState} /> : <section className="mt-5 min-w-0 rounded-md border border-[#d8ad45]/40 bg-[#fffdf7] p-4">
+            {selectedTemplate === "council_two_division" ? <CouncilDivisionApproval error={error} extraTeamIds={councilExtraTeamIds} onApprove={approveCouncilDivisions} onExtrasChange={setCouncilExtraTeamIds} onReopen={reopenCouncilDivisions} onSaveDraft={saveCouncilDraft} pending={isPending} state={councilState} /> : selectedTemplate === "ksw_standard" && selectedTemplateDefinition && defaultPairing ? <section className="mt-5 min-w-0 rounded-md border border-[#d8ad45]/40 bg-[#fffdf7] p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div><h3 className="font-black text-[#061426]">ตัวอย่างการจัดสาย: {selectedTemplateDefinition.name}</h3><p className="mt-1 text-sm font-semibold text-slate-600">{selectedTemplateDefinition.description}</p></div>
               <div className="flex flex-wrap gap-2"><button className="min-h-10 rounded-md border border-[#d8ad45] bg-white px-3 py-2 text-sm font-black text-[#8a6418]" onClick={() => setDraftSources(defaultPairing.sources)} type="button">ใช้การจัดสายอัตโนมัติ</button><button className="min-h-10 rounded-md border border-[#d8ad45] bg-white px-3 py-2 text-sm font-black text-[#8a6418]" onClick={() => setEditingPairing((current) => !current)} type="button">{editingPairing ? "ดูตัวอย่างคู่" : "แก้ไขคู่ก่อนยืนยัน"}</button></div>
@@ -880,7 +882,7 @@ export function AdminCompetitionTreeEngineV2({
                 </div>
               ))}
             </div>
-            </section>}
+            </section> : null}
           </>
         ) : null}
 

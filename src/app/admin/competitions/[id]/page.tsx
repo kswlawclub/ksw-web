@@ -280,7 +280,7 @@ function asEngineV2Config(row: Row | undefined): CompetitionEngineV2Config | nul
     }),
     qualificationSnapshotSummary,
     status: text(row, ["status"], "draft") as CompetitionEngineV2Config["status"],
-    templateKey: row.template_key === "council_two_division" ? "council_two_division" : "ksw_standard",
+    templateKey: row.template_key === "ksw_standard" || row.template_key === "council_two_division" ? row.template_key : null,
   };
 }
 

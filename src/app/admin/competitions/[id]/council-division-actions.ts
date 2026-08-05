@@ -3,8 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { requireAdminSession } from "@/lib/admin-server-auth";
 import { isCupCompetition, normalizeCompetitionType } from "@/lib/competition-format";
-import { getKnockoutTemplate } from "@/lib/knockout-templates/registry";
-import type { KnockoutTemplateKey } from "@/lib/knockout-templates/types";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { calculateCupGroupStandings } from "@/lib/cup-group-standings";
 
@@ -149,26 +147,17 @@ function buildState(data: Exclude<Awaited<ReturnType<typeof loadCouncilData>>, {
   };
 }
 
-export async function selectKnockoutTemplateV2(competitionId: string, templateKey: KnockoutTemplateKey) {
-  const template = getKnockoutTemplate(templateKey);
-  if (!template) return { error: "ไม่พบรูปแบบการแข่งขันที่เลือก", ok: false };
+export async function validateCouncilTemplateSelectionV2(competitionId: string) {
   const data = await loadCouncilData(competitionId);
   if (!data.supabase) return { error: data.error, ok: false };
   if (data.competition.season_status === "completed") return { error: "การแข่งขันปิดแล้ว ต้องเปิดการแข่งขันเพื่อแก้ไขก่อน", ok: false };
-  if (templateKey === councilTemplateKey) {
-    const state = buildState(data);
-    if (state.division1.error || state.division2.error) return { error: state.division1.error ?? state.division2.error, ok: false };
+
+  const state = buildState(data);
+  if (state.division1.error || state.division2.error) {
+    return { error: state.division1.error ?? state.division2.error, ok: false };
   }
-  const [nodes, matches] = await Promise.all([
-    data.supabase.from("competition_bracket_nodes").select("id").eq("competition_id", competitionId).limit(1),
-    data.supabase.from("matches").select("id").eq("league_id", competitionId).eq("competition_stage", "knockout").limit(1),
-  ]);
-  if (nodes.error || matches.error) return { error: "ไม่สามารถตรวจสอบสถานะรอบน็อกเอาต์", ok: false };
-  if (nodes.data?.length || matches.data?.length) return { error: "เปลี่ยนรูปแบบการแข่งขันไม่ได้ เพราะมีโครงสร้างหรือแมตช์รอบน็อกเอาต์แล้ว", ok: false };
-  const update = await data.supabase.from("competition_knockout_configs").update({ template_key: templateKey, updated_at: new Date().toISOString() }).eq("competition_id", competitionId);
-  if (update.error) return { error: "ไม่สามารถบันทึกรูปแบบการแข่งขัน", ok: false };
-  revalidatePath(`/admin/competitions/${competitionId}`);
-  return { ok: true, state: templateKey === councilTemplateKey ? buildState(data) : undefined };
+
+  return { ok: true };
 }
 
 export async function getCouncilDivisionStateV2(competitionId: string) {
