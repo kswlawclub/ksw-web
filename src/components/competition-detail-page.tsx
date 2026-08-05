@@ -1229,7 +1229,7 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
             <TournamentJourney matches={legacyKswJourney} />
             {isCup ? <PublicCupGroupStandings matches={canonicalCupGroupMatches} standings={legacyCupGroupStandings} /> : null}
             {kswStandardV2 ? <PublicKnockoutBracket data={kswStandardV2} seasonCompleted={false} /> : null}
-            {councilV2 ? <PublicCouncilCupBrackets data={councilV2} seasonCompleted={false} /> : null}
+            {councilV2 ? <PublicCouncilCupBrackets data={councilV2} localized seasonCompleted={false} /> : null}
             {!isCup && legacyMatches.length ? (
               <CompetitionResultsTable
                 isLeague={false}
