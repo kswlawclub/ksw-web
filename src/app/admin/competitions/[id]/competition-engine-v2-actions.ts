@@ -30,7 +30,6 @@ import { isCupCompetition, normalizeCompetitionType } from "@/lib/competition-fo
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { buildKnockoutTemplatePreview, getKnockoutTemplate, isKnockoutTemplateKey } from "@/lib/knockout-templates/registry";
 import { getKnockoutTemplateSwitchGuard, topologySourceTeamId } from "@/lib/knockout-template-switching";
-import { findUnmaterializedKnockoutDraftAssignments } from "@/lib/unmaterialized-knockout-draft-cleanup";
 import type { KnockoutTemplateKey } from "@/lib/knockout-templates/types";
 import type { ApprovedQualificationSummary } from "@/app/admin/competitions/[id]/qualification-actions";
 
@@ -404,7 +403,7 @@ export async function selectCompetitionKnockoutTemplateV2(
       .from("competition_bracket_nodes")
       .select("id, competition_id, round_index, round_label, match_order, bracket_position, linked_match_id, home_source_type, away_source_type, home_source_group_id, home_source_rank, home_source_team_id, home_source_node_id, home_source_best_order, away_source_group_id, away_source_rank, away_source_team_id, away_source_node_id, away_source_best_order")
       .eq("competition_id", competitionId),
-    verified.supabase.from("matches").select("id, status, winner_team_id").eq("league_id", competitionId).eq("competition_stage", "knockout"),
+    verified.supabase.from("matches").select("id, status, winner_team_id, home_score, away_score, penalty_home_score, penalty_away_score").eq("league_id", competitionId).eq("competition_stage", "knockout"),
   ]);
 
   if (configResult.error || nodesResult.error || matchesResult.error) {
@@ -415,7 +414,7 @@ export async function selectCompetitionKnockoutTemplateV2(
     return { error: "ยังไม่ได้ตั้งค่ารอบน็อกเอาต์", ok: false };
   }
   const templateSwitchGuard = getKnockoutTemplateSwitchGuard({
-    matches: (matchesResult.data ?? []).map((match) => ({ status: match.status, winnerTeamId: match.winner_team_id })),
+    matches: (matchesResult.data ?? []).map((match) => ({ awayScore: match.away_score, homeScore: match.home_score, penaltyAwayScore: match.penalty_away_score, penaltyHomeScore: match.penalty_home_score, status: match.status, winnerTeamId: match.winner_team_id })),
     nodes: (nodesResult.data ?? []).map((row) => nodeFromDatabase(row as Record<string, unknown>)),
     qualificationSnapshot: qualificationSnapshotSources(configResult.data.qualification_snapshot),
   });
@@ -453,64 +452,6 @@ export async function selectCompetitionKnockoutTemplateV2(
 
   revalidatePath(`/admin/competitions/${competitionId}`);
   return { ok: true };
-}
-
-export async function clearUnmaterializedKnockoutDraftAssignments(competitionId: string): Promise<{ clearedCount?: number; error?: string; ok: boolean }> {
-  const verified = await verifyCupCompetition(competitionId);
-  if (verified.error || !verified.supabase) return { error: verified.error, ok: false };
-  if (verified.seasonStatus === "completed") return { error: "การแข่งขันปิดแล้ว ต้องเปิดการแข่งขันเพื่อแก้ไขก่อน", ok: false };
-
-  const [configResult, nodesResult, matchesResult] = await Promise.all([
-    verified.supabase
-      .from("competition_knockout_configs")
-      .select("competition_id, qualification_snapshot")
-      .eq("competition_id", competitionId)
-      .maybeSingle(),
-    verified.supabase
-      .from("competition_bracket_nodes")
-      .select("id, competition_id, round_index, round_label, match_order, bracket_position, linked_match_id, home_source_type, away_source_type, home_source_group_id, home_source_rank, home_source_team_id, home_source_node_id, home_source_best_order, away_source_group_id, away_source_rank, away_source_team_id, away_source_node_id, away_source_best_order")
-      .eq("competition_id", competitionId),
-    verified.supabase
-      .from("matches")
-      .select("id, status, winner_team_id, home_score, away_score")
-      .eq("league_id", competitionId)
-      .eq("competition_stage", "knockout"),
-  ]);
-  if (configResult.error || nodesResult.error || matchesResult.error || !configResult.data) {
-    console.error("knockout draft cleanup lookup failed", { config: configResult.error, matches: matchesResult.error, nodes: nodesResult.error });
-    return { error: "ไม่สามารถตรวจสอบโครงร่างรอบน็อกเอาต์ได้", ok: false };
-  }
-
-  const nodes = (nodesResult.data ?? []).map((row) => nodeFromDatabase(row as Record<string, unknown>));
-  const matches = (matchesResult.data ?? []).map((match) => ({ awayScore: match.away_score, id: match.id, homeScore: match.home_score, status: match.status, winnerTeamId: match.winner_team_id }));
-  const cleanup = findUnmaterializedKnockoutDraftAssignments({
-    matches,
-    nodes,
-    qualificationSnapshot: qualificationSnapshotSources(configResult.data.qualification_snapshot),
-  });
-  if (!cleanup.length) return { error: "ไม่พบข้อมูลทีมค้างในโครงร่างที่ล้างได้อย่างปลอดภัย", ok: false };
-
-  let clearedCount = 0;
-  for (const entry of cleanup) {
-    const update = await verified.supabase
-      .from("competition_bracket_nodes")
-      .update({
-        ...(entry.awayTeamId ? { away_source_team_id: null } : {}),
-        ...(entry.homeTeamId ? { home_source_team_id: null } : {}),
-      })
-      .eq("competition_id", competitionId)
-      .eq("id", entry.nodeId)
-      .is("linked_match_id", null)
-      .select("id");
-    if (update.error || update.data?.length !== 1) {
-      console.error("knockout draft cleanup update failed", { error: update.error, nodeId: entry.nodeId });
-      return { clearedCount, error: "ไม่สามารถล้างข้อมูลทีมค้างได้อย่างปลอดภัย", ok: false };
-    }
-    clearedCount += 1;
-  }
-
-  revalidatePath(`/admin/competitions/${competitionId}`);
-  return { clearedCount, ok: true };
 }
 
 export async function getCompetitionEngineV2WorkflowState(competitionId: string): Promise<CompetitionEngineV2WorkflowResult> {

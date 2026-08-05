@@ -16,18 +16,21 @@ export type KnockoutNodeForState = {
 
 export type KnockoutMatchForState = {
   awayScore?: number | null;
+  penaltyAwayScore?: number | null;
   id?: string;
   homeScore?: number | null;
+  penaltyHomeScore?: number | null;
   status: string | null | undefined;
   winnerTeamId: string | null | undefined;
 };
 
 export type QualificationSnapshotSource = Pick<KnockoutNodeSource, "bestOrder" | "groupId" | "rank" | "teamId" | "type">;
 
-export type KnockoutNodeState = "draft" | "resolved_draft" | "materialized" | "played";
+export type KnockoutNodeState = "confirmed_draft" | "draft" | "resolved_draft" | "materialized" | "played";
 
 export type KnockoutTemplateSwitchReasonCode =
   | "allowed_draft_only"
+  | "allowed_confirmed_draft"
   | "linked_knockout_match"
   | "knockout_result_exists"
   | "manual_team_assignment"
@@ -62,7 +65,7 @@ export function hasLinkedKnockoutMatch(node: KnockoutNodeForState) {
 }
 
 export function hasPlayedKnockoutResult(match: KnockoutMatchForState) {
-  return match.status === "finished" || match.status === "completed" || Boolean(match.winnerTeamId) || isScore(match.homeScore) || isScore(match.awayScore);
+  return match.status === "finished" || match.status === "completed" || Boolean(match.winnerTeamId) || isScore(match.homeScore) || isScore(match.awayScore) || isScore(match.penaltyHomeScore) || isScore(match.penaltyAwayScore);
 }
 
 export function hasExplicitManualAssignment(source: KnockoutNodeSource) {
@@ -91,11 +94,10 @@ export function classifyKnockoutNodeState(node: KnockoutNodeForState, context: K
   const linkedMatch = linkedMatchForNode(node, matches);
   if (linkedMatch && hasPlayedKnockoutResult(linkedMatch)) return "played";
   if (hasLinkedKnockoutMatch(node)) return "materialized";
-  if (hasExplicitManualAssignment(node.homeSource) || hasExplicitManualAssignment(node.awaySource)) return "materialized";
-
   const sources = [node.homeSource, node.awaySource];
   const qualificationSnapshot = context.qualificationSnapshot ?? [];
-  if (sources.some((source) => hasTeamId(source) && !hasQualificationDerivedResolution(source, qualificationSnapshot))) return "materialized";
+  if (sources.some(hasExplicitManualAssignment)) return "confirmed_draft";
+  if (sources.some((source) => hasTeamId(source) && !hasQualificationDerivedResolution(source, qualificationSnapshot))) return "confirmed_draft";
   if (sources.some((source) => hasQualificationDerivedResolution(source, qualificationSnapshot))) return "resolved_draft";
   return "draft";
 }
@@ -103,15 +105,13 @@ export function classifyKnockoutNodeState(node: KnockoutNodeForState, context: K
 function nodeReasonCode(node: KnockoutNodeForState, state: KnockoutNodeState): KnockoutNodeStateEntry["reasonCode"] {
   if (state !== "materialized") return undefined;
   if (hasLinkedKnockoutMatch(node)) return "linked_knockout_match";
-  if (hasExplicitManualAssignment(node.homeSource) || hasExplicitManualAssignment(node.awaySource)) return "manual_team_assignment";
-  return "unverified_team_assignment";
+  return "linked_knockout_match";
 }
 
 function messageForReason(reasonCode: KnockoutTemplateSwitchReasonCode) {
   if (reasonCode === "knockout_result_exists") return "เปลี่ยนไม่ได้ เพราะมีผลการแข่งขันรอบน็อกเอาต์แล้ว";
   if (reasonCode === "linked_knockout_match") return "เปลี่ยนไม่ได้ เพราะสร้างโปรแกรมรอบน็อกเอาต์แล้ว";
-  if (reasonCode === "manual_team_assignment") return "เปลี่ยนไม่ได้ เพราะมีทีมที่ผู้ดูแลจัดลงสายแล้ว";
-  if (reasonCode === "unverified_team_assignment") return "เปลี่ยนไม่ได้ เพราะพบทีมในโครงสร้างที่ไม่สามารถยืนยันแหล่งที่มาได้";
+  if (reasonCode === "allowed_confirmed_draft") return "เปลี่ยนรูปแบบได้ แต่จะล้างโครงสร้างและการจัดสายรอบน็อกเอาต์ที่ยืนยันไว้";
   return "เปลี่ยนรูปแบบการแข่งขันได้ เพราะยังมีเพียงโครงร่างหรือข้อมูลร่าง";
 }
 
@@ -126,18 +126,18 @@ export function getKnockoutTemplateSwitchGuard(input: {
     return { nodeId: node.id ?? `node-${index}`, reasonCode: nodeReasonCode(node, state), state };
   });
   const blockingNodeIds = nodeStates.filter((entry) => entry.state === "materialized" || entry.state === "played").map((entry) => entry.nodeId);
-  const resettableNodeIds = nodeStates.filter((entry) => entry.state === "draft" || entry.state === "resolved_draft").map((entry) => entry.nodeId);
+  const resettableNodeIds = nodeStates.filter((entry) => entry.state === "draft" || entry.state === "resolved_draft" || entry.state === "confirmed_draft").map((entry) => entry.nodeId);
   const hasPlayedResult = input.matches.some(hasPlayedKnockoutResult) || nodeStates.some((entry) => entry.state === "played");
   const hasFixture = input.matches.length > 0;
-  const firstBlockingNode = nodeStates.find((entry) => entry.state === "materialized");
+  const hasConfirmedDraft = nodeStates.some((entry) => entry.state === "confirmed_draft");
   const reasonCode = hasPlayedResult
     ? "knockout_result_exists"
-    : hasFixture || firstBlockingNode?.reasonCode === "linked_knockout_match"
+    : hasFixture || nodeStates.some((entry) => entry.state === "materialized")
       ? "linked_knockout_match"
-      : firstBlockingNode?.reasonCode ?? "allowed_draft_only";
+      : hasConfirmedDraft ? "allowed_confirmed_draft" : "allowed_draft_only";
 
   return {
-    allowed: reasonCode === "allowed_draft_only",
+    allowed: reasonCode === "allowed_draft_only" || reasonCode === "allowed_confirmed_draft",
     blockingNodeIds,
     message: messageForReason(reasonCode),
     nodeStates,

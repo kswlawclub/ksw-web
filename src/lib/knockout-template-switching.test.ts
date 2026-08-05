@@ -23,24 +23,24 @@ test("allows a qualification-derived team resolution only when its approved sour
   const node = { ...skeletonNode, homeSource: { groupId: "group-a", rank: 1, teamId: "team-a", type: "group_rank" as const } };
   const qualificationSnapshot = [{ groupId: "group-a", rank: 1, teamId: "team-a", type: "group_rank" as const }];
 
-  assert.equal(classifyKnockoutNodeState(node), "materialized");
+  assert.equal(classifyKnockoutNodeState(node), "confirmed_draft");
   assert.equal(classifyKnockoutNodeState(node, { qualificationSnapshot }), "resolved_draft");
   assert.equal(getKnockoutTemplateSwitchGuard({ matches: [], nodes: [node], qualificationSnapshot }).allowed, true);
 });
 
-test("blocks explicit and unverified team assignments fail-safely", () => {
+test("keeps confirmed source assignments resettable until a knockout fixture exists", () => {
   const manual = { ...skeletonNode, id: "manual", homeSource: { teamId: "team-a", type: "manual_team" as const } };
   const unknown = { ...skeletonNode, id: "unknown", homeSource: { teamId: "team-b", type: "legacy_source" } };
   const unassigned = { ...skeletonNode, id: "unassigned", homeSource: { teamId: "team-c", type: "unassigned" as const } };
   const winner = { ...skeletonNode, id: "winner", homeSource: { nodeId: "prior", teamId: "team-d", type: "node_winner" as const } };
 
-  const manualGuard = getKnockoutTemplateSwitchGuard({ matches: [], nodes: [manual] });
-  assert.equal(manualGuard.allowed, false);
-  assert.equal(manualGuard.reasonCode, "manual_team_assignment");
-  assert.equal(classifyKnockoutNodeState(unknown), "materialized");
-  assert.equal(getKnockoutTemplateSwitchGuard({ matches: [], nodes: [unknown] }).reasonCode, "unverified_team_assignment");
-  assert.equal(getKnockoutTemplateSwitchGuard({ matches: [], nodes: [unassigned] }).reasonCode, "unverified_team_assignment");
-  assert.equal(getKnockoutTemplateSwitchGuard({ matches: [], nodes: [winner] }).reasonCode, "unverified_team_assignment");
+  [manual, unknown, unassigned, winner].forEach((node) => {
+    const guard = getKnockoutTemplateSwitchGuard({ matches: [], nodes: [node] });
+    assert.equal(classifyKnockoutNodeState(node), "confirmed_draft");
+    assert.equal(guard.allowed, true);
+    assert.equal(guard.reasonCode, "allowed_confirmed_draft");
+    assert.deepEqual(guard.resettableNodeIds, [node.id]);
+  });
 });
 
 test("blocks linked fixtures and knockout results", () => {
@@ -48,7 +48,7 @@ test("blocks linked fixtures and knockout results", () => {
   assert.equal(getKnockoutTemplateSwitchGuard({ matches: [], nodes: [linked] }).reasonCode, "linked_knockout_match");
   assert.equal(getKnockoutTemplateSwitchGuard({ matches: [{ id: "fixture-1", status: "scheduled", winnerTeamId: null }], nodes: [skeletonNode] }).reasonCode, "linked_knockout_match");
   assert.equal(getKnockoutTemplateSwitchGuard({ matches: [{ id: "fixture-1", status: "finished", winnerTeamId: "team-a" }], nodes: [linked] }).reasonCode, "knockout_result_exists");
-  assert.equal(getKnockoutTemplateSwitchGuard({ matches: [{ id: "fixture-1", homeScore: 1, status: "scheduled", winnerTeamId: null }], nodes: [] }).reasonCode, "knockout_result_exists");
+  assert.equal(getKnockoutTemplateSwitchGuard({ matches: [{ id: "fixture-1", penaltyHomeScore: 4, status: "scheduled", winnerTeamId: null }], nodes: [] }).reasonCode, "knockout_result_exists");
   assert.equal(classifyKnockoutNodeState(linked, { matches: [{ id: "fixture-1", status: "finished", winnerTeamId: "team-a" }] }), "played");
 });
 
@@ -60,7 +60,8 @@ test("allows Standard to Council to Standard before materialization and blocks a
   assert.equal(getKnockoutTemplateSwitchGuard({ matches: [], nodes: [standard], qualificationSnapshot }).allowed, true);
   assert.equal(getKnockoutTemplateSwitchGuard({ matches: [], nodes: [council], qualificationSnapshot }).allowed, true);
   assert.equal(getKnockoutTemplateSwitchGuard({ matches: [], nodes: [standard, council], qualificationSnapshot }).allowed, true);
-  assert.equal(getKnockoutTemplateSwitchGuard({ matches: [], nodes: [{ ...standard, homeSource: { teamId: "team-a", type: "manual_team" as const } }], qualificationSnapshot }).allowed, false);
+  assert.equal(getKnockoutTemplateSwitchGuard({ matches: [], nodes: [{ ...standard, homeSource: { teamId: "team-a", type: "manual_team" as const } }], qualificationSnapshot }).allowed, true);
+  assert.equal(getKnockoutTemplateSwitchGuard({ matches: [{ id: "fixture-1", status: "scheduled", winnerTeamId: null }], nodes: [standard], qualificationSnapshot }).allowed, false);
 });
 
 test("keeps the public visibility adapter independent from the Admin switch guard", () => {
