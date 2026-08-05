@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getKnockoutTemplateSwitchGuard, hasResolvedBracketPairing, inspectKnockoutTemplateSwitchState, isTopologyOnlyNode } from "./knockout-template-switching.ts";
+import { getKnockoutTemplateSwitchGuard, getRepairableTopologyAssignments, hasResolvedBracketPairing, inspectKnockoutTemplateSwitchState, isInvalidPreMaterializedTeamAssignment, isTopologyOnlyNode, topologySourceTeamId } from "./knockout-template-switching.ts";
 
 const skeletonNode = {
   awaySource: { type: "unassigned" as const },
@@ -41,4 +41,29 @@ test("reports the exact blocking source for nodes and fixtures", () => {
   const fixtureDiagnostic = inspectKnockoutTemplateSwitchState({ matches: [{ id: "fixture-1", status: "scheduled", winnerTeamId: null }], nodes: [skeletonNode] });
   assert.equal(fixtureDiagnostic.code, "fixture_created");
   assert.equal(fixtureDiagnostic.fixtures[0]?.match.id, "fixture-1");
+});
+
+test("identifies and normalizes only invalid pre-materialized topology assignments", () => {
+  const invalid = { ...skeletonNode, id: "invalid", homeSource: { teamId: "team-1", type: "unassigned" as const } };
+  const groupRank = { ...skeletonNode, id: "group-rank", homeSource: { groupId: "group-a", rank: 1, teamId: "team-3", type: "group_rank" as const } };
+  const nodeWinner = { ...skeletonNode, id: "node-winner", homeSource: { nodeId: "source-node", teamId: "team-4", type: "node_winner" as const } };
+  const direct = { ...skeletonNode, id: "direct", homeSource: { teamId: "team-2", type: "manual_team" as const } };
+  const linked = { ...invalid, id: "linked", linkedMatchId: "match-1" };
+
+  assert.equal(isInvalidPreMaterializedTeamAssignment(invalid), true);
+  assert.equal(isInvalidPreMaterializedTeamAssignment(groupRank), true);
+  assert.equal(isInvalidPreMaterializedTeamAssignment(nodeWinner), true);
+  assert.equal(isInvalidPreMaterializedTeamAssignment(direct), false);
+  assert.equal(isInvalidPreMaterializedTeamAssignment(linked), false);
+  assert.deepEqual(
+    getRepairableTopologyAssignments([invalid, groupRank, nodeWinner, direct, linked]).map((entry) => [entry.node.id, entry.fields]),
+    [["invalid", ["home_source_team_id"]], ["group-rank", ["home_source_team_id"]], ["node-winner", ["home_source_team_id"]]],
+  );
+  assert.equal(getKnockoutTemplateSwitchGuard({ matches: [], nodes: [invalid] }).allowed, false);
+  assert.equal(getKnockoutTemplateSwitchGuard({ matches: [], nodes: [{ ...invalid, homeSource: { type: "unassigned" } }] }).allowed, true);
+  assert.equal(getKnockoutTemplateSwitchGuard({ matches: [{ status: "scheduled", winnerTeamId: null }], nodes: [invalid] }).code, "fixture_created");
+  assert.equal(topologySourceTeamId("unassigned", "team-1"), null);
+  assert.equal(topologySourceTeamId("group_rank", "team-1"), null);
+  assert.equal(topologySourceTeamId("node_winner", "team-1"), null);
+  assert.equal(topologySourceTeamId("manual_team", "team-1"), "team-1");
 });

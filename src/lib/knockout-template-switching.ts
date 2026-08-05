@@ -1,4 +1,4 @@
-type KnockoutNodeForState = {
+export type KnockoutNodeForState = {
   id?: string;
   linkedMatchId?: string | null;
   matchOrder?: number;
@@ -34,8 +34,38 @@ export type KnockoutTemplateSwitchDiagnostic = KnockoutTemplateSwitchGuard & {
   resettableNodes: KnockoutNodeForState[];
 };
 
+export type RepairableTopologyAssignment = {
+  fields: Array<"away_source_team_id" | "home_source_team_id">;
+  node: KnockoutNodeForState;
+};
+
 function nodeHasAssignedTeam(node: KnockoutNodeForState) {
   return Boolean(node.homeSource.teamId || node.awaySource.teamId);
+}
+
+function isTopologySourceType(type: string | null | undefined) {
+  return type === "unassigned" || type === "group_rank" || type === "node_winner";
+}
+
+export function topologySourceTeamId(type: string | null | undefined, teamId: string | null | undefined) {
+  return isTopologySourceType(type) ? null : teamId ?? null;
+}
+
+export function isInvalidPreMaterializedTeamAssignment(node: KnockoutNodeForState) {
+  return !node.linkedMatchId && (
+    (isTopologySourceType(node.homeSource.type) && Boolean(node.homeSource.teamId))
+    || (isTopologySourceType(node.awaySource.type) && Boolean(node.awaySource.teamId))
+  );
+}
+
+export function getRepairableTopologyAssignments(nodes: KnockoutNodeForState[]) {
+  return nodes.flatMap((node) => {
+    if (!isInvalidPreMaterializedTeamAssignment(node)) return [];
+    const fields: RepairableTopologyAssignment["fields"] = [];
+    if (isTopologySourceType(node.homeSource.type) && node.homeSource.teamId) fields.push("home_source_team_id");
+    if (isTopologySourceType(node.awaySource.type) && node.awaySource.teamId) fields.push("away_source_team_id");
+    return fields.length ? [{ fields, node }] : [];
+  });
 }
 
 export function isTopologyOnlyNode(node: KnockoutNodeForState) {

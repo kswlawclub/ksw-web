@@ -29,7 +29,7 @@ import { requireAdminSession } from "@/lib/admin-server-auth";
 import { isCupCompetition, normalizeCompetitionType } from "@/lib/competition-format";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { buildKnockoutTemplatePreview, getKnockoutTemplate, isKnockoutTemplateKey } from "@/lib/knockout-templates/registry";
-import { getKnockoutTemplateSwitchGuard } from "@/lib/knockout-template-switching";
+import { getKnockoutTemplateSwitchGuard, getRepairableTopologyAssignments, topologySourceTeamId } from "@/lib/knockout-template-switching";
 import type { KnockoutTemplateKey } from "@/lib/knockout-templates/types";
 import type { ApprovedQualificationSummary } from "@/app/admin/competitions/[id]/qualification-actions";
 
@@ -83,6 +83,14 @@ export type CompetitionEngineV2WorkflowResult = {
 export type CompetitionKnockoutTemplateSelectionResult = {
   error?: string;
   ok: boolean;
+};
+
+export type CompetitionTopologyRepairResult = {
+  blockedReason?: string;
+  error?: string;
+  ok: boolean;
+  repairable: Array<{ fields: Array<"away_source_team_id" | "home_source_team_id">; nodeId: string }>;
+  repairedCount: number;
 };
 
 export type CompetitionFixtureNodeV2 = {
@@ -164,7 +172,7 @@ async function verifyCupCompetition(competitionId: string) {
 
   const result = await supabase
     .from("leagues")
-    .select("id, competition_type, season_status")
+    .select("id, competition_type, season_status, slug")
     .eq("id", competitionId)
     .limit(1)
     .maybeSingle();
@@ -182,7 +190,12 @@ async function verifyCupCompetition(competitionId: string) {
     return { error: "Knockout competition management is available for cup competitions only.", seasonStatus: null, supabase };
   }
 
-  return { error: "", seasonStatus: typeof result.data.season_status === "string" ? result.data.season_status : null, supabase };
+  return {
+    error: "",
+    seasonStatus: typeof result.data.season_status === "string" ? result.data.season_status : null,
+    slug: typeof result.data.slug === "string" ? result.data.slug : null,
+    supabase,
+  };
 }
 
 export async function completeCupCompetitionV2(competitionId: string): Promise<CompleteCupCompetitionV2Result> {
@@ -278,7 +291,7 @@ function sourceForInsert(source: CompetitionTreeSource) {
   if (source.type === "node_winner") {
     return { bestOrder: null, groupId: null, nodeId: source.nodeId ?? null, rank: null, teamId: null };
   }
-  return { bestOrder: null, groupId: null, nodeId: null, rank: null, teamId: null };
+  return { bestOrder: null, groupId: null, nodeId: null, rank: null, teamId: topologySourceTeamId(source.type, source.teamId) };
 }
 
 function nodeForInsert(node: CompetitionTreeNode) {
@@ -432,6 +445,101 @@ export async function selectCompetitionKnockoutTemplateV2(
 
   revalidatePath(`/admin/competitions/${competitionId}`);
   return { ok: true };
+}
+
+async function loadCompetitionTopologyRepairState(competitionId: string) {
+  const verified = await verifyCupCompetition(competitionId);
+  if (verified.error || !verified.supabase) return { error: verified.error, verified: null };
+
+  const [nodesResult, matchesResult] = await Promise.all([
+    verified.supabase
+      .from("competition_bracket_nodes")
+      .select("id, competition_id, round_index, round_label, match_order, bracket_position, linked_match_id, home_source_type, away_source_type, home_source_group_id, home_source_rank, home_source_team_id, home_source_node_id, home_source_best_order, away_source_group_id, away_source_rank, away_source_team_id, away_source_node_id, away_source_best_order")
+      .eq("competition_id", competitionId),
+    verified.supabase
+      .from("matches")
+      .select("id, status, winner_team_id")
+      .eq("league_id", competitionId)
+      .eq("competition_stage", "knockout"),
+  ]);
+
+  if (nodesResult.error || matchesResult.error) {
+    console.error("competition topology repair lookup failed", { matches: matchesResult.error, nodes: nodesResult.error });
+    return { error: "ไม่สามารถตรวจสอบโครงร่างรอบน็อกเอาต์ได้", verified: null };
+  }
+
+  return {
+    error: "",
+    matches: matchesResult.data ?? [],
+    nodes: (nodesResult.data ?? []).map((row) => nodeFromDatabase(row as Record<string, unknown>)),
+    verified,
+  };
+}
+
+function topologyRepairResult(input: {
+  matches: Array<{ id: string; status: string | null; winner_team_id: string | null }>;
+  nodes: CompetitionTreeNode[];
+}): Omit<CompetitionTopologyRepairResult, "error" | "repairedCount"> {
+  const repairable = getRepairableTopologyAssignments(input.nodes).map(({ fields, node }) => ({ fields, nodeId: node.id ?? "" }));
+  const hasFixtures = input.matches.length > 0;
+  return {
+    blockedReason: hasFixtures
+      ? input.matches.some((match) => match.status === "finished" || Boolean(match.winner_team_id))
+        ? "ไม่สามารถซ่อมโครงร่าง เพราะมีผลการแข่งขันรอบน็อกเอาต์แล้ว"
+        : "ไม่สามารถซ่อมโครงร่าง เพราะสร้างโปรแกรมรอบน็อกเอาต์แล้ว"
+      : undefined,
+    ok: true,
+    repairable,
+  };
+}
+
+export async function inspectCompetitionTopologyRepairV2(competitionId: string): Promise<CompetitionTopologyRepairResult> {
+  const state = await loadCompetitionTopologyRepairState(competitionId);
+  if (state.error || !state.verified || !state.nodes || !state.matches) {
+    return { error: state.error || "ไม่สามารถตรวจสอบโครงร่างรอบน็อกเอาต์ได้", ok: false, repairable: [], repairedCount: 0 };
+  }
+  if (state.verified.seasonStatus === "completed") {
+    return { blockedReason: "การแข่งขันปิดแล้ว จึงไม่สามารถซ่อมโครงร่างได้", ok: true, repairable: [], repairedCount: 0 };
+  }
+  return { ...topologyRepairResult(state), repairedCount: 0 };
+}
+
+export async function repairCompetitionTopologyV2(competitionId: string): Promise<CompetitionTopologyRepairResult> {
+  const state = await loadCompetitionTopologyRepairState(competitionId);
+  if (state.error || !state.verified || !state.nodes || !state.matches) {
+    return { error: state.error || "ไม่สามารถซ่อมโครงร่างรอบน็อกเอาต์ได้", ok: false, repairable: [], repairedCount: 0 };
+  }
+  if (state.verified.seasonStatus === "completed") {
+    return { error: "การแข่งขันปิดแล้ว จึงไม่สามารถซ่อมโครงร่างได้", ok: false, repairable: [], repairedCount: 0 };
+  }
+
+  const inspection = topologyRepairResult(state);
+  if (inspection.blockedReason) {
+    return { ...inspection, error: inspection.blockedReason, ok: false, repairedCount: 0 };
+  }
+
+  let repairedCount = 0;
+  for (const repair of getRepairableTopologyAssignments(state.nodes)) {
+    const patch = Object.fromEntries(repair.fields.map((field) => [field, null]));
+    let updateQuery = state.verified.supabase
+      .from("competition_bracket_nodes")
+      .update(patch)
+      .eq("competition_id", competitionId)
+      .eq("id", repair.node.id)
+      .is("linked_match_id", null);
+    if (repair.fields.includes("home_source_team_id")) updateQuery = updateQuery.eq("home_source_type", repair.node.homeSource.type ?? "");
+    if (repair.fields.includes("away_source_team_id")) updateQuery = updateQuery.eq("away_source_type", repair.node.awaySource.type ?? "");
+    const updateResult = await updateQuery.select("id").maybeSingle();
+    if (updateResult.error || !updateResult.data) {
+      console.error("competition topology repair update failed", { error: updateResult.error, nodeId: repair.node.id });
+      return { error: "ไม่สามารถซ่อมโครงร่างได้ เพราะข้อมูลมีการเปลี่ยนแปลงระหว่างดำเนินการ", ok: false, repairable: inspection.repairable, repairedCount };
+    }
+    repairedCount += 1;
+  }
+
+  revalidatePath(`/admin/competitions/${competitionId}`);
+  if (state.verified.slug) revalidatePath(`/competitions/${state.verified.slug}`);
+  return { ok: true, repairable: [], repairedCount };
 }
 
 export async function getCompetitionEngineV2WorkflowState(competitionId: string): Promise<CompetitionEngineV2WorkflowResult> {
