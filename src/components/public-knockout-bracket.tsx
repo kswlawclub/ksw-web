@@ -1,5 +1,5 @@
 import { TeamLogo } from "@/components/team-logo";
-import { CalendarDays, ChevronDown, GitBranch, MapPin, Trophy } from "lucide-react";
+import { Activity, CalendarDays, CheckCircle2, ChevronDown, CircleDot, Clock3, Flag, GitBranch, MapPin, Trophy } from "lucide-react";
 import {
   groupPublicCupV2Rounds,
   isPublicCupKswMatch,
@@ -110,6 +110,151 @@ function localizedRoundLabel(label: string, localized: boolean) {
   if (normalized.includes("group")) return "รอบแบ่งกลุ่ม";
   if (normalized.includes("round")) return "รอบน็อกเอาต์ก่อนหน้า";
   return label;
+}
+
+function isFinishedMatch(match: PublicCupV2Node["linkedMatch"]) {
+  return Boolean(match && ["finished", "completed"].includes(match.status));
+}
+
+function liveRoundTimeline(data: PublicCupV2Data, partitionKey: "division_1" | "division_2") {
+  const visibleRounds = groupPublicCupV2Rounds(data.nodes, partitionKey);
+  const visibleRoundByIndex = new Map(visibleRounds.map((round) => [round.roundIndex, round]));
+  const groups = new Map<number, PublicCupV2Node[]>();
+  data.nodes
+    .filter((node) => node.partitionKey === partitionKey)
+    .forEach((node) => groups.set(node.roundIndex, [...(groups.get(node.roundIndex) ?? []), node]));
+
+  return Array.from(groups.entries())
+    .sort(([left], [right]) => left - right)
+    .map(([roundIndex, nodes]) => {
+      const visible = visibleRoundByIndex.get(roundIndex);
+      const orderedNodes = [...nodes].sort((left, right) => left.matchOrder - right.matchOrder);
+      const finishedCount = orderedNodes.filter((node) => isFinishedMatch(node.linkedMatch)).length;
+      return {
+        completed: visible?.completed ?? false,
+        current: visible?.current ?? false,
+        finishedCount,
+        hasPublicPairing: Boolean(visible),
+        nodes: orderedNodes,
+        roundIndex,
+        roundLabel: orderedNodes[0]?.roundLabel || `Round ${roundIndex + 1}`,
+      };
+    });
+}
+
+function LiveDivisionOverview({ data, partitionKey, theme, title }: {
+  data: PublicCupV2Data;
+  partitionKey: "division_1" | "division_2";
+  theme: Extract<BracketTheme, "division_1" | "division_2">;
+  title: string;
+}) {
+  const palette = themes[theme];
+  const partition = data.partitions.find((entry) => entry.key === partitionKey);
+  const rounds = liveRoundTimeline(data, partitionKey);
+  const currentRound = rounds.find((round) => round.current) ?? null;
+  const matches = rounds.flatMap((round) => round.nodes.map((node) => node.linkedMatch).filter((match): match is NonNullable<typeof match> => Boolean(match)));
+  const remainingMatches = matches.filter((match) => !isFinishedMatch(match)).length;
+  const latestWinner = [...matches]
+    .filter((match) => match.winner)
+    .sort((left, right) => (right.matchDate ?? "").localeCompare(left.matchDate ?? ""))[0]?.winner ?? null;
+  const progress = matches.length ? Math.round((matches.filter(isFinishedMatch).length / matches.length) * 100) : 0;
+
+  return (
+    <article className={`min-w-0 overflow-hidden rounded-xl border bg-white shadow-sm shadow-slate-900/10 ${palette.accent}`}>
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-5">
+        <div className="min-w-0">
+          <p className={`text-xs font-black uppercase tracking-[0.18em] ${palette.eyebrow}`}>Council Cup</p>
+          <h3 className="mt-1 text-xl font-black text-[#061426]">{title}</h3>
+        </div>
+        <span className={`rounded-full px-2.5 py-1 text-xs font-black ${palette.badge}`}>{partitionStatusLabel(partition?.status ?? "draft")}</span>
+      </header>
+      <div className="space-y-4 px-4 py-4 sm:px-5">
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Current round</p>
+            <p className="mt-1 break-words font-black text-[#061426]">{currentRound ? localizedRoundLabel(currentRound.roundLabel, true) : "รอจัดโปรแกรม"}</p>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Matches remaining</p>
+            <p className="mt-1 font-black text-[#061426]">{remainingMatches} คู่</p>
+          </div>
+        </div>
+        <div>
+          <div className="flex items-center justify-between gap-3 text-xs font-bold text-slate-600"><span>ความคืบหน้า</span><span>{progress}%</span></div>
+          <div aria-label={`ความคืบหน้า ${title} ${progress}%`} className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuemax={100} aria-valuemin={0} aria-valuenow={progress}>
+            <div className={`h-full rounded-full ${theme === "division_1" ? "bg-[#d8ad45]" : "bg-emerald-600"}`} style={{ width: `${progress}%` }} />
+          </div>
+        </div>
+        {latestWinner ? <div className={`flex min-w-0 items-center gap-2 border-t border-slate-100 pt-3 text-sm font-bold ${palette.eyebrow}`}><Trophy aria-hidden="true" className="size-4 shrink-0" /><span className="min-w-0 break-words">ผู้ท้าชิงล่าสุด: {latestWinner.name}</span></div> : null}
+      </div>
+    </article>
+  );
+}
+
+function LiveCurrentMatches({ data, partitionKey, theme, title }: {
+  data: PublicCupV2Data;
+  partitionKey: "division_1" | "division_2";
+  theme: Extract<BracketTheme, "division_1" | "division_2">;
+  title: string;
+}) {
+  const rounds = liveRoundTimeline(data, partitionKey);
+  const currentRound = rounds.find((round) => round.current) ?? null;
+  if (!currentRound?.hasPublicPairing) return null;
+  const liveNode = currentRound.nodes.find((node) => node.linkedMatch?.status === "active") ?? currentRound.nodes.find((node) => isFinishedMatch(node.linkedMatch));
+
+  return (
+    <article className={`min-w-0 overflow-hidden rounded-xl border bg-white shadow-sm shadow-slate-900/10 ${themes[theme].accent}`}>
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
+        <div className="min-w-0"><p className={`text-xs font-black uppercase tracking-[0.16em] ${themes[theme].eyebrow}`}>{title}</p><h3 className="mt-1 text-lg font-black text-[#061426]">{localizedRoundLabel(currentRound.roundLabel, true)}</h3></div>
+        <span className={`rounded-full px-2.5 py-1 text-xs font-black ${themes[theme].badge}`}>รอบปัจจุบัน</span>
+      </header>
+      <div className="grid gap-3 bg-slate-50/70 p-3 sm:p-4">
+        {currentRound.nodes.map((node) => <div className={node.id === liveNode?.id ? "rounded-lg ring-2 ring-[#d8ad45]/40" : ""} key={node.id}><PublicKnockoutMatchCard compact={false} node={node} /></div>)}
+      </div>
+    </article>
+  );
+}
+
+function LiveNextRoundPreview({ data, partitionKey, title }: { data: PublicCupV2Data; partitionKey: "division_1" | "division_2"; title: string }) {
+  const rounds = liveRoundTimeline(data, partitionKey);
+  const currentRound = rounds.find((round) => round.current);
+  const nextRound = currentRound ? rounds.find((round) => round.roundIndex > currentRound.roundIndex) : rounds[0];
+  if (!nextRound) return null;
+  return <article className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 sm:px-5"><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">{title}</p><div className="mt-2 flex min-w-0 items-center gap-2"><Clock3 aria-hidden="true" className="size-4 shrink-0 text-slate-500" /><p className="min-w-0 break-words text-base font-black text-[#061426]">{localizedRoundLabel(nextRound.roundLabel, true)}</p></div><p className="mt-2 text-sm font-semibold text-slate-600">{nextRound.hasPublicPairing ? "รอผลจากรอบปัจจุบัน" : "รอผู้ชนะจากรอบก่อนหน้า"}</p></article>;
+}
+
+function LiveBracketTimeline({ data, partitionKey, theme, title }: { data: PublicCupV2Data; partitionKey: "division_1" | "division_2"; theme: Extract<BracketTheme, "division_1" | "division_2">; title: string }) {
+  const rounds = liveRoundTimeline(data, partitionKey);
+  if (!rounds.length) return null;
+  return <article className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-900/10 sm:p-5"><p className={`text-xs font-black uppercase tracking-[0.16em] ${themes[theme].eyebrow}`}>{title}</p><div className="mt-3 grid gap-2 sm:grid-cols-3">{rounds.map((round) => {
+    const state = round.completed ? "completed" : round.current ? "current" : "future";
+    return <div className={`min-w-0 rounded-lg border px-3 py-3 ${state === "completed" ? "border-emerald-200 bg-emerald-50" : state === "current" ? themes[theme].badge : "border-slate-200 bg-slate-50"}`} key={round.roundIndex}><div className="flex items-start justify-between gap-2"><p className="min-w-0 break-words text-sm font-black text-[#061426]">{localizedRoundLabel(round.roundLabel, true)}</p>{state === "completed" ? <CheckCircle2 aria-hidden="true" className="size-4 shrink-0 text-emerald-700" /> : state === "current" ? <CircleDot aria-hidden="true" className={`size-4 shrink-0 ${themes[theme].eyebrow}`} /> : <Flag aria-hidden="true" className="size-4 shrink-0 text-slate-400" />}</div><p className="mt-2 text-xs font-bold text-slate-600">{state === "completed" ? "จบแล้ว" : state === "current" ? "กำลังแข่งขัน" : "รอผลรอบก่อน"}</p></div>;
+  })}</div></article>;
+}
+
+function LiveLatestResults({ data }: { data: PublicCupV2Data }) {
+  const results = data.linkedMatches.filter(isFinishedMatch).sort((left, right) => (right.matchDate ?? "").localeCompare(left.matchDate ?? "")).slice(0, 5);
+  if (!results.length) return null;
+  return <section className="mx-auto w-full max-w-7xl px-4 pb-8 sm:px-6 lg:px-10" id="tournament-results"><div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm shadow-slate-900/10"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-5"><div><p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-[#8a6418]"><Activity aria-hidden="true" className="size-4 shrink-0" />Latest results</p><h2 className="mt-1 text-2xl font-black text-[#061426]">ผลการแข่งขันล่าสุด</h2></div><a className="text-sm font-black text-[#8a6418] underline decoration-[#d8ad45]/60 underline-offset-4 hover:text-[#061426]" href="#next-round">ดูเส้นทางการแข่งขัน</a></div><div className="divide-y divide-slate-100">{results.map((match) => <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-4 py-3 sm:px-5" key={match.id}><p className="min-w-0 break-words text-sm font-bold text-[#061426]">{match.homeTeam?.name ?? "ทีมเหย้า"}</p><span className="rounded-md bg-[#061426] px-2.5 py-1 text-xs font-black text-white">{match.homeScore ?? 0}-{match.awayScore ?? 0}</span><p className="min-w-0 break-words text-right text-sm font-bold text-[#061426]">{match.awayTeam?.name ?? "ทีมเยือน"}</p><p className="col-span-3 text-xs font-semibold text-slate-500">FT · {formatDateTime(match.matchDate)}</p></div>)}</div></div></section>;
+}
+
+export function PublicCouncilCupLiveCenter({ data }: { data: PublicCupV2Data }) {
+  const divisionKeys = ["division_1", "division_2"] as const;
+  const divisions = divisionKeys.filter((partitionKey) => data.partitions.some((partition) => partition.key === partitionKey) || data.nodes.some((node) => node.partitionKey === partitionKey));
+  if (!divisions.length) return null;
+  const allRounds = divisions.flatMap((partitionKey) => liveRoundTimeline(data, partitionKey));
+  const currentRounds = allRounds.filter((round) => round.current);
+  const matches = data.linkedMatches;
+  const remainingMatches = matches.filter((match) => !isFinishedMatch(match)).length;
+  const progress = matches.length ? Math.round((matches.filter(isFinishedMatch).length / matches.length) * 100) : 0;
+
+  return <>
+    <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-10" id="live-status"><div className="rounded-xl border border-[#d8ad45]/30 bg-white p-4 shadow-sm shadow-slate-900/10 sm:p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-[#8a6418]"><Activity aria-hidden="true" className="size-4 shrink-0" />Current tournament status</p><h2 className="mt-1 text-2xl font-black text-[#061426]">ตอนนี้การแข่งขันอยู่ที่</h2></div><span className="rounded-full bg-[#fff4dc] px-3 py-1.5 text-xs font-black text-[#8a6418]">{currentRounds.length ? currentRounds.map((round) => localizedRoundLabel(round.roundLabel, true)).filter((value, index, values) => values.indexOf(value) === index).join(" · ") : "รอจัดโปรแกรม"}</span></div><div className="mt-5 grid gap-3 sm:grid-cols-3"><div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3"><p className="text-xs font-bold text-slate-500">แมตช์ที่เหลือ</p><p className="mt-1 text-2xl font-black text-[#061426]">{remainingMatches}</p></div><div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3"><p className="text-xs font-bold text-slate-500">แมตช์ที่แข่งแล้ว</p><p className="mt-1 text-2xl font-black text-[#061426]">{matches.filter(isFinishedMatch).length}</p></div><div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3"><p className="text-xs font-bold text-slate-500">ความคืบหน้ารายการ</p><p className="mt-1 text-2xl font-black text-[#061426]">{progress}%</p></div></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-[#d8ad45]" style={{ width: `${progress}%` }} /></div></div></section>
+    <section className="mx-auto w-full max-w-7xl px-4 pb-8 sm:px-6 lg:px-10"><div className="grid gap-4 xl:grid-cols-2 xl:gap-5">{divisions.map((partitionKey) => <LiveDivisionOverview data={data} key={partitionKey} partitionKey={partitionKey} theme={partitionKey === "division_1" ? "division_1" : "division_2"} title={partitionKey === "division_1" ? "Division 1" : "Division 2"} />)}</div></section>
+    <section className="mx-auto w-full max-w-7xl px-4 pb-8 sm:px-6 lg:px-10" id="current-matches"><div className="mb-4"><p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-[#8a6418]"><CircleDot aria-hidden="true" className="size-4 shrink-0" />Live match center</p><h2 className="mt-1 text-2xl font-black text-[#061426]">แมตช์ในรอบปัจจุบัน</h2></div><div className="grid gap-4 xl:grid-cols-2 xl:gap-5">{divisions.map((partitionKey) => <LiveCurrentMatches data={data} key={partitionKey} partitionKey={partitionKey} theme={partitionKey === "division_1" ? "division_1" : "division_2"} title={partitionKey === "division_1" ? "Division 1" : "Division 2"} />)}</div>{!currentRounds.length ? <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-semibold text-slate-600">ยังไม่มีโปรแกรมรอบน็อกเอาต์ที่พร้อมแข่งขัน</p> : null}</section>
+    <section className="mx-auto grid w-full max-w-7xl gap-4 px-4 pb-8 sm:px-6 xl:grid-cols-2 xl:gap-5 lg:px-10" id="next-round"><div className="min-w-0"><p className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-slate-500"><Clock3 aria-hidden="true" className="size-4 shrink-0" />Next round preview</p><div className="grid gap-3">{divisions.map((partitionKey) => <LiveNextRoundPreview data={data} key={partitionKey} partitionKey={partitionKey} title={partitionKey === "division_1" ? "Division 1" : "Division 2"} />)}</div></div><div className="min-w-0"><p className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-slate-500"><GitBranch aria-hidden="true" className="size-4 shrink-0" />Bracket timeline</p><div className="grid gap-3">{divisions.map((partitionKey) => <LiveBracketTimeline data={data} key={partitionKey} partitionKey={partitionKey} theme={partitionKey === "division_1" ? "division_1" : "division_2"} title={partitionKey === "division_1" ? "Division 1" : "Division 2"} />)}</div></div></section>
+    <LiveLatestResults data={data} />
+  </>;
 }
 
 export function PublicKnockoutBracket({
