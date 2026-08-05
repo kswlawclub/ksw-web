@@ -31,6 +31,20 @@ type CompetitionPayload = {
   is_published: boolean;
 };
 
+type CompletedCompetitionEditorialPayload = Pick<
+  CompetitionPayload,
+  | "name"
+  | "season"
+  | "short_description"
+  | "description"
+  | "cover_image_url"
+  | "edition_number"
+  | "start_date"
+  | "end_date"
+  | "location"
+  | "display_order"
+>;
+
 type ActionResult = {
   deletedCount?: number;
   ok: boolean;
@@ -109,6 +123,25 @@ function normalizePayload(payload: CompetitionPayload): CompetitionPayload {
     ...payload,
     name: payload.name.trim(),
     slug: normalizeSlug(payload.slug),
+  };
+}
+
+function isSeasonStatus(value: unknown): value is SeasonStatus {
+  return value === "upcoming" || value === "active" || value === "completed";
+}
+
+function completedEditorialPayload(payload: CompetitionPayload): CompletedCompetitionEditorialPayload {
+  return {
+    cover_image_url: payload.cover_image_url,
+    description: payload.description,
+    display_order: payload.display_order,
+    edition_number: payload.edition_number,
+    end_date: payload.end_date,
+    location: payload.location,
+    name: payload.name,
+    season: payload.season,
+    short_description: payload.short_description,
+    start_date: payload.start_date,
   };
 }
 
@@ -271,14 +304,7 @@ export async function updateCompetition(
   coverFormData?: FormData | null,
 ): Promise<ActionResult> {
   await requireAdminSession();
-  const normalizedPayload = normalizePayload(payload);
   const coverFile = coverFileFromFormData(coverFormData);
-
-  const validationError = validatePayload(normalizedPayload);
-
-  if (validationError) {
-    return { ok: false, error: validationError };
-  }
 
   const { supabase, error } = getAdminClient();
 
@@ -286,11 +312,43 @@ export async function updateCompetition(
     return { ok: false, error };
   }
 
-  const current = await supabase.from("leagues").select("cover_image_url").eq("id", id).single();
-  const oldCoverUrl =
-    !current.error && typeof current.data?.cover_image_url === "string"
-      ? current.data.cover_image_url
-      : null;
+  const current = await supabase
+    .from("leagues")
+    .select("cover_image_url, slug, competition_type, season_status, is_active, is_featured, is_published")
+    .eq("id", id)
+    .maybeSingle();
+  if (current.error) {
+    console.error("admin competition current record lookup failed", current.error);
+    return { ok: false, error: "ไม่สามารถตรวจสอบสถานะรายการแข่งขันก่อนบันทึกได้" };
+  }
+  if (!current.data) {
+    return { ok: false, error: "ไม่พบรายการแข่งขันที่ต้องการบันทึก" };
+  }
+  if (!isCompetitionType(current.data.competition_type) || !isSeasonStatus(current.data.season_status)) {
+    console.error("admin competition current record has invalid protected fields", { id });
+    return { ok: false, error: "ข้อมูลรายการแข่งขันไม่สมบูรณ์ จึงไม่สามารถบันทึกได้อย่างปลอดภัย" };
+  }
+
+  const isCompleted = current.data.season_status === "completed";
+  const normalizedPayload = normalizePayload(isCompleted
+    ? {
+        ...payload,
+        competition_type: current.data.competition_type,
+        is_active: current.data.is_active === true,
+        is_featured: current.data.is_featured === true,
+        is_published: current.data.is_published === true,
+        season_status: current.data.season_status,
+        slug: current.data.slug,
+      }
+    : payload);
+  const validationError = validatePayload(normalizedPayload);
+
+  if (validationError) {
+    return { ok: false, error: validationError };
+  }
+
+  const oldCoverUrl = typeof current.data.cover_image_url === "string" ? current.data.cover_image_url : null;
+  const currentSlug = typeof current.data.slug === "string" ? current.data.slug : "";
   let uploadedCover: { path: string; publicUrl: string } | null = null;
 
   if (coverFile) {
@@ -309,7 +367,10 @@ export async function updateCompetition(
   const finalPayload = uploadedCover
     ? { ...normalizedPayload, cover_image_url: uploadedCover.publicUrl }
     : normalizedPayload;
-  const result = await supabase.from("leagues").update(finalPayload).eq("id", id);
+  const updatePayload = isCompleted
+    ? completedEditorialPayload(finalPayload)
+    : finalPayload;
+  const result = await supabase.from("leagues").update(updatePayload).eq("id", id);
 
   if (result.error) {
     console.error("admin competition update failed", result.error);
@@ -321,6 +382,15 @@ export async function updateCompetition(
 
   if (uploadedCover || normalizedPayload.cover_image_url !== oldCoverUrl) {
     await removeCompetitionCover(oldCoverUrl);
+  }
+
+  revalidatePath("/");
+  revalidatePath("/competitions");
+  if (currentSlug) {
+    revalidatePath(`/competitions/${currentSlug}`);
+  }
+  if (!isCompleted && normalizedPayload.slug && normalizedPayload.slug !== currentSlug) {
+    revalidatePath(`/competitions/${normalizedPayload.slug}`);
   }
 
   return { ok: true };

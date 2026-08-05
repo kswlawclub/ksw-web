@@ -633,6 +633,7 @@ export default function AdminCompetitionsPage() {
     { length: daysInMonth(endDateParts.month, endDateParts.buddhistYear) },
     (_, index) => String(index + 1),
   );
+  const isCompletedCompetition = Boolean(form.id && form.seasonStatus === "completed");
 
   const visibleCompetitions = competitions.filter((competition) => publicationFilter === "all" || (publicationFilter === "published" ? competition.is_published : !competition.is_published));
 
@@ -678,6 +679,11 @@ export default function AdminCompetitionsPage() {
           </div>
 
           <div className="grid gap-4">
+            {isCompletedCompetition ? (
+              <p className="rounded-md border border-amber-200 bg-[#fff7e6] px-3 py-2 text-sm font-semibold text-[#6f5115]">
+                รายการแข่งขันจบแล้ว แก้ไขได้เฉพาะข้อมูลนำเสนอและข้อมูลประวัติ โครงสร้าง สถานะ และผลการแข่งขันถูกล็อก
+              </p>
+            ) : null}
             <label className="grid min-w-0 gap-2 text-sm font-black">
               Name
               <input
@@ -703,6 +709,7 @@ export default function AdminCompetitionsPage() {
               <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
                 <input
                   className="w-full min-w-0 max-w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                  disabled={isCompletedCompetition}
                   onChange={(event) => updateSlug(event.target.value)}
                   pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
                   placeholder="thai-lawyers-league-season-6"
@@ -710,6 +717,7 @@ export default function AdminCompetitionsPage() {
                 />
                 <button
                   className="min-h-11 w-full max-w-full rounded-md border border-[#d8ad45]/45 px-3 py-2 text-center text-xs font-black leading-tight text-[#061426] hover:bg-[#fff4dc] sm:w-auto"
+                  disabled={isCompletedCompetition}
                   onClick={generateSlugFromCurrentName}
                   type="button"
                 >
@@ -967,6 +975,7 @@ export default function AdminCompetitionsPage() {
               Type
               <select
                 className="w-full min-w-0 max-w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                disabled={isCompletedCompetition}
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
@@ -987,6 +996,7 @@ export default function AdminCompetitionsPage() {
               Season Status
               <select
                 className="w-full min-w-0 max-w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                disabled={isCompletedCompetition}
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
@@ -1005,6 +1015,7 @@ export default function AdminCompetitionsPage() {
               <input
                 checked={form.isActive}
                 className="size-4 accent-[#d8ad45]"
+                disabled={isCompletedCompetition}
                 onChange={(event) =>
                   setForm((current) => ({ ...current, isActive: event.target.checked }))
                 }
@@ -1017,6 +1028,7 @@ export default function AdminCompetitionsPage() {
               <input
                 checked={form.isFeatured}
                 className="size-4 accent-[#d8ad45]"
+                disabled={isCompletedCompetition}
                 onChange={(event) =>
                   setForm((current) => ({ ...current, isFeatured: event.target.checked }))
                 }
@@ -1029,6 +1041,7 @@ export default function AdminCompetitionsPage() {
               <input
                 checked={form.isPublished}
                 className="size-4 accent-[#d8ad45]"
+                disabled={isCompletedCompetition}
                 onChange={(event) =>
                   setForm((current) => ({ ...current, isPublished: event.target.checked }))
                 }
