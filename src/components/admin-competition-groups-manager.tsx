@@ -2,7 +2,20 @@
 
 import { FormEvent, type ReactNode, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check } from "lucide-react";
+import {
+  CalendarDays,
+  Check,
+  ChevronRight,
+  ClipboardList,
+  Layers3,
+  ListOrdered,
+  Pencil,
+  ShieldCheck,
+  Swords,
+  Trash2,
+  UserRoundPlus,
+  UsersRound,
+} from "lucide-react";
 import { TeamLogo } from "@/components/team-logo";
 import {
   assignCompetitionTeamToGroup,
@@ -89,9 +102,9 @@ function WorkflowStep({
         : "border-slate-200 bg-slate-50 text-slate-500";
 
   return (
-    <li className={`rounded-md border px-3 py-2 text-xs font-black ${className}`}>
-      {label}
-      <span className="ml-2 rounded-full bg-white/70 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em]">
+    <li className={`flex min-w-0 items-center justify-between gap-2 rounded-md border px-3 py-2.5 text-xs font-black ${className}`}>
+      <span className="min-w-0">{label}</span>
+      <span className="inline-flex shrink-0 items-center rounded-full bg-white/70 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em]">
         {completedPresentation ? <span className="inline-flex items-center gap-1"><Check aria-hidden="true" className="size-3 shrink-0" />COMPLETED</span> : status === "coming" ? "Coming next" : "Available"}
       </span>
     </li>
@@ -366,10 +379,10 @@ export function AdminCompetitionGroupsManager({
     }
 
     return (
-      <div className="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <div className="flex flex-col gap-2 border-b border-slate-100 bg-slate-50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a6418]">Group Standings</p>
+      <div className="mt-4 overflow-hidden rounded-md border border-slate-200 bg-white">
+        <div className="flex flex-col gap-2 border-b border-slate-200 bg-[#fffdf8] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.16em] text-[#8a6418]"><ListOrdered aria-hidden="true" className="size-3.5 shrink-0" />Group Standings</p>
             <p className="mt-1 text-xs font-bold text-slate-500">
               {standings.is_complete ? "แข่งครบแล้ว" : "สถานะชั่วคราว"} · {standings.finished_matches}/{standings.total_required_matches} results
             </p>
@@ -391,21 +404,21 @@ export function AdminCompetitionGroupsManager({
             </thead>
             <tbody>
               {standings.rows.map((row) => (
-                <tr className={row.qualifies ? "bg-[#fff7e6]" : "bg-white"} key={row.team_id}>
-                  <td className="border-b border-slate-100 px-3 py-2 font-black">{row.position}</td>
-                  <td className="min-w-44 border-b border-slate-100 px-3 py-2 font-black text-[#061426]">
+                <tr className={row.qualifies ? "bg-[#f0fdf4]" : "bg-white"} key={row.team_id}>
+                  <td className="border-b border-slate-100 px-3 py-2.5 font-black">{row.position}</td>
+                  <td className="min-w-44 border-b border-slate-100 px-3 py-2.5 font-black text-[#061426]">
                     <span className="break-words">{row.team_name}</span>
                     {row.tie_unresolved ? (
                       <span className="mt-1 block text-[10px] font-bold text-[#8a6418]">อันดับยังเสมอกัน</span>
                     ) : null}
                   </td>
                   {[row.played, row.won, row.drawn, row.lost, row.goals_for, row.goals_against, row.goal_difference, row.points].map((value, index) => (
-                    <td className="border-b border-slate-100 px-3 py-2 font-bold" key={index}>{value}</td>
+                    <td className="border-b border-slate-100 px-3 py-2.5 font-bold" key={index}>{value}</td>
                   ))}
-                  <td className="border-b border-slate-100 px-3 py-2">
+                  <td className="border-b border-slate-100 px-3 py-2.5">
                     {row.qualifies ? (
-                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">
-                        ผ่านเข้ารอบ
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">
+                        <ShieldCheck aria-hidden="true" className="size-3 shrink-0" />ผ่านเข้ารอบ
                       </span>
                     ) : null}
                   </td>
@@ -420,7 +433,7 @@ export function AdminCompetitionGroupsManager({
 
   function TeamAssignmentRow({ team }: { team: AdminCompetitionGroupTeam }) {
     return (
-      <div className="grid min-w-0 gap-2 rounded-md border border-slate-100 bg-slate-50 p-2.5">
+      <div className="grid min-w-0 gap-2 rounded-md border border-slate-200 bg-[#fffdf8] p-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <TeamLogo
             className="!size-8 shrink-0 bg-[#061426]"
@@ -454,7 +467,7 @@ export function AdminCompetitionGroupsManager({
 
   function UnassignedTeamCard({ team }: { team: AdminCompetitionGroupTeam }) {
     return (
-      <div className="grid min-w-0 gap-2 rounded-md border border-slate-100 bg-slate-50 p-2.5">
+      <div className="grid min-w-0 gap-2 rounded-md border border-slate-200 bg-[#fffdf8] p-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <TeamLogo
             className="!size-8 shrink-0 bg-[#061426]"
@@ -483,27 +496,27 @@ export function AdminCompetitionGroupsManager({
 
   return (
     <section className="mx-auto w-full max-w-7xl scroll-mt-28 px-4 pb-10 sm:px-6 lg:px-10" id="groups-summary">
-      <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/10">
-        <div className="mb-4 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
+      <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm shadow-slate-900/5 sm:p-5">
+        <div className="mb-3 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a6418]">Cup Workspace</p>
-            <h2 className="mt-2 text-2xl font-black">Group Stage</h2>
+            <p className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.18em] text-[#8a6418]"><Layers3 aria-hidden="true" className="size-4 shrink-0" />Cup Workspace</p>
+            <h2 className="mt-2 inline-flex items-center gap-2 text-2xl font-black"><ClipboardList aria-hidden="true" className="size-5 shrink-0 text-[#061426]" />Group Stage</h2>
             <p className="mt-1 text-sm font-semibold text-slate-600">
               Create cup groups and assign participating teams before building group-stage fixtures.
             </p>
-            <a className="mt-3 inline-flex min-h-10 items-center rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-black text-[#061426]" href="#cup-workspace-nav">กลับเมนูลัด</a>
+            <a className="mt-3 inline-flex min-h-10 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-black text-[#061426] hover:border-[#d8ad45]" href="#cup-workspace-nav">กลับเมนูลัด<ChevronRight aria-hidden="true" className="size-4 shrink-0" /></a>
           </div>
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="grid w-full grid-cols-3 gap-2 text-center lg:w-auto lg:min-w-[300px]">
+            <div className="rounded-md border border-slate-200 bg-[#fffdf8] px-3 py-2.5">
               <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Groups</p>
               <p className="text-xl font-black">{localGroups.length}</p>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+            <div className="rounded-md border border-slate-200 bg-[#fffdf8] px-3 py-2.5">
               <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Assigned</p>
               <p className="text-xl font-black">{assignedCount}</p>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+            <div className="rounded-md border border-slate-200 bg-[#fffdf8] px-3 py-2.5">
               <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Unassigned</p>
               <p className="text-xl font-black">{unassignedTeams.length}</p>
             </div>
@@ -525,7 +538,7 @@ export function AdminCompetitionGroupsManager({
           <WorkflowStep completedPresentation={isCompetitionCompleted} label="6. Knockout bracket" status={isCompetitionCompleted ? "done" : "coming"} />
         </ol>
 
-        {form.id ? <form className="mt-6 grid gap-3 rounded-lg border border-[#d8ad45]/30 bg-[#fffaf0] p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_140px_auto] lg:items-end" onSubmit={saveGroup}>
+        {form.id ? <form className="mt-5 grid gap-3 rounded-md border border-[#d8ad45]/30 bg-[#fffaf0] p-3 sm:p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_140px_auto] lg:items-end" onSubmit={saveGroup}>
           <label className="grid min-w-0 gap-2 text-sm font-black">
             Group Name
             <input
@@ -560,11 +573,11 @@ export function AdminCompetitionGroupsManager({
           </label>
           <div className="flex flex-wrap gap-2">
             <button
-              className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] hover:bg-[#091f39] disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] hover:bg-[#091f39] disabled:cursor-not-allowed disabled:opacity-60"
               disabled={saving || !schemaReady}
               type="submit"
             >
-              {saving ? "Saving..." : form.id ? "Update Group" : "Add Group"}
+              <Pencil aria-hidden="true" className="size-4 shrink-0" />{saving ? "Saving..." : form.id ? "Update Group" : "Add Group"}
             </button>
             {form.id ? (
               <button className="min-h-11 rounded-md border border-slate-200 px-4 py-2 text-sm font-black" onClick={resetForm} type="button">
@@ -572,11 +585,11 @@ export function AdminCompetitionGroupsManager({
               </button>
             ) : null}
           </div>
-        </form> : <form className="mt-6 grid min-w-0 gap-3 rounded-lg border border-[#d8ad45]/30 bg-[#fffaf0] p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end" onSubmit={createGroups}>
+        </form> : <form className="mt-5 grid min-w-0 gap-3 rounded-md border border-[#d8ad45]/30 bg-[#fffaf0] p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end" onSubmit={createGroups}>
           <label className="grid min-w-0 gap-2 text-sm font-black">จำนวนกลุ่ม
             <input className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20" disabled={!schemaReady || saving} max="64" min="1" onChange={(event) => setGroupCount(event.target.value)} placeholder="8" required step="1" type="number" value={groupCount} />
           </label>
-          <button className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] hover:bg-[#091f39] disabled:cursor-not-allowed disabled:opacity-60" disabled={saving || !schemaReady} type="submit">{saving ? "กำลังสร้าง..." : "สร้างกลุ่ม"}</button>
+          <button className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-[#061426] px-4 py-2 text-sm font-black text-[#f4d58a] hover:bg-[#091f39] disabled:cursor-not-allowed disabled:opacity-60" disabled={saving || !schemaReady} type="submit"><Layers3 aria-hidden="true" className="size-4 shrink-0" />{saving ? "กำลังสร้าง..." : "สร้างกลุ่ม"}</button>
           <p className="text-sm font-bold text-slate-600 sm:col-span-2">มีอยู่แล้ว {localGroups.length} กลุ่ม{groupsToAdd.length ? ` · จะเพิ่ม ${groupsToAdd.length} กลุ่ม: Group ${groupsToAdd[0]} ถึง Group ${groupsToAdd[groupsToAdd.length - 1]}` : requestedGroupCount === localGroups.length && requestedGroupCount > 0 ? ` · มีครบ ${requestedGroupCount} กลุ่มแล้ว` : requestedGroupCount > 0 && requestedGroupCount < localGroups.length ? ` · มีกลุ่มมากกว่าจำนวนที่ระบุ ระบบจะไม่ลบกลุ่มอัตโนมัติ` : ""}</p>
         </form>}
 
@@ -597,7 +610,7 @@ export function AdminCompetitionGroupsManager({
           </p>
         ) : null}
 
-        <div className="mt-6 grid gap-4">
+        <div className="mt-5 grid gap-3">
           {sortedGroups.length ? (
             sortedGroups.map((group) => {
               const groupTeams = teamsByGroup.get(group.id) ?? [];
@@ -605,37 +618,38 @@ export function AdminCompetitionGroupsManager({
               const missingPreviewCount = previewPairs.filter((pair) => !pair.exists).length;
               const standings = standingsByGroup.get(group.id);
               return (
-                <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm" key={group.id}>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-3.5 shadow-sm shadow-slate-900/5 sm:p-4" key={group.id}>
+                  <div className="flex flex-col gap-3 border-b border-slate-100 pb-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a6418]">
                         {group.name}
                       </p>
                       <h3 className="mt-1 break-words text-xl font-black">{groupDisplayName(group)}</h3>
-                      <p className="mt-1 text-sm font-semibold text-slate-500">
+                      <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500">
+                        <UsersRound aria-hidden="true" className="size-4 shrink-0 text-slate-400" />
                         {groupTeams.length} ทีม · ผ่านเข้ารอบ {group.qualifiers_count} ทีม
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <button
-                        className="rounded-md border border-slate-200 px-3 py-2 text-xs font-black hover:border-[#d8ad45]"
+                        className="inline-flex min-h-10 items-center gap-1.5 rounded-md border border-slate-200 px-3 py-2 text-xs font-black text-[#061426] hover:border-[#d8ad45]"
                         onClick={() => editGroup(group)}
                         type="button"
                       >
-                        Edit
+                        <Pencil aria-hidden="true" className="size-3.5 shrink-0" />Edit
                       </button>
                       <button
-                        className="rounded-md border border-[#9b1c1f]/30 px-3 py-2 text-xs font-black text-[#9b1c1f] hover:bg-[#9b1c1f]/10"
+                        className="inline-flex min-h-10 items-center gap-1.5 rounded-md border border-[#9b1c1f]/30 px-3 py-2 text-xs font-black text-[#9b1c1f] hover:bg-[#9b1c1f]/10"
                         onClick={() => void removeGroup(group)}
                         type="button"
                       >
-                        Delete
+                        <Trash2 aria-hidden="true" className="size-3.5 shrink-0" />Delete
                       </button>
                     </div>
                   </div>
-                  <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50 p-3">
+                  <div className="mt-3 grid gap-3 rounded-md border border-slate-200 bg-[#fffdf8] p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] sm:items-end">
                     <label className="grid min-w-0 gap-2 text-xs font-black text-slate-600">
-                      Teams qualifying
+                      <span className="inline-flex items-center gap-1.5"><ShieldCheck aria-hidden="true" className="size-4 shrink-0 text-emerald-700" />Teams qualifying</span>
                       <input
                         className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-[#061426] outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20 disabled:cursor-not-allowed disabled:opacity-60"
                         disabled={!schemaReady || qualifierActionGroupId === group.id}
@@ -647,12 +661,12 @@ export function AdminCompetitionGroupsManager({
                         defaultValue={group.qualifiers_count}
                       />
                     </label>
-                    <p className="mt-2 text-xs font-bold text-slate-500">
+                    <p className="text-xs font-bold leading-5 text-slate-500">
                       Maximum {groupTeams.length} team{groupTeams.length === 1 ? "" : "s"} in this group.
                     </p>
                   </div>
                   {standings ? <GroupStandingsTable standings={standings} /> : null}
-                  <div className="mt-4 grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4">
                     {groupTeams.length ? (
                       groupTeams.map((team) => <TeamAssignmentRow key={team.competition_team_id} team={team} />)
                     ) : (
@@ -661,14 +675,14 @@ export function AdminCompetitionGroupsManager({
                       </p>
                     )}
                   </div>
-                  <div className="mt-4">
+                  <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
                     <button
-                      className="min-h-11 rounded-md border border-[#d8ad45]/45 px-3 py-2 text-xs font-black text-[#061426] hover:bg-[#fff7e6] disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-[#d8ad45]/45 px-3 py-2 text-xs font-black text-[#061426] hover:bg-[#fff7e6] disabled:cursor-not-allowed disabled:opacity-60"
                       disabled={!schemaReady || fixtureActionGroupId === group.id || groupTeams.length < 2}
                       onClick={() => void generateFixtures(group)}
                       type="button"
                     >
-                      {fixtureActionGroupId === group.id ? "กำลังสร้าง..." : "สร้างโปรแกรมการแข่งขัน"}
+                      <CalendarDays aria-hidden="true" className="size-4 shrink-0 text-[#8a6418]" />{fixtureActionGroupId === group.id ? "กำลังสร้าง..." : "สร้างโปรแกรมการแข่งขัน"}
                     </button>
                   </div>
                   {groupTeams.length < 2 ? (
@@ -677,23 +691,23 @@ export function AdminCompetitionGroupsManager({
                     </p>
                   ) : null}
                   {previewPairs.length ? (
-                    <div className="mt-4 rounded-lg border border-[#d8ad45]/30 bg-[#fffaf0] p-3">
+                    <div className="mt-3 rounded-md border border-[#d8ad45]/30 bg-[#fffaf0] p-3">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a6418]">
-                            Fixture Preview
+                          <p className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.16em] text-[#8a6418]">
+                            <Swords aria-hidden="true" className="size-3.5 shrink-0" />Fixture Preview
                           </p>
                           <p className="mt-1 text-sm font-bold text-slate-600">
                             {previewPairs.length} fixtures · {missingPreviewCount} to create
                           </p>
                         </div>
                         <button
-                          className="min-h-11 rounded-md bg-[#061426] px-4 py-2 text-xs font-black text-[#f4d58a] hover:bg-[#091f39] disabled:cursor-not-allowed disabled:opacity-60"
+                          className="inline-flex min-h-11 items-center gap-1.5 rounded-md bg-[#061426] px-4 py-2 text-xs font-black text-[#f4d58a] hover:bg-[#091f39] disabled:cursor-not-allowed disabled:opacity-60"
                           disabled={fixtureActionGroupId === group.id || missingPreviewCount === 0}
                           onClick={() => void generateFixtures(group)}
                           type="button"
                         >
-                          {missingPreviewCount === 0 ? "All Created" : "Confirm Generate"}
+                          <Swords aria-hidden="true" className="size-4 shrink-0" />{missingPreviewCount === 0 ? "All Created" : "Confirm Generate"}
                         </button>
                       </div>
                       <div className="mt-3 grid gap-2">
@@ -724,9 +738,9 @@ export function AdminCompetitionGroupsManager({
           )}
         </div>
 
-        <section className="mt-6 rounded-lg border border-slate-200 bg-white p-4">
-          <h3 className="text-xl font-black">ทีมที่ยังไม่จัดกลุ่ม</h3>
-          <div className="mt-3 rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-600">
+        <section className="mt-5 rounded-lg border border-slate-200 bg-[#fffdf8] p-3.5 sm:p-4">
+          <h3 className="inline-flex items-center gap-2 text-xl font-black"><UserRoundPlus aria-hidden="true" className="size-5 shrink-0 text-[#8a6418]" />ทีมที่ยังไม่จัดกลุ่ม</h3>
+          <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600">
             ทีมที่ยังไม่จัดกลุ่ม <strong className="ml-2 text-[#061426]">{unassignedTeams.length}</strong>
           </div>
           <div className="mt-4 grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4">
@@ -739,7 +753,8 @@ export function AdminCompetitionGroupsManager({
             )}
           </div>
           {unassignedTeams.length > 16 ? (
-            <button className="mt-4 min-h-11 rounded-md border border-slate-200 px-4 py-2 text-sm font-black text-[#061426] hover:border-[#d8ad45]" onClick={() => setShowAllUnassignedTeams((current) => !current)} type="button">
+            <button className="mt-4 inline-flex min-h-11 items-center gap-1.5 rounded-md border border-slate-200 px-4 py-2 text-sm font-black text-[#061426] hover:border-[#d8ad45]" onClick={() => setShowAllUnassignedTeams((current) => !current)} type="button">
+              <UsersRound aria-hidden="true" className="size-4 shrink-0" />
               {showAllUnassignedTeams ? "แสดงน้อยลง" : "แสดงทั้งหมด / Show all"}
             </button>
           ) : null}
