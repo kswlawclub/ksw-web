@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildKnockoutMatchReadinessByMatchId,
+  getKnockoutRoundProgression,
   getKnockoutMatchPresentation,
+  getPrematureKnockoutFixtureDrafts,
   isKnockoutMatchReadyForEditing,
   isKnockoutRoundReadyForFixtures,
 } from "./knockout-round-readiness.ts";
-import type { CompetitionTreeNode } from "./competition-tree.ts";
+import { buildCompetitionTree, type CompetitionTreeNode } from "./competition-tree.ts";
 
 function node(input: Partial<CompetitionTreeNode>): CompetitionTreeNode {
   return {
@@ -96,4 +98,38 @@ test("readiness is keyed by linked match id without crossing Council divisions",
   assert.equal(readinessByMatchId.get("d1-match")?.ready, true);
   assert.equal(readinessByMatchId.get("d2-match")?.ready, true);
   assert.equal(readinessByMatchId.get("missing-match"), undefined);
+});
+
+test("a confirmed Council topology starts at its direct-team round and advances only after every winner exists", () => {
+  let nextId = 0;
+  const tree = buildCompetitionTree({
+    bracketCapacity: 4,
+    competitionId: "competition",
+    entrantCount: 4,
+    entryMode: "custom",
+    entrants: Array.from({ length: 4 }, (_, index) => ({ teamId: `team-${index + 1}`, type: "manual_team" as const })),
+    idFactory: () => `node-${++nextId}`,
+    partitionKey: "division_1",
+  });
+  const initial = getKnockoutRoundProgression({ matches: [], nodes: tree.nodes });
+  assert.equal(initial.currentRound?.roundIndex, 0);
+  assert.equal(initial.currentRound?.playable, true);
+
+  const firstRound = tree.nodes.filter((entry) => entry.roundIndex === 0).map((entry, index) => ({ ...entry, linkedMatchId: `first-${index + 1}` }));
+  const downstream = tree.nodes.filter((entry) => entry.roundIndex > 0);
+  const progressed = getKnockoutRoundProgression({
+    matches: firstRound.map((entry, index) => ({ id: entry.linkedMatchId!, status: "finished", winner_team_id: `winner-${index + 1}` })),
+    nodes: [...firstRound, ...downstream],
+  });
+  assert.equal(progressed.currentRound?.roundIndex, 1);
+  assert.equal(progressed.currentRound?.playable, true);
+});
+
+test("only unplayed downstream fixture drafts are repairable before the first round has fixtures", () => {
+  const first = node({ id: "first", roundIndex: 0 });
+  const downstream = node({ id: "downstream", linkedMatchId: "wrong-fixture", roundIndex: 1, homeSource: { nodeId: "first", type: "node_winner" } });
+  const repairable = getPrematureKnockoutFixtureDrafts({ matches: [{ id: "wrong-fixture", status: "scheduled", winner_team_id: null }], nodes: [first, downstream] });
+  assert.deepEqual(repairable, { matchIds: ["wrong-fixture"], nodeIds: ["downstream"] });
+  const played = getPrematureKnockoutFixtureDrafts({ matches: [{ home_score: 1, id: "wrong-fixture", status: "finished", winner_team_id: "team-a" }], nodes: [first, downstream] });
+  assert.deepEqual(played, { matchIds: [], nodeIds: [] });
 });

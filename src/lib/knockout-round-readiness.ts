@@ -1,7 +1,12 @@
 import type { CompetitionTreeNode, CompetitionTreeSource } from "@/lib/competition-tree";
 
 export type KnockoutReadinessMatch = {
+  away_score?: number | null;
   id: string;
+  home_score?: number | null;
+  manual_winner_team_id?: string | null;
+  penalty_away_score?: number | null;
+  penalty_home_score?: number | null;
   status: string | null | undefined;
   winner_team_id?: string | null;
 };
@@ -27,6 +32,15 @@ export type KnockoutReadinessContext = {
 export type KnockoutMatchPresentation = {
   editable: boolean;
   state: "missing" | "ready" | "waiting";
+};
+
+export type KnockoutRoundProgress = {
+  complete: boolean;
+  linkedMatchCount: number;
+  nodes: CompetitionTreeNode[];
+  playable: boolean;
+  reason: "complete" | "ready_for_fixtures" | "waiting_for_dependencies";
+  roundIndex: number;
 };
 
 function resolvedWinner(match: KnockoutReadinessMatch | undefined) {
@@ -91,4 +105,51 @@ export function getKnockoutMatchPresentation(readiness: KnockoutNodeReadiness | 
   return readiness.ready
     ? { editable: true, state: "ready" }
     : { editable: false, state: "waiting" };
+}
+
+export function getKnockoutRoundProgression(context: KnockoutReadinessContext) {
+  const matchesById = new Map(context.matches.map((match) => [match.id, match]));
+  const grouped = new Map<number, CompetitionTreeNode[]>();
+  context.nodes.forEach((node) => grouped.set(node.roundIndex, [...(grouped.get(node.roundIndex) ?? []), node]));
+  const rounds = Array.from(grouped, ([roundIndex, nodes]): KnockoutRoundProgress => {
+    const complete = nodes.length > 0 && nodes.every((node) => {
+      const match = node.linkedMatchId ? matchesById.get(node.linkedMatchId) : undefined;
+      return Boolean(match && ["finished", "completed"].includes(match.status ?? "") && match.winner_team_id);
+    });
+    const playable = isKnockoutRoundReadyForFixtures(nodes, context).ready;
+    return {
+      complete,
+      linkedMatchCount: nodes.filter((node) => Boolean(node.linkedMatchId)).length,
+      nodes,
+      playable,
+      reason: complete ? "complete" : playable ? "ready_for_fixtures" : "waiting_for_dependencies",
+      roundIndex,
+    };
+  }).sort((left, right) => left.roundIndex - right.roundIndex);
+  return { currentRound: rounds.find((round) => !round.complete) ?? null, rounds };
+}
+
+function isUnplayedFixtureDraft(match: KnockoutReadinessMatch) {
+  return !["finished", "completed"].includes(match.status ?? "")
+    && match.away_score == null
+    && match.home_score == null
+    && match.manual_winner_team_id == null
+    && match.penalty_away_score == null
+    && match.penalty_home_score == null
+    && match.winner_team_id == null;
+}
+
+export function getPrematureKnockoutFixtureDrafts(context: KnockoutReadinessContext) {
+  const progression = getKnockoutRoundProgression(context);
+  const currentRound = progression.currentRound;
+  if (!currentRound || currentRound.linkedMatchCount > 0) return { matchIds: [] as string[], nodeIds: [] as string[] };
+  const matchesById = new Map(context.matches.map((match) => [match.id, match]));
+  const candidates = progression.rounds
+    .filter((round) => round.roundIndex > currentRound.roundIndex)
+    .flatMap((round) => round.nodes)
+    .flatMap((node) => {
+      const match = node.linkedMatchId ? matchesById.get(node.linkedMatchId) : undefined;
+      return match && isUnplayedFixtureDraft(match) ? [{ matchId: match.id, nodeId: node.id }] : [];
+    });
+  return { matchIds: candidates.map((candidate) => candidate.matchId), nodeIds: candidates.map((candidate) => candidate.nodeId) };
 }

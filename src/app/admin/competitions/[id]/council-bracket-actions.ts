@@ -5,7 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireAdminSession } from "@/lib/admin-server-auth";
 import { isCupCompetition, normalizeCompetitionType } from "@/lib/competition-format";
 import { buildCompetitionTree, type CompetitionTreeNode, type CompetitionTreeSource, validateCompetitionTree } from "@/lib/competition-tree";
-import { isKnockoutMatchReadyForEditing, isKnockoutRoundReadyForFixtures } from "@/lib/knockout-round-readiness";
+import { getKnockoutRoundProgression, getPrematureKnockoutFixtureDrafts, isKnockoutMatchReadyForEditing } from "@/lib/knockout-round-readiness";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 const partitionKeys = ["division_1", "division_2"] as const;
@@ -296,12 +296,11 @@ export async function createCouncilPartitionFixturesV2(competitionId: string, pa
   if (!state.ok) return state;
   const validation = validateCompetitionTree(state.nodes, state.entrantCount);
   if (!validation.valid) return { ...state, error: `โครงสร้างการแข่งขันไม่สมบูรณ์: ${validation.errors[0]}`, ok: false };
-  const rounds = Array.from(new Set(state.nodes.map((node) => node.roundIndex))).sort((a, b) => a - b);
-  const currentRound = rounds.find((index) => state.nodes.filter((node) => node.roundIndex === index).some((node) => !node.linkedMatchId || state.matches.find((match) => match.id === node.linkedMatchId)?.status !== "finished"));
-  if (currentRound === undefined || currentRound !== roundIndex) return { ...state, error: "รอบนี้ยังไม่พร้อมสร้างโปรแกรมแข่งขัน", ok: false };
-  const targetNodes = state.nodes.filter((node) => node.roundIndex === roundIndex);
-  const readiness = isKnockoutRoundReadyForFixtures(targetNodes, { matches: state.matches, nodes: state.nodes });
-  if (!readiness.ready) return { ...state, error: "รอผู้ชนะจากรอบก่อนก่อนสร้างโปรแกรม", ok: false };
+  const progression = getKnockoutRoundProgression({ matches: state.matches, nodes: state.nodes });
+  const currentRound = progression.currentRound;
+  if (!currentRound || currentRound.roundIndex !== roundIndex) return { ...state, error: "รอบนี้ยังไม่พร้อมสร้างโปรแกรมแข่งขัน", ok: false };
+  if (!currentRound.playable) return { ...state, error: "รอผู้ชนะจากรอบก่อนก่อนสร้างโปรแกรม", ok: false };
+  const targetNodes = currentRound.nodes;
   for (const node of targetNodes.filter((node) => !node.linkedMatchId)) {
     const nodeReadiness = isKnockoutMatchReadyForEditing(node, { matches: state.matches, nodes: state.nodes });
     if (!nodeReadiness.ready || !nodeReadiness.home.teamId || !nodeReadiness.away.teamId) return { ...state, error: "รอผู้ชนะจากรอบก่อนก่อนสร้างโปรแกรม", ok: false };
@@ -318,6 +317,39 @@ export async function createCouncilPartitionFixturesV2(competitionId: string, pa
   }
   const update = await verified.supabase.from("competition_knockout_partitions").update({ status: "fixtures_created", updated_at: new Date().toISOString() }).eq("competition_id", competitionId).eq("partition_key", verified.partitionKey);
   if (update.error) return { ...state, error: "สร้างโปรแกรมแล้ว แต่ไม่สามารถอัปเดตสถานะดิวิชั่นได้", ok: false };
+  revalidatePath(`/admin/competitions/${competitionId}`);
+  return loadState(verified.supabase, competitionId, verified.partitionKey, verified.partition);
+}
+
+export async function repairCouncilPrematureFixtureDraftsV2(competitionId: string, partitionKey: string) {
+  const verified = await verifyCouncilPartition(competitionId, partitionKey);
+  if (!verified.supabase || !verified.partition || !verified.partitionKey) return { error: verified.error, ok: false };
+  if (verified.competition?.season_status === "completed") return { error: "การแข่งขันปิดแล้ว ไม่สามารถซ่อมโครงร่างได้", ok: false };
+  const state = await loadState(verified.supabase, competitionId, verified.partitionKey, verified.partition);
+  if (!state.ok) return state;
+  const repair = getPrematureKnockoutFixtureDrafts({ matches: state.matches, nodes: state.nodes });
+  if (!repair.nodeIds.length || !repair.matchIds.length) return { ...state, error: "ไม่พบโปรแกรมรอบถัดไปที่ล้างได้อย่างปลอดภัย", ok: false };
+  const unlink = await verified.supabase
+    .from("competition_bracket_nodes")
+    .update({ linked_match_id: null })
+    .eq("competition_id", competitionId)
+    .eq("partition_key", verified.partitionKey)
+    .in("id", repair.nodeIds)
+    .in("linked_match_id", repair.matchIds)
+    .select("id");
+  if (unlink.error || unlink.data?.length !== repair.nodeIds.length) return { ...state, error: "ไม่สามารถล้างการเชื่อมโยงโปรแกรมรอบถัดไปได้", ok: false };
+  const remove = await verified.supabase
+    .from("matches")
+    .delete()
+    .eq("league_id", competitionId)
+    .eq("competition_stage", "knockout")
+    .eq("knockout_partition_key", verified.partitionKey)
+    .in("id", repair.matchIds)
+    .is("home_score", null)
+    .is("away_score", null)
+    .is("winner_team_id", null)
+    .select("id");
+  if (remove.error || remove.data?.length !== repair.matchIds.length) return { ...state, error: "ล้างการเชื่อมโยงแล้ว แต่ไม่สามารถลบโปรแกรมร่างได้อย่างปลอดภัย", ok: false };
   revalidatePath(`/admin/competitions/${competitionId}`);
   return loadState(verified.supabase, competitionId, verified.partitionKey, verified.partition);
 }
