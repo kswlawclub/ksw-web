@@ -524,6 +524,7 @@ export function AdminCompetitionTreeEngineV2({
     () => nodes.map((node) => localNodeLinks[node.id] ? { ...node, linkedMatchId: localNodeLinks[node.id] } : node),
     [localNodeLinks, nodes],
   );
+  const canChangeTemplate = effectiveNodes.length === 0 && visibleKnockoutMatches.length === 0;
   const knockoutRounds = useMemo<KnockoutRoundView[]>(() => {
     const matchesById = new Map(visibleKnockoutMatches.map((match) => [match.id, match]));
     const grouped = new Map<number, CompetitionTreeNode[]>();
@@ -691,6 +692,10 @@ export function AdminCompetitionTreeEngineV2({
   }
 
   function openTemplateSelection() {
+    if (!canChangeTemplate) {
+      setError("เปลี่ยนรูปแบบการแข่งขันไม่ได้ เพราะมีโครงสร้างหรือแมตช์รอบน็อกเอาต์แล้ว");
+      return;
+    }
     if (!window.confirm("เปลี่ยนรูปแบบการแข่งขัน? ร่างการแบ่งดิวิชั่นหรือการจัดสายอัตโนมัติที่ยังไม่มี bracket จะถูกล้างเมื่อยืนยันรูปแบบใหม่")) return;
     setError("");
     setMessage("");
@@ -826,7 +831,10 @@ export function AdminCompetitionTreeEngineV2({
             <p className="mt-1 text-sm font-semibold text-slate-600">
               Knockout Competition Management
             </p>
-            <a className="mt-3 inline-flex min-h-10 items-center rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-black text-[#061426]" href="#cup-workspace-nav">กลับเมนูลัด</a>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <a className="inline-flex min-h-10 items-center rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-black text-[#061426]" href="#cup-workspace-nav">กลับเมนูลัด</a>
+              {selectedTemplate === "ksw_standard" ? <button className="min-h-10 rounded-md border border-[#d8ad45] bg-white px-3 py-2 text-sm font-black text-[#8a6418]" onClick={openTemplateSelection} type="button">เปลี่ยนรูปแบบการแข่งขัน</button> : null}
+            </div>
           </div>
           <span className="inline-flex w-fit shrink-0 rounded-full bg-[#fff7e6] px-3 py-2 text-sm font-black text-[#8a6418]">
             {statusLabel.th} / {statusLabel.en}
@@ -870,7 +878,7 @@ export function AdminCompetitionTreeEngineV2({
           <p className="mt-4 rounded-md border border-[#8a6418]/25 bg-[#fff7e6] px-3 py-2 text-sm font-bold text-[#8a6418]">{currentWorkflow.warning}</p>
         ) : null}
 
-        {configReady && !summary ? (
+        {configReady && (!summary || templateSelectionOpen) ? (
           <>
             <section className="mt-5 min-w-0 rounded-md border border-slate-200 bg-white p-4">
               <div>
