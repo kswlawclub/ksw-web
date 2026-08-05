@@ -11,6 +11,7 @@ import {
   reviewCompetitionTreeV2,
   saveCompetitionKnockoutMatchV2,
   selectCompetitionKnockoutTemplateV2,
+  clearUnmaterializedKnockoutDraftAssignments,
 } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
 import type { CompetitionFixturesV2Result, CompetitionKnockoutMatchV2 } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
 import { approveCouncilDivisionsV2, getCouncilDivisionStateV2, getCouncilTemplatePreflightV2, reopenCouncilDivisionsV2, saveCouncilDivisionDraftV2 } from "@/app/admin/competitions/[id]/council-division-actions";
@@ -32,6 +33,7 @@ import {
 import { buildCompetitionTree, type CompetitionTreeEntryMode, type CompetitionTreeNode, type CompetitionTreeSource, type CompetitionTreeSummary } from "@/lib/competition-tree";
 import { buildKnockoutTemplatePreview, getKnockoutTemplate, listKnockoutTemplates, validateKnockoutTemplateSources } from "@/lib/knockout-templates/registry";
 import { getKnockoutTemplateSwitchGuard } from "@/lib/knockout-template-switching";
+import { findUnmaterializedKnockoutDraftAssignments } from "@/lib/unmaterialized-knockout-draft-cleanup";
 import type { KnockoutTemplateDiagram, KnockoutTemplateKey } from "@/lib/knockout-templates/types";
 import type { KswQualificationSource } from "@/lib/ksw-knockout-template";
 import { TeamLogo } from "@/components/team-logo";
@@ -81,13 +83,22 @@ function knockoutRoundTitle(label: string) {
   return roundOf ? `รอบ ${roundOf[1]} ทีม` : label;
 }
 
-function KnockoutStateDiagnostic({ matches, nodes, qualificationSnapshot, templateKey }: { matches: CompetitionKnockoutMatchV2[]; nodes: CompetitionTreeNode[]; qualificationSnapshot: CompetitionTreeSource[]; templateKey: KnockoutTemplateKey | null }) {
+function KnockoutStateDiagnostic({ competitionId, matches, nodes, qualificationSnapshot, templateKey }: { competitionId: string; matches: CompetitionKnockoutMatchV2[]; nodes: CompetitionTreeNode[]; qualificationSnapshot: CompetitionTreeSource[]; templateKey: KnockoutTemplateKey | null }) {
+  const router = useRouter();
+  const [cleanupMessage, setCleanupMessage] = useState("");
+  const [cleanupPending, startCleanupTransition] = useTransition();
   const guard = getKnockoutTemplateSwitchGuard({
     matches: matches.map((match) => ({ awayScore: match.away_score, awayTeamId: match.away_team_id, homeScore: match.home_score, homeTeamId: match.home_team_id, id: match.id, status: match.status, winnerTeamId: match.winner_team_id })),
     nodes,
     qualificationSnapshot,
   });
   const nodeStates = new Map(guard.nodeStates.map((entry) => [entry.nodeId, entry]));
+  const safeCleanupNodes = findUnmaterializedKnockoutDraftAssignments({
+    matches: matches.map((match) => ({ awayScore: match.away_score, id: match.id, homeScore: match.home_score, status: match.status, winnerTeamId: match.winner_team_id })),
+    nodes,
+    qualificationSnapshot,
+  });
+  const safeCleanupNodeIds = new Set(safeCleanupNodes.map((entry) => entry.nodeId));
   const diagnostic = {
     allowed: guard.allowed,
     blockingNodes: guard.blockingNodeIds,
@@ -119,6 +130,19 @@ function KnockoutStateDiagnostic({ matches, nodes, qualificationSnapshot, templa
           <div className="rounded border border-slate-200 bg-white p-2"><dt className="font-bold text-slate-500">Template</dt><dd className="mt-0.5 break-all font-mono">{templateKey ?? "—"}</dd></div>
         </dl>
         <div className={diagnostic.allowed ? "rounded border border-emerald-200 bg-emerald-50 px-3 py-2 font-bold text-emerald-900" : "rounded border border-red-200 bg-red-50 px-3 py-2 font-bold text-red-900"}>เหตุผล Guard: {diagnostic.reason ?? "ไม่มี node หรือ fixture ที่ block การเปลี่ยนรูปแบบ"}</div>
+        <div className="rounded border border-slate-200 bg-white px-3 py-2">
+          <p className="font-bold text-[#061426]">ล้างได้อย่างปลอดภัย: {safeCleanupNodes.length} node · ห้ามล้าง: {Math.max(diagnostic.blockingNodes.length - safeCleanupNodes.length, 0)} node</p>
+          {safeCleanupNodes.length ? <button className="mt-2 min-h-9 rounded-md border border-[#d8ad45] bg-[#061426] px-3 py-2 text-xs font-black text-[#f4df9c] disabled:cursor-not-allowed disabled:opacity-60" disabled={cleanupPending} onClick={() => {
+            if (!window.confirm("ล้างเฉพาะทีมที่ค้างในโครงร่างและยังไม่มีโปรแกรมหรือผลการแข่งขัน? จะไม่ลบทีมผ่านเข้ารอบ ผลรอบแบ่งกลุ่ม หรือ qualification snapshot")) return;
+            setCleanupMessage("");
+            startCleanupTransition(async () => {
+              const result = await clearUnmaterializedKnockoutDraftAssignments(competitionId);
+              setCleanupMessage(result.ok ? `ล้างข้อมูลทีมค้างแล้ว ${result.clearedCount ?? 0} node` : result.error ?? "ไม่สามารถล้างข้อมูลทีมค้างได้");
+              router.refresh();
+            });
+          }} type="button">{cleanupPending ? "กำลังล้างข้อมูล..." : "ล้างข้อมูลทีมค้างในโครงร่าง"}</button> : null}
+          {cleanupMessage ? <p className="mt-2 font-bold text-slate-700">{cleanupMessage}</p> : null}
+        </div>
         <div className="grid gap-2">
           <p className="font-black text-[#061426]">Bracket nodes</p>
           {diagnostic.nodeDiagnostics.length ? diagnostic.nodeDiagnostics.map(({ blocking, code, node, reason, resettable, resolvedPairing, topologyOnly }) => {
@@ -126,7 +150,7 @@ function KnockoutStateDiagnostic({ matches, nodes, qualificationSnapshot, templa
             const classification = nodeStates.get(node.id)?.state ?? "draft";
             return <article className={blocking ? "min-w-0 rounded border border-red-300 bg-red-50 p-3 text-red-950" : resettable ? "min-w-0 rounded border border-emerald-200 bg-emerald-50/60 p-3 text-emerald-950" : "min-w-0 rounded border border-slate-200 bg-white p-3"} key={node.id}>
               <div className="flex flex-wrap items-start justify-between gap-2"><p className="break-all font-mono font-bold">node id: {node.id}</p><span className={blocking ? "rounded border border-red-300 bg-white px-2 py-0.5 font-black text-red-800" : "rounded border border-emerald-300 bg-white px-2 py-0.5 font-black text-emerald-800"}>{blocking ? "BLOCKING" : "ALLOW"}</span></div>
-              <dl className="mt-2 grid gap-x-4 gap-y-1 break-words sm:grid-cols-2"><div><dt className="font-bold opacity-70">Round</dt><dd>{node.roundLabel} · index {node.roundIndex}</dd></div><div><dt className="font-bold opacity-70">Match order / position</dt><dd>{node.matchOrder} / {node.bracketPosition}</dd></div><div><dt className="font-bold opacity-70">Home source</dt><dd>{sourceText(node.homeSource)}</dd></div><div><dt className="font-bold opacity-70">Away source</dt><dd>{sourceText(node.awaySource)}</dd></div><div><dt className="font-bold opacity-70">Linked match</dt><dd className="break-all font-mono">{node.linkedMatchId ?? "—"}</dd></div><div><dt className="font-bold opacity-70">Classification</dt><dd className="font-black">{classification}</dd></div><div><dt className="font-bold opacity-70">Guard flags</dt><dd>topologyOnly={String(topologyOnly)} · resolvedPairing={String(resolvedPairing)} · resettable={String(resettable)}</dd></div><div><dt className="font-bold opacity-70">Block reason</dt><dd>{reason ?? "—"}{code ? ` (${code})` : ""}</dd></div></dl>
+              <dl className="mt-2 grid gap-x-4 gap-y-1 break-words sm:grid-cols-2"><div><dt className="font-bold opacity-70">Round</dt><dd>{node.roundLabel} · index {node.roundIndex}</dd></div><div><dt className="font-bold opacity-70">Match order / position</dt><dd>{node.matchOrder} / {node.bracketPosition}</dd></div><div><dt className="font-bold opacity-70">Home source</dt><dd>{sourceText(node.homeSource)}</dd></div><div><dt className="font-bold opacity-70">Away source</dt><dd>{sourceText(node.awaySource)}</dd></div><div><dt className="font-bold opacity-70">Linked match</dt><dd className="break-all font-mono">{node.linkedMatchId ?? "—"}</dd></div><div><dt className="font-bold opacity-70">Classification</dt><dd className="font-black">{classification}</dd></div><div><dt className="font-bold opacity-70">Guard flags</dt><dd>topologyOnly={String(topologyOnly)} · resolvedPairing={String(resolvedPairing)} · resettable={String(resettable)} · cleanupSafe={String(safeCleanupNodeIds.has(node.id))}</dd></div><div><dt className="font-bold opacity-70">Block reason</dt><dd>{reason ?? "—"}{code ? ` (${code})` : ""}</dd></div></dl>
               {linkedMatch ? <p className="mt-2 border-t border-current/15 pt-2">Fixture: status={linkedMatch.status} · score={linkedMatch.home_score ?? "—"}-{linkedMatch.away_score ?? "—"} · winner={linkedMatch.winner_team_id ?? "—"}</p> : null}
             </article>;
           }) : <p>ไม่มี bracket node</p>}
@@ -899,7 +923,7 @@ export function AdminCompetitionTreeEngineV2({
               <a className="inline-flex min-h-10 items-center rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-black text-[#061426]" href="#cup-workspace-nav">กลับเมนูลัด</a>
               {selectedTemplate === "ksw_standard" ? <button className="min-h-10 rounded-md border border-[#d8ad45] bg-white px-3 py-2 text-sm font-black text-[#8a6418]" onClick={openTemplateSelection} type="button">เปลี่ยนรูปแบบการแข่งขัน</button> : null}
             </div>
-            <KnockoutStateDiagnostic matches={visibleKnockoutMatches} nodes={effectiveNodes} qualificationSnapshot={qualificationSnapshot} templateKey={selectedTemplate} />
+            <KnockoutStateDiagnostic competitionId={competitionId} matches={visibleKnockoutMatches} nodes={effectiveNodes} qualificationSnapshot={qualificationSnapshot} templateKey={selectedTemplate} />
           </div>
           <span className="inline-flex w-fit shrink-0 rounded-full bg-[#fff7e6] px-3 py-2 text-sm font-black text-[#8a6418]">
             {statusLabel.th} / {statusLabel.en}
