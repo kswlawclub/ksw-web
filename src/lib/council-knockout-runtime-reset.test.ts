@@ -38,6 +38,20 @@ test("allows scheduled and pending draft fixtures, including linked nodes", () =
   assert.equal(inspection.canReset, true);
   assert.deepEqual(inspection.plan?.linkedNodeIds, ["node-1", "node-2"]);
   assert.deepEqual(inspection.plan?.matchIds, ["match-scheduled", "match-pending"]);
+  assert.equal(inspection.hasOnlyDraftKnockoutData, true);
+  assert.equal(inspection.hasPlayedKnockoutData, false);
+  assert.equal(inspection.canReopenDivisions, true);
+});
+
+test("returns one structured reason and blocking match id for each played-data category", () => {
+  const inspection = getCouncilKnockoutResetPlan(input({
+    matches: [{ id: "match-1", status: "finished", homeScore: 2, penaltyAwayScore: 4, winnerTeamId: "team-1" }],
+  }));
+
+  assert.deepEqual(inspection.reasonCodes, ["knockout_score_exists", "knockout_penalty_exists", "knockout_winner_exists", "knockout_match_completed"]);
+  assert.deepEqual(inspection.blockingMatchIds, ["match-1"]);
+  assert.equal(inspection.hasPlayedKnockoutData, true);
+  assert.equal(inspection.canReopenDivisions, false);
 });
 
 test("level A plan clears only knockout draft ids and preserves division approval inputs", () => {
@@ -67,7 +81,7 @@ for (const [name, override, code] of [
   ["persisted division champion", { partitions: [{ partitionKey: "division_1", championTeamId: "team-1" }] }, "division_champion_persisted"],
   ["home score", { matches: [{ id: "match-1", status: "scheduled", homeScore: 1 }] }, "knockout_score_exists"],
   ["away score", { matches: [{ id: "match-1", status: "scheduled", awayScore: 1 }] }, "knockout_score_exists"],
-  ["penalty score", { matches: [{ id: "match-1", status: "scheduled", penaltyHomeScore: 4 }] }, "knockout_score_exists"],
+  ["penalty score", { matches: [{ id: "match-1", status: "scheduled", penaltyHomeScore: 4 }] }, "knockout_penalty_exists"],
   ["winner", { matches: [{ id: "match-1", status: "scheduled", winnerTeamId: "team-1" }] }, "knockout_winner_exists"],
   ["manual winner", { matches: [{ id: "match-1", status: "scheduled", manualWinnerTeamId: "team-1" }] }, "knockout_winner_exists"],
   ["finished match", { matches: [{ id: "match-1", status: "finished" }] }, "knockout_match_completed"],

@@ -30,6 +30,7 @@ export type CouncilKnockoutResetBlockerCode =
   | "competition_completed"
   | "division_champion_persisted"
   | "knockout_score_exists"
+  | "knockout_penalty_exists"
   | "knockout_winner_exists"
   | "knockout_match_completed";
 
@@ -55,12 +56,18 @@ export type CouncilKnockoutResetPlan = {
 };
 
 export type CouncilKnockoutResetInspection = {
+  blockingMatchIds: string[];
   blockers: CouncilKnockoutResetBlocker[];
   blockingReasons: string[];
+  canReopenDivisions: boolean;
   canReset: boolean;
+  hasOnlyDraftKnockoutData: boolean;
+  hasPlayedKnockoutData: boolean;
   matchCount: number;
   nodeCount: number;
   plan: CouncilKnockoutResetPlan | null;
+  reasonCodes: CouncilKnockoutResetBlockerCode[];
+  reasonMessages: string[];
 };
 
 function hasValue(value: unknown) {
@@ -80,6 +87,7 @@ export function hasExactCouncilKnockoutResetTargets(actualIds: readonly string[]
  */
 export function getCouncilKnockoutResetPlan(input: CouncilKnockoutResetInput): CouncilKnockoutResetInspection {
   const blockers: CouncilKnockoutResetBlocker[] = [];
+  const blockingMatchIds = new Set<string>();
 
   if (input.seasonStatus === "completed") {
     blockers.push({ code: "competition_completed", message: "การแข่งขันปิดแล้ว" });
@@ -87,21 +95,36 @@ export function getCouncilKnockoutResetPlan(input: CouncilKnockoutResetInput): C
   if (input.partitions.some((partition) => hasValue(partition.championTeamId))) {
     blockers.push({ code: "division_champion_persisted", message: "มีแชมป์ดิวิชั่นที่บันทึกแล้ว" });
   }
-  if (input.matches.some((match) => hasValue(match.homeScore) || hasValue(match.awayScore) || hasValue(match.penaltyHomeScore) || hasValue(match.penaltyAwayScore))) {
-    blockers.push({ code: "knockout_score_exists", message: "มีคะแนนหรือผลจุดโทษแล้ว" });
+  const scoreMatches = input.matches.filter((match) => hasValue(match.homeScore) || hasValue(match.awayScore));
+  if (scoreMatches.length) {
+    blockers.push({ code: "knockout_score_exists", message: "มีคะแนนที่บันทึกแล้ว" });
+    scoreMatches.forEach((match) => blockingMatchIds.add(match.id));
   }
-  if (input.matches.some((match) => hasValue(match.winnerTeamId) || hasValue(match.manualWinnerTeamId))) {
+  const penaltyMatches = input.matches.filter((match) => hasValue(match.penaltyHomeScore) || hasValue(match.penaltyAwayScore));
+  if (penaltyMatches.length) {
+    blockers.push({ code: "knockout_penalty_exists", message: "มีผลจุดโทษแล้ว" });
+    penaltyMatches.forEach((match) => blockingMatchIds.add(match.id));
+  }
+  const winnerMatches = input.matches.filter((match) => hasValue(match.winnerTeamId) || hasValue(match.manualWinnerTeamId));
+  if (winnerMatches.length) {
     blockers.push({ code: "knockout_winner_exists", message: "มีผู้ชนะที่บันทึกแล้ว" });
+    winnerMatches.forEach((match) => blockingMatchIds.add(match.id));
   }
-  if (input.matches.some((match) => match.status === "finished" || match.status === "completed")) {
+  const completedMatches = input.matches.filter((match) => match.status === "finished" || match.status === "completed");
+  if (completedMatches.length) {
     blockers.push({ code: "knockout_match_completed", message: "มีแมตช์รอบน็อกเอาต์ที่จบแล้ว" });
+    completedMatches.forEach((match) => blockingMatchIds.add(match.id));
   }
 
   const canReset = blockers.length === 0;
   return {
+    blockingMatchIds: [...blockingMatchIds],
     blockers,
     blockingReasons: blockers.map((blocker) => blocker.message),
+    canReopenDivisions: canReset,
     canReset,
+    hasOnlyDraftKnockoutData: canReset && input.matches.length > 0,
+    hasPlayedKnockoutData: blockingMatchIds.size > 0 || blockers.some((blocker) => blocker.code === "division_champion_persisted"),
     matchCount: input.matches.length,
     nodeCount: input.nodes.length,
     plan: canReset
@@ -121,5 +144,7 @@ export function getCouncilKnockoutResetPlan(input: CouncilKnockoutResetInput): C
           ],
         }
       : null,
+    reasonCodes: blockers.map((blocker) => blocker.code),
+    reasonMessages: blockers.map((blocker) => blocker.message),
   };
 }
