@@ -49,7 +49,7 @@ const competitionTeamGroupColumns = "id, competition_id, team_id, group_id, is_a
 const engineV2ConfigColumns =
   "competition_id, entrant_count, bracket_capacity, entry_mode, group_stage_enabled, status, template_key, extra_rank_enabled, extra_rank, extra_qualifier_count, qualification_status, qualification_approved_at, qualification_approved_by_label, qualification_snapshot";
 const bracketNodeColumns =
-  "id, competition_id, partition_key, round_index, round_label, match_order, bracket_position, home_source_type, away_source_type, home_source_group_id, home_source_rank, home_source_team_id, home_source_node_id, away_source_group_id, away_source_rank, away_source_team_id, away_source_node_id, linked_match_id";
+  "id, competition_id, partition_key, round_index, round_label, match_order, bracket_position, home_source_type, away_source_type, home_source_group_id, home_source_rank, home_source_team_id, home_source_node_id, home_source_best_order, away_source_group_id, away_source_rank, away_source_team_id, away_source_node_id, away_source_best_order, linked_match_id";
 
 function text(row: Row | undefined, keys: string[], fallback = "") {
   if (!row) return fallback;
@@ -286,15 +286,17 @@ function asEngineV2Config(row: Row | undefined): CompetitionEngineV2Config | nul
 
 function asTreeSource(row: Row, side: "away" | "home"): CompetitionTreeSource {
   const candidate = text(row, [`${side}_source_type`], "unassigned");
-  const type = candidate === "bye" || candidate === "group_rank" || candidate === "manual_team" || candidate === "node_winner" || candidate === "unassigned"
+  const teamId = text(row, [`${side}_source_team_id`], "") || undefined;
+  const type = candidate === "best_ranked" || candidate === "bye" || candidate === "group_rank" || candidate === "manual_team" || candidate === "node_winner" || candidate === "unassigned"
     ? candidate
-    : "unassigned";
+    : teamId ? "manual_team" : "unassigned";
 
   return {
+    bestOrder: number(row, [`${side}_source_best_order`]) || undefined,
     groupId: text(row, [`${side}_source_group_id`], "") || undefined,
     nodeId: text(row, [`${side}_source_node_id`], "") || undefined,
     rank: number(row, [`${side}_source_rank`]) || undefined,
-    teamId: text(row, [`${side}_source_team_id`], "") || undefined,
+    teamId,
     type,
   };
 }

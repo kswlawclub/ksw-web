@@ -9,12 +9,10 @@ import {
   previewCompetitionFixturesV2,
   reopenCompetitionTreeV2,
   reviewCompetitionTreeV2,
-  inspectCompetitionTopologyRepairV2,
-  repairCompetitionTopologyV2,
   saveCompetitionKnockoutMatchV2,
   selectCompetitionKnockoutTemplateV2,
 } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
-import type { CompetitionFixturesV2Result, CompetitionKnockoutMatchV2, CompetitionTopologyRepairResult } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
+import type { CompetitionFixturesV2Result, CompetitionKnockoutMatchV2 } from "@/app/admin/competitions/[id]/competition-engine-v2-actions";
 import { approveCouncilDivisionsV2, getCouncilDivisionStateV2, getCouncilTemplatePreflightV2, reopenCouncilDivisionsV2, saveCouncilDivisionDraftV2 } from "@/app/admin/competitions/[id]/council-division-actions";
 import type { CouncilDivisionExtraSelections, CouncilDivisionState, CouncilTemplatePreflightResult } from "@/app/admin/competitions/[id]/council-division-actions";
 import {
@@ -83,31 +81,16 @@ function knockoutRoundTitle(label: string) {
   return roundOf ? `รอบ ${roundOf[1]} ทีม` : label;
 }
 
-function KnockoutStateDiagnostic({
-  matches,
-  nodes,
-  onInspectRepair,
-  onRepair,
-  pending,
-  repairState,
-  templateKey,
-}: {
-  matches: CompetitionKnockoutMatchV2[];
-  nodes: CompetitionTreeNode[];
-  onInspectRepair: () => void;
-  onRepair: () => void;
-  pending: boolean;
-  repairState: CompetitionTopologyRepairResult | null;
-  templateKey: KnockoutTemplateKey | null;
-}) {
+function KnockoutStateDiagnostic({ matches, nodes, qualificationSnapshot, templateKey }: { matches: CompetitionKnockoutMatchV2[]; nodes: CompetitionTreeNode[]; qualificationSnapshot: CompetitionTreeSource[]; templateKey: KnockoutTemplateKey | null }) {
   const diagnostic = inspectKnockoutTemplateSwitchState({
+    derivedSources: qualificationSnapshot,
     matches: matches.map((match) => ({ awayScore: match.away_score, awayTeamId: match.away_team_id, homeScore: match.home_score, homeTeamId: match.home_team_id, id: match.id, status: match.status, winnerTeamId: match.winner_team_id })),
     nodes,
   });
   const linkedNodeIds = new Map(nodes.filter((node) => node.linkedMatchId).map((node) => [node.linkedMatchId, node.id]));
   const sourceText = (source: { groupId?: string | null; nodeId?: string | null; rank?: number | null; teamId?: string | null; type?: string | null }) => `type=${source.type ?? "—"} group=${source.groupId ?? "—"} rank=${source.rank ?? "—"} node=${source.nodeId ?? "—"} team=${source.teamId ?? "—"}`;
 
-  return <details className="mt-4 rounded-md border border-dashed border-slate-300 bg-slate-50/70 p-3 text-xs text-slate-700"><summary className="cursor-pointer font-black text-[#061426]">ตรวจสอบสถานะ Knockout</summary><div className="mt-3 grid gap-3"><dl className="grid gap-2 sm:grid-cols-3"><div><dt className="font-bold text-slate-500">Template</dt><dd className="mt-0.5 break-all font-mono">{templateKey ?? "—"}</dd></div><div><dt className="font-bold text-slate-500">Guard</dt><dd className="mt-0.5 font-black">{String(diagnostic.allowed)} · {diagnostic.code}</dd></div><div><dt className="font-bold text-slate-500">Reason</dt><dd className="mt-0.5 break-words">{diagnostic.reason ?? "—"}</dd></div><div><dt className="font-bold text-slate-500">Bracket nodes</dt><dd className="mt-0.5 font-black">{nodes.length}</dd></div><div><dt className="font-bold text-slate-500">Knockout fixtures</dt><dd className="mt-0.5 font-black">{matches.length}</dd></div><div><dt className="font-bold text-slate-500">Resettable / blocking</dt><dd className="mt-0.5 font-black">{diagnostic.resettableNodes.length} / {diagnostic.blockingNodes.length}</dd></div></dl><div className="rounded border border-amber-200 bg-amber-50 p-2"><p className="font-black text-amber-900">การซ่อมโครงร่าง</p><p className="mt-1">ตรวจเฉพาะ source topology ที่มี team id ผิดรูปแบบและยังไม่มีโปรแกรมรอบน็อกเอาต์ ระบบจะล้างเฉพาะ field ที่ผิดโดยไม่ลบ node หรือผลการแข่งขัน</p><div className="mt-2 flex flex-wrap gap-2"><button className="min-h-8 rounded border border-slate-300 bg-white px-2.5 py-1.5 font-black text-[#061426] disabled:cursor-not-allowed disabled:opacity-60" disabled={pending} onClick={onInspectRepair} type="button">ตรวจสอบข้อมูลที่แก้ได้</button><button className="min-h-8 rounded border border-amber-500 bg-amber-100 px-2.5 py-1.5 font-black text-amber-950 disabled:cursor-not-allowed disabled:opacity-60" disabled={pending || !repairState?.repairable.length || Boolean(repairState.blockedReason)} onClick={onRepair} type="button">ซ่อมโครงร่างที่ผิด</button></div>{repairState ? <div className="mt-2 break-words">{repairState.error ? <p className="font-bold text-red-700">{repairState.error}</p> : null}{repairState.blockedReason ? <p className="font-bold text-amber-900">{repairState.blockedReason}</p> : null}<p>พบ {repairState.repairable.length} node ที่ซ่อมได้ · ซ่อมแล้ว {repairState.repairedCount} node</p>{repairState.repairable.map((entry) => <p className="font-mono" key={entry.nodeId}>{entry.nodeId}: {entry.fields.join(", ")}</p>)}</div> : null}</div><div className="grid gap-2"><p className="font-black text-[#061426]">Bracket nodes</p>{diagnostic.nodeDiagnostics.length ? diagnostic.nodeDiagnostics.map(({ blocking, code, node, reason, resettable, resolvedPairing, topologyOnly }) => <article className="min-w-0 rounded border border-slate-200 bg-white p-2" key={node.id}><p className="break-all font-mono font-bold">{node.id}</p><p className="mt-1">round={node.roundLabel} ({node.roundIndex}) · order={node.matchOrder} · position={node.bracketPosition} · linkedMatch={node.linkedMatchId ?? "—"}</p><p className="mt-1 break-words">home: {sourceText(node.homeSource)}</p><p className="break-words">away: {sourceText(node.awaySource)}</p><p className="mt-1 font-bold">topologyOnly={String(topologyOnly)} · resolvedPairing={String(resolvedPairing)} · resettable={String(resettable)} · blocking={String(blocking)}{code ? ` (${code})` : ""}{reason ? ` · ${reason}` : ""}</p></article>) : <p>ไม่มี bracket node</p>}</div><div className="grid gap-2"><p className="font-black text-[#061426]">Knockout fixtures</p>{diagnostic.fixtures.length ? diagnostic.fixtures.map(({ code, match, reason }) => <article className="min-w-0 rounded border border-slate-200 bg-white p-2" key={match.id}><p className="break-all font-mono font-bold">{match.id ?? "—"}</p><p className="mt-1">round node={linkedNodeIds.get(match.id) ?? "—"} · status={match.status ?? "—"} · code={code}</p><p>home={match.homeTeamId ?? "—"} away={match.awayTeamId ?? "—"} · score={match.homeScore ?? "—"}-{match.awayScore ?? "—"} · winner={match.winnerTeamId ?? "—"}</p><p className="mt-1 font-bold">{reason}</p></article>) : <p>ไม่มี knockout fixture</p>}</div></div></details>;
+  return <details className="mt-4 rounded-md border border-dashed border-slate-300 bg-slate-50/70 p-3 text-xs text-slate-700"><summary className="cursor-pointer font-black text-[#061426]">ตรวจสอบสถานะ Knockout</summary><div className="mt-3 grid gap-3"><dl className="grid gap-2 sm:grid-cols-3"><div><dt className="font-bold text-slate-500">Template</dt><dd className="mt-0.5 break-all font-mono">{templateKey ?? "—"}</dd></div><div><dt className="font-bold text-slate-500">Guard</dt><dd className="mt-0.5 font-black">{String(diagnostic.allowed)} · {diagnostic.code}</dd></div><div><dt className="font-bold text-slate-500">Reason</dt><dd className="mt-0.5 break-words">{diagnostic.reason ?? "—"}</dd></div><div><dt className="font-bold text-slate-500">Bracket nodes</dt><dd className="mt-0.5 font-black">{nodes.length}</dd></div><div><dt className="font-bold text-slate-500">Knockout fixtures</dt><dd className="mt-0.5 font-black">{matches.length}</dd></div><div><dt className="font-bold text-slate-500">Resettable / blocking</dt><dd className="mt-0.5 font-black">{diagnostic.resettableNodes.length} / {diagnostic.blockingNodes.length}</dd></div></dl><div className="grid gap-2"><p className="font-black text-[#061426]">Bracket nodes</p>{diagnostic.nodeDiagnostics.length ? diagnostic.nodeDiagnostics.map(({ blocking, code, node, reason, resettable, resolvedPairing, topologyOnly }) => <article className="min-w-0 rounded border border-slate-200 bg-white p-2" key={node.id}><p className="break-all font-mono font-bold">{node.id}</p><p className="mt-1">round={node.roundLabel} ({node.roundIndex}) · order={node.matchOrder} · position={node.bracketPosition} · linkedMatch={node.linkedMatchId ?? "—"}</p><p className="mt-1 break-words">home: {sourceText(node.homeSource)}</p><p className="break-words">away: {sourceText(node.awaySource)}</p><p className="mt-1 font-bold">topologyOnly={String(topologyOnly)} · resolvedPairing={String(resolvedPairing)} · resettable={String(resettable)} · blocking={String(blocking)}{code ? ` (${code})` : ""}{reason ? ` · ${reason}` : ""}</p></article>) : <p>ไม่มี bracket node</p>}</div><div className="grid gap-2"><p className="font-black text-[#061426]">Knockout fixtures</p>{diagnostic.fixtures.length ? diagnostic.fixtures.map(({ code, match, reason }) => <article className="min-w-0 rounded border border-slate-200 bg-white p-2" key={match.id}><p className="break-all font-mono font-bold">{match.id ?? "—"}</p><p className="mt-1">round node={linkedNodeIds.get(match.id) ?? "—"} · status={match.status ?? "—"} · code={code}</p><p>home={match.homeTeamId ?? "—"} away={match.awayTeamId ?? "—"} · score={match.homeScore ?? "—"}-{match.awayScore ?? "—"} · winner={match.winnerTeamId ?? "—"}</p><p className="mt-1 font-bold">{reason}</p></article>) : <p>ไม่มี knockout fixture</p>}</div></div></details>;
 }
 
 function dateValue(value: string | null) {
@@ -506,7 +489,6 @@ export function AdminCompetitionTreeEngineV2({
   const [generatedSummary, setGeneratedSummary] = useState<CompetitionTreeSummary | null>(null);
   const [currentWorkflow, setCurrentWorkflow] = useState(workflow);
   const [fixtureResult, setFixtureResult] = useState<CompetitionFixturesV2Result | null>(null);
-  const [topologyRepair, setTopologyRepair] = useState<CompetitionTopologyRepairResult | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -556,6 +538,7 @@ export function AdminCompetitionTreeEngineV2({
     [localNodeLinks, nodes],
   );
   const templateSwitchGuard = getKnockoutTemplateSwitchGuard({
+    derivedSources: qualificationSnapshot,
     matches: visibleKnockoutMatches.map((match) => ({ status: match.status, winnerTeamId: match.winner_team_id })),
     nodes: effectiveNodes,
   });
@@ -736,33 +719,6 @@ export function AdminCompetitionTreeEngineV2({
     setTemplateSelectionOpen(true);
   }
 
-  function inspectTopologyRepair() {
-    setError("");
-    setMessage("");
-    startTransition(async () => {
-      const result = await inspectCompetitionTopologyRepairV2(competitionId);
-      setTopologyRepair(result);
-      if (!result.ok) setError(result.error ?? "ไม่สามารถตรวจสอบโครงร่างที่ซ่อมได้");
-    });
-  }
-
-  function repairTopology() {
-    if (!topologyRepair?.repairable.length || topologyRepair.blockedReason) return;
-    if (!window.confirm(`ซ่อมโครงร่าง ${topologyRepair.repairable.length} node? ระบบจะล้างเฉพาะ source team id ที่ผิดรูปแบบและยังไม่มีโปรแกรมรอบน็อกเอาต์`)) return;
-    setError("");
-    setMessage("");
-    startTransition(async () => {
-      const result = await repairCompetitionTopologyV2(competitionId);
-      setTopologyRepair(result);
-      if (!result.ok) {
-        setError(result.error ?? "ไม่สามารถซ่อมโครงร่างที่ผิดได้");
-        return;
-      }
-      setMessage(result.repairedCount ? `ซ่อมโครงร่างแล้ว ${result.repairedCount} node` : "ไม่พบโครงร่างที่ต้องซ่อม");
-      router.refresh();
-    });
-  }
-
   function sourceKey(source: CompetitionTreeSource) {
     return `${source.type}:${source.teamId ?? ""}:${source.groupId ?? ""}:${source.rank ?? ""}:${source.bestOrder ?? ""}`;
   }
@@ -896,7 +852,7 @@ export function AdminCompetitionTreeEngineV2({
               <a className="inline-flex min-h-10 items-center rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-black text-[#061426]" href="#cup-workspace-nav">กลับเมนูลัด</a>
               {selectedTemplate === "ksw_standard" ? <button className="min-h-10 rounded-md border border-[#d8ad45] bg-white px-3 py-2 text-sm font-black text-[#8a6418]" onClick={openTemplateSelection} type="button">เปลี่ยนรูปแบบการแข่งขัน</button> : null}
             </div>
-            <KnockoutStateDiagnostic matches={visibleKnockoutMatches} nodes={effectiveNodes} onInspectRepair={inspectTopologyRepair} onRepair={repairTopology} pending={isPending} repairState={topologyRepair} templateKey={selectedTemplate} />
+            <KnockoutStateDiagnostic matches={visibleKnockoutMatches} nodes={effectiveNodes} qualificationSnapshot={qualificationSnapshot} templateKey={selectedTemplate} />
           </div>
           <span className="inline-flex w-fit shrink-0 rounded-full bg-[#fff7e6] px-3 py-2 text-sm font-black text-[#8a6418]">
             {statusLabel.th} / {statusLabel.en}
