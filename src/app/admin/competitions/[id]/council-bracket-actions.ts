@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireAdminSession } from "@/lib/admin-server-auth";
 import { isCupCompetition, normalizeCompetitionType } from "@/lib/competition-format";
 import { buildCompetitionTree, type CompetitionTreeNode, type CompetitionTreeSource, validateCompetitionTree } from "@/lib/competition-tree";
+import { isKnockoutMatchReadyForEditing, isKnockoutRoundReadyForFixtures } from "@/lib/knockout-round-readiness";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 const partitionKeys = ["division_1", "division_2"] as const;
@@ -287,14 +288,6 @@ export async function confirmCouncilBracketV2(competitionId: string, partitionKe
   return loadState(verified.supabase, competitionId, verified.partitionKey, verified.partition);
 }
 
-function resolveSource(source: CompetitionTreeSource, nodesById: Map<string, CompetitionTreeNode>, matchesById: Map<string, Row>) {
-  if (source.type === "group_rank" || source.type === "best_ranked" || source.type === "manual_team") return source.teamId ? { teamId: source.teamId } : null;
-  if (source.type !== "node_winner" || !source.nodeId) return null;
-  const sourceNode = nodesById.get(source.nodeId);
-  const sourceMatch = sourceNode?.linkedMatchId ? matchesById.get(sourceNode.linkedMatchId) : undefined;
-  return sourceMatch && text(sourceMatch, "status") === "finished" && text(sourceMatch, "winner_team_id") ? { teamId: text(sourceMatch, "winner_team_id") } : null;
-}
-
 export async function createCouncilPartitionFixturesV2(competitionId: string, partitionKey: string, roundIndex: number) {
   const verified = await verifyCouncilPartition(competitionId, partitionKey);
   if (!verified.supabase || !verified.partition || !verified.partitionKey) return { error: verified.error, ok: false };
@@ -307,13 +300,12 @@ export async function createCouncilPartitionFixturesV2(competitionId: string, pa
   const currentRound = rounds.find((index) => state.nodes.filter((node) => node.roundIndex === index).some((node) => !node.linkedMatchId || state.matches.find((match) => match.id === node.linkedMatchId)?.status !== "finished"));
   if (currentRound === undefined || currentRound !== roundIndex) return { ...state, error: "รอบนี้ยังไม่พร้อมสร้างโปรแกรมแข่งขัน", ok: false };
   const targetNodes = state.nodes.filter((node) => node.roundIndex === roundIndex);
-  const matchesById = new Map(state.matches.map((match) => [match.id, match as unknown as Row]));
-  const nodesById = new Map(state.nodes.map((node) => [node.id, node]));
+  const readiness = isKnockoutRoundReadyForFixtures(targetNodes, { matches: state.matches, nodes: state.nodes });
+  if (!readiness.ready) return { ...state, error: "รอผู้ชนะจากรอบก่อนก่อนสร้างโปรแกรม", ok: false };
   for (const node of targetNodes.filter((node) => !node.linkedMatchId)) {
-    const home = resolveSource(node.homeSource, nodesById, matchesById);
-    const away = resolveSource(node.awaySource, nodesById, matchesById);
-    if (!home || !away || home.teamId === away.teamId) return { ...state, error: "รอผู้ชนะจากรอบก่อนก่อนสร้างโปรแกรม", ok: false };
-    const created = await verified.supabase.from("matches").insert({ away_score: null, away_team_id: away.teamId, competition_stage: "knockout", fixture_source: "generated", group_id: null, home_score: null, home_team_id: home.teamId, knockout_partition_key: verified.partitionKey, league_id: competitionId, match_date: null, match_type: "cup", status: "scheduled", venue: null, winner_team_id: null }).select("id").maybeSingle();
+    const nodeReadiness = isKnockoutMatchReadyForEditing(node, { matches: state.matches, nodes: state.nodes });
+    if (!nodeReadiness.ready || !nodeReadiness.home.teamId || !nodeReadiness.away.teamId) return { ...state, error: "รอผู้ชนะจากรอบก่อนก่อนสร้างโปรแกรม", ok: false };
+    const created = await verified.supabase.from("matches").insert({ away_score: null, away_team_id: nodeReadiness.away.teamId, competition_stage: "knockout", fixture_source: "generated", group_id: null, home_score: null, home_team_id: nodeReadiness.home.teamId, knockout_partition_key: verified.partitionKey, league_id: competitionId, match_date: null, match_type: "cup", status: "scheduled", venue: null, winner_team_id: null }).select("id").maybeSingle();
     if (created.error || !created.data?.id) {
       console.error("council fixture insert failed", created.error);
       return { ...state, error: "ไม่สามารถสร้างโปรแกรมการแข่งขันได้", ok: false };
@@ -342,15 +334,22 @@ export async function saveCouncilPartitionMatchV2(payload: { awayScore: number |
   if (![payload.homeScore, payload.awayScore, payload.penaltyHomeScore, payload.penaltyAwayScore].every(validScore)) return { error: "คะแนนต้องเป็นจำนวนเต็มตั้งแต่ 0 ถึง 999", ok: false };
   const ownership = await verified.supabase.from("competition_bracket_nodes").select("id").eq("competition_id", payload.competitionId).eq("partition_key", verified.partitionKey).eq("linked_match_id", payload.matchId).maybeSingle();
   if (ownership.error || !ownership.data) return { error: "ไม่พบแมตช์ของดิวิชั่นนี้", ok: false };
-  const matchResult = await verified.supabase.from("matches").select("id, home_team_id, away_team_id").eq("id", payload.matchId).eq("league_id", payload.competitionId).eq("competition_stage", "knockout").eq("knockout_partition_key", verified.partitionKey).maybeSingle();
-  if (matchResult.error || !matchResult.data) return { error: "ไม่พบแมตช์รอบน็อกเอาต์", ok: false };
+  const ownershipNodeId = ownership.data.id;
+  const state = await loadState(verified.supabase, payload.competitionId, verified.partitionKey, verified.partition);
+  if (!state.ok) return state;
+  const node = state.nodes.find((entry) => entry.id === ownershipNodeId);
+  const match = state.matches.find((entry) => entry.id === payload.matchId);
+  if (!node || !match) return { error: "ไม่พบแมตช์รอบน็อกเอาต์", ok: false };
+  if (!isKnockoutMatchReadyForEditing(node, { matches: state.matches, nodes: state.nodes }).ready) {
+    return { error: "ยังบันทึกแมตช์นี้ไม่ได้ เพราะผู้ชนะจากรอบก่อนหน้ายังไม่ครบ", ok: false };
+  }
   let winnerTeamId: string | null = null;
   if (payload.status === "finished") {
     if (payload.homeScore === null || payload.awayScore === null) return { error: "กรุณากรอกคะแนนทั้งสองทีมก่อนบันทึกผล", ok: false };
-    if (payload.homeScore !== payload.awayScore) winnerTeamId = payload.homeScore > payload.awayScore ? matchResult.data.home_team_id : matchResult.data.away_team_id;
+    if (payload.homeScore !== payload.awayScore) winnerTeamId = payload.homeScore > payload.awayScore ? match.home_team_id : match.away_team_id;
     else if (payload.penaltyHomeScore === null || payload.penaltyAwayScore === null) return { error: "เสมอในเวลาปกติ กรุณากรอกผลการดวลจุดโทษ", ok: false };
     else if (payload.penaltyHomeScore === payload.penaltyAwayScore) return { error: "ผลการดวลจุดโทษต้องไม่เสมอกัน", ok: false };
-    else winnerTeamId = payload.penaltyHomeScore > payload.penaltyAwayScore ? matchResult.data.home_team_id : matchResult.data.away_team_id;
+    else winnerTeamId = payload.penaltyHomeScore > payload.penaltyAwayScore ? match.home_team_id : match.away_team_id;
   }
   const update = await verified.supabase.from("matches").update({ away_score: payload.awayScore, home_score: payload.homeScore, match_date: payload.matchDate, penalty_away_score: payload.status === "finished" && payload.homeScore === payload.awayScore ? payload.penaltyAwayScore : null, penalty_home_score: payload.status === "finished" && payload.homeScore === payload.awayScore ? payload.penaltyHomeScore : null, status: payload.status, venue: payload.venue, winner_team_id: winnerTeamId }).eq("id", payload.matchId).eq("league_id", payload.competitionId);
   if (update.error) return { error: "ไม่สามารถบันทึกผลการแข่งขันได้", ok: false };
@@ -385,9 +384,9 @@ export async function saveCouncilPartitionMatchV2(payload: { awayScore: number |
     partitionForState = { ...verified.partition, ...(championClear.data[0] as Row) };
   }
   revalidatePath(`/admin/competitions/${payload.competitionId}`);
-  const state = await loadState(verified.supabase, payload.competitionId, verified.partitionKey, partitionForState);
-  console.info("council bracket state returned after match save", { championAt: state.championAt, championTeamId: state.championTeamId, competitionId: payload.competitionId, partitionKey: verified.partitionKey });
-  return state;
+  const updatedState = await loadState(verified.supabase, payload.competitionId, verified.partitionKey, partitionForState);
+  console.info("council bracket state returned after match save", { championAt: updatedState.championAt, championTeamId: updatedState.championTeamId, competitionId: payload.competitionId, partitionKey: verified.partitionKey });
+  return updatedState;
 }
 
 export async function completeCouncilCupCompetitionV2(competitionId: string) {
