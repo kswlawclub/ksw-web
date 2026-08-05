@@ -35,7 +35,7 @@ import { buildCompetitionTree, type CompetitionTreeEntryMode, type CompetitionTr
 import { buildKnockoutTemplatePreview, getKnockoutTemplate, listKnockoutTemplates, validateKnockoutTemplateSources } from "@/lib/knockout-templates/registry";
 import { getKnockoutTemplateSwitchGuard } from "@/lib/knockout-template-switching";
 import { deriveKnockoutRoundState } from "@/lib/knockout-round-engine";
-import { buildKnockoutMatchReadinessByMatchId, getKnockoutMatchPresentation, getKnockoutRoundProgression, getPrematureKnockoutFixtureDrafts, type KnockoutNodeReadiness } from "@/lib/knockout-round-readiness";
+import { buildKnockoutMatchReadinessByMatchId, deriveKnockoutRoundRuntime, getKnockoutMatchPresentation, getPrematureKnockoutFixtureDrafts, type KnockoutNodeReadiness } from "@/lib/knockout-round-readiness";
 import type { KnockoutTemplateDiagram, KnockoutTemplateKey } from "@/lib/knockout-templates/types";
 import type { KswQualificationSource } from "@/lib/ksw-knockout-template";
 import { TeamLogo } from "@/components/team-logo";
@@ -457,16 +457,16 @@ function CouncilPartitionBracket({
     return () => { active = false; };
   }, [competitionId, partitionKey]);
 
-  const roundProgression = useMemo(() => state ? getKnockoutRoundProgression({ matches: state.matches, nodes: state.nodes }) : { currentRound: null, rounds: [] }, [state]);
+  const roundRuntime = useMemo(() => state ? deriveKnockoutRoundRuntime({ matches: state.matches, nodes: state.nodes }) : null, [state]);
   const rounds = useMemo(() => {
     if (!state) return [];
     const matchesById = new Map(state.matches.map((match) => [match.id, match]));
-    return roundProgression.rounds.map(({ complete, nodes, roundIndex }) => {
+    return (roundRuntime?.rounds ?? []).map(({ complete, nodes, roundIndex }) => {
       const matches = nodes.flatMap((node) => node.linkedMatchId ? [matchesById.get(node.linkedMatchId)].filter((match): match is CouncilBracketMatch => Boolean(match)) : []);
       return { complete, label: knockoutRoundTitle(nodes[0]?.roundLabel ?? `Round ${roundIndex + 1}`), matches, nodes, roundIndex };
     });
-  }, [roundProgression, state]);
-  const currentRound = roundProgression.currentRound;
+  }, [roundRuntime, state]);
+  const currentRound = roundRuntime?.currentRound ?? null;
   const matchReadiness = useMemo(() => {
     if (!state) return new Map<string, { readiness: KnockoutNodeReadiness; waitingSources: string[] }>();
     const nodesById = new Map(state.nodes.map((node) => [node.id, node]));
@@ -482,7 +482,7 @@ function CouncilPartitionBracket({
       return [[node.linkedMatchId, { readiness, waitingSources }] as const];
     }));
   }, [state]);
-  const roundReadiness = useMemo(() => new Map(roundProgression.rounds.map((round) => [round.roundIndex, round.playable])), [roundProgression]);
+  const roundReadiness = useMemo(() => new Map((roundRuntime?.rounds ?? []).map((round) => [round.roundIndex, round.playable])), [roundRuntime]);
   const prematureFixtureDrafts = useMemo(() => state ? getPrematureKnockoutFixtureDrafts({ matches: state.matches, nodes: state.nodes }) : { matchIds: [], nodeIds: [] }, [state]);
   const readinessDiagnostics = useMemo(() => {
     if (!state) return [];
@@ -574,7 +574,7 @@ function CouncilPartitionBracket({
   const label = partitionKey === "division_1" ? "Knockout Division 1" : "Knockout Division 2";
   return <section className={`mt-5 min-w-0 scroll-mt-28 rounded-lg border ${theme.accent} ${theme.surface} p-4 sm:p-5`} id={partitionKey === "division_1" ? "cup-knockout-d1" : "cup-knockout-d2"}>
     <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className={`text-xl font-black ${theme.heading}`}>{label}</h3><p className="mt-1 text-sm font-semibold text-slate-600">จัดสาย สร้างโปรแกรม และบันทึกผลของดิวิชั่นนี้อย่างอิสระ</p></div><span className={`rounded-full border px-3 py-1.5 text-xs font-black ${theme.badge}`}>{state?.status === "completed" ? "ได้แชมป์แล้ว" : state?.nodes.length ? "จัดสายแล้ว" : "รอจัดสาย"}</span></div>
-    {state ? <details className="mt-4 rounded-md border border-dashed border-slate-300 bg-white/75 p-3 text-xs text-slate-700"><summary className="cursor-pointer font-black text-[#061426]">ตรวจสอบความพร้อมของรอบน็อกเอาต์</summary><div className="mt-3 grid gap-2"><p className="font-bold">รอบปัจจุบัน: {currentRound ? `${currentRound.roundIndex} · ${currentRound.reason}` : "ไม่มี"} · โปรแกรมร่างผิดลำดับที่ล้างได้: {prematureFixtureDrafts.nodeIds.length}</p>{readinessDiagnostics.map(({ away, branch, home, linkedMatchId, mappedReadiness, node, readiness }) => <article className={readiness.ready ? "min-w-0 rounded border border-emerald-200 bg-emerald-50/60 p-3" : "min-w-0 rounded border border-amber-200 bg-amber-50/60 p-3"} key={node.id}><div className="flex flex-wrap items-start justify-between gap-2"><p className="break-all font-mono font-bold">node: {node.id}</p><span className="rounded border border-slate-300 bg-white px-2 py-0.5 font-black">{branch}</span></div><dl className="mt-2 grid gap-x-4 gap-y-1 break-words sm:grid-cols-2"><div><dt className="font-bold opacity-70">Round / order</dt><dd>{node.roundLabel} · {node.roundIndex} / {node.matchOrder}</dd></div><div><dt className="font-bold opacity-70">Linked match</dt><dd className="font-mono">{linkedMatchId ?? "—"}</dd></div><div><dt className="font-bold opacity-70">Home</dt><dd>type={home.type} · team={home.teamId ?? "—"} · source node={home.nodeId ?? "—"} · status={home.sourceMatchStatus ?? "—"} · winner={home.sourceMatchWinnerTeamId ?? "—"}</dd></div><div><dt className="font-bold opacity-70">Away</dt><dd>type={away.type} · team={away.teamId ?? "—"} · source node={away.nodeId ?? "—"} · status={away.sourceMatchStatus ?? "—"} · winner={away.sourceMatchWinnerTeamId ?? "—"}</dd></div><div><dt className="font-bold opacity-70">Readiness map</dt><dd>{mappedReadiness ? "found" : "missing"}</dd></div><div><dt className="font-bold opacity-70">readyForEditing</dt><dd className="font-black">{String(readiness.ready)}{readiness.waitingNodeIds.length ? ` · waiting=${readiness.waitingNodeIds.join(", ")}` : ""}</dd></div></dl></article>)}</div></details> : null}
+    {state ? <details className="mt-4 rounded-md border border-dashed border-slate-300 bg-white/75 p-3 text-xs text-slate-700"><summary className="cursor-pointer font-black text-[#061426]">ตรวจสอบความพร้อมของรอบน็อกเอาต์</summary><div className="mt-3 grid gap-2"><p className="font-bold">รอบปัจจุบัน: {currentRound ? `${currentRound.roundIndex} · ${currentRound.state}` : "ไม่มี"} · โปรแกรมร่างผิดลำดับที่ล้างได้: {prematureFixtureDrafts.nodeIds.length}</p>{readinessDiagnostics.map(({ away, branch, home, linkedMatchId, mappedReadiness, node, readiness }) => <article className={readiness.ready ? "min-w-0 rounded border border-emerald-200 bg-emerald-50/60 p-3" : "min-w-0 rounded border border-amber-200 bg-amber-50/60 p-3"} key={node.id}><div className="flex flex-wrap items-start justify-between gap-2"><p className="break-all font-mono font-bold">node: {node.id}</p><span className="rounded border border-slate-300 bg-white px-2 py-0.5 font-black">{branch}</span></div><dl className="mt-2 grid gap-x-4 gap-y-1 break-words sm:grid-cols-2"><div><dt className="font-bold opacity-70">Round / order</dt><dd>{node.roundLabel} · {node.roundIndex} / {node.matchOrder}</dd></div><div><dt className="font-bold opacity-70">Linked match</dt><dd className="font-mono">{linkedMatchId ?? "—"}</dd></div><div><dt className="font-bold opacity-70">Home</dt><dd>type={home.type} · team={home.teamId ?? "—"} · source node={home.nodeId ?? "—"} · status={home.sourceMatchStatus ?? "—"} · winner={home.sourceMatchWinnerTeamId ?? "—"}</dd></div><div><dt className="font-bold opacity-70">Away</dt><dd>type={away.type} · team={away.teamId ?? "—"} · source node={away.nodeId ?? "—"} · status={away.sourceMatchStatus ?? "—"} · winner={away.sourceMatchWinnerTeamId ?? "—"}</dd></div><div><dt className="font-bold opacity-70">Readiness map</dt><dd>{mappedReadiness ? "found" : "missing"}</dd></div><div><dt className="font-bold opacity-70">readyForEditing</dt><dd className="font-black">{String(readiness.ready)}{readiness.waitingNodeIds.length ? ` · waiting=${readiness.waitingNodeIds.join(", ")}` : ""}</dd></div></dl></article>)}</div></details> : null}
     {prematureFixtureDrafts.nodeIds.length ? <button className="mt-3 min-h-10 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-black text-amber-900 disabled:opacity-60" disabled={pending} onClick={repairPrematureFixtures} type="button">ล้างโปรแกรมรอบถัดไปที่สร้างผิดลำดับ</button> : null}
     {error ? <p className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-800">{error}</p> : null}
     {message ? <p className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">{message}</p> : null}
@@ -601,7 +601,18 @@ function CouncilChampions({ competitionId, competitionStatus, teamsById }: { com
     window.addEventListener("council-bracket-updated", load);
     return () => { active = false; window.removeEventListener("council-bracket-updated", load); };
   }, [competitionId]);
-  const champion = (state: CouncilBracketState | null) => state?.championTeamId ? teamsById.get(state.championTeamId) : undefined;
+  const champion = (state: CouncilBracketState | null) => {
+    if (!state) return undefined;
+    const persistedChampion = state.championTeamId ? teamsById.get(state.championTeamId) : undefined;
+    if (persistedChampion) return persistedChampion;
+    const finalRound = deriveKnockoutRoundRuntime(state).finalRound;
+    const finalMatch = finalRound?.nodes[0]?.linkedMatchId
+      ? state.matches.find((match) => match.id === finalRound.nodes[0]?.linkedMatchId)
+      : undefined;
+    return finalRound?.complete && finalMatch?.winner_team_id
+      ? teamsById.get(finalMatch.winner_team_id)
+      : undefined;
+  };
   const championDate = (state: CouncilBracketState | null) => state?.championAt ? new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(new Date(state.championAt)) : "";
   const d1Champion = champion(division1);
   const d2Champion = champion(division2);

@@ -32,6 +32,7 @@ export type KnockoutRoundEngineInput = {
 };
 
 export type KnockoutRoundEngineState = {
+  advanceFromRound: KnockoutRoundState | null;
   completedRounds: KnockoutRoundState[];
   currentRound: KnockoutRoundState | null;
   finalRound: KnockoutRoundState | null;
@@ -40,6 +41,7 @@ export type KnockoutRoundEngineState = {
   playableRounds: KnockoutRoundState[];
   roundStates: KnockoutRoundState[];
   rounds: KnockoutRoundState[];
+  runtimePhase: "confirmed" | "completed" | "current_round_ready" | "fixtures_created" | "playing" | "round_complete";
 };
 
 const stateRank: Record<KnockoutRoundNodeState, number> = {
@@ -116,7 +118,7 @@ export function deriveKnockoutRoundState(input: KnockoutRoundEngineInput): Knock
       const linkedMatchCount = orderedNodes.filter((node) => Boolean(node.linkedMatchId)).length;
       const complete = orderedNodes.length > 0 && orderedNodes.every((node) => {
         const match = node.linkedMatchId ? matchesById.get(node.linkedMatchId) : undefined;
-        return Boolean(match?.status === "finished" && match.winnerTeamId);
+        return hasResult(match);
       });
       const playable = orderedNodes.length > 0 && orderedNodes.every((node) => {
         const homeTeamId = resolveSource(node.homeSource, node);
@@ -135,17 +137,36 @@ export function deriveKnockoutRoundState(input: KnockoutRoundEngineInput): Knock
         state,
       } satisfies KnockoutRoundState;
     });
-  const currentRound = rounds.find((round) => !round.complete) ?? null;
+  const firstIncompleteRound = rounds.find((round) => !round.complete) ?? null;
+  const currentRound = rounds.find((round) => !round.complete && round.playable) ?? null;
   const playableRounds = rounds.filter((round) => round.playable);
+  const finalRound = rounds[rounds.length - 1] ?? null;
+  const advanceFromRound = currentRound && currentRound.roundIndex > 0
+    ? [...rounds].reverse().find((round) => round.roundIndex < currentRound.roundIndex && round.complete) ?? null
+    : null;
+  const runtimePhase = finalRound?.complete
+    ? "completed"
+    : currentRound && currentRound.linkedMatchCount === currentRound.nodes.length
+      ? currentRound.nodes.some((node) => {
+        const match = node.linkedMatchId ? matchesById.get(node.linkedMatchId) : undefined;
+        return match?.status === "active";
+      }) ? "playing" : "fixtures_created"
+      : currentRound
+        ? "current_round_ready"
+        : firstIncompleteRound
+          ? "round_complete"
+          : "confirmed";
 
   return {
+    advanceFromRound,
     completedRounds: rounds.filter((round) => round.complete),
     currentRound,
-    finalRound: rounds[rounds.length - 1] ?? null,
+    finalRound,
     firstPlayableRound: rounds.find((round) => !round.complete && round.playable && round.requiresFixtures) ?? null,
     localizedLabels: Object.fromEntries(rounds.map((round) => [round.roundIndex, round.roundLabel])),
     playableRounds,
     roundStates: rounds,
     rounds,
+    runtimePhase,
   };
 }

@@ -1,4 +1,5 @@
 import type { CompetitionTreeNode, CompetitionTreeSource } from "@/lib/competition-tree";
+import { deriveKnockoutRoundState, type KnockoutRoundEngineState } from "@/lib/knockout-round-engine";
 
 export type KnockoutReadinessMatch = {
   away_score?: number | null;
@@ -107,26 +108,46 @@ export function getKnockoutMatchPresentation(readiness: KnockoutNodeReadiness | 
     : { editable: false, state: "waiting" };
 }
 
+/**
+ * Shared runtime projection for Admin knockout consumers. Readiness remains
+ * responsible for a single match's source dependencies; round progression is
+ * owned exclusively by the round engine.
+ */
+export function deriveKnockoutRoundRuntime(context: KnockoutReadinessContext): KnockoutRoundEngineState {
+  return deriveKnockoutRoundState({
+    matches: context.matches.map((match) => ({
+      awayScore: match.away_score,
+      homeScore: match.home_score,
+      id: match.id,
+      penaltyAwayScore: match.penalty_away_score,
+      penaltyHomeScore: match.penalty_home_score,
+      status: match.status,
+      winnerTeamId: match.winner_team_id,
+    })),
+    nodes: context.nodes,
+  });
+}
+
+/**
+ * Compatibility adapter for existing readiness consumers. New runtime code
+ * should use deriveKnockoutRoundRuntime directly.
+ */
 export function getKnockoutRoundProgression(context: KnockoutReadinessContext) {
-  const matchesById = new Map(context.matches.map((match) => [match.id, match]));
-  const grouped = new Map<number, CompetitionTreeNode[]>();
-  context.nodes.forEach((node) => grouped.set(node.roundIndex, [...(grouped.get(node.roundIndex) ?? []), node]));
-  const rounds = Array.from(grouped, ([roundIndex, nodes]): KnockoutRoundProgress => {
-    const complete = nodes.length > 0 && nodes.every((node) => {
-      const match = node.linkedMatchId ? matchesById.get(node.linkedMatchId) : undefined;
-      return Boolean(match && ["finished", "completed"].includes(match.status ?? "") && match.winner_team_id);
-    });
-    const playable = isKnockoutRoundReadyForFixtures(nodes, context).ready;
-    return {
-      complete,
-      linkedMatchCount: nodes.filter((node) => Boolean(node.linkedMatchId)).length,
-      nodes,
-      playable,
-      reason: complete ? "complete" : playable ? "ready_for_fixtures" : "waiting_for_dependencies",
-      roundIndex,
-    };
-  }).sort((left, right) => left.roundIndex - right.roundIndex);
-  return { currentRound: rounds.find((round) => !round.complete) ?? null, rounds };
+  const runtime = deriveKnockoutRoundRuntime(context);
+  const rounds = runtime.rounds.map((round): KnockoutRoundProgress => ({
+    complete: round.complete,
+    linkedMatchCount: round.linkedMatchCount,
+    nodes: round.nodes,
+    playable: round.playable,
+    reason: round.complete ? "complete" : round.playable ? "ready_for_fixtures" : "waiting_for_dependencies",
+    roundIndex: round.roundIndex,
+  }));
+  return {
+    currentRound: runtime.currentRound
+      ? rounds.find((round) => round.roundIndex === runtime.currentRound?.roundIndex) ?? null
+      : null,
+    rounds,
+  };
 }
 
 function isUnplayedFixtureDraft(match: KnockoutReadinessMatch) {
@@ -140,11 +161,11 @@ function isUnplayedFixtureDraft(match: KnockoutReadinessMatch) {
 }
 
 export function getPrematureKnockoutFixtureDrafts(context: KnockoutReadinessContext) {
-  const progression = getKnockoutRoundProgression(context);
-  const currentRound = progression.currentRound;
+  const runtime = deriveKnockoutRoundRuntime(context);
+  const currentRound = runtime.currentRound;
   if (!currentRound || currentRound.linkedMatchCount > 0) return { matchIds: [] as string[], nodeIds: [] as string[] };
   const matchesById = new Map(context.matches.map((match) => [match.id, match]));
-  const candidates = progression.rounds
+  const candidates = runtime.rounds
     .filter((round) => round.roundIndex > currentRound.roundIndex)
     .flatMap((round) => round.nodes)
     .flatMap((node) => {

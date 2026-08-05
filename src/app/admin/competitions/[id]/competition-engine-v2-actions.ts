@@ -197,29 +197,38 @@ export async function completeCupCompetitionV2(competitionId: string): Promise<C
 
   const nodesResult = await verified.supabase
     .from("competition_bracket_nodes")
-    .select("linked_match_id, round_index")
+    .select("id, competition_id, round_index, round_label, match_order, bracket_position, linked_match_id, home_source_type, away_source_type, home_source_group_id, home_source_rank, home_source_team_id, home_source_node_id, home_source_best_order, away_source_group_id, away_source_rank, away_source_team_id, away_source_node_id, away_source_best_order")
     .eq("competition_id", competitionId)
-    .order("round_index", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (nodesResult.error || !nodesResult.data?.linked_match_id) {
+    .order("round_index", { ascending: true })
+    .order("match_order", { ascending: true });
+  if (nodesResult.error || !nodesResult.data?.length) {
     if (nodesResult.error) console.error("competition completion final node lookup failed", nodesResult.error);
     return { error: "ยังไม่พบคู่รอบชิงชนะเลิศที่พร้อมปิดการแข่งขัน", ok: false };
   }
 
-  const finalResult = await verified.supabase
-    .from("matches")
-    .select("id, league_id, competition_stage, home_team_id, away_team_id, status, winner_team_id")
-    .eq("id", nodesResult.data.linked_match_id)
-    .eq("league_id", competitionId)
-    .eq("competition_stage", "knockout")
-    .maybeSingle();
-  if (finalResult.error || !finalResult.data) {
-    if (finalResult.error) console.error("competition completion final match lookup failed", finalResult.error);
+  const nodes = nodesResult.data.map((node) => nodeFromDatabase(node as Record<string, unknown>));
+  const linkedMatchIds = nodes.flatMap((node) => node.linkedMatchId ? [node.linkedMatchId] : []);
+  const matchesResult = linkedMatchIds.length
+    ? await verified.supabase.from("matches").select("id, league_id, competition_stage, home_team_id, away_team_id, status, winner_team_id").in("id", linkedMatchIds)
+    : { data: [], error: null };
+  if (matchesResult.error) {
+    console.error("competition completion match lookup failed", matchesResult.error);
     return { error: "ไม่พบผลรอบชิงชนะเลิศของรายการนี้", ok: false };
   }
-  const winnerTeamId = finalResult.data.winner_team_id;
-  if (finalResult.data.status !== "finished" || typeof winnerTeamId !== "string" || !winnerTeamId || ![finalResult.data.home_team_id, finalResult.data.away_team_id].includes(winnerTeamId)) {
+  const runtime = deriveKnockoutRoundState({
+    matches: (matchesResult.data ?? []).map((match) => ({ id: match.id, status: match.status, winnerTeamId: match.winner_team_id })),
+    nodes,
+  });
+  const finalNode = runtime.finalRound?.nodes[0];
+  const finalMatchId = finalNode?.linkedMatchId;
+  if (!runtime.finalRound?.complete || !finalMatchId) return { error: "รอบชิงชนะเลิศต้องจบการแข่งขันและมีผู้ชนะก่อนปิดรายการ", ok: false };
+
+  const finalResult = (matchesResult.data ?? []).find((match) => match.id === finalMatchId && match.league_id === competitionId && match.competition_stage === "knockout");
+  if (!finalResult) {
+    return { error: "ไม่พบผลรอบชิงชนะเลิศของรายการนี้", ok: false };
+  }
+  const winnerTeamId = finalResult.winner_team_id;
+  if (finalResult.status !== "finished" || typeof winnerTeamId !== "string" || !winnerTeamId || ![finalResult.home_team_id, finalResult.away_team_id].includes(winnerTeamId)) {
     return { error: "รอบชิงชนะเลิศต้องจบการแข่งขันและมีผู้ชนะก่อนปิดรายการ", ok: false };
   }
 
@@ -1157,13 +1166,19 @@ export async function saveCompetitionKnockoutMatchV2(payload: {
 
   const nodeResult = await verified.supabase
     .from("competition_bracket_nodes")
-    .select("id")
+    .select("id, round_index")
     .eq("competition_id", payload.competitionId)
     .eq("linked_match_id", payload.matchId)
     .maybeSingle();
   if (nodeResult.error || !nodeResult.data) {
     if (nodeResult.error) console.error("competition knockout v2 match ownership lookup failed", nodeResult.error);
     return { error: "ไม่พบแมตช์รอบน็อกเอาต์ของรายการนี้", ok: false };
+  }
+
+  const fixtureInspection = await inspectCompetitionFixturesV2(verified.supabase, payload.competitionId);
+  const currentRoundIndex = fixtureInspection.roundEngine?.currentRound?.roundIndex;
+  if (currentRoundIndex === undefined || nodeResult.data.round_index !== currentRoundIndex) {
+    return { error: "ยังบันทึกแมตช์นี้ไม่ได้ เพราะไม่ใช่รอบการแข่งขันปัจจุบัน", ok: false };
   }
 
   const matchResult = await verified.supabase

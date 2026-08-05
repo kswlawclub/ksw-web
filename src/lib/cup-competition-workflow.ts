@@ -1,5 +1,7 @@
 import { calculateCupQualification } from "@/lib/cup-qualification";
 import type { CupGroupRow } from "@/lib/cup-group-standings";
+import { deriveKnockoutRoundState } from "@/lib/knockout-round-engine";
+import type { CompetitionTreeNode } from "@/lib/competition-tree";
 
 export type CupCompetitionWorkflowStep = {
   description: string;
@@ -13,7 +15,6 @@ export type CouncilWorkflowPartition = {
   approvalStatus: string | null;
   bracketConfirmed: boolean;
   championTeamId: string | null;
-  finalFinished: boolean;
   partitionKey: "division_1" | "division_2";
   status: string | null;
 };
@@ -26,7 +27,7 @@ export function calculateCupCompetitionWorkflow(input: {
   councilPartitions: CouncilWorkflowPartition[];
   groups: CupGroupRow[];
   matches: CupGroupRow[];
-  nodes: Array<{ linkedMatchId?: string; partitionKey?: string; roundIndex: number }>;
+  nodes: CompetitionTreeNode[];
   competitionStatus: string | null;
   qualificationStatus: "approved" | "pending" | null;
   knockoutStatus: string | null;
@@ -49,11 +50,30 @@ export function calculateCupCompetitionWorkflow(input: {
   const finalNode = [...mainNodes].sort((a, b) => b.roundIndex - a.roundIndex)[0];
   const finalMatch = finalNode?.linkedMatchId ? input.matches.find((match) => text(match, "id") === finalNode.linkedMatchId) : undefined;
   const isCouncil = input.templateKey === "council_two_division";
-  const councilPartitions = ["division_1", "division_2"].map((partitionKey) => input.councilPartitions.find((partition) => partition.partitionKey === partitionKey));
-  const councilDivisionApproved = councilPartitions.every((partition) => partition?.approvalStatus === "approved");
-  const councilSetupComplete = councilDivisionApproved && councilPartitions.every((partition) => partition?.bracketConfirmed === true);
-  const councilMatchesComplete = councilPartitions.every((partition) => partition?.finalFinished === true);
-  const councilChampionReady = councilPartitions.every((partition) => Boolean(partition?.championTeamId));
+  const knockoutMatches = input.matches.map((match) => ({
+    id: text(match, "id"),
+    status: text(match, "status") || null,
+    winnerTeamId: text(match, "winner_team_id") || null,
+  })).filter((match) => Boolean(match.id));
+  const councilPartitions = (["division_1", "division_2"] as const).map((partitionKey) => {
+    const partition = input.councilPartitions.find((entry) => entry.partitionKey === partitionKey);
+    const runtime = deriveKnockoutRoundState({
+      matches: knockoutMatches,
+      nodes: input.nodes,
+      partitionKey,
+    });
+    return {
+      championCandidateReady: runtime.finalRound?.complete === true,
+      fixturesCreated: runtime.rounds.some((round) => round.linkedMatchCount > 0),
+      partition,
+      runtime,
+      topologyConfigured: runtime.rounds.length > 0,
+    };
+  });
+  const councilDivisionApproved = councilPartitions.every(({ partition }) => partition?.approvalStatus === "approved");
+  const councilSetupComplete = councilDivisionApproved && councilPartitions.every(({ partition, topologyConfigured }) => partition?.bracketConfirmed === true && topologyConfigured);
+  const councilMatchesComplete = councilPartitions.every(({ runtime }) => runtime.finalRound?.complete === true);
+  const councilChampionReady = councilPartitions.every(({ championCandidateReady }) => championCandidateReady);
   const kswSetupComplete = ["reviewed", "fixtures_created", "active", "completed"].includes(input.knockoutStatus ?? "");
   const kswMatchesComplete = text(finalMatch, "status") === "finished";
   const kswChampionReady = kswMatchesComplete && Boolean(text(finalMatch, "winner_team_id"));
@@ -62,16 +82,16 @@ export function calculateCupCompetitionWorkflow(input: {
   const championReady = isCouncil ? councilChampionReady : kswChampionReady;
   const competitionCompleted = input.competitionStatus === "completed";
 
-  const divisionLabel = (partition: CouncilWorkflowPartition | undefined) => {
+  const divisionLabel = ({ fixturesCreated, partition, runtime, topologyConfigured }: (typeof councilPartitions)[number]) => {
     const label = partition?.partitionKey === "division_1" ? "D1" : "D2";
-    if (!partition?.bracketConfirmed) return `${label} รอจัดสาย`;
-    if (partition.finalFinished) return `${label} ✓`;
-    if (partition.status === "reviewed") return `${label} พร้อมสร้างโปรแกรม`;
+    if (!partition?.bracketConfirmed || !topologyConfigured) return `${label} รอจัดสาย`;
+    if (runtime.finalRound?.complete) return `${label} ✓`;
+    if (!fixturesCreated && runtime.firstPlayableRound) return `${label} พร้อมสร้างโปรแกรม`;
     return `${label} กำลังแข่งขัน`;
   };
   const knockoutSubStatus = isCouncil ? councilPartitions.map(divisionLabel).join(" · ") : undefined;
   const championSubStatus = isCouncil
-    ? councilPartitions.map((partition) => `${partition?.partitionKey === "division_1" ? "D1" : "D2"} ${partition?.championTeamId ? "✓" : "รอผล"}`).join(" · ")
+    ? councilPartitions.map(({ championCandidateReady, partition }) => `${partition?.partitionKey === "division_1" ? "D1" : "D2"} ${championCandidateReady ? "✓" : "รอผล"}`).join(" · ")
     : undefined;
   const definitions = [
     { complete: teamsReady, description: "เพิ่มทีมที่จะเข้าร่วมการแข่งขัน", id: "teams" as const, label: "ทีมที่เข้าแข่งขัน" },

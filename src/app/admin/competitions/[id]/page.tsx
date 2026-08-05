@@ -540,17 +540,11 @@ async function loadWorkspaceData(id: string) {
   const engineV2TreeNodes = engineV2TreeResult.data.map(asCompetitionTreeNode).filter((node) => node.id);
   const councilWorkflowPartitions = (["division_1", "division_2"] as const).map((partitionKey) => {
     const partition = councilPartitionsResult.data.find((row) => text(row, ["partition_key"]) === partitionKey);
-    const partitionNodes = engineV2TreeNodes.filter((node) => node.partitionKey === partitionKey);
-    const finalNode = [...partitionNodes].sort((a, b) => b.roundIndex - a.roundIndex || b.matchOrder - a.matchOrder)[0];
-    const finalMatch = finalNode?.linkedMatchId
-      ? matches.find((match) => text(match, ["id"]) === finalNode.linkedMatchId)
-      : undefined;
     const status = text(partition, ["status"]) || null;
     return {
       approvalStatus: text(partition, ["approval_status"]) || null,
       bracketConfirmed: ["reviewed", "fixtures_created", "active", "completed"].includes(status ?? ""),
       championTeamId: text(partition, ["champion_team_id"]) || null,
-      finalFinished: text(finalMatch, ["status"]) === "finished",
       partitionKey,
       status,
     };
