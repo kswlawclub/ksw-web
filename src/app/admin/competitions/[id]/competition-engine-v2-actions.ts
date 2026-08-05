@@ -30,6 +30,7 @@ import { isCupCompetition, normalizeCompetitionType } from "@/lib/competition-fo
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { buildKnockoutTemplatePreview, getKnockoutTemplate, isKnockoutTemplateKey } from "@/lib/knockout-templates/registry";
 import { getKnockoutTemplateSwitchGuard, topologySourceTeamId } from "@/lib/knockout-template-switching";
+import { deriveKnockoutRoundState, type KnockoutRoundEngineState } from "@/lib/knockout-round-engine";
 import type { KnockoutTemplateKey } from "@/lib/knockout-templates/types";
 import type { ApprovedQualificationSummary } from "@/app/admin/competitions/[id]/qualification-actions";
 
@@ -111,6 +112,10 @@ export type CompetitionFixturesV2Result = {
   roundMatches?: CompetitionKnockoutMatchV2[];
   skippedCount: number;
   status?: CompetitionEngineV2Status;
+};
+
+type InspectedCompetitionFixturesV2Result = CompetitionFixturesV2Result & {
+  roundEngine?: KnockoutRoundEngineState;
 };
 
 export type CompetitionKnockoutMatchLinkV2 = {
@@ -798,7 +803,7 @@ async function loadCompetitionFixturesV2Context(
   const linkedMatchesResult = linkedMatchIds.length
     ? await supabase
         .from("matches")
-        .select("id, league_id, competition_stage, fixture_source, home_team_id, away_team_id, winner_team_id")
+        .select("id, league_id, competition_stage, fixture_source, home_team_id, away_team_id, status, winner_team_id")
         .in("id", linkedMatchIds)
     : { data: [], error: null };
   if (linkedMatchesResult.error) {
@@ -883,7 +888,7 @@ function resolveCompetitionTreeSource(
 async function inspectCompetitionFixturesV2(
   supabase: SupabaseClient,
   competitionId: string,
-): Promise<CompetitionFixturesV2Result> {
+): Promise<InspectedCompetitionFixturesV2Result> {
   const context = await loadCompetitionFixturesV2Context(supabase, competitionId);
   if ("error" in context) return { ...fixtureResultBase(), error: context.error, ok: false };
   const result = fixtureResultBase(context.workflow.status ?? undefined);
@@ -966,8 +971,22 @@ async function inspectCompetitionFixturesV2(
     });
   }
 
+  const roundEngine = deriveKnockoutRoundState({
+    matches: Array.from(context.linkedMatchesById.values()).map((match) => ({
+      id: typeof match.id === "string" ? match.id : "",
+      status: typeof match.status === "string" ? match.status : null,
+      winnerTeamId: typeof match.winner_team_id === "string" ? match.winner_team_id : null,
+    })).filter((match) => Boolean(match.id)),
+    nodes: context.nodes,
+    qualificationSnapshot: qualificationSnapshotSources(context.config.qualification_snapshot),
+    resolveSource: (source) => {
+      const resolved = resolveCompetitionTreeSource(source, resolverContext);
+      return resolved.state === "team" ? resolved.teamId : null;
+    },
+  });
+
   if (result.errors.length) result.ok = false;
-  return result;
+  return { ...result, roundEngine };
 }
 
 export async function previewCompetitionFixturesV2(competitionId: string): Promise<CompetitionFixturesV2Result> {
@@ -993,8 +1012,8 @@ export async function createCompetitionFixturesV2(competitionId: string, roundIn
   if (!targetNodes.length) return { ...inspected, error: "ไม่พบรอบการแข่งขันที่เลือก", ok: false };
   const targetNeedsCreation = targetNodes.some((node) => node.state === "eligible");
   if (targetNeedsCreation) {
-    const firstEligibleRound = Math.min(...inspected.nodes.filter((node) => node.state === "eligible").map((node) => node.roundIndex));
-    if (!Number.isFinite(firstEligibleRound) || roundIndex !== firstEligibleRound) {
+    const firstPlayableRound = inspected.roundEngine?.firstPlayableRound?.roundIndex;
+    if (firstPlayableRound === undefined || roundIndex !== firstPlayableRound) {
       return { ...inspected, error: "รอบนี้ยังไม่พร้อมสร้างโปรแกรมแข่งขัน", ok: false };
     }
   } else if (!targetNodes.every((node) => node.state === "linked")) {

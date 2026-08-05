@@ -34,6 +34,7 @@ import {
 import { buildCompetitionTree, type CompetitionTreeEntryMode, type CompetitionTreeNode, type CompetitionTreeSource, type CompetitionTreeSummary } from "@/lib/competition-tree";
 import { buildKnockoutTemplatePreview, getKnockoutTemplate, listKnockoutTemplates, validateKnockoutTemplateSources } from "@/lib/knockout-templates/registry";
 import { getKnockoutTemplateSwitchGuard } from "@/lib/knockout-template-switching";
+import { deriveKnockoutRoundState } from "@/lib/knockout-round-engine";
 import { buildKnockoutMatchReadinessByMatchId, getKnockoutMatchPresentation, getKnockoutRoundProgression, getPrematureKnockoutFixtureDrafts, type KnockoutNodeReadiness } from "@/lib/knockout-round-readiness";
 import type { KnockoutTemplateDiagram, KnockoutTemplateKey } from "@/lib/knockout-templates/types";
 import type { KswQualificationSource } from "@/lib/ksw-knockout-template";
@@ -695,6 +696,19 @@ export function AdminCompetitionTreeEngineV2({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isPending, templateConfirmationKey]);
+  const standardRoundEngine = useMemo(() => deriveKnockoutRoundState({
+    matches: visibleKnockoutMatches.map((match) => ({
+      awayScore: match.away_score,
+      homeScore: match.home_score,
+      id: match.id,
+      penaltyAwayScore: match.penalty_away_score,
+      penaltyHomeScore: match.penalty_home_score,
+      status: match.status,
+      winnerTeamId: match.winner_team_id,
+    })),
+    nodes: effectiveNodes,
+    qualificationSnapshot,
+  }), [effectiveNodes, qualificationSnapshot, visibleKnockoutMatches]);
   const knockoutRounds = useMemo<KnockoutRoundView[]>(() => {
     const matchesById = new Map(visibleKnockoutMatches.map((match) => [match.id, match]));
     const grouped = new Map<number, CompetitionTreeNode[]>();
@@ -705,18 +719,15 @@ export function AdminCompetitionTreeEngineV2({
         const matches = roundNodes.flatMap((node) => node.linkedMatchId ? [matchesById.get(node.linkedMatchId)].filter((match): match is CompetitionKnockoutMatchV2 => Boolean(match)) : []);
         return {
           allMatchesReady: matches.length === roundNodes.length,
-          complete: roundNodes.length > 0 && roundNodes.every((node) => {
-            const match = node.linkedMatchId ? matchesById.get(node.linkedMatchId) : undefined;
-            return match?.status === "finished" && Boolean(match.winner_team_id);
-          }),
+          complete: standardRoundEngine.rounds.find((round) => round.roundIndex === roundIndex)?.complete ?? false,
           label: knockoutRoundTitle(roundNodes[0]?.roundLabel ?? `Round ${roundIndex + 1}`),
           matches,
           nodes: roundNodes,
           roundIndex,
         };
       });
-  }, [effectiveNodes, visibleKnockoutMatches]);
-  const currentRoundIndex = knockoutRounds.find((round) => !round.complete)?.roundIndex ?? null;
+  }, [effectiveNodes, standardRoundEngine.rounds, visibleKnockoutMatches]);
+  const currentRoundIndex = standardRoundEngine.currentRound?.roundIndex ?? null;
   const currentRound = knockoutRounds.find((round) => round.roundIndex === currentRoundIndex);
   const statusLabel = status === "fixtures_created" && currentRound
     ? { en: "Current round", th: currentRound.allMatchesReady ? `กำลังแข่งขัน${currentRound.label}` : `พร้อมสร้างโปรแกรม${currentRound.label}` }
