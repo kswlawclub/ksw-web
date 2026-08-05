@@ -414,12 +414,12 @@ export async function selectCompetitionKnockoutTemplateV2(
     return { error: "ยังไม่ได้ตั้งค่ารอบน็อกเอาต์", ok: false };
   }
   const templateSwitchGuard = getKnockoutTemplateSwitchGuard({
-    derivedSources: qualificationSnapshotSources(configResult.data.qualification_snapshot),
     matches: (matchesResult.data ?? []).map((match) => ({ status: match.status, winnerTeamId: match.winner_team_id })),
     nodes: (nodesResult.data ?? []).map((row) => nodeFromDatabase(row as Record<string, unknown>)),
+    qualificationSnapshot: qualificationSnapshotSources(configResult.data.qualification_snapshot),
   });
   if (!templateSwitchGuard.allowed) {
-    return { error: templateSwitchGuard.reason ?? "เปลี่ยนรูปแบบการแข่งขันไม่ได้", ok: false };
+    return { error: templateSwitchGuard.message, ok: false };
   }
 
   if (configResult.data.template_key && configResult.data.template_key !== templateKey) {

@@ -1,148 +1,161 @@
-export type KnockoutNodeForState = {
-  id?: string;
-  linkedMatchId?: string | null;
-  matchOrder?: number;
-  bracketPosition?: number;
-  roundIndex?: number;
-  roundLabel?: string;
-  awaySource: { bestOrder?: number | null; groupId?: string | null; nodeId?: string | null; rank?: number | null; teamId?: string | null; type?: string | null };
-  homeSource: { bestOrder?: number | null; groupId?: string | null; nodeId?: string | null; rank?: number | null; teamId?: string | null; type?: string | null };
-};
-
-type KnockoutMatchForState = {
-  id?: string;
-  awayScore?: number | null;
-  awayTeamId?: string | null;
-  homeScore?: number | null;
-  homeTeamId?: string | null;
-  status: string | null | undefined;
-  winnerTeamId: string | null | undefined;
-};
-
-export type KnockoutTemplateSwitchCode = "allowed" | "fixture_result" | "fixture_created" | "linked_match" | "team_assigned";
-
-export type KnockoutTemplateSwitchGuard = {
-  allowed: boolean;
-  code: KnockoutTemplateSwitchCode;
-  reason?: string;
-};
-
-export type KnockoutTemplateSwitchDiagnostic = KnockoutTemplateSwitchGuard & {
-  blockingNodes: Array<{ code: "linked_match" | "team_assigned"; node: KnockoutNodeForState; reason: string }>;
-  fixtures: Array<{ code: "fixture_created" | "fixture_result"; match: KnockoutMatchForState; reason: string }>;
-  nodeDiagnostics: Array<{ blocking: boolean; code: "linked_match" | "team_assigned" | null; node: KnockoutNodeForState; reason: string | null; resettable: boolean; resolvedPairing: boolean; topologyOnly: boolean }>;
-  resettableNodes: KnockoutNodeForState[];
-};
-
-export type KnockoutNodeState = "materialized_pairing" | "source_draft" | "topology_only";
-
-export type DerivedQualificationSource = {
+export type KnockoutNodeSource = {
   bestOrder?: number | null;
   groupId?: string | null;
+  nodeId?: string | null;
   rank?: number | null;
   teamId?: string | null;
   type?: string | null;
 };
 
-function isTopologySourceType(type: string | null | undefined) {
-  return type === "unassigned" || type === "group_rank" || type === "node_winner";
+export type KnockoutNodeForState = {
+  awaySource: KnockoutNodeSource;
+  homeSource: KnockoutNodeSource;
+  id?: string;
+  linkedMatchId?: string | null;
+};
+
+export type KnockoutMatchForState = {
+  awayScore?: number | null;
+  id?: string;
+  homeScore?: number | null;
+  status: string | null | undefined;
+  winnerTeamId: string | null | undefined;
+};
+
+export type QualificationSnapshotSource = Pick<KnockoutNodeSource, "bestOrder" | "groupId" | "rank" | "teamId" | "type">;
+
+export type KnockoutNodeState = "draft" | "resolved_draft" | "materialized" | "played";
+
+export type KnockoutTemplateSwitchReasonCode =
+  | "allowed_draft_only"
+  | "linked_knockout_match"
+  | "knockout_result_exists"
+  | "manual_team_assignment"
+  | "unverified_team_assignment";
+
+export type KnockoutNodeStateEntry = {
+  nodeId: string;
+  reasonCode?: Exclude<KnockoutTemplateSwitchReasonCode, "allowed_draft_only" | "knockout_result_exists">;
+  state: KnockoutNodeState;
+};
+
+export type KnockoutTemplateSwitchGuard = {
+  allowed: boolean;
+  blockingNodeIds: string[];
+  message: string;
+  nodeStates: KnockoutNodeStateEntry[];
+  reasonCode: KnockoutTemplateSwitchReasonCode;
+  resettableNodeIds: string[];
+};
+
+export type KnockoutStateContext = {
+  matches?: KnockoutMatchForState[];
+  qualificationSnapshot?: QualificationSnapshotSource[];
+};
+
+function isScore(value: number | null | undefined) {
+  return typeof value === "number";
 }
 
-export function topologySourceTeamId(type: string | null | undefined, teamId: string | null | undefined) {
-  return isTopologySourceType(type) ? null : teamId ?? null;
+export function hasLinkedKnockoutMatch(node: KnockoutNodeForState) {
+  return Boolean(node.linkedMatchId);
 }
 
-function sourceHasExplicitTeamAssignment(source: KnockoutNodeForState["homeSource"]) {
+export function hasPlayedKnockoutResult(match: KnockoutMatchForState) {
+  return match.status === "finished" || match.status === "completed" || Boolean(match.winnerTeamId) || isScore(match.homeScore) || isScore(match.awayScore);
+}
+
+export function hasExplicitManualAssignment(source: KnockoutNodeSource) {
   return source.type === "manual_team" && Boolean(source.teamId);
 }
 
-function sourceHasDraftMetadata(source: KnockoutNodeForState["homeSource"]) {
-  return Boolean(source.teamId || source.groupId || source.nodeId || source.rank || source.type !== "unassigned");
+function hasTeamId(source: KnockoutNodeSource) {
+  return Boolean(source.teamId);
 }
 
-export function hasDerivedSourceResolution(source: KnockoutNodeForState["homeSource"], derivedSources: DerivedQualificationSource[] = []) {
+export function hasQualificationDerivedResolution(source: KnockoutNodeSource, qualificationSnapshot: QualificationSnapshotSource[] = []) {
   if (!source.teamId || (source.type !== "best_ranked" && source.type !== "group_rank")) return false;
-  return derivedSources.some((candidate) => candidate.type === source.type
+  return qualificationSnapshot.some((candidate) => candidate.type === source.type
     && candidate.teamId === source.teamId
     && candidate.groupId === source.groupId
     && candidate.rank === source.rank
     && (source.type !== "best_ranked" || candidate.bestOrder === source.bestOrder));
 }
 
-function sourceHasUnprovenTeamAssignment(source: KnockoutNodeForState["homeSource"], derivedSources: DerivedQualificationSource[]) {
-  return Boolean(source.teamId) && !hasDerivedSourceResolution(source, derivedSources);
+function linkedMatchForNode(node: KnockoutNodeForState, matches: KnockoutMatchForState[]) {
+  return node.linkedMatchId ? matches.find((match) => match.id === node.linkedMatchId) : undefined;
 }
 
-export function classifyKnockoutNodeState(node: KnockoutNodeForState, derivedSources: DerivedQualificationSource[] = []): KnockoutNodeState {
-  if (
-    node.linkedMatchId
-    || sourceHasExplicitTeamAssignment(node.homeSource)
-    || sourceHasExplicitTeamAssignment(node.awaySource)
-    || sourceHasUnprovenTeamAssignment(node.homeSource, derivedSources)
-    || sourceHasUnprovenTeamAssignment(node.awaySource, derivedSources)
-  ) {
-    return "materialized_pairing";
-  }
-  if (sourceHasDraftMetadata(node.homeSource) || sourceHasDraftMetadata(node.awaySource)) return "source_draft";
-  return "topology_only";
+export function classifyKnockoutNodeState(node: KnockoutNodeForState, context: KnockoutStateContext = {}): KnockoutNodeState {
+  const matches = context.matches ?? [];
+  const linkedMatch = linkedMatchForNode(node, matches);
+  if (linkedMatch && hasPlayedKnockoutResult(linkedMatch)) return "played";
+  if (hasLinkedKnockoutMatch(node)) return "materialized";
+  if (hasExplicitManualAssignment(node.homeSource) || hasExplicitManualAssignment(node.awaySource)) return "materialized";
+
+  const sources = [node.homeSource, node.awaySource];
+  const qualificationSnapshot = context.qualificationSnapshot ?? [];
+  if (sources.some((source) => hasTeamId(source) && !hasQualificationDerivedResolution(source, qualificationSnapshot))) return "materialized";
+  if (sources.some((source) => hasQualificationDerivedResolution(source, qualificationSnapshot))) return "resolved_draft";
+  return "draft";
 }
 
-export function isTopologyOnlyNode(node: KnockoutNodeForState, derivedSources: DerivedQualificationSource[] = []) {
-  return classifyKnockoutNodeState(node, derivedSources) !== "materialized_pairing";
+function nodeReasonCode(node: KnockoutNodeForState, state: KnockoutNodeState): KnockoutNodeStateEntry["reasonCode"] {
+  if (state !== "materialized") return undefined;
+  if (hasLinkedKnockoutMatch(node)) return "linked_knockout_match";
+  if (hasExplicitManualAssignment(node.homeSource) || hasExplicitManualAssignment(node.awaySource)) return "manual_team_assignment";
+  return "unverified_team_assignment";
 }
 
-export function hasResolvedBracketPairing(node: KnockoutNodeForState, derivedSources: DerivedQualificationSource[] = []) {
-  return classifyKnockoutNodeState(node, derivedSources) === "materialized_pairing";
-}
-
-export function hasMaterializedKnockoutFixtures(matches: KnockoutMatchForState[]) {
-  return matches.length > 0;
-}
-
-export function inspectKnockoutTemplateSwitchState(input: {
-  derivedSources?: DerivedQualificationSource[];
-  matches: KnockoutMatchForState[];
-  nodes: KnockoutNodeForState[];
-}): KnockoutTemplateSwitchDiagnostic {
-  const nodeDiagnostics = input.nodes.map((node) => {
-    const topologyOnly = isTopologyOnlyNode(node, input.derivedSources);
-    const resolvedPairing = hasResolvedBracketPairing(node, input.derivedSources);
-    if (node.linkedMatchId) {
-      return { blocking: true, code: "linked_match" as const, node, reason: "มีคู่แข่งขันรอบน็อกเอาต์ที่เชื่อมอยู่แล้ว", resettable: false, resolvedPairing, topologyOnly };
-    }
-    if (hasResolvedBracketPairing(node, input.derivedSources)) {
-      return { blocking: true, code: "team_assigned" as const, node, reason: "มีทีมถูกจัดลงสายแล้ว", resettable: false, resolvedPairing, topologyOnly };
-    }
-    return { blocking: false, code: null, node, reason: null, resettable: true, resolvedPairing, topologyOnly };
-  });
-  const fixtures = input.matches.map((match) => {
-    const result = match.status === "finished" || Boolean(match.winnerTeamId);
-    return result
-      ? { code: "fixture_result" as const, match, reason: "มีผลการแข่งขันรอบน็อกเอาต์แล้ว" }
-      : { code: "fixture_created" as const, match, reason: "สร้างโปรแกรมรอบน็อกเอาต์แล้ว" };
-  });
-  const blockingNodes = nodeDiagnostics.filter((entry): entry is Extract<typeof entry, { code: "linked_match" | "team_assigned" }> => entry.blocking);
-
-  if (fixtures.some((entry) => entry.code === "fixture_result")) {
-    return { allowed: false, blockingNodes, code: "fixture_result", fixtures, nodeDiagnostics, reason: "เปลี่ยนไม่ได้ เพราะมีผลการแข่งขันรอบน็อกเอาต์แล้ว", resettableNodes: nodeDiagnostics.filter((entry) => entry.resettable).map((entry) => entry.node) };
-  }
-  if (hasMaterializedKnockoutFixtures(input.matches)) {
-    return { allowed: false, blockingNodes, code: "fixture_created", fixtures, nodeDiagnostics, reason: "เปลี่ยนไม่ได้ เพราะสร้างโปรแกรมรอบน็อกเอาต์แล้ว", resettableNodes: nodeDiagnostics.filter((entry) => entry.resettable).map((entry) => entry.node) };
-  }
-  if (blockingNodes[0]?.code === "linked_match") {
-    return { allowed: false, blockingNodes, code: "linked_match", fixtures, nodeDiagnostics, reason: "เปลี่ยนไม่ได้ เพราะมีคู่แข่งขันรอบน็อกเอาต์ที่เชื่อมอยู่แล้ว", resettableNodes: nodeDiagnostics.filter((entry) => entry.resettable).map((entry) => entry.node) };
-  }
-  if (blockingNodes[0]?.code === "team_assigned") {
-    return { allowed: false, blockingNodes, code: "team_assigned", fixtures, nodeDiagnostics, reason: "เปลี่ยนไม่ได้ เพราะมีทีมถูกจัดลงสายแล้ว", resettableNodes: nodeDiagnostics.filter((entry) => entry.resettable).map((entry) => entry.node) };
-  }
-  return { allowed: true, blockingNodes, code: "allowed", fixtures, nodeDiagnostics, resettableNodes: nodeDiagnostics.map((entry) => entry.node) };
+function messageForReason(reasonCode: KnockoutTemplateSwitchReasonCode) {
+  if (reasonCode === "knockout_result_exists") return "เปลี่ยนไม่ได้ เพราะมีผลการแข่งขันรอบน็อกเอาต์แล้ว";
+  if (reasonCode === "linked_knockout_match") return "เปลี่ยนไม่ได้ เพราะสร้างโปรแกรมรอบน็อกเอาต์แล้ว";
+  if (reasonCode === "manual_team_assignment") return "เปลี่ยนไม่ได้ เพราะมีทีมที่ผู้ดูแลจัดลงสายแล้ว";
+  if (reasonCode === "unverified_team_assignment") return "เปลี่ยนไม่ได้ เพราะพบทีมในโครงสร้างที่ไม่สามารถยืนยันแหล่งที่มาได้";
+  return "เปลี่ยนรูปแบบการแข่งขันได้ เพราะยังมีเพียงโครงร่างหรือข้อมูลร่าง";
 }
 
 export function getKnockoutTemplateSwitchGuard(input: {
-  derivedSources?: DerivedQualificationSource[];
   matches: KnockoutMatchForState[];
   nodes: KnockoutNodeForState[];
+  qualificationSnapshot?: QualificationSnapshotSource[];
 }): KnockoutTemplateSwitchGuard {
-  const { allowed, code, reason } = inspectKnockoutTemplateSwitchState(input);
-  return { allowed, code, reason };
+  const context: KnockoutStateContext = { matches: input.matches, qualificationSnapshot: input.qualificationSnapshot };
+  const nodeStates = input.nodes.map((node, index) => {
+    const state = classifyKnockoutNodeState(node, context);
+    return { nodeId: node.id ?? `node-${index}`, reasonCode: nodeReasonCode(node, state), state };
+  });
+  const blockingNodeIds = nodeStates.filter((entry) => entry.state === "materialized" || entry.state === "played").map((entry) => entry.nodeId);
+  const resettableNodeIds = nodeStates.filter((entry) => entry.state === "draft" || entry.state === "resolved_draft").map((entry) => entry.nodeId);
+  const hasPlayedResult = input.matches.some(hasPlayedKnockoutResult) || nodeStates.some((entry) => entry.state === "played");
+  const hasFixture = input.matches.length > 0;
+  const firstBlockingNode = nodeStates.find((entry) => entry.state === "materialized");
+  const reasonCode = hasPlayedResult
+    ? "knockout_result_exists"
+    : hasFixture || firstBlockingNode?.reasonCode === "linked_knockout_match"
+      ? "linked_knockout_match"
+      : firstBlockingNode?.reasonCode ?? "allowed_draft_only";
+
+  return {
+    allowed: reasonCode === "allowed_draft_only",
+    blockingNodeIds,
+    message: messageForReason(reasonCode),
+    nodeStates,
+    reasonCode,
+    resettableNodeIds,
+  };
+}
+
+/**
+ * Public visibility predicate. This deliberately does not share the Admin
+ * template-switch contract: a public bracket needs a visible pairing, not a
+ * decision about whether an Admin may reset a draft topology.
+ */
+export function hasResolvedBracketPairing(node: Pick<KnockoutNodeForState, "awaySource" | "homeSource" | "linkedMatchId">) {
+  return hasLinkedKnockoutMatch(node) || Boolean(node.homeSource.teamId && node.awaySource.teamId);
+}
+
+// Generator persistence invariant: topology sources never persist a direct team id.
+export function topologySourceTeamId(type: string | null | undefined, teamId: string | null | undefined) {
+  return type === "unassigned" || type === "group_rank" || type === "node_winner" ? null : teamId ?? null;
 }

@@ -31,7 +31,7 @@ import {
 } from "@/lib/competition-engine-v2-state";
 import { buildCompetitionTree, type CompetitionTreeEntryMode, type CompetitionTreeNode, type CompetitionTreeSource, type CompetitionTreeSummary } from "@/lib/competition-tree";
 import { buildKnockoutTemplatePreview, getKnockoutTemplate, listKnockoutTemplates, validateKnockoutTemplateSources } from "@/lib/knockout-templates/registry";
-import { classifyKnockoutNodeState, getKnockoutTemplateSwitchGuard, inspectKnockoutTemplateSwitchState } from "@/lib/knockout-template-switching";
+import { getKnockoutTemplateSwitchGuard } from "@/lib/knockout-template-switching";
 import type { KnockoutTemplateDiagram, KnockoutTemplateKey } from "@/lib/knockout-templates/types";
 import type { KswQualificationSource } from "@/lib/ksw-knockout-template";
 import { TeamLogo } from "@/components/team-logo";
@@ -82,11 +82,25 @@ function knockoutRoundTitle(label: string) {
 }
 
 function KnockoutStateDiagnostic({ matches, nodes, qualificationSnapshot, templateKey }: { matches: CompetitionKnockoutMatchV2[]; nodes: CompetitionTreeNode[]; qualificationSnapshot: CompetitionTreeSource[]; templateKey: KnockoutTemplateKey | null }) {
-  const diagnostic = inspectKnockoutTemplateSwitchState({
-    derivedSources: qualificationSnapshot,
+  const guard = getKnockoutTemplateSwitchGuard({
     matches: matches.map((match) => ({ awayScore: match.away_score, awayTeamId: match.away_team_id, homeScore: match.home_score, homeTeamId: match.home_team_id, id: match.id, status: match.status, winnerTeamId: match.winner_team_id })),
     nodes,
+    qualificationSnapshot,
   });
+  const nodeStates = new Map(guard.nodeStates.map((entry) => [entry.nodeId, entry]));
+  const diagnostic = {
+    allowed: guard.allowed,
+    blockingNodes: guard.blockingNodeIds,
+    code: guard.reasonCode,
+    fixtures: matches.map((match) => ({ code: match.status === "finished" || match.winner_team_id ? "knockout_result_exists" : "linked_knockout_match", match: { awayScore: match.away_score, awayTeamId: match.away_team_id, homeScore: match.home_score, homeTeamId: match.home_team_id, id: match.id, status: match.status, winnerTeamId: match.winner_team_id }, reason: match.status === "finished" || match.winner_team_id ? "มีผลการแข่งขันรอบน็อกเอาต์แล้ว" : "สร้างโปรแกรมรอบน็อกเอาต์แล้ว" })),
+    nodeDiagnostics: nodes.map((node) => {
+      const state = nodeStates.get(node.id)?.state ?? "draft";
+      const blocking = state === "materialized" || state === "played";
+      return { blocking, code: nodeStates.get(node.id)?.reasonCode ?? null, node, reason: nodeStates.get(node.id)?.reasonCode ?? null, resettable: guard.resettableNodeIds.includes(node.id), resolvedPairing: blocking, topologyOnly: state === "draft" };
+    }),
+    reason: guard.message,
+    resettableNodes: guard.resettableNodeIds,
+  };
   const linkedNodeIds = new Map(nodes.filter((node) => node.linkedMatchId).map((node) => [node.linkedMatchId, node.id]));
   const matchesById = new Map(matches.map((match) => [match.id, match]));
   const linkedMatchCount = nodes.filter((node) => node.linkedMatchId).length;
@@ -109,7 +123,7 @@ function KnockoutStateDiagnostic({ matches, nodes, qualificationSnapshot, templa
           <p className="font-black text-[#061426]">Bracket nodes</p>
           {diagnostic.nodeDiagnostics.length ? diagnostic.nodeDiagnostics.map(({ blocking, code, node, reason, resettable, resolvedPairing, topologyOnly }) => {
             const linkedMatch = node.linkedMatchId ? matchesById.get(node.linkedMatchId) : undefined;
-            const classification = linkedMatch?.status === "finished" || linkedMatch?.winner_team_id ? "played" : classifyKnockoutNodeState(node, qualificationSnapshot);
+            const classification = nodeStates.get(node.id)?.state ?? "draft";
             return <article className={blocking ? "min-w-0 rounded border border-red-300 bg-red-50 p-3 text-red-950" : resettable ? "min-w-0 rounded border border-emerald-200 bg-emerald-50/60 p-3 text-emerald-950" : "min-w-0 rounded border border-slate-200 bg-white p-3"} key={node.id}>
               <div className="flex flex-wrap items-start justify-between gap-2"><p className="break-all font-mono font-bold">node id: {node.id}</p><span className={blocking ? "rounded border border-red-300 bg-white px-2 py-0.5 font-black text-red-800" : "rounded border border-emerald-300 bg-white px-2 py-0.5 font-black text-emerald-800"}>{blocking ? "BLOCKING" : "ALLOW"}</span></div>
               <dl className="mt-2 grid gap-x-4 gap-y-1 break-words sm:grid-cols-2"><div><dt className="font-bold opacity-70">Round</dt><dd>{node.roundLabel} · index {node.roundIndex}</dd></div><div><dt className="font-bold opacity-70">Match order / position</dt><dd>{node.matchOrder} / {node.bracketPosition}</dd></div><div><dt className="font-bold opacity-70">Home source</dt><dd>{sourceText(node.homeSource)}</dd></div><div><dt className="font-bold opacity-70">Away source</dt><dd>{sourceText(node.awaySource)}</dd></div><div><dt className="font-bold opacity-70">Linked match</dt><dd className="break-all font-mono">{node.linkedMatchId ?? "—"}</dd></div><div><dt className="font-bold opacity-70">Classification</dt><dd className="font-black">{classification}</dd></div><div><dt className="font-bold opacity-70">Guard flags</dt><dd>topologyOnly={String(topologyOnly)} · resolvedPairing={String(resolvedPairing)} · resettable={String(resettable)}</dd></div><div><dt className="font-bold opacity-70">Block reason</dt><dd>{reason ?? "—"}{code ? ` (${code})` : ""}</dd></div></dl>
@@ -571,9 +585,9 @@ export function AdminCompetitionTreeEngineV2({
     [localNodeLinks, nodes],
   );
   const templateSwitchGuard = getKnockoutTemplateSwitchGuard({
-    derivedSources: qualificationSnapshot,
     matches: visibleKnockoutMatches.map((match) => ({ status: match.status, winnerTeamId: match.winner_team_id })),
     nodes: effectiveNodes,
+    qualificationSnapshot,
   });
   const knockoutRounds = useMemo<KnockoutRoundView[]>(() => {
     const matchesById = new Map(visibleKnockoutMatches.map((match) => [match.id, match]));
@@ -743,7 +757,7 @@ export function AdminCompetitionTreeEngineV2({
 
   function openTemplateSelection() {
     if (!templateSwitchGuard.allowed) {
-      setError(templateSwitchGuard.reason ?? "เปลี่ยนรูปแบบการแข่งขันไม่ได้");
+      setError(templateSwitchGuard.message);
       return;
     }
     if (!window.confirm("เปลี่ยนรูปแบบการแข่งขัน? โครงร่างรอบน็อกเอาต์ที่ยังไม่มีคู่แข่งขันจะถูกล้างเมื่อยืนยันรูปแบบใหม่")) return;
