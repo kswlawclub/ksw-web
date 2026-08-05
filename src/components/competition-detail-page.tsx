@@ -456,7 +456,7 @@ function TournamentOverview({
   );
 }
 
-function TournamentJourneyCard({ chronicle = false, match }: { chronicle?: boolean; match: Row }) {
+function TournamentJourneyCard({ chronicle = false, highlightKsw = false, match }: { chronicle?: boolean; highlightKsw?: boolean; match: Row }) {
   const matchDate = match.match_date ?? match.date ?? match.kickoff_at;
   const homeName = text(match, ["home_team_name"], "Home team unavailable");
   const awayName = text(match, ["away_team_name"], "Away team unavailable");
@@ -467,7 +467,7 @@ function TournamentJourneyCard({ chronicle = false, match }: { chronicle?: boole
   const status = text(match, ["status"], "");
 
   return (
-    <article className={chronicle ? "rounded-lg border border-slate-200 bg-white px-3 py-3 shadow-none" : "rounded-xl border border-[#d8ad45]/30 bg-white p-4 shadow-lg shadow-slate-900/5"}>
+    <article className={chronicle ? `rounded-lg border px-3 py-3 shadow-none ${highlightKsw && (isKswMatchByFlag(match) || isKswMatch(match)) ? "border-[#d8ad45]/55 bg-[#fffaf0]" : "border-slate-200 bg-white"}` : "rounded-xl border border-[#d8ad45]/30 bg-white p-4 shadow-lg shadow-slate-900/5"}>
       <div className={chronicle ? "mb-2 flex flex-wrap items-center justify-end gap-2" : "mb-3 flex flex-wrap items-center justify-between gap-2"}>
         {!chronicle ? <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
           {formatDateTime(matchDate) || "รอกำหนดวันและเวลา"}
@@ -650,8 +650,26 @@ function TournamentTeams({ teams }: { teams: Row[] }) {
   );
 }
 
-function PublicCupGroupStandings({ standings }: { standings: CupGroupStanding[] }) {
+function PublicCupGroupStandings({ matches, standings }: { matches: Row[]; standings: CupGroupStanding[] }) {
   const visibleStandings = standings.filter((group) => group.team_count > 0);
+  const matchesByGroup = new Map<string, Row[]>();
+  matches.forEach((match) => {
+    const groupId = text(match, ["group_id"], "");
+    if (!groupId) return;
+    matchesByGroup.set(groupId, [...(matchesByGroup.get(groupId) ?? []), match]);
+  });
+
+  function groupMatchSort(left: Row, right: Row) {
+    const leftDate = text(left, ["match_date", "date", "kickoff_at"], "");
+    const rightDate = text(right, ["match_date", "date", "kickoff_at"], "");
+    const leftTime = leftDate ? new Date(leftDate).getTime() : Number.NaN;
+    const rightTime = rightDate ? new Date(rightDate).getTime() : Number.NaN;
+    const leftValid = Number.isFinite(leftTime);
+    const rightValid = Number.isFinite(rightTime);
+    if (leftValid && rightValid && leftTime !== rightTime) return leftTime - rightTime;
+    if (leftValid !== rightValid) return leftValid ? -1 : 1;
+    return text(left, ["id"], "").localeCompare(text(right, ["id"], ""));
+  }
 
   if (!visibleStandings.length) {
     return (
@@ -677,73 +695,35 @@ function PublicCupGroupStandings({ standings }: { standings: CupGroupStanding[] 
             Tables are calculated from finished group-stage matches only.
           </p>
         </div>
-        <div className="grid gap-3 bg-slate-100 px-4 py-5 sm:px-6">
-          {visibleStandings.map((group, index) => (
-            <details
-              className="overflow-hidden rounded-xl border border-slate-200 bg-white"
-              key={group.group_id}
-              open={index === 0 || !group.is_complete}
-            >
-              <summary className="cursor-pointer list-none px-4 py-4 hover:bg-[#fffaf0]">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="grid gap-4 bg-slate-100 px-4 py-5 sm:px-6">
+          {visibleStandings.map((group, index) => {
+            const groupMatches = [...(matchesByGroup.get(group.group_id) ?? [])].sort(groupMatchSort);
+            return (
+              <article className="overflow-hidden rounded-xl border border-slate-200 bg-white" key={group.group_id}>
+                <header className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <h3 className="break-words text-lg font-black text-[#061426]">{group.group_label}</h3>
-                    <p className="mt-1 text-xs font-bold text-slate-500">
-                      {group.is_complete ? "แข่งครบแล้ว" : "สถานะชั่วคราว"} · {group.finished_matches}/{group.total_required_matches} results
-                    </p>
+                    <p className="mt-1 text-xs font-bold text-slate-500">{group.is_complete ? "แข่งครบแล้ว" : "สถานะชั่วคราว"} · {group.finished_matches}/{group.total_required_matches} results</p>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <span className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                      <span className="block text-[9px] font-black uppercase tracking-[0.1em] text-slate-500">Teams</span>
-                      <span className="font-black">{group.team_count}</span>
-                    </span>
-                    <span className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                      <span className="block text-[9px] font-black uppercase tracking-[0.1em] text-slate-500">Qualify</span>
-                      <span className="font-black">{group.qualifiers_count}</span>
-                    </span>
-                    <span className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                      <span className="block text-[9px] font-black uppercase tracking-[0.1em] text-slate-500">Played</span>
-                      <span className="font-black">{group.finished_matches}</span>
-                    </span>
+                  <div className="grid shrink-0 grid-cols-3 gap-2 text-center">
+                    <span className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2"><span className="block text-[9px] font-black uppercase tracking-[0.1em] text-slate-500">Teams</span><span className="font-black">{group.team_count}</span></span>
+                    <span className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2"><span className="block text-[9px] font-black uppercase tracking-[0.1em] text-slate-500">Qualify</span><span className="font-black">{group.qualifiers_count}</span></span>
+                    <span className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2"><span className="block text-[9px] font-black uppercase tracking-[0.1em] text-slate-500">Played</span><span className="font-black">{group.finished_matches}</span></span>
                   </div>
+                </header>
+                <div className="overflow-x-auto border-b border-slate-100">
+                  <table className="w-full min-w-[660px] border-separate border-spacing-0 text-left text-xs">
+                    <thead className="bg-[#061426] text-white"><tr>{["#", "Team", "P", "W", "D", "L", "GF", "GA", "GD", "Pts", "Status"].map((label) => <th className="px-3 py-2 font-black" key={label}>{label}</th>)}</tr></thead>
+                    <tbody>{group.rows.map((row) => <tr className={row.qualifies ? "bg-[#fff7e6]" : "bg-white"} key={row.team_id}><td className="border-b border-slate-100 px-3 py-2 font-black">{row.position}</td><td className="min-w-48 border-b border-slate-100 px-3 py-2 font-black"><span className="break-words">{row.team_name}</span>{row.tie_unresolved ? <span className="mt-1 block text-[10px] font-bold text-[#8a6418]">อันดับยังเสมอกัน</span> : null}</td>{[row.played, row.won, row.drawn, row.lost, row.goals_for, row.goals_against, row.goal_difference, row.points].map((value, valueIndex) => <td className="border-b border-slate-100 px-3 py-2 font-bold" key={valueIndex}>{value}</td>)}<td className="border-b border-slate-100 px-3 py-2">{row.qualifies ? <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">ผ่านเข้ารอบ</span> : null}</td></tr>)}</tbody>
+                  </table>
                 </div>
-              </summary>
-              <div className="overflow-x-auto border-t border-slate-100">
-                <table className="w-full min-w-[660px] border-separate border-spacing-0 text-left text-xs">
-                  <thead className="bg-[#061426] text-white">
-                    <tr>
-                      {["#", "Team", "P", "W", "D", "L", "GF", "GA", "GD", "Pts", "Status"].map((label) => (
-                        <th className="px-3 py-2 font-black" key={label}>{label}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {group.rows.map((row) => (
-                      <tr className={row.qualifies ? "bg-[#fff7e6]" : "bg-white"} key={row.team_id}>
-                        <td className="border-b border-slate-100 px-3 py-2 font-black">{row.position}</td>
-                        <td className="min-w-48 border-b border-slate-100 px-3 py-2 font-black">
-                          <span className="break-words">{row.team_name}</span>
-                          {row.tie_unresolved ? (
-                            <span className="mt-1 block text-[10px] font-bold text-[#8a6418]">อันดับยังเสมอกัน</span>
-                          ) : null}
-                        </td>
-                        {[row.played, row.won, row.drawn, row.lost, row.goals_for, row.goals_against, row.goal_difference, row.points].map((value, valueIndex) => (
-                          <td className="border-b border-slate-100 px-3 py-2 font-bold" key={valueIndex}>{value}</td>
-                        ))}
-                        <td className="border-b border-slate-100 px-3 py-2">
-                          {row.qualifies ? (
-                            <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">
-                              ผ่านเข้ารอบ
-                            </span>
-                          ) : null}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </details>
-          ))}
+                <div className="px-4 py-4" id={index === 0 ? "fixtures" : undefined}>
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a6418]">ผลการแข่งขันของ{group.group_label}</p>
+                  {groupMatches.length ? <div className="mt-3 grid gap-2" id={index === 0 ? "tournament-results" : undefined}>{groupMatches.map((match) => <TournamentJourneyCard chronicle highlightKsw key={text(match, ["id"])} match={match} />)}</div> : <p className="mt-3 text-sm font-semibold text-slate-500">ยังไม่มีโปรแกรมการแข่งขันของกลุ่มนี้</p>}
+                </div>
+              </article>
+            );
+          })}
         </div>
       </div>
     </section>
@@ -1245,12 +1225,12 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
               scheduledMatches={legacyScheduledMatches}
               teams={teams}
             />
-            <UpcomingFixtures matches={legacyScheduledMatches} />
+            {!isCup ? <UpcomingFixtures matches={legacyScheduledMatches} /> : null}
             <TournamentJourney matches={legacyKswJourney} />
-            {isCup ? <PublicCupGroupStandings standings={legacyCupGroupStandings} /> : null}
+            {isCup ? <PublicCupGroupStandings matches={canonicalCupGroupMatches} standings={legacyCupGroupStandings} /> : null}
             {kswStandardV2 ? <PublicKnockoutBracket data={kswStandardV2} seasonCompleted={false} /> : null}
             {councilV2 ? <PublicCouncilCupBrackets data={councilV2} seasonCompleted={false} /> : null}
-            {legacyMatches.length ? (
+            {!isCup && legacyMatches.length ? (
               <CompetitionResultsTable
                 isLeague={false}
                 matches={legacyMatches}
