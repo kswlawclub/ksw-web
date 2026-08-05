@@ -31,7 +31,7 @@ import {
 } from "@/lib/competition-engine-v2-state";
 import { buildCompetitionTree, type CompetitionTreeEntryMode, type CompetitionTreeNode, type CompetitionTreeSource, type CompetitionTreeSummary } from "@/lib/competition-tree";
 import { buildKnockoutTemplatePreview, getKnockoutTemplate, listKnockoutTemplates, validateKnockoutTemplateSources } from "@/lib/knockout-templates/registry";
-import { getKnockoutTemplateSwitchGuard } from "@/lib/knockout-template-switching";
+import { getKnockoutTemplateSwitchGuard, inspectKnockoutTemplateSwitchState } from "@/lib/knockout-template-switching";
 import type { KnockoutTemplateDiagram, KnockoutTemplateKey } from "@/lib/knockout-templates/types";
 import type { KswQualificationSource } from "@/lib/ksw-knockout-template";
 import { TeamLogo } from "@/components/team-logo";
@@ -79,6 +79,17 @@ function knockoutRoundTitle(label: string) {
   if (label === "Preliminary") return "รอบคัดเลือก";
   const roundOf = /^Round of (\d+)$/.exec(label);
   return roundOf ? `รอบ ${roundOf[1]} ทีม` : label;
+}
+
+function KnockoutStateDiagnostic({ matches, nodes, templateKey }: { matches: CompetitionKnockoutMatchV2[]; nodes: CompetitionTreeNode[]; templateKey: KnockoutTemplateKey | null }) {
+  const diagnostic = inspectKnockoutTemplateSwitchState({
+    matches: matches.map((match) => ({ awayScore: match.away_score, awayTeamId: match.away_team_id, homeScore: match.home_score, homeTeamId: match.home_team_id, id: match.id, status: match.status, winnerTeamId: match.winner_team_id })),
+    nodes,
+  });
+  const linkedNodeIds = new Map(nodes.filter((node) => node.linkedMatchId).map((node) => [node.linkedMatchId, node.id]));
+  const sourceText = (source: { groupId?: string | null; nodeId?: string | null; rank?: number | null; teamId?: string | null; type?: string | null }) => `type=${source.type ?? "—"} group=${source.groupId ?? "—"} rank=${source.rank ?? "—"} node=${source.nodeId ?? "—"} team=${source.teamId ?? "—"}`;
+
+  return <details className="mt-4 rounded-md border border-dashed border-slate-300 bg-slate-50/70 p-3 text-xs text-slate-700"><summary className="cursor-pointer font-black text-[#061426]">ตรวจสอบสถานะ Knockout</summary><div className="mt-3 grid gap-3"><dl className="grid gap-2 sm:grid-cols-3"><div><dt className="font-bold text-slate-500">Template</dt><dd className="mt-0.5 break-all font-mono">{templateKey ?? "—"}</dd></div><div><dt className="font-bold text-slate-500">Guard</dt><dd className="mt-0.5 font-black">{String(diagnostic.allowed)} · {diagnostic.code}</dd></div><div><dt className="font-bold text-slate-500">Reason</dt><dd className="mt-0.5 break-words">{diagnostic.reason ?? "—"}</dd></div><div><dt className="font-bold text-slate-500">Bracket nodes</dt><dd className="mt-0.5 font-black">{nodes.length}</dd></div><div><dt className="font-bold text-slate-500">Knockout fixtures</dt><dd className="mt-0.5 font-black">{matches.length}</dd></div><div><dt className="font-bold text-slate-500">Resettable / blocking</dt><dd className="mt-0.5 font-black">{diagnostic.resettableNodes.length} / {diagnostic.blockingNodes.length}</dd></div></dl><div className="grid gap-2"><p className="font-black text-[#061426]">Bracket nodes</p>{diagnostic.nodeDiagnostics.length ? diagnostic.nodeDiagnostics.map(({ blocking, code, node, reason, resettable, resolvedPairing, topologyOnly }) => <article className="min-w-0 rounded border border-slate-200 bg-white p-2" key={node.id}><p className="break-all font-mono font-bold">{node.id}</p><p className="mt-1">round={node.roundLabel} ({node.roundIndex}) · order={node.matchOrder} · position={node.bracketPosition} · linkedMatch={node.linkedMatchId ?? "—"}</p><p className="mt-1 break-words">home: {sourceText(node.homeSource)}</p><p className="break-words">away: {sourceText(node.awaySource)}</p><p className="mt-1 font-bold">topologyOnly={String(topologyOnly)} · resolvedPairing={String(resolvedPairing)} · resettable={String(resettable)} · blocking={String(blocking)}{code ? ` (${code})` : ""}{reason ? ` · ${reason}` : ""}</p></article>) : <p>ไม่มี bracket node</p>}</div><div className="grid gap-2"><p className="font-black text-[#061426]">Knockout fixtures</p>{diagnostic.fixtures.length ? diagnostic.fixtures.map(({ code, match, reason }) => <article className="min-w-0 rounded border border-slate-200 bg-white p-2" key={match.id}><p className="break-all font-mono font-bold">{match.id ?? "—"}</p><p className="mt-1">round node={linkedNodeIds.get(match.id) ?? "—"} · status={match.status ?? "—"} · code={code}</p><p>home={match.homeTeamId ?? "—"} away={match.awayTeamId ?? "—"} · score={match.homeScore ?? "—"}-{match.awayScore ?? "—"} · winner={match.winnerTeamId ?? "—"}</p><p className="mt-1 font-bold">{reason}</p></article>) : <p>ไม่มี knockout fixture</p>}</div></div></details>;
 }
 
 function dateValue(value: string | null) {
@@ -839,6 +850,7 @@ export function AdminCompetitionTreeEngineV2({
               <a className="inline-flex min-h-10 items-center rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-black text-[#061426]" href="#cup-workspace-nav">กลับเมนูลัด</a>
               {selectedTemplate === "ksw_standard" ? <button className="min-h-10 rounded-md border border-[#d8ad45] bg-white px-3 py-2 text-sm font-black text-[#8a6418]" onClick={openTemplateSelection} type="button">เปลี่ยนรูปแบบการแข่งขัน</button> : null}
             </div>
+            <KnockoutStateDiagnostic matches={visibleKnockoutMatches} nodes={effectiveNodes} templateKey={selectedTemplate} />
           </div>
           <span className="inline-flex w-fit shrink-0 rounded-full bg-[#fff7e6] px-3 py-2 text-sm font-black text-[#8a6418]">
             {statusLabel.th} / {statusLabel.en}
