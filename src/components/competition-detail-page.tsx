@@ -28,6 +28,7 @@ import {
   type CompetitionType,
 } from "@/lib/competition-format";
 import type { PublicCupV2Data } from "@/lib/public-cup-v2-types";
+import { derivePublicCouncilCupPresentationState, type PublicCouncilCupPresentation } from "@/lib/public-council-cup-presentation";
 import type { PublicCompetitionGroupData } from "@/lib/public-competition-group-loader";
 import {
   buildPublicCupArchive,
@@ -395,7 +396,7 @@ function HeroCover({ competition, completed }: { competition: Row; completed: bo
   );
 }
 
-function ActiveCouncilHero({ competition, cupV2, teams }: { competition: Row; cupV2: PublicCupV2Data; teams: Row[] }) {
+function ActiveCouncilHero({ competition, cupV2, presentation, teams }: { competition: Row; cupV2: PublicCupV2Data; presentation: PublicCouncilCupPresentation; teams: Row[] }) {
   const coverImageUrl = text(competition, ["cover_image_url"], "");
   const matches = cupV2.linkedMatches;
   const finishedMatches = matches.filter((match) => ["finished", "completed"].includes(match.status)).length;
@@ -403,6 +404,7 @@ function ActiveCouncilHero({ competition, cupV2, teams }: { competition: Row; cu
   const totalTeams = teams.length || cupV2.teams.length;
   const progress = matches.length ? Math.round((finishedMatches / matches.length) * 100) : 0;
   const tournamentMetadata = [dateRange(competition), text(competition, ["location"], "")].filter(Boolean);
+  const awaitingCompletion = presentation.state === "awaiting_completion";
 
   return (
     <section className="relative isolate overflow-hidden border-b border-[#d8ad45]/30 bg-[#061426] text-white" id="overview">
@@ -410,15 +412,16 @@ function ActiveCouncilHero({ competition, cupV2, teams }: { competition: Row; cu
       <div className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgba(6,20,38,0.98),rgba(6,20,38,0.82),rgba(6,20,38,0.9)),radial-gradient(circle_at_85%_10%,rgba(216,173,69,0.24),transparent_28%)]" />
       <div className="mx-auto grid w-full max-w-7xl gap-8 px-4 py-10 sm:px-6 sm:py-12 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.68fr)] lg:px-10">
         <div className="min-w-0">
-          <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.22em] text-[#f4d58a]"><CircleDot aria-hidden="true" className="size-4 shrink-0" />Council Cup · Live Tournament Center</p>
+          <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.22em] text-[#f4d58a]"><CircleDot aria-hidden="true" className="size-4 shrink-0" />Council Cup · {awaitingCompletion ? "Results Confirmed" : "Live Tournament Center"}</p>
           <h1 className="mt-4 max-w-4xl break-words text-4xl font-black leading-tight sm:text-5xl lg:text-6xl">{text(competition, ["name"], "Competition")}</h1>
-          <div className="mt-5 flex flex-wrap gap-2"><span className="rounded-full border border-[#d8ad45]/45 bg-[#d8ad45]/15 px-3 py-1.5 text-xs font-black uppercase tracking-[0.14em] text-[#f4d58a]">ACTIVE</span>{tournamentMetadata.map((item) => <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-bold text-slate-100" key={item}>{item}</span>)}</div>
+          <div className="mt-5 flex flex-wrap gap-2"><span className="rounded-full border border-[#d8ad45]/45 bg-[#d8ad45]/15 px-3 py-1.5 text-xs font-black uppercase tracking-[0.14em] text-[#f4d58a]">{awaitingCompletion ? "RESULTS CONFIRMED" : "ACTIVE"}</span>{tournamentMetadata.map((item) => <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-bold text-slate-100" key={item}>{item}</span>)}</div>
+          {awaitingCompletion ? <p className="mt-4 max-w-2xl text-base font-bold leading-7 text-[#f4d58a]">ผลการแข่งขันครบแล้ว · รอผู้ดูแลยืนยันปิดการแข่งขัน</p> : null}
           {text(competition, ["short_description"], "") ? <p className="mt-5 max-w-2xl text-base leading-7 text-slate-200">{text(competition, ["short_description"], "")}</p> : null}
-          <div className="mt-7 flex flex-wrap gap-3"><Link className="inline-flex items-center justify-center gap-2 rounded-md bg-[#d8ad45] px-4 py-3 text-sm font-black text-[#061426] shadow-sm shadow-black/30 transition-colors hover:bg-[#f4d58a]" href="#current-matches"><Swords aria-hidden="true" className="size-4 shrink-0" />ดูแมตช์ปัจจุบัน</Link><Link className="inline-flex items-center justify-center gap-2 rounded-md border border-white/20 bg-white/5 px-4 py-3 text-sm font-black text-white transition-colors hover:bg-white/10" href="#bracket-timeline"><CalendarDays aria-hidden="true" className="size-4 shrink-0" />เส้นทางการแข่งขัน</Link></div>
+          <div className="mt-7 flex flex-wrap gap-3"><Link className="inline-flex items-center justify-center gap-2 rounded-md bg-[#d8ad45] px-4 py-3 text-sm font-black text-[#061426] shadow-sm shadow-black/30 transition-colors hover:bg-[#f4d58a]" href={awaitingCompletion ? "#winner-summary" : "#current-matches"}><Swords aria-hidden="true" className="size-4 shrink-0" />{awaitingCompletion ? "ดูผู้ชนะการแข่งขัน" : "ดูแมตช์ปัจจุบัน"}</Link><Link className="inline-flex items-center justify-center gap-2 rounded-md border border-white/20 bg-white/5 px-4 py-3 text-sm font-black text-white transition-colors hover:bg-white/10" href="#bracket-timeline"><CalendarDays aria-hidden="true" className="size-4 shrink-0" />เส้นทางการแข่งขัน</Link></div>
         </div>
         <aside className="self-end rounded-xl border border-white/15 bg-white/10 p-4 shadow-xl shadow-black/20 backdrop-blur-sm sm:p-5">
           <div className="grid grid-cols-2 gap-3"><div className="rounded-lg border border-white/10 bg-[#061426]/40 p-3"><p className="text-xs font-bold text-slate-300">แข่งขันแล้ว</p><p className="mt-1 text-2xl font-black text-white">{finishedMatches}</p></div><div className="rounded-lg border border-white/10 bg-[#061426]/40 p-3"><p className="text-xs font-bold text-slate-300">เหลือ</p><p className="mt-1 text-2xl font-black text-white">{scheduledMatches}</p></div><div className="rounded-lg border border-white/10 bg-[#061426]/40 p-3"><p className="text-xs font-bold text-slate-300">จำนวนทีม</p><p className="mt-1 text-2xl font-black text-white">{totalTeams}</p></div><div className="rounded-lg border border-white/10 bg-[#061426]/40 p-3"><p className="text-xs font-bold text-slate-300">จำนวนแมตช์</p><p className="mt-1 text-2xl font-black text-white">{matches.length}</p></div></div>
-          <div className="mt-5"><div className="flex items-center justify-between text-xs font-bold text-slate-200"><span>ความคืบหน้าทัวร์นาเมนต์</span><span>{progress}%</span></div><div aria-label={`ความคืบหน้าทัวร์นาเมนต์ ${progress}%`} className="mt-2 h-2.5 overflow-hidden rounded-full bg-white/15" role="progressbar" aria-valuemax={100} aria-valuemin={0} aria-valuenow={progress}><div className="h-full rounded-full bg-[#d8ad45]" style={{ width: `${progress}%` }} /></div></div>
+          <div className="mt-5"><div className="flex items-center justify-between text-xs font-bold text-slate-200"><span>ความคืบหน้าทัวร์นาเมนต์</span><span>{awaitingCompletion ? 100 : progress}%</span></div><div aria-label={`ความคืบหน้าทัวร์นาเมนต์ ${awaitingCompletion ? 100 : progress}%`} className="mt-2 h-2.5 overflow-hidden rounded-full bg-white/15" role="progressbar" aria-valuemax={100} aria-valuemin={0} aria-valuenow={awaitingCompletion ? 100 : progress}><div className="h-full rounded-full bg-[#d8ad45]" style={{ width: `${awaitingCompletion ? 100 : progress}%` }} /></div></div>
         </aside>
       </div>
     </section>
@@ -1151,6 +1154,7 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
   const completedLeague = isLeague && seasonStatus === "completed";
   const kswStandardV2 = publicCupV2?.templateKey === "ksw_standard" ? publicCupV2 : null;
   const councilV2 = publicCupV2?.templateKey === "council_two_division" ? publicCupV2 : null;
+  const councilPresentation = councilV2 ? derivePublicCouncilCupPresentationState({ data: councilV2, seasonStatus }) : null;
   const cupV2 = kswStandardV2 ?? councilV2;
   const knockoutMatchIds = new Set(cupV2?.linkedMatches.map((match) => match.id) ?? []);
   const legacyMatches = cupV2 ? matches.filter((match) => !knockoutMatchIds.has(text(match, ["id"]))) : matches;
@@ -1197,8 +1201,8 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
     if (councilV2 && !completedTournament) {
       return (
         <main className="min-h-screen overflow-x-hidden bg-slate-100 text-[#061426]">
-          <ActiveCouncilHero competition={competition} cupV2={councilV2} teams={teams} />
-          <PublicCouncilCupLiveCenter data={councilV2} />
+          <ActiveCouncilHero competition={competition} cupV2={councilV2} presentation={councilPresentation!} teams={teams} />
+          <PublicCouncilCupLiveCenter data={councilV2} presentation={councilPresentation!} />
           <TournamentJourney matches={legacyKswJourney} />
           <PublicCupGroupStandings collapsible matches={canonicalCupGroupMatches} standings={legacyCupGroupStandings} />
           <ActiveTournamentStatistics cupV2={councilV2} teams={teams} />
