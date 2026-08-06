@@ -4,6 +4,7 @@ import {
   groupPublicCupV2Rounds,
   isPublicCupKswMatch,
   publicCupV2ScoreLabel,
+  publicCupV2SourcePresentation,
   publicCupV2SourceLabel,
 } from "@/lib/public-cup-v2-bracket";
 import type { PublicCupV2Data, PublicCupV2Node, PublicCupV2Team } from "@/lib/public-cup-v2-types";
@@ -63,7 +64,7 @@ function MatchTeamRow({ align, team, winner }: { align: "left" | "right"; team: 
   );
 }
 
-function PublicKnockoutMatchCard({ chronicle = false, compact, liveCenter = false, node }: { chronicle?: boolean; compact: boolean; liveCenter?: boolean; node: PublicCupV2Node }) {
+function PublicKnockoutMatchCard({ chronicle = false, compact, liveCenter = false, node, placeholder = false, sourceLabels }: { chronicle?: boolean; compact: boolean; liveCenter?: boolean; node: PublicCupV2Node; placeholder?: boolean; sourceLabels?: { away: string; home: string } }) {
   const match = node.linkedMatch;
   const home = match?.homeTeam ?? node.homeSource.team;
   const away = match?.awayTeam ?? node.awaySource.team;
@@ -75,7 +76,7 @@ function PublicKnockoutMatchCard({ chronicle = false, compact, liveCenter = fals
   const isLive = match?.status === "active";
 
   return (
-    <article className={`min-w-0 border ${chronicle ? "rounded-md px-3 py-3 shadow-none" : `rounded-lg shadow-sm ${compact ? "p-2.5" : "p-3"}`} ${liveCenter && finished ? "border-emerald-200 bg-emerald-50/40" : liveCenter && isLive ? "border-[#d8ad45]/70 bg-[#fffaf0] shadow-[#d8ad45]/15" : isKswMatch ? "border-[#d8ad45]/80 bg-[#fffaf0] shadow-[#d8ad45]/15" : "border-slate-200 bg-white"}`}>
+    <article className={`min-w-0 border ${placeholder ? "rounded-lg border-dashed border-slate-300 bg-slate-50 shadow-none" : chronicle ? "rounded-md px-3 py-3 shadow-none" : `rounded-lg shadow-sm ${compact ? "p-2.5" : "p-3"}`} ${placeholder ? "" : liveCenter && finished ? "border-emerald-200 bg-emerald-50/40" : liveCenter && isLive ? "border-[#d8ad45]/70 bg-[#fffaf0] shadow-[#d8ad45]/15" : isKswMatch ? "border-[#d8ad45]/80 bg-[#fffaf0] shadow-[#d8ad45]/15" : "border-slate-200 bg-white"}`}>
       {isKswMatch ? <span className={`mb-2 inline-flex rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-[#8a6418] ${chronicle ? "bg-[#fff7df]" : "bg-[#fff0c8]"}`}>KSW Match</span> : null}
       {liveCenter && match ? <div className="mb-2 flex justify-end"><span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] ${finished ? "bg-emerald-100 text-emerald-800" : isLive ? "bg-[#fff0c8] text-[#8a6418]" : "bg-slate-100 text-slate-600"}`}>{finished ? "FT" : isLive ? "LIVE" : "Scheduled"}</span></div> : null}
       <div className={`grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center ${chronicle ? "gap-3" : "gap-2"}`}>
@@ -85,13 +86,13 @@ function PublicKnockoutMatchCard({ chronicle = false, compact, liveCenter = fals
         </span>
         <MatchTeamRow align="right" team={away} winner={awayWinner} />
       </div>
-      {waitingForTeam ? <p className="mt-1.5 text-xs font-bold text-slate-500">{publicCupV2SourceLabel(node.homeSource)} · {publicCupV2SourceLabel(node.awaySource)}</p> : null}
+      {waitingForTeam || placeholder ? <p className="mt-1.5 text-xs font-bold text-slate-500">{sourceLabels?.home ?? publicCupV2SourceLabel(node.homeSource)} · {sourceLabels?.away ?? publicCupV2SourceLabel(node.awaySource)}</p> : null}
       {match ? (
         <div className={`flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-500 ${chronicle ? "mt-2 border-t border-slate-100 pt-2" : "mt-1.5"}`}>
           <span className="flex min-w-0 items-center gap-1.5">{chronicle ? <CalendarDays aria-hidden="true" className="size-3.5 shrink-0" /> : null}{formatDateTime(match.matchDate)}{match.venue ? <><span aria-hidden="true">·</span>{chronicle ? <MapPin aria-hidden="true" className="size-3.5 shrink-0" /> : null}{match.venue}</> : null}</span>
           <span className={finished ? "font-black text-emerald-700" : "font-black text-[#8a6418]"}>{finished ? "จบการแข่งขัน" : "รอแข่งขัน"}</span>
         </div>
-      ) : null}
+      ) : placeholder ? <div className="mt-2 flex justify-end"><span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-black text-slate-600">{node.homeSource.team && node.awaySource.team ? "รอประกาศโปรแกรม" : "รอผลการแข่งขัน"}</span></div> : null}
       {match?.winner ? <p className="mt-1.5 flex items-center gap-1.5 text-xs font-black text-emerald-700">{chronicle || liveCenter ? <Trophy aria-hidden="true" className="size-3.5 shrink-0" /> : null}ผู้ชนะ: {match.winner.name}</p> : null}
     </article>
   );
@@ -309,7 +310,17 @@ export function PublicKnockoutBracket({
   theme?: BracketTheme;
   title?: string;
 }) {
-  const rounds = groupPublicCupV2Rounds(data.nodes, partitionKey);
+  const resolvedRounds = groupPublicCupV2Rounds(data.nodes, partitionKey);
+  const resolvedByIndex = new Map(resolvedRounds.map((round) => [round.roundIndex, round]));
+  const topologyRounds = Array.from(new Map(data.nodes.filter((node) => node.partitionKey === partitionKey).map((node) => [node.roundIndex, [] as PublicCupV2Node[]])).entries())
+    .map(([roundIndex]) => {
+      const nodes = data.nodes.filter((node) => node.partitionKey === partitionKey && node.roundIndex === roundIndex).sort((left, right) => left.matchOrder - right.matchOrder);
+      const resolved = resolvedByIndex.get(roundIndex);
+      const finishedCount = nodes.filter((node) => isFinishedMatch(node.linkedMatch)).length;
+      return { completed: nodes.length > 0 && finishedCount === nodes.length, current: resolved?.current ?? false, finishedCount, nodes, roundIndex, roundLabel: nodes[0]?.roundLabel ?? `Round ${roundIndex + 1}` };
+    })
+    .sort((left, right) => left.roundIndex - right.roundIndex);
+  const rounds = seasonCompleted ? resolvedRounds : topologyRounds;
   if (!rounds.length) return null;
   const partition = data.partitions.find((entry) => entry.key === partitionKey);
   const champion = partition?.champion ?? null;
@@ -369,7 +380,6 @@ function CouncilDivisionBracket({ data, localized, partitionKey, seasonCompleted
   const partition = data.partitions.find((entry) => entry.key === partitionKey);
   const champion = partition?.champion ?? null;
   const palette = themes[theme];
-  const finalRoundIndex = rounds[rounds.length - 1]?.roundIndex;
   const waitingMessage = partition?.status === "reviewed"
     ? "ยังไม่มีโปรแกรมรอบน็อกเอาต์"
     : "รอจัดสายการแข่งขัน";
@@ -395,7 +405,7 @@ function CouncilDivisionBracket({ data, localized, partitionKey, seasonCompleted
         ) : null}
         {rounds.length ? <div className="grid gap-2.5 bg-slate-100/80 p-2.5 sm:p-3">
           {rounds.map((round) => (
-            <details className="group overflow-hidden rounded-md border border-slate-200 bg-white" key={round.roundIndex} open={seasonCompleted ? round.roundIndex === finalRoundIndex : round.current}>
+            <details className="group overflow-hidden rounded-md border border-slate-200 bg-white" key={round.roundIndex} open>
               <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-4 py-3 hover:bg-[#fffaf0]">
                 <div className="flex min-w-0 items-center gap-2">
                   <ChevronDown aria-hidden="true" className="size-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
@@ -404,7 +414,7 @@ function CouncilDivisionBracket({ data, localized, partitionKey, seasonCompleted
                 <span className="text-xs font-bold text-slate-500">{seasonCompleted || round.completed ? `จบแล้ว ${round.finishedCount}/${round.nodes.length} คู่` : round.current ? "กำลังแข่งขัน" : "รอผลรอบก่อน"}</span>
               </summary>
               <div className="grid gap-2 border-t border-slate-100 bg-[#fffdf8] p-3">
-                {round.nodes.map((node) => <PublicKnockoutMatchCard chronicle compact key={node.id} node={node} />)}
+                {round.nodes.map((node) => <PublicKnockoutMatchCard chronicle compact key={node.id} node={node} placeholder={!seasonCompleted && !node.linkedMatch} sourceLabels={{ away: publicCupV2SourcePresentation(node.awaySource, data.nodes), home: publicCupV2SourcePresentation(node.homeSource, data.nodes) }} />)}
               </div>
             </details>
           ))}

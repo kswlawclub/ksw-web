@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { groupPublicCupV2Rounds, isPublicCupKswMatch, publicCupV2ScoreLabel, publicCupV2SourceLabel } from "./public-cup-v2-bracket.ts";
+import { groupPublicCupV2Rounds, isPublicCupKswMatch, publicCupV2ScoreLabel, publicCupV2SourceLabel, publicCupV2SourcePresentation } from "./public-cup-v2-bracket.ts";
 import type { PublicCupV2Node } from "./public-cup-v2-types.ts";
 
 function node(input: Partial<PublicCupV2Node>): PublicCupV2Node {
@@ -48,6 +48,22 @@ test("keeps unresolved nodes locked and renders normal and penalty scores", () =
   assert.equal(publicCupV2SourceLabel(unresolved.homeSource), "รอผู้ชนะจากคู่ก่อนหน้า");
   assert.equal(publicCupV2ScoreLabel(unresolved), "VS");
   assert.equal(publicCupV2ScoreLabel(node({ linkedMatch: { awayPenaltyScore: 4, awayScore: 1, awayTeam: null, homePenaltyScore: 5, homeScore: 1, homeTeam: null, id: "match", matchDate: null, status: "finished", venue: null, winner: null } })), "1-1 (จุดโทษ 5-4)");
+});
+
+test("resolves future final sources from topology without creating a fixture", () => {
+  const semifinalOne = node({ id: "semi-1", matchOrder: 1, roundIndex: 1, roundLabel: "Semifinal" });
+  const semifinalTwo = node({ id: "semi-2", matchOrder: 2, roundIndex: 1, roundLabel: "Semifinal" });
+  const final = node({ id: "final", matchOrder: 1, roundIndex: 2, roundLabel: "Final", homeSource: { bestOrder: null, groupId: null, groupLabel: null, rank: null, team: null, type: "node_winner", winnerNodeId: "semi-1" }, awaySource: { bestOrder: null, groupId: null, groupLabel: null, rank: null, team: null, type: "node_winner", winnerNodeId: "semi-2" } });
+  assert.equal(publicCupV2SourcePresentation(final.homeSource, [semifinalOne, semifinalTwo, final]), "ผู้ชนะ Semifinal คู่ที่ 1");
+  assert.equal(publicCupV2SourcePresentation(final.awaySource, [semifinalOne, semifinalTwo, final]), "ผู้ชนะ Semifinal คู่ที่ 2");
+  assert.equal(final.linkedMatch, null);
+});
+
+test("uses known teams and keeps the unresolved side as a topology source", () => {
+  const semifinal = node({ id: "semi-2", matchOrder: 2, roundIndex: 1, roundLabel: "Semifinal" });
+  const final = resolvedNode({ id: "final", roundIndex: 2, roundLabel: "Final", linkedMatch: null, awaySource: { bestOrder: null, groupId: null, groupLabel: null, rank: null, team: null, type: "node_winner", winnerNodeId: "semi-2" } });
+  assert.equal(publicCupV2SourcePresentation(final.homeSource, [semifinal, final]), "ทีมเหย้า");
+  assert.equal(publicCupV2SourcePresentation(final.awaySource, [semifinal, final]), "ผู้ชนะ Semifinal คู่ที่ 2");
 });
 
 test("does not include Council nodes in the KSW main bracket", () => {

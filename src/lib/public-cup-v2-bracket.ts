@@ -55,6 +55,15 @@ export function publicCupV2SourceLabel(source: PublicCupV2Source) {
   return "รอการยืนยันทีม";
 }
 
+export function publicCupV2SourcePresentation(source: PublicCupV2Source, nodes: PublicCupV2Node[]) {
+  if (source.team) return source.team.name;
+  if (source.type === "node_winner" && source.winnerNodeId) {
+    const sourceNode = nodes.find((node) => node.id === source.winnerNodeId);
+    if (sourceNode) return `ผู้ชนะ ${sourceNode.roundLabel} คู่ที่ ${sourceNode.matchOrder}`;
+  }
+  return publicCupV2SourceLabel(source);
+}
+
 export function publicCupV2ScoreLabel(node: PublicCupV2Node) {
   const match = node.linkedMatch;
   if (!match || match.homeScore === null || match.awayScore === null) return "VS";
