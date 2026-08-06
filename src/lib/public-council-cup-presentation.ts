@@ -31,6 +31,58 @@ export type PublicCouncilLiveDivisionState = {
   waitingFor: string | null;
 };
 
+export type PublicCouncilTopologyRound = {
+  completed: boolean;
+  current: boolean;
+  finishedCount: number;
+  nodes: PublicCupV2Data["nodes"];
+  roundIndex: number;
+  roundLabel: string;
+};
+
+export type PublicParticipant = {
+  id: string;
+  logoUrl: string;
+  name: string;
+  seed: string;
+  shortName: string;
+};
+
+export const PUBLIC_PARTICIPANT_PREVIEW_LIMIT = 6;
+
+export function getPublicParticipantDisplayList(teams: PublicParticipant[], expanded: boolean) {
+  return expanded ? teams : teams.slice(0, PUBLIC_PARTICIPANT_PREVIEW_LIMIT);
+}
+
+export function shouldShowPublicParticipantToggle(teams: PublicParticipant[]) {
+  return teams.length > PUBLIC_PARTICIPANT_PREVIEW_LIMIT;
+}
+
+export function derivePublicCouncilTopologyRounds(data: PublicCupV2Data, partitionKey: "division_1" | "division_2"): PublicCouncilTopologyRound[] {
+  const resolvedRoundByIndex = new Map(groupPublicCupV2Rounds(data.nodes, partitionKey).map((round) => [round.roundIndex, round]));
+  const nodesByRound = new Map<number, PublicCupV2Data["nodes"]>();
+
+  data.nodes
+    .filter((node) => node.partitionKey === partitionKey)
+    .forEach((node) => nodesByRound.set(node.roundIndex, [...(nodesByRound.get(node.roundIndex) ?? []), node]));
+
+  return Array.from(nodesByRound.entries())
+    .sort(([left], [right]) => left - right)
+    .map(([roundIndex, nodes]) => {
+      const orderedNodes = [...nodes].sort((left, right) => left.matchOrder - right.matchOrder);
+      const resolvedRound = resolvedRoundByIndex.get(roundIndex);
+      const finishedCount = orderedNodes.filter((node) => isFinished(node.linkedMatch)).length;
+      return {
+        completed: resolvedRound?.completed ?? (orderedNodes.length > 0 && finishedCount === orderedNodes.length),
+        current: resolvedRound?.current ?? false,
+        finishedCount,
+        nodes: orderedNodes,
+        roundIndex,
+        roundLabel: orderedNodes[0]?.roundLabel || `Round ${roundIndex + 1}`,
+      };
+    });
+}
+
 type PublicMatchStatus = { status?: unknown };
 
 export function derivePublicCouncilTournamentProgress({ groupMatches, knockoutMatches }: { groupMatches: PublicMatchStatus[]; knockoutMatches: PublicCupV2Match[] }) {

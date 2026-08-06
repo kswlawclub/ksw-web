@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { derivePublicCouncilCupPresentationState, derivePublicCouncilLiveDivisionState, derivePublicCouncilTournamentProgress } from "@/lib/public-council-cup-presentation";
+import { derivePublicCouncilCupPresentationState, derivePublicCouncilLiveDivisionState, derivePublicCouncilTopologyRounds, derivePublicCouncilTournamentProgress, getPublicParticipantDisplayList, PUBLIC_PARTICIPANT_PREVIEW_LIMIT, shouldShowPublicParticipantToggle, type PublicParticipant } from "@/lib/public-council-cup-presentation";
 import type { PublicCupV2Data, PublicCupV2Node, PublicCupV2Team } from "@/lib/public-cup-v2-types";
 
 const division1Winner: PublicCupV2Team = { id: "d1-winner", logoUrl: null, name: "Division 1 Winner", shortName: "D1" };
@@ -162,4 +162,42 @@ test("calculates tournament progress from actual group and knockout fixtures onl
 
 test("keeps progress at zero when no fixture exists", () => {
   assert.deepEqual(derivePublicCouncilTournamentProgress({ groupMatches: [], knockoutMatches: [] }), { playedMatches: 0, progressPercent: 0, remainingMatches: 0, totalMatches: 0 });
+});
+
+const participantTeams: PublicParticipant[] = Array.from({ length: 14 }, (_, index) => ({
+  id: `team-${index + 1}`,
+  logoUrl: "",
+  name: `Team ${index + 1}`,
+  seed: "",
+  shortName: `T${index + 1}`,
+}));
+
+test("keeps a single ordered participant list when collapsed or expanded", () => {
+  const collapsed = getPublicParticipantDisplayList(participantTeams, false);
+  const expanded = getPublicParticipantDisplayList(participantTeams, true);
+
+  assert.equal(collapsed.length, PUBLIC_PARTICIPANT_PREVIEW_LIMIT);
+  assert.deepEqual(collapsed.map((team) => team.id), participantTeams.slice(0, PUBLIC_PARTICIPANT_PREVIEW_LIMIT).map((team) => team.id));
+  assert.equal(expanded.length, participantTeams.length);
+  assert.deepEqual(expanded.map((team) => team.id), participantTeams.map((team) => team.id));
+  assert.deepEqual(getPublicParticipantDisplayList(participantTeams, false), collapsed);
+});
+
+test("only shows the participant toggle when a responsive preview would hide teams", () => {
+  assert.equal(shouldShowPublicParticipantToggle(participantTeams), true);
+  assert.equal(shouldShowPublicParticipantToggle(participantTeams.slice(0, PUBLIC_PARTICIPANT_PREVIEW_LIMIT)), false);
+});
+
+test("keeps every topology round visible for divisions with different bracket sizes", () => {
+  const competition = data([
+    directDraftNode("division_1", 0),
+    waitingNode("division_1", 1),
+    directDraftNode("division_2", 0),
+    waitingNode("division_2", 1),
+    waitingNode("division_2", 2),
+  ]);
+
+  assert.deepEqual(derivePublicCouncilTopologyRounds(competition, "division_1").map((round) => round.roundIndex), [0, 1]);
+  assert.deepEqual(derivePublicCouncilTopologyRounds(competition, "division_2").map((round) => round.roundIndex), [0, 1, 2]);
+  assert.equal(derivePublicCouncilTopologyRounds(competition, "division_2")[2]?.nodes[0]?.linkedMatch, null);
 });

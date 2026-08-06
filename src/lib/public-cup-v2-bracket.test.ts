@@ -54,8 +54,8 @@ test("resolves future final sources from topology without creating a fixture", (
   const semifinalOne = node({ id: "semi-1", matchOrder: 1, roundIndex: 1, roundLabel: "Semifinal" });
   const semifinalTwo = node({ id: "semi-2", matchOrder: 2, roundIndex: 1, roundLabel: "Semifinal" });
   const final = node({ id: "final", matchOrder: 1, roundIndex: 2, roundLabel: "Final", homeSource: { bestOrder: null, groupId: null, groupLabel: null, rank: null, team: null, type: "node_winner", winnerNodeId: "semi-1" }, awaySource: { bestOrder: null, groupId: null, groupLabel: null, rank: null, team: null, type: "node_winner", winnerNodeId: "semi-2" } });
-  assert.equal(publicCupV2SourcePresentation(final.homeSource, [semifinalOne, semifinalTwo, final]), "ผู้ชนะ Semifinal คู่ที่ 1");
-  assert.equal(publicCupV2SourcePresentation(final.awaySource, [semifinalOne, semifinalTwo, final]), "ผู้ชนะ Semifinal คู่ที่ 2");
+  assert.equal(publicCupV2SourcePresentation(final.homeSource, [semifinalOne, semifinalTwo, final]), "ผู้ชนะรอบรองชนะเลิศ คู่ที่ 1");
+  assert.equal(publicCupV2SourcePresentation(final.awaySource, [semifinalOne, semifinalTwo, final]), "ผู้ชนะรอบรองชนะเลิศ คู่ที่ 2");
   assert.equal(final.linkedMatch, null);
 });
 
@@ -63,7 +63,14 @@ test("uses known teams and keeps the unresolved side as a topology source", () =
   const semifinal = node({ id: "semi-2", matchOrder: 2, roundIndex: 1, roundLabel: "Semifinal" });
   const final = resolvedNode({ id: "final", roundIndex: 2, roundLabel: "Final", linkedMatch: null, awaySource: { bestOrder: null, groupId: null, groupLabel: null, rank: null, team: null, type: "node_winner", winnerNodeId: "semi-2" } });
   assert.equal(publicCupV2SourcePresentation(final.homeSource, [semifinal, final]), "ทีมเหย้า");
-  assert.equal(publicCupV2SourcePresentation(final.awaySource, [semifinal, final]), "ผู้ชนะ Semifinal คู่ที่ 2");
+  assert.equal(publicCupV2SourcePresentation(final.awaySource, [semifinal, final]), "ผู้ชนะรอบรองชนะเลิศ คู่ที่ 2");
+});
+
+test("keeps both resolved final teams visible without treating the topology as a fixture", () => {
+  const final = resolvedNode({ id: "final", linkedMatch: null, roundIndex: 2, roundLabel: "Final" });
+  assert.equal(publicCupV2SourcePresentation(final.homeSource, [final]), "ทีมเหย้า");
+  assert.equal(publicCupV2SourcePresentation(final.awaySource, [final]), "ทีมเยือน");
+  assert.equal(final.linkedMatch, null);
 });
 
 test("does not include Council nodes in the KSW main bracket", () => {

@@ -8,7 +8,7 @@ import {
   publicCupV2SourceLabel,
 } from "@/lib/public-cup-v2-bracket";
 import type { PublicCupV2Data, PublicCupV2Node, PublicCupV2Team } from "@/lib/public-cup-v2-types";
-import { derivePublicCouncilLiveDivisionState, publicCouncilDivisionPresentation, type PublicCouncilCupPresentation, type PublicCouncilLiveDivisionState, type PublicCouncilLiveDivisionStatus } from "@/lib/public-council-cup-presentation";
+import { derivePublicCouncilLiveDivisionState, derivePublicCouncilTopologyRounds, publicCouncilDivisionPresentation, type PublicCouncilCupPresentation, type PublicCouncilLiveDivisionState, type PublicCouncilLiveDivisionStatus } from "@/lib/public-council-cup-presentation";
 
 type BracketTheme = "division_1" | "division_2" | "main";
 
@@ -53,8 +53,8 @@ function formatDateTime(value: string | null) {
   }).format(date);
 }
 
-function MatchTeamRow({ align, team, winner }: { align: "left" | "right"; team: PublicCupV2Team | null; winner: boolean }) {
-  const name = team?.name || "รอผู้ชนะจากคู่ก่อนหน้า";
+function MatchTeamRow({ align, fallbackName, team, winner }: { align: "left" | "right"; fallbackName?: string; team: PublicCupV2Team | null; winner: boolean }) {
+  const name = team?.name || fallbackName || "รอผู้ชนะจากคู่ก่อนหน้า";
   return (
     <div className={`flex min-w-0 items-center gap-2 ${align === "right" ? "justify-end text-right" : ""}`}>
       {align === "right" ? <p className={`min-w-0 max-w-full break-words whitespace-normal [overflow-wrap:anywhere] text-sm leading-5 ${winner ? "font-black text-emerald-700" : "font-bold text-[#061426]"}`}>{name}</p> : null}
@@ -76,15 +76,15 @@ function PublicKnockoutMatchCard({ chronicle = false, compact, liveCenter = fals
   const isLive = match?.status === "active";
 
   return (
-    <article className={`min-w-0 border ${placeholder ? "rounded-lg border-dashed border-slate-300 bg-slate-50 shadow-none" : chronicle ? "rounded-md px-3 py-3 shadow-none" : `rounded-lg shadow-sm ${compact ? "p-2.5" : "p-3"}`} ${placeholder ? "" : liveCenter && finished ? "border-emerald-200 bg-emerald-50/40" : liveCenter && isLive ? "border-[#d8ad45]/70 bg-[#fffaf0] shadow-[#d8ad45]/15" : isKswMatch ? "border-[#d8ad45]/80 bg-[#fffaf0] shadow-[#d8ad45]/15" : "border-slate-200 bg-white"}`}>
+    <article className={`min-w-0 border ${placeholder ? `rounded-lg border-dashed border-slate-300 bg-slate-50 shadow-none ${compact ? "p-2.5" : "p-3"}` : chronicle ? "rounded-md px-3 py-3 shadow-none" : `rounded-lg shadow-sm ${compact ? "p-2.5" : "p-3"}`} ${placeholder ? "" : liveCenter && finished ? "border-emerald-200 bg-emerald-50/40" : liveCenter && isLive ? "border-[#d8ad45]/70 bg-[#fffaf0] shadow-[#d8ad45]/15" : isKswMatch ? "border-[#d8ad45]/80 bg-[#fffaf0] shadow-[#d8ad45]/15" : "border-slate-200 bg-white"}`}>
       {isKswMatch ? <span className={`mb-2 inline-flex rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-[#8a6418] ${chronicle ? "bg-[#fff7df]" : "bg-[#fff0c8]"}`}>KSW Match</span> : null}
       {liveCenter && match ? <div className="mb-2 flex justify-end"><span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] ${finished ? "bg-emerald-100 text-emerald-800" : isLive ? "bg-[#fff0c8] text-[#8a6418]" : "bg-slate-100 text-slate-600"}`}>{finished ? "FT" : isLive ? "LIVE" : "Scheduled"}</span></div> : null}
       <div className={`grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center ${chronicle ? "gap-3" : "gap-2"}`}>
-        <MatchTeamRow align="left" team={home} winner={homeWinner} />
+        <MatchTeamRow align="left" fallbackName={sourceLabels?.home} team={home} winner={homeWinner} />
         <span className="whitespace-nowrap rounded-md bg-[#061426] px-2.5 py-1 text-xs font-black text-white">
           {publicCupV2ScoreLabel(node)}
         </span>
-        <MatchTeamRow align="right" team={away} winner={awayWinner} />
+        <MatchTeamRow align="right" fallbackName={sourceLabels?.away} team={away} winner={awayWinner} />
       </div>
       {waitingForTeam || placeholder ? <p className="mt-1.5 text-xs font-bold text-slate-500">{sourceLabels?.home ?? publicCupV2SourceLabel(node.homeSource)} · {sourceLabels?.away ?? publicCupV2SourceLabel(node.awaySource)}</p> : null}
       {match ? (
@@ -376,7 +376,8 @@ function CouncilDivisionBracket({ data, localized, partitionKey, seasonCompleted
   theme: Extract<BracketTheme, "division_1" | "division_2">;
   title: string;
 }) {
-  const rounds = groupPublicCupV2Rounds(data.nodes, partitionKey);
+  const resolvedRounds = groupPublicCupV2Rounds(data.nodes, partitionKey);
+  const rounds = seasonCompleted ? resolvedRounds : derivePublicCouncilTopologyRounds(data, partitionKey);
   const partition = data.partitions.find((entry) => entry.key === partitionKey);
   const champion = partition?.champion ?? null;
   const palette = themes[theme];

@@ -59,9 +59,17 @@ export function publicCupV2SourcePresentation(source: PublicCupV2Source, nodes: 
   if (source.team) return source.team.name;
   if (source.type === "node_winner" && source.winnerNodeId) {
     const sourceNode = nodes.find((node) => node.id === source.winnerNodeId);
-    if (sourceNode) return `ผู้ชนะ ${sourceNode.roundLabel} คู่ที่ ${sourceNode.matchOrder}`;
+    if (sourceNode) return `ผู้ชนะ${publicCupV2RoundLabel(sourceNode.roundLabel)} คู่ที่ ${sourceNode.matchOrder}`;
   }
   return publicCupV2SourceLabel(source);
+}
+
+function publicCupV2RoundLabel(label: string) {
+  const normalized = label.toLowerCase();
+  if (normalized.includes("quarter")) return "รอบก่อนรองชนะเลิศ";
+  if (normalized.includes("semi")) return "รอบรองชนะเลิศ";
+  if (normalized.includes("final")) return "รอบชิงชนะเลิศ";
+  return label;
 }
 
 export function publicCupV2ScoreLabel(node: PublicCupV2Node) {
