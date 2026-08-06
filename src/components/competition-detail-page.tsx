@@ -3,6 +3,7 @@ import Link from "next/link";
 import { BookOpen, CalendarDays, ChevronDown, CircleDot, FileText, History, ListOrdered, MapPin, ScrollText, Swords, TableProperties, Trophy, Users } from "lucide-react";
 import { CompetitionResultsTable } from "@/components/competition-results-table";
 import { CompletedParticipatingTeamsGrid, type CompletedParticipantTeam } from "@/components/completed-participating-teams";
+import { ActiveCouncilGroupStandings } from "@/components/active-council-group-standings";
 import { ActiveCouncilParticipants as ActiveCouncilParticipantsGrid } from "@/components/active-council-participants";
 import { LeagueTable } from "@/components/league-table";
 import { TeamLogo } from "@/components/team-logo";
@@ -1197,7 +1198,7 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
           <ActiveCouncilHero competition={competition} cupV2={councilV2} groupMatches={canonicalCupGroupMatches} presentation={councilPresentation!} teams={teams} />
           <ActiveCouncilParticipants cupV2={councilV2} teams={teams} />
           <PublicCouncilCupLiveCenter data={councilV2} presentation={councilPresentation!} />
-          <section id="tournament-timeline"><PublicCupGroupStandings collapsible matches={canonicalCupGroupMatches} standings={legacyCupGroupStandings} /><PublicCouncilCupBrackets data={councilV2} localized seasonCompleted={false} showOverview /></section>
+          <section id="tournament-timeline"><ActiveCouncilGroupStandings matches={canonicalCupGroupMatches} standings={legacyCupGroupStandings} /><PublicCouncilCupBrackets data={councilV2} localized seasonCompleted={false} showOverview /></section>
           <SponsorsSection sponsors={sponsors} />
         </main>
       );
