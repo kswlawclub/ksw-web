@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { derivePublicCouncilCupPresentationState, derivePublicCouncilLiveDivisionState } from "@/lib/public-council-cup-presentation";
+import { derivePublicCouncilCupPresentationState, derivePublicCouncilLiveDivisionState, derivePublicCouncilTournamentProgress } from "@/lib/public-council-cup-presentation";
 import type { PublicCupV2Data, PublicCupV2Node, PublicCupV2Team } from "@/lib/public-cup-v2-types";
 
 const division1Winner: PublicCupV2Team = { id: "d1-winner", logoUrl: null, name: "Division 1 Winner", shortName: "D1" };
@@ -149,4 +149,17 @@ test("marks both divisions as awaiting completion once the presentation state is
 
   assert.equal(derivePublicCouncilLiveDivisionState({ data: competition, partitionKey: "division_1", presentation }).status, "awaiting_completion");
   assert.equal(derivePublicCouncilLiveDivisionState({ data: competition, partitionKey: "division_2", presentation }).status, "awaiting_completion");
+});
+
+test("calculates tournament progress from actual group and knockout fixtures only", () => {
+  const result = derivePublicCouncilTournamentProgress({
+    groupMatches: [{ status: "finished" }, { status: "scheduled" }],
+    knockoutMatches: [finalNode("division_1", 1, division1Winner).linkedMatch!],
+  });
+
+  assert.deepEqual(result, { playedMatches: 2, progressPercent: 67, remainingMatches: 1, totalMatches: 3 });
+});
+
+test("keeps progress at zero when no fixture exists", () => {
+  assert.deepEqual(derivePublicCouncilTournamentProgress({ groupMatches: [], knockoutMatches: [] }), { playedMatches: 0, progressPercent: 0, remainingMatches: 0, totalMatches: 0 });
 });

@@ -31,6 +31,20 @@ export type PublicCouncilLiveDivisionState = {
   waitingFor: string | null;
 };
 
+type PublicMatchStatus = { status?: unknown };
+
+export function derivePublicCouncilTournamentProgress({ groupMatches, knockoutMatches }: { groupMatches: PublicMatchStatus[]; knockoutMatches: PublicCupV2Match[] }) {
+  const isFinishedStatus = (status: unknown) => typeof status === "string" && ["finished", "completed"].includes(status.toLowerCase());
+  const totalMatches = groupMatches.length + knockoutMatches.length;
+  const playedMatches = groupMatches.filter((match) => isFinishedStatus(match.status)).length + knockoutMatches.filter((match) => isFinishedStatus(match.status)).length;
+  return {
+    playedMatches,
+    progressPercent: totalMatches ? Math.min(100, Math.max(0, Math.round((playedMatches / totalMatches) * 100))) : 0,
+    remainingMatches: Math.max(0, totalMatches - playedMatches),
+    totalMatches,
+  };
+}
+
 function isFinished(match: PublicCupV2Match | null) {
   return Boolean(match && ["finished", "completed"].includes(match.status));
 }

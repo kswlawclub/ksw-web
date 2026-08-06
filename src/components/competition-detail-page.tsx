@@ -28,7 +28,7 @@ import {
   type CompetitionType,
 } from "@/lib/competition-format";
 import type { PublicCupV2Data } from "@/lib/public-cup-v2-types";
-import { derivePublicCouncilCupPresentationState, type PublicCouncilCupPresentation } from "@/lib/public-council-cup-presentation";
+import { derivePublicCouncilCupPresentationState, derivePublicCouncilTournamentProgress, type PublicCouncilCupPresentation } from "@/lib/public-council-cup-presentation";
 import type { PublicCompetitionGroupData } from "@/lib/public-competition-group-loader";
 import {
   buildPublicCupArchive,
@@ -396,13 +396,10 @@ function HeroCover({ competition, completed }: { competition: Row; completed: bo
   );
 }
 
-function ActiveCouncilHero({ competition, cupV2, presentation, teams }: { competition: Row; cupV2: PublicCupV2Data; presentation: PublicCouncilCupPresentation; teams: Row[] }) {
+function ActiveCouncilHero({ competition, cupV2, groupMatches, presentation, teams }: { competition: Row; cupV2: PublicCupV2Data; groupMatches: Row[]; presentation: PublicCouncilCupPresentation; teams: Row[] }) {
   const coverImageUrl = text(competition, ["cover_image_url"], "");
-  const matches = cupV2.linkedMatches;
-  const finishedMatches = matches.filter((match) => ["finished", "completed"].includes(match.status)).length;
-  const scheduledMatches = matches.length - finishedMatches;
+  const { playedMatches, progressPercent: progress, remainingMatches, totalMatches } = derivePublicCouncilTournamentProgress({ groupMatches, knockoutMatches: cupV2.linkedMatches });
   const totalTeams = teams.length || cupV2.teams.length;
-  const progress = matches.length ? Math.round((finishedMatches / matches.length) * 100) : 0;
   const tournamentMetadata = [dateRange(competition), text(competition, ["location"], "")].filter(Boolean);
   const awaitingCompletion = presentation.state === "awaiting_completion";
 
@@ -417,10 +414,10 @@ function ActiveCouncilHero({ competition, cupV2, presentation, teams }: { compet
           <div className="mt-5 flex flex-wrap gap-2"><span className="rounded-full border border-[#d8ad45]/45 bg-[#d8ad45]/15 px-3 py-1.5 text-xs font-black uppercase tracking-[0.14em] text-[#f4d58a]">{awaitingCompletion ? "RESULTS CONFIRMED" : "ACTIVE"}</span>{tournamentMetadata.map((item) => <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-bold text-slate-100" key={item}>{item}</span>)}</div>
           {awaitingCompletion ? <p className="mt-4 max-w-2xl text-base font-bold leading-7 text-[#f4d58a]">ผลการแข่งขันครบแล้ว · รอผู้ดูแลยืนยันปิดการแข่งขัน</p> : null}
           {text(competition, ["short_description"], "") ? <p className="mt-5 max-w-2xl text-base leading-7 text-slate-200">{text(competition, ["short_description"], "")}</p> : null}
-          <div className="mt-7 flex flex-wrap gap-3"><Link className="inline-flex items-center justify-center gap-2 rounded-md bg-[#d8ad45] px-4 py-3 text-sm font-black text-[#061426] shadow-sm shadow-black/30 transition-colors hover:bg-[#f4d58a]" href={awaitingCompletion ? "#winner-summary" : "#current-matches"}><Swords aria-hidden="true" className="size-4 shrink-0" />{awaitingCompletion ? "ดูผู้ชนะการแข่งขัน" : "ดูแมตช์ปัจจุบัน"}</Link><Link className="inline-flex items-center justify-center gap-2 rounded-md border border-white/20 bg-white/5 px-4 py-3 text-sm font-black text-white transition-colors hover:bg-white/10" href="#bracket-timeline"><CalendarDays aria-hidden="true" className="size-4 shrink-0" />เส้นทางการแข่งขัน</Link></div>
+          <div className="mt-7 flex flex-wrap gap-3"><Link className="inline-flex items-center justify-center gap-2 rounded-md bg-[#d8ad45] px-4 py-3 text-sm font-black text-[#061426] shadow-sm shadow-black/30 transition-colors hover:bg-[#f4d58a]" href="#live-status"><Swords aria-hidden="true" className="size-4 shrink-0" />ดูสถานะปัจจุบัน</Link><Link className="inline-flex items-center justify-center gap-2 rounded-md border border-white/20 bg-white/5 px-4 py-3 text-sm font-black text-white transition-colors hover:bg-white/10" href="#tournament-timeline"><CalendarDays aria-hidden="true" className="size-4 shrink-0" />เส้นทางการแข่งขัน</Link></div>
         </div>
         <aside className="self-end rounded-xl border border-white/15 bg-white/10 p-4 shadow-xl shadow-black/20 backdrop-blur-sm sm:p-5">
-          <div className="grid grid-cols-2 gap-3"><div className="rounded-lg border border-white/10 bg-[#061426]/40 p-3"><p className="text-xs font-bold text-slate-300">แข่งขันแล้ว</p><p className="mt-1 text-2xl font-black text-white">{finishedMatches}</p></div><div className="rounded-lg border border-white/10 bg-[#061426]/40 p-3"><p className="text-xs font-bold text-slate-300">เหลือ</p><p className="mt-1 text-2xl font-black text-white">{scheduledMatches}</p></div><div className="rounded-lg border border-white/10 bg-[#061426]/40 p-3"><p className="text-xs font-bold text-slate-300">จำนวนทีม</p><p className="mt-1 text-2xl font-black text-white">{totalTeams}</p></div><div className="rounded-lg border border-white/10 bg-[#061426]/40 p-3"><p className="text-xs font-bold text-slate-300">จำนวนแมตช์</p><p className="mt-1 text-2xl font-black text-white">{matches.length}</p></div></div>
+          <div className="grid grid-cols-2 gap-3"><div className="rounded-lg border border-white/10 bg-[#061426]/40 p-3"><p className="text-xs font-bold text-slate-300">แข่งแล้ว</p><p className="mt-1 text-2xl font-black text-white">{playedMatches}</p></div><div className="rounded-lg border border-white/10 bg-[#061426]/40 p-3"><p className="text-xs font-bold text-slate-300">เหลือ</p><p className="mt-1 text-2xl font-black text-white">{remainingMatches}</p></div><div className="rounded-lg border border-white/10 bg-[#061426]/40 p-3"><p className="text-xs font-bold text-slate-300">จำนวนทีม</p><p className="mt-1 text-2xl font-black text-white">{totalTeams}</p></div><div className="rounded-lg border border-white/10 bg-[#061426]/40 p-3"><p className="text-xs font-bold text-slate-300">แมตช์ทั้งหมด</p><p className="mt-1 text-2xl font-black text-white">{totalMatches}</p></div></div>
           <div className="mt-5"><div className="flex items-center justify-between text-xs font-bold text-slate-200"><span>ความคืบหน้าทัวร์นาเมนต์</span><span>{awaitingCompletion ? 100 : progress}%</span></div><div aria-label={`ความคืบหน้าทัวร์นาเมนต์ ${awaitingCompletion ? 100 : progress}%`} className="mt-2 h-2.5 overflow-hidden rounded-full bg-white/15" role="progressbar" aria-valuemax={100} aria-valuemin={0} aria-valuenow={awaitingCompletion ? 100 : progress}><div className="h-full rounded-full bg-[#d8ad45]" style={{ width: `${awaitingCompletion ? 100 : progress}%` }} /></div></div>
         </aside>
       </div>
@@ -428,17 +425,13 @@ function ActiveCouncilHero({ competition, cupV2, presentation, teams }: { compet
   );
 }
 
-function ActiveTournamentStatistics({ cupV2, teams }: { cupV2: PublicCupV2Data; teams: Row[] }) {
-  const finishedMatches = cupV2.linkedMatches.filter((match) => ["finished", "completed"].includes(match.status) && match.homeScore !== null && match.awayScore !== null);
-  const goals = finishedMatches.reduce((total, match) => total + (match.homeScore ?? 0) + (match.awayScore ?? 0), 0);
-  const statItems = [
-    ["Goals", goals],
-    ["Average goals", finishedMatches.length ? (goals / finishedMatches.length).toFixed(2) : null],
-    ["Matches", cupV2.linkedMatches.length],
-    ["Teams", teams.length || cupV2.teams.length],
-  ].filter(([, value]) => value !== null && value !== 0);
-  if (!statItems.length) return null;
-  return <section className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-10" id="tournament-statistics"><div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-900/10 sm:p-5"><p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-[#8a6418]"><Trophy aria-hidden="true" className="size-4 shrink-0" />Tournament statistics</p><h2 className="mt-1 text-2xl font-black text-[#061426]">สถิติการแข่งขัน</h2><div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">{statItems.map(([label, value]) => <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3" key={label}><p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">{label}</p><p className="mt-1 text-xl font-black text-[#061426]">{value}</p></div>)}</div></div></section>;
+function ActiveCouncilParticipants({ cupV2, teams }: { cupV2: PublicCupV2Data; teams: Row[] }) {
+  const participantTeams = teams.length
+    ? teams.map((team) => ({ id: text(team, ["id"], text(team, ["name"], "team")), logoUrl: text(team, ["logo_url"], ""), name: text(team, ["name"], "ทีมไม่ทราบชื่อ"), seed: text(team, ["seed"], ""), shortName: text(team, ["short_name"], "") }))
+    : cupV2.teams.map((team) => ({ id: team.id, logoUrl: team.logoUrl ?? "", name: team.name, seed: "", shortName: team.shortName ?? "" }));
+  if (!participantTeams.length) return null;
+  const teamCard = (team: typeof participantTeams[number]) => <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-3" key={team.id}><div className="flex min-w-0 items-center gap-3"><TeamLogo className="!size-9 shrink-0" initials={(team.shortName || team.name || "?").slice(0, 3).toUpperCase()} logoUrl={team.logoUrl} teamName={team.name} /><div className="min-w-0"><p className="break-words text-sm font-black leading-5 text-[#061426]">{team.name}</p>{team.seed ? <p className="mt-1 text-xs font-bold text-slate-500">Seed {team.seed}</p> : null}</div></div></article>;
+  return <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-10" id="participating-teams"><div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-900/10 sm:p-5"><div className="flex flex-wrap items-end justify-between gap-3"><div><p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-[#8a6418]"><Users aria-hidden="true" className="size-4 shrink-0" />Participating teams</p><h2 className="mt-1 text-2xl font-black text-[#061426]">ทีมที่เข้าร่วมการแข่งขัน</h2></div><span className="text-sm font-bold text-slate-500">{participantTeams.length} ทีม</span></div><div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 [&>:nth-child(n+7)]:hidden sm:[&>:nth-child(n+10)]:hidden lg:[&>:nth-child(n+13)]:hidden">{participantTeams.map(teamCard)}</div>{participantTeams.length > 6 ? <details className="group mt-4"><summary className="cursor-pointer text-sm font-black text-[#8a6418] underline decoration-[#d8ad45]/60 underline-offset-4"><span className="group-open:hidden">แสดงทีมทั้งหมด</span><span className="hidden group-open:inline">ย่อรายชื่อทีม</span></summary><div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{participantTeams.map(teamCard)}</div></details> : null}</div></section>;
 }
 
 function HonorChampion({ accent, initials, label, logoUrl, name }: { accent: "gold" | "green"; initials: string; label: string; logoUrl: string; name: string }) {
@@ -1201,12 +1194,10 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
     if (councilV2 && !completedTournament) {
       return (
         <main className="min-h-screen overflow-x-hidden bg-slate-100 text-[#061426]">
-          <ActiveCouncilHero competition={competition} cupV2={councilV2} presentation={councilPresentation!} teams={teams} />
+          <ActiveCouncilHero competition={competition} cupV2={councilV2} groupMatches={canonicalCupGroupMatches} presentation={councilPresentation!} teams={teams} />
+          <ActiveCouncilParticipants cupV2={councilV2} teams={teams} />
           <PublicCouncilCupLiveCenter data={councilV2} presentation={councilPresentation!} />
-          <TournamentJourney matches={legacyKswJourney} />
-          <PublicCupGroupStandings collapsible matches={canonicalCupGroupMatches} standings={legacyCupGroupStandings} />
-          <ActiveTournamentStatistics cupV2={councilV2} teams={teams} />
-          <TournamentTeams teams={teams} />
+          <section id="tournament-timeline"><PublicCupGroupStandings collapsible matches={canonicalCupGroupMatches} standings={legacyCupGroupStandings} /><PublicCouncilCupBrackets data={councilV2} localized seasonCompleted={false} showOverview /></section>
           <SponsorsSection sponsors={sponsors} />
         </main>
       );
