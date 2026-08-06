@@ -164,7 +164,7 @@ function progressNode(partitionKey: "division_1" | "division_2", index: number, 
 test("calculates tournament progress from real group fixtures and confirmed knockout topology", () => {
   const result = derivePublicCouncilTournamentProgress({
     data: data(Array.from({ length: 6 }, (_, index) => progressNode(index < 3 ? "division_1" : "division_2", index, "finished"))),
-    groupMatches: Array.from({ length: 9 }, () => ({ status: "completed" })),
+    groupMatches: Array.from({ length: 9 }, () => ({ away_score: 0, home_score: 1, status: "completed" })),
   });
 
   assert.deepEqual(result, {
@@ -173,8 +173,10 @@ test("calculates tournament progress from real group fixtures and confirmed knoc
     playedGroupMatches: 9,
     playedKnockoutMatches: 6,
     playedMatches: 15,
+    progressBasis: "confirmed_tournament_plan",
     progressPercent: 100,
     remainingMatches: 0,
+    scheduledTotal: 15,
     totalMatches: 15,
   });
 });
@@ -185,6 +187,16 @@ test("counts a confirmed final topology as remaining before its fixture exists",
   assert.equal(result.expectedKnockoutMatches, 1);
   assert.equal(result.playedKnockoutMatches, 0);
   assert.equal(result.remainingMatches, 1);
+  assert.equal(result.progressPercent, 0);
+});
+
+test("keeps 36 unplayed group fixtures at zero progress before knockout topology exists", () => {
+  const result = derivePublicCouncilTournamentProgress({
+    data: data([]),
+    groupMatches: Array.from({ length: 36 }, () => ({ status: "scheduled" })),
+  });
+
+  assert.deepEqual([result.scheduledTotal, result.playedMatches, result.remainingMatches, result.progressPercent, result.progressBasis], [36, 0, 36, 0, "scheduled_fixtures"]);
 });
 
 test("uses actual topology size for 4, 8, 16, and 32-team divisions", () => {
@@ -208,6 +220,43 @@ test("combines independently sized Division 1 and Division 2 topologies", () => 
   assert.equal(result.remainingMatches, 7);
 });
 
+test("does not count scheduled, pending, active, or scoreless completed records as played", () => {
+  const result = derivePublicCouncilTournamentProgress({
+    data: data([
+      progressNode("division_1", 0, "scheduled"),
+      progressNode("division_1", 1, "pending"),
+      progressNode("division_2", 0, "active"),
+      { ...progressNode("division_2", 1, "completed"), linkedMatch: { ...progressNode("division_2", 1, "completed").linkedMatch!, awayScore: null, homeScore: null } },
+    ]),
+    groupMatches: [
+      { status: "scheduled" },
+      { status: "pending" },
+      { status: "active" },
+      { status: "completed" },
+    ],
+  });
+
+  assert.equal(result.playedMatches, 0);
+  assert.equal(result.remainingMatches, 8);
+});
+
+test("does not double count a topology node after its fixture is linked", () => {
+  const result = derivePublicCouncilTournamentProgress({ data: data([progressNode("division_1", 0, "scheduled")]), groupMatches: [] });
+
+  assert.equal(result.expectedKnockoutMatches, 1);
+  assert.equal(result.scheduledTotal, 1);
+  assert.equal(result.totalMatches, 1);
+});
+
+test("keeps progress below 100 percent when every group fixture is complete but knockout topology remains", () => {
+  const result = derivePublicCouncilTournamentProgress({
+    data: data([progressNode("division_1", 0, null)]),
+    groupMatches: [{ away_score: 0, home_score: 1, status: "finished" }, { away_score: 2, home_score: 2, status: "completed" }],
+  });
+
+  assert.deepEqual([result.playedMatches, result.totalMatches, result.remainingMatches, result.progressPercent], [2, 3, 1, 67]);
+});
+
 test("keeps progress at zero when no fixture exists", () => {
   assert.deepEqual(derivePublicCouncilTournamentProgress({ data: data([]), groupMatches: [] }), {
     expectedGroupMatches: 0,
@@ -215,8 +264,10 @@ test("keeps progress at zero when no fixture exists", () => {
     playedGroupMatches: 0,
     playedKnockoutMatches: 0,
     playedMatches: 0,
+    progressBasis: "scheduled_fixtures",
     progressPercent: 0,
     remainingMatches: 0,
+    scheduledTotal: 0,
     totalMatches: 0,
   });
 });

@@ -86,12 +86,16 @@ export function derivePublicCouncilTopologyRounds(data: PublicCupV2Data, partiti
 export type PublicMatchStatus = { status?: unknown };
 
 export function derivePublicCouncilTournamentProgress({ data, groupMatches }: { data: PublicCupV2Data; groupMatches: PublicMatchStatus[] }) {
-  const isFinishedStatus = (status: unknown) => typeof status === "string" && ["finished", "completed"].includes(status.toLowerCase());
+  const isFinishedStatus = (status: unknown) => typeof status === "string" && ["finished", "completed"].includes(status.trim().toLowerCase());
+  const score = (match: Record<string, unknown>, key: "home" | "away") => match[`${key}Score`] ?? match[`${key}_score`];
+  const hasRecordedResult = (match: PublicMatchStatus) => typeof score(match as Record<string, unknown>, "home") === "number" && typeof score(match as Record<string, unknown>, "away") === "number";
+  const isPlayedMatch = (match: PublicMatchStatus) => isFinishedStatus(match.status) && hasRecordedResult(match);
   const expectedGroupMatches = groupMatches.length;
   const expectedKnockoutMatches = data.nodes.filter((node) => node.partitionKey === "division_1" || node.partitionKey === "division_2").length;
   const knockoutMatches = Array.from(new Map(data.linkedMatches.map((match) => [match.id, match])).values());
-  const playedGroupMatches = groupMatches.filter((match) => isFinishedStatus(match.status)).length;
-  const playedKnockoutMatches = knockoutMatches.filter((match) => isFinishedStatus(match.status)).length;
+  const playedGroupMatches = groupMatches.filter(isPlayedMatch).length;
+  const playedKnockoutMatches = knockoutMatches.filter(isPlayedMatch).length;
+  const scheduledTotal = expectedGroupMatches + knockoutMatches.length;
   const totalMatches = expectedGroupMatches + expectedKnockoutMatches;
   const playedMatches = playedGroupMatches + playedKnockoutMatches;
   return {
@@ -100,8 +104,10 @@ export function derivePublicCouncilTournamentProgress({ data, groupMatches }: { 
     playedMatches,
     playedGroupMatches,
     playedKnockoutMatches,
+    progressBasis: expectedKnockoutMatches > 0 ? "confirmed_tournament_plan" as const : "scheduled_fixtures" as const,
     progressPercent: totalMatches ? Math.min(100, Math.max(0, Math.round((playedMatches / totalMatches) * 100))) : 0,
     remainingMatches: Math.max(0, totalMatches - playedMatches),
+    scheduledTotal,
     totalMatches,
   };
 }
