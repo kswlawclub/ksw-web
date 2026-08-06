@@ -400,7 +400,7 @@ function HeroCover({ competition, completed }: { competition: Row; completed: bo
 
 function ActiveCouncilHero({ competition, cupV2, groupMatches, presentation, teams }: { competition: Row; cupV2: PublicCupV2Data; groupMatches: Row[]; presentation: PublicCouncilCupPresentation; teams: Row[] }) {
   const coverImageUrl = text(competition, ["cover_image_url"], "");
-  const { playedMatches, progressPercent: progress, remainingMatches, totalMatches } = derivePublicCouncilTournamentProgress({ groupMatches, knockoutMatches: cupV2.linkedMatches });
+  const { playedMatches, progressPercent: progress, remainingMatches, totalMatches } = derivePublicCouncilTournamentProgress({ data: cupV2, groupMatches });
   const totalTeams = teams.length || cupV2.teams.length;
   const tournamentMetadata = [dateRange(competition), text(competition, ["location"], "")].filter(Boolean);
   const awaitingCompletion = presentation.state === "awaiting_completion";
@@ -420,7 +420,7 @@ function ActiveCouncilHero({ competition, cupV2, groupMatches, presentation, tea
         </div>
         <aside className="self-end rounded-xl border border-white/15 bg-white/10 p-4 shadow-xl shadow-black/20 backdrop-blur-sm sm:p-5">
           <div className="grid grid-cols-2 gap-3"><div className="rounded-lg border border-white/10 bg-[#061426]/40 p-3"><p className="text-xs font-bold text-slate-300">แข่งแล้ว</p><p className="mt-1 text-2xl font-black text-white">{playedMatches}</p></div><div className="rounded-lg border border-white/10 bg-[#061426]/40 p-3"><p className="text-xs font-bold text-slate-300">เหลือ</p><p className="mt-1 text-2xl font-black text-white">{remainingMatches}</p></div><div className="rounded-lg border border-white/10 bg-[#061426]/40 p-3"><p className="text-xs font-bold text-slate-300">จำนวนทีม</p><p className="mt-1 text-2xl font-black text-white">{totalTeams}</p></div><div className="rounded-lg border border-white/10 bg-[#061426]/40 p-3"><p className="text-xs font-bold text-slate-300">แมตช์ทั้งหมด</p><p className="mt-1 text-2xl font-black text-white">{totalMatches}</p></div></div>
-          <div className="mt-5"><div className="flex items-center justify-between text-xs font-bold text-slate-200"><span>ความคืบหน้าทัวร์นาเมนต์</span><span>{awaitingCompletion ? 100 : progress}%</span></div><div aria-label={`ความคืบหน้าทัวร์นาเมนต์ ${awaitingCompletion ? 100 : progress}%`} className="mt-2 h-2.5 overflow-hidden rounded-full bg-white/15" role="progressbar" aria-valuemax={100} aria-valuemin={0} aria-valuenow={awaitingCompletion ? 100 : progress}><div className="h-full rounded-full bg-[#d8ad45]" style={{ width: `${awaitingCompletion ? 100 : progress}%` }} /></div></div>
+          <div className="mt-5"><div className="flex items-center justify-between text-xs font-bold text-slate-200"><span>ความคืบหน้าทัวร์นาเมนต์</span><span>{progress}%</span></div><div aria-label={`ความคืบหน้าทัวร์นาเมนต์ ${progress}%`} className="mt-2 h-2.5 overflow-hidden rounded-full bg-white/15" role="progressbar" aria-valuemax={100} aria-valuemin={0} aria-valuenow={progress}><div className="h-full rounded-full bg-[#d8ad45]" style={{ width: `${progress}%` }} /></div></div>
         </aside>
       </div>
     </section>
@@ -1197,7 +1197,7 @@ export function CompetitionDetailPage({ data }: { data: CompetitionDetailData })
         <main className="min-h-screen overflow-x-hidden bg-slate-100 text-[#061426]">
           <ActiveCouncilHero competition={competition} cupV2={councilV2} groupMatches={canonicalCupGroupMatches} presentation={councilPresentation!} teams={teams} />
           <ActiveCouncilParticipants cupV2={councilV2} teams={teams} />
-          <PublicCouncilCupLiveCenter data={councilV2} presentation={councilPresentation!} />
+          <PublicCouncilCupLiveCenter data={councilV2} groupMatches={canonicalCupGroupMatches} presentation={councilPresentation!} />
           <section id="tournament-timeline"><ActiveCouncilGroupStandings matches={canonicalCupGroupMatches} standings={legacyCupGroupStandings} /><PublicCouncilCupBrackets data={councilV2} localized seasonCompleted={false} showOverview /></section>
           <SponsorsSection sponsors={sponsors} />
         </main>

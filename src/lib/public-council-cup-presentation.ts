@@ -83,14 +83,23 @@ export function derivePublicCouncilTopologyRounds(data: PublicCupV2Data, partiti
     });
 }
 
-type PublicMatchStatus = { status?: unknown };
+export type PublicMatchStatus = { status?: unknown };
 
-export function derivePublicCouncilTournamentProgress({ groupMatches, knockoutMatches }: { groupMatches: PublicMatchStatus[]; knockoutMatches: PublicCupV2Match[] }) {
+export function derivePublicCouncilTournamentProgress({ data, groupMatches }: { data: PublicCupV2Data; groupMatches: PublicMatchStatus[] }) {
   const isFinishedStatus = (status: unknown) => typeof status === "string" && ["finished", "completed"].includes(status.toLowerCase());
-  const totalMatches = groupMatches.length + knockoutMatches.length;
-  const playedMatches = groupMatches.filter((match) => isFinishedStatus(match.status)).length + knockoutMatches.filter((match) => isFinishedStatus(match.status)).length;
+  const expectedGroupMatches = groupMatches.length;
+  const expectedKnockoutMatches = data.nodes.filter((node) => node.partitionKey === "division_1" || node.partitionKey === "division_2").length;
+  const knockoutMatches = Array.from(new Map(data.linkedMatches.map((match) => [match.id, match])).values());
+  const playedGroupMatches = groupMatches.filter((match) => isFinishedStatus(match.status)).length;
+  const playedKnockoutMatches = knockoutMatches.filter((match) => isFinishedStatus(match.status)).length;
+  const totalMatches = expectedGroupMatches + expectedKnockoutMatches;
+  const playedMatches = playedGroupMatches + playedKnockoutMatches;
   return {
+    expectedGroupMatches,
+    expectedKnockoutMatches,
     playedMatches,
+    playedGroupMatches,
+    playedKnockoutMatches,
     progressPercent: totalMatches ? Math.min(100, Math.max(0, Math.round((playedMatches / totalMatches) * 100))) : 0,
     remainingMatches: Math.max(0, totalMatches - playedMatches),
     totalMatches,

@@ -151,17 +151,74 @@ test("marks both divisions as awaiting completion once the presentation state is
   assert.equal(derivePublicCouncilLiveDivisionState({ data: competition, partitionKey: "division_2", presentation }).status, "awaiting_completion");
 });
 
-test("calculates tournament progress from actual group and knockout fixtures only", () => {
+function progressNode(partitionKey: "division_1" | "division_2", index: number, status: string | null): PublicCupV2Node {
+  const source = directDraftNode(partitionKey, index);
+  return {
+    ...source,
+    id: `${partitionKey}-progress-${index}`,
+    linkedMatch: status ? { awayPenaltyScore: null, awayScore: 0, awayTeam, homePenaltyScore: null, homeScore: 1, homeTeam, id: `${partitionKey}-progress-match-${index}`, matchDate: null, status, venue: null, winner: status === "finished" ? homeTeam : null } : null,
+    linkedMatchId: status ? `${partitionKey}-progress-match-${index}` : null,
+  };
+}
+
+test("calculates tournament progress from real group fixtures and confirmed knockout topology", () => {
   const result = derivePublicCouncilTournamentProgress({
-    groupMatches: [{ status: "finished" }, { status: "scheduled" }],
-    knockoutMatches: [finalNode("division_1", 1, division1Winner).linkedMatch!],
+    data: data(Array.from({ length: 6 }, (_, index) => progressNode(index < 3 ? "division_1" : "division_2", index, "finished"))),
+    groupMatches: Array.from({ length: 9 }, () => ({ status: "completed" })),
   });
 
-  assert.deepEqual(result, { playedMatches: 2, progressPercent: 67, remainingMatches: 1, totalMatches: 3 });
+  assert.deepEqual(result, {
+    expectedGroupMatches: 9,
+    expectedKnockoutMatches: 6,
+    playedGroupMatches: 9,
+    playedKnockoutMatches: 6,
+    playedMatches: 15,
+    progressPercent: 100,
+    remainingMatches: 0,
+    totalMatches: 15,
+  });
+});
+
+test("counts a confirmed final topology as remaining before its fixture exists", () => {
+  const result = derivePublicCouncilTournamentProgress({ data: data([progressNode("division_1", 1, null)]), groupMatches: [] });
+
+  assert.equal(result.expectedKnockoutMatches, 1);
+  assert.equal(result.playedKnockoutMatches, 0);
+  assert.equal(result.remainingMatches, 1);
+});
+
+test("uses actual topology size for 4, 8, 16, and 32-team divisions", () => {
+  [4, 8, 16, 32].forEach((teamCount) => {
+    const nodes = Array.from({ length: teamCount - 1 }, (_, index) => progressNode("division_1", index, null));
+    const result = derivePublicCouncilTournamentProgress({ data: data(nodes), groupMatches: [] });
+    assert.equal(result.expectedKnockoutMatches, teamCount - 1);
+    assert.equal(result.totalMatches, teamCount - 1);
+  });
+});
+
+test("combines independently sized Division 1 and Division 2 topologies", () => {
+  const nodes = [
+    ...Array.from({ length: 3 }, (_, index) => progressNode("division_1", index, "finished")),
+    ...Array.from({ length: 7 }, (_, index) => progressNode("division_2", index, null)),
+  ];
+  const result = derivePublicCouncilTournamentProgress({ data: data(nodes), groupMatches: [] });
+
+  assert.equal(result.expectedKnockoutMatches, 10);
+  assert.equal(result.playedKnockoutMatches, 3);
+  assert.equal(result.remainingMatches, 7);
 });
 
 test("keeps progress at zero when no fixture exists", () => {
-  assert.deepEqual(derivePublicCouncilTournamentProgress({ groupMatches: [], knockoutMatches: [] }), { playedMatches: 0, progressPercent: 0, remainingMatches: 0, totalMatches: 0 });
+  assert.deepEqual(derivePublicCouncilTournamentProgress({ data: data([]), groupMatches: [] }), {
+    expectedGroupMatches: 0,
+    expectedKnockoutMatches: 0,
+    playedGroupMatches: 0,
+    playedKnockoutMatches: 0,
+    playedMatches: 0,
+    progressPercent: 0,
+    remainingMatches: 0,
+    totalMatches: 0,
+  });
 });
 
 const participantTeams: PublicParticipant[] = Array.from({ length: 14 }, (_, index) => ({
