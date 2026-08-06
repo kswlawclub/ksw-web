@@ -1,4 +1,5 @@
 import type { PublicCupV2Data, PublicCupV2Match, PublicCupV2PartitionKey, PublicCupV2Team } from "@/lib/public-cup-v2-types";
+import { groupPublicCupV2Rounds, publicCupV2SourceLabel } from "@/lib/public-cup-v2-bracket";
 
 export type PublicCouncilCupPresentationState = "live" | "awaiting_completion" | "completed";
 
@@ -18,8 +19,44 @@ export type PublicCouncilCupPresentation = {
   state: PublicCouncilCupPresentationState;
 };
 
+export type PublicCouncilLiveDivisionStatus = "playing" | "round_complete" | "awaiting_next_round" | "ready_for_next_round" | "awaiting_completion";
+
+export type PublicCouncilLiveDivisionState = {
+  completedMatches: number;
+  matchCount: number;
+  nextRoundLabel: string | null;
+  remainingMatches: number;
+  roundLabel: string | null;
+  status: PublicCouncilLiveDivisionStatus;
+  waitingFor: string | null;
+};
+
 function isFinished(match: PublicCupV2Match | null) {
   return Boolean(match && ["finished", "completed"].includes(match.status));
+}
+
+function liveRoundTimeline(data: PublicCupV2Data, partitionKey: "division_1" | "division_2") {
+  const visibleRounds = groupPublicCupV2Rounds(data.nodes, partitionKey);
+  const visibleRoundByIndex = new Map(visibleRounds.map((round) => [round.roundIndex, round]));
+  const groups = new Map<number, typeof data.nodes>();
+  data.nodes
+    .filter((node) => node.partitionKey === partitionKey)
+    .forEach((node) => groups.set(node.roundIndex, [...(groups.get(node.roundIndex) ?? []), node]));
+
+  return Array.from(groups.entries())
+    .sort(([left], [right]) => left - right)
+    .map(([roundIndex, nodes]) => {
+      const visible = visibleRoundByIndex.get(roundIndex);
+      const orderedNodes = [...nodes].sort((left, right) => left.matchOrder - right.matchOrder);
+      return {
+        completed: visible?.completed ?? false,
+        current: visible?.current ?? false,
+        hasPublicPairing: Boolean(visible),
+        nodes: orderedNodes,
+        roundIndex,
+        roundLabel: orderedNodes[0]?.roundLabel || `Round ${roundIndex + 1}`,
+      };
+    });
 }
 
 function divisionFinalState(data: PublicCupV2Data, partitionKey: "division_1" | "division_2"): PublicCouncilDivisionFinalState {
@@ -54,6 +91,38 @@ export function derivePublicCouncilCupPresentationState(input: { data: PublicCup
     hasOutstandingKnockoutMatches,
     state: seasonCompleted ? "completed" : finalsConfirmed && !hasOutstandingKnockoutMatches ? "awaiting_completion" : "live",
   };
+}
+
+export function derivePublicCouncilLiveDivisionState({ data, partitionKey, presentation }: { data: PublicCupV2Data; partitionKey: "division_1" | "division_2"; presentation: PublicCouncilCupPresentation }): PublicCouncilLiveDivisionState {
+  if (presentation.state === "awaiting_completion") return { completedMatches: 0, matchCount: 0, nextRoundLabel: null, remainingMatches: 0, roundLabel: null, status: "awaiting_completion", waitingFor: null };
+
+  const rounds = liveRoundTimeline(data, partitionKey);
+  const currentRound = rounds.find((round) => round.current);
+  const lastVisibleRound = [...rounds].reverse().find((round) => round.hasPublicPairing);
+  const nextTopologyRound = currentRound
+    ? rounds.find((round) => round.roundIndex > currentRound.roundIndex)
+    : lastVisibleRound
+      ? rounds.find((round) => round.roundIndex > lastVisibleRound.roundIndex)
+      : rounds[0];
+  const activeRound = currentRound ?? lastVisibleRound ?? nextTopologyRound ?? null;
+  const roundMatches = activeRound?.nodes.map((node) => node.linkedMatch).filter((match): match is PublicCupV2Match => Boolean(match)) ?? [];
+  const completedMatches = roundMatches.filter(isFinished).length;
+  const remainingMatches = roundMatches.length - completedMatches;
+  const unresolvedNode = nextTopologyRound?.nodes.find((node) => !node.homeSource.team || !node.awaySource.team) ?? null;
+  const waitingFor = unresolvedNode
+    ? `${publicCupV2SourceLabel(unresolvedNode.homeSource)} · ${publicCupV2SourceLabel(unresolvedNode.awaySource)}`
+    : null;
+
+  if (currentRound && roundMatches.some((match) => !isFinished(match))) {
+    return { completedMatches, matchCount: roundMatches.length, nextRoundLabel: nextTopologyRound?.roundLabel ?? null, remainingMatches, roundLabel: currentRound.roundLabel, status: "playing", waitingFor: null };
+  }
+  if (currentRound && !roundMatches.length && currentRound.nodes.every((node) => node.homeSource.team && node.awaySource.team)) {
+    return { completedMatches: 0, matchCount: currentRound.nodes.length, nextRoundLabel: currentRound.roundLabel, remainingMatches: currentRound.nodes.length, roundLabel: currentRound.roundLabel, status: "ready_for_next_round", waitingFor: null };
+  }
+  if (lastVisibleRound?.completed) {
+    return { completedMatches, matchCount: roundMatches.length, nextRoundLabel: nextTopologyRound?.roundLabel ?? null, remainingMatches: 0, roundLabel: lastVisibleRound.roundLabel, status: "round_complete", waitingFor };
+  }
+  return { completedMatches: 0, matchCount: activeRound?.nodes.length ?? 0, nextRoundLabel: nextTopologyRound?.roundLabel ?? activeRound?.roundLabel ?? null, remainingMatches: 0, roundLabel: activeRound?.roundLabel ?? null, status: "awaiting_next_round", waitingFor };
 }
 
 export function publicCouncilDivisionPresentation(

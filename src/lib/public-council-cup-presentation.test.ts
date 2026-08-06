@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { derivePublicCouncilCupPresentationState } from "@/lib/public-council-cup-presentation";
+import { derivePublicCouncilCupPresentationState, derivePublicCouncilLiveDivisionState } from "@/lib/public-council-cup-presentation";
 import type { PublicCupV2Data, PublicCupV2Node, PublicCupV2Team } from "@/lib/public-cup-v2-types";
 
 const division1Winner: PublicCupV2Team = { id: "d1-winner", logoUrl: null, name: "Division 1 Winner", shortName: "D1" };
 const division2Winner: PublicCupV2Team = { id: "d2-winner", logoUrl: null, name: "Division 2 Winner", shortName: "D2" };
+const homeTeam: PublicCupV2Team = { id: "home", logoUrl: null, name: "Home Team", shortName: "H" };
+const awayTeam: PublicCupV2Team = { id: "away", logoUrl: null, name: "Away Team", shortName: "A" };
 
 function finalNode(partitionKey: "division_1" | "division_2", roundIndex: number, winner: PublicCupV2Team | null, status = "finished"): PublicCupV2Node {
   return {
@@ -34,6 +36,30 @@ function data(nodes: PublicCupV2Node[]): PublicCupV2Data {
     ],
     templateKey: "council_two_division",
     teams: [division1Winner, division2Winner],
+  };
+}
+
+function directDraftNode(partitionKey: "division_1" | "division_2", roundIndex: number): PublicCupV2Node {
+  return {
+    awaySource: { bestOrder: null, groupId: null, groupLabel: null, rank: 1, team: awayTeam, type: "group_rank", winnerNodeId: null },
+    bracketPosition: 0,
+    homeSource: { bestOrder: null, groupId: null, groupLabel: null, rank: 1, team: homeTeam, type: "group_rank", winnerNodeId: null },
+    id: `${partitionKey}-draft-${roundIndex}`,
+    linkedMatch: null,
+    linkedMatchId: null,
+    matchOrder: 1,
+    partitionKey,
+    roundIndex,
+    roundLabel: `Round ${roundIndex + 1}`,
+  };
+}
+
+function waitingNode(partitionKey: "division_1" | "division_2", roundIndex: number): PublicCupV2Node {
+  return {
+    ...directDraftNode(partitionKey, roundIndex),
+    awaySource: { bestOrder: null, groupId: null, groupLabel: null, rank: null, team: null, type: "node_winner", winnerNodeId: "previous-away" },
+    homeSource: { bestOrder: null, groupId: null, groupLabel: null, rank: null, team: null, type: "node_winner", winnerNodeId: "previous-home" },
+    id: `${partitionKey}-waiting-${roundIndex}`,
   };
 }
 
@@ -88,4 +114,39 @@ test("uses the highest topology round index for 4, 8, 16, and 32-team division f
     assert.equal(presentation.state, "awaiting_completion");
     assert.equal(presentation.divisions[0].finalRoundIndex, finalRoundIndex);
   });
+});
+
+test("derives playing and round-complete states independently for Division 1 and Division 2", () => {
+  const competition = data([
+    finalNode("division_1", 0, division1Winner),
+    finalNode("division_2", 0, null, "scheduled"),
+  ]);
+  const presentation = derivePublicCouncilCupPresentationState({ data: competition, seasonStatus: "active" });
+
+  assert.equal(derivePublicCouncilLiveDivisionState({ data: competition, partitionKey: "division_1", presentation }).status, "round_complete");
+  assert.equal(derivePublicCouncilLiveDivisionState({ data: competition, partitionKey: "division_2", presentation }).status, "playing");
+});
+
+test("identifies a fully resolved round without a fixture as ready for the next round", () => {
+  const competition = data([directDraftNode("division_1", 1), waitingNode("division_2", 1)]);
+  const presentation = derivePublicCouncilCupPresentationState({ data: competition, seasonStatus: "active" });
+
+  assert.equal(derivePublicCouncilLiveDivisionState({ data: competition, partitionKey: "division_1", presentation }).status, "ready_for_next_round");
+});
+
+test("identifies unresolved winner dependencies as awaiting the next round", () => {
+  const competition = data([waitingNode("division_1", 1), directDraftNode("division_2", 1)]);
+  const presentation = derivePublicCouncilCupPresentationState({ data: competition, seasonStatus: "active" });
+  const state = derivePublicCouncilLiveDivisionState({ data: competition, partitionKey: "division_1", presentation });
+
+  assert.equal(state.status, "awaiting_next_round");
+  assert.match(state.waitingFor ?? "", /รอผู้ชนะ/);
+});
+
+test("marks both divisions as awaiting completion once the presentation state is confirmed", () => {
+  const competition = data([finalNode("division_1", 1, division1Winner), finalNode("division_2", 1, division2Winner)]);
+  const presentation = derivePublicCouncilCupPresentationState({ data: competition, seasonStatus: "active" });
+
+  assert.equal(derivePublicCouncilLiveDivisionState({ data: competition, partitionKey: "division_1", presentation }).status, "awaiting_completion");
+  assert.equal(derivePublicCouncilLiveDivisionState({ data: competition, partitionKey: "division_2", presentation }).status, "awaiting_completion");
 });
