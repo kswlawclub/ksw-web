@@ -525,12 +525,26 @@ export default async function Home() {
       <AnalyticsPageView />
       <style>
         {`
+          @keyframes kswHeroLogoFloat {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-8px) scale(1.012); }
+          }
           @keyframes kswLivePulse {
             0%, 100% { opacity: 0.72; transform: scale(0.92); box-shadow: 0 0 0 0 rgba(244, 213, 138, 0.28); }
             50% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 6px rgba(244, 213, 138, 0); }
           }
+          .ksw-hero-logo {
+            animation: kswHeroLogoFloat 8s ease-in-out infinite;
+            will-change: transform;
+          }
           .ksw-live-dot {
             animation: kswLivePulse 2.4s ease-in-out infinite;
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .ksw-hero-logo,
+            .ksw-live-dot {
+              animation: none;
+            }
           }
         `}
       </style>
@@ -595,7 +609,7 @@ export default async function Home() {
               <div aria-hidden="true" className="absolute -right-3 top-1/2 h-px w-10 bg-[#d8ad45]/70 lg:-right-8 lg:w-16" />
               <img
                 alt="KSW L.C. logo"
-                className="relative z-10 max-h-[235px] w-full object-contain drop-shadow-[0_20px_40px_rgba(216,173,69,0.3)] sm:max-h-[275px] lg:max-h-[310px]"
+                className="ksw-hero-logo relative z-10 max-h-[235px] w-full object-contain drop-shadow-[0_20px_40px_rgba(216,173,69,0.3)] sm:max-h-[275px] lg:max-h-[310px]"
                 src={logoUrl}
               />
           </div>
