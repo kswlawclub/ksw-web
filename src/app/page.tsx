@@ -525,39 +525,34 @@ export default async function Home() {
       <AnalyticsPageView />
       <style>
         {`
-          @keyframes kswFloat {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
-          }
           @keyframes kswLivePulse {
             0%, 100% { opacity: 0.72; transform: scale(0.92); box-shadow: 0 0 0 0 rgba(244, 213, 138, 0.28); }
             50% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 6px rgba(244, 213, 138, 0); }
-          }
-          .ksw-float-logo {
-            animation: kswFloat 7s ease-in-out infinite;
           }
           .ksw-live-dot {
             animation: kswLivePulse 2.4s ease-in-out infinite;
           }
         `}
       </style>
-      <section className="relative overflow-hidden border-b border-[#d8ad45]/30">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.2),transparent_34%),linear-gradient(135deg,rgba(6,20,38,0.96),rgba(9,31,57,0.88))]" />
-        <div className="relative mx-auto grid min-h-[540px] w-full max-w-7xl items-center gap-8 px-4 py-10 sm:px-6 sm:py-14 md:grid-cols-[1.12fr_0.88fr] lg:px-10">
-          <div className="min-w-0">
-            <p className="mb-4 text-xs font-bold uppercase tracking-[0.22em] text-[#d8ad45] sm:text-sm sm:tracking-[0.28em]">
+      <section className="relative overflow-hidden border-b border-[#d8ad45]/30 bg-[#061426]">
+        <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(118deg,#061426_0%,#071c34_50%,#0b2745_100%)]" />
+        <div aria-hidden="true" className="absolute inset-0 opacity-35 [background-image:repeating-linear-gradient(115deg,transparent_0,transparent_31px,rgba(244,213,138,0.11)_32px,transparent_33px)]" />
+        <div aria-hidden="true" className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-[#d8ad45]/70 to-transparent" />
+        <div className="relative mx-auto grid w-full max-w-7xl items-center gap-9 px-4 py-11 sm:px-6 sm:py-14 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)] lg:gap-12 lg:px-10 lg:py-16">
+          <div className="min-w-0 lg:max-w-2xl">
+            <p className="mb-5 text-xs font-black uppercase text-[#d8ad45] sm:text-sm">
               KHLONG SAM WA LAWYERS CLUB
             </p>
-            <h1 className="max-w-4xl text-4xl font-black leading-[1.03] tracking-tight text-white sm:text-5xl md:text-7xl">
+            <h1 className="max-w-4xl text-5xl font-black leading-none text-white sm:text-6xl lg:text-7xl">
               KSW L.C.
             </h1>
-            <p className="mt-4 max-w-2xl text-lg font-black uppercase leading-7 tracking-wide text-[#f4d58a] sm:text-2xl">
+            <p className="mt-5 max-w-xl text-lg font-black uppercase leading-7 text-[#f4d58a] sm:text-xl sm:leading-8">
               WHERE LAWYERS PLAY BEYOND THE COURTROOM
             </p>
-            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300 sm:mt-6 sm:text-lg sm:leading-8">
+            <p className="mt-5 max-w-xl text-base leading-7 text-slate-200 sm:text-lg sm:leading-8">
               ชุมชนฟุตบอลนักกฎหมายที่รวมการแข่งขัน มิตรภาพ และเครือข่ายวิชาชีพไว้ในสนามเดียวกัน
             </p>
-            <div className="mt-5 inline-flex max-w-full items-center rounded-full border border-[#d8ad45]/35 bg-[#d8ad45]/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-[#f4d58a] shadow-lg shadow-[#d8ad45]/10 sm:text-xs">
+            <div className="mt-6 inline-flex max-w-full items-center rounded-full border border-[#d8ad45]/35 bg-[#d8ad45]/10 px-4 py-2 text-[10px] font-black uppercase text-[#f4d58a] shadow-sm shadow-black/20 sm:text-xs">
               {competitionTypeLabel(competitionType)} • {competitionStatusLabel(competitionStatus)}
               {isPrimaryCompetitionComingSoon ? " • COMING SOON" : ""}
             </div>
@@ -567,15 +562,15 @@ export default async function Home() {
               </p>
             ) : null}
             <div className="mt-3 flex flex-wrap items-center gap-3 text-sm font-bold text-slate-300"><span className="min-w-0">{competitionName} · {allParticipants.length} ทีม · {isPrimaryCompetitionComingSoon ? startsInLabel(primaryCompetitionStartsInDays) : featuredPhase}</span></div>
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
               <Link
-                className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/15 transition-transform hover:scale-[1.02]"
+                className="inline-flex min-h-12 items-center justify-center rounded-md border border-[#f4d58a]/60 bg-[#d8ad45] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-black/25 transition-colors hover:bg-[#f4d58a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4d58a]"
                 href={heroPrimaryHref}
               >
                 {heroPrimaryLabel}
               </Link>
               <Link
-                className="inline-flex items-center justify-center rounded-md border border-[#d8ad45]/50 bg-white/[0.03] px-5 py-3 text-sm font-black text-[#f4d58a] backdrop-blur transition-colors hover:bg-[#d8ad45]/10"
+                className="inline-flex min-h-12 items-center justify-center rounded-md border border-[#d8ad45]/45 bg-white/[0.04] px-5 py-3 text-sm font-black text-[#f4d58a] transition-colors hover:bg-white/[0.1] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4d58a]"
                 href="/partners"
               >
                 Partner With KSW
@@ -592,12 +587,15 @@ export default async function Home() {
             ) : null}
           </div>
 
-          <div className="ksw-float-logo relative mx-auto flex w-full max-w-[17rem] min-w-0 items-center justify-center sm:max-w-xs md:max-w-sm">
-              <div className="absolute inset-0 -z-10 rounded-full bg-[#d8ad45]/20 blur-3xl" />
-              <div className="absolute inset-x-6 inset-y-10 -z-10 rounded-full bg-[#f4d58a]/10 blur-2xl" />
+          <div className="relative order-2 mx-auto flex w-full max-w-[15rem] min-w-0 items-center justify-center pt-1 sm:max-w-[18rem] lg:max-w-[22rem] lg:pt-0">
+              <div aria-hidden="true" className="absolute inset-x-1 inset-y-5 border border-[#d8ad45]/35" />
+              <div aria-hidden="true" className="absolute inset-x-5 inset-y-0 border border-white/10" />
+              <div aria-hidden="true" className="absolute inset-8 bg-[radial-gradient(ellipse_at_center,rgba(216,173,69,0.22),transparent_68%)] blur-2xl" />
+              <div aria-hidden="true" className="absolute -left-3 top-1/2 h-px w-10 bg-[#d8ad45]/70 lg:-left-8 lg:w-16" />
+              <div aria-hidden="true" className="absolute -right-3 top-1/2 h-px w-10 bg-[#d8ad45]/70 lg:-right-8 lg:w-16" />
               <img
                 alt="KSW L.C. logo"
-                className="max-h-[305px] w-full object-contain drop-shadow-[0_22px_48px_rgba(216,173,69,0.28)]"
+                className="relative z-10 max-h-[235px] w-full object-contain drop-shadow-[0_20px_40px_rgba(216,173,69,0.3)] sm:max-h-[275px] lg:max-h-[310px]"
                 src={logoUrl}
               />
           </div>
