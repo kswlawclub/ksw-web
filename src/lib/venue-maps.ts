@@ -1,9 +1,4 @@
-export type VenueMapsInput = {
-  mapsUrl?: string | null;
-  venueName?: string | null;
-};
-
-function validHttpUrl(value: string | null | undefined) {
+export function normalizeMapsUrl(value: string | null | undefined) {
   if (!value?.trim()) return null;
 
   try {
@@ -14,10 +9,12 @@ function validHttpUrl(value: string | null | undefined) {
   }
 }
 
-export function getVenueMapsUrl({ mapsUrl, venueName }: VenueMapsInput) {
-  const customUrl = validHttpUrl(mapsUrl);
-  if (customUrl) return customUrl;
+export function validateMapsUrl(value: string | null | undefined) {
+  return value?.trim() && !normalizeMapsUrl(value)
+    ? "Google Maps URL ต้องเป็นลิงก์ http/https ที่ถูกต้อง"
+    : "";
+}
 
-  const name = venueName?.trim();
-  return name ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}` : null;
+export function getExplicitVenueMapsUrl({ mapsUrl, venueName }: { mapsUrl: string | null | undefined; venueName: string | null | undefined }) {
+  return venueName?.trim() ? normalizeMapsUrl(mapsUrl) : null;
 }

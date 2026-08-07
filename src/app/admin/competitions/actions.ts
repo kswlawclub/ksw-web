@@ -9,6 +9,7 @@ import {
 import { isCompetitionType, type CompetitionType } from "@/lib/competition-format";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAdminSession } from "@/lib/admin-server-auth";
+import { normalizeMapsUrl, validateMapsUrl } from "@/lib/venue-maps";
 
 type SeasonStatus = "upcoming" | "active" | "completed";
 
@@ -23,6 +24,7 @@ type CompetitionPayload = {
   start_date: string | null;
   end_date: string | null;
   location: string | null;
+  location_maps_url: string | null;
   display_order: number;
   competition_type: CompetitionType;
   season_status: SeasonStatus;
@@ -42,6 +44,7 @@ type CompletedCompetitionEditorialPayload = Pick<
   | "start_date"
   | "end_date"
   | "location"
+  | "location_maps_url"
   | "display_order"
 >;
 
@@ -99,6 +102,9 @@ function validatePayload(payload: CompetitionPayload) {
     return "Competition type must be league, cup, friendly, or tournament.";
   }
 
+  const mapsUrlError = validateMapsUrl(payload.location_maps_url);
+  if (mapsUrlError) return mapsUrlError;
+
   return "";
 }
 
@@ -121,6 +127,7 @@ function normalizeSlug(value: string | null) {
 function normalizePayload(payload: CompetitionPayload): CompetitionPayload {
   return {
     ...payload,
+    location_maps_url: normalizeMapsUrl(payload.location_maps_url),
     name: payload.name.trim(),
     slug: normalizeSlug(payload.slug),
   };
@@ -138,6 +145,7 @@ function completedEditorialPayload(payload: CompetitionPayload): CompletedCompet
     edition_number: payload.edition_number,
     end_date: payload.end_date,
     location: payload.location,
+    location_maps_url: payload.location_maps_url,
     name: payload.name,
     season: payload.season,
     short_description: payload.short_description,
@@ -159,6 +167,7 @@ function competitionErrorMessage(message: string) {
     message.includes("start_date") ||
     message.includes("end_date") ||
     message.includes("location") ||
+    message.includes("location_maps_url") ||
     message.includes("display_order") ||
     message.includes("is_featured") ||
     message.includes("is_published")

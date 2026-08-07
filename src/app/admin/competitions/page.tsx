@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
+import { normalizeMapsUrl } from "@/lib/venue-maps";
 import {
   createCompetition,
   deleteCompetitionById,
@@ -31,6 +32,7 @@ type Competition = {
   start_date: string | null;
   end_date: string | null;
   location: string | null;
+  location_maps_url: string | null;
   display_order: number | null;
   competition_type: CompetitionType;
   season_status: SeasonStatus;
@@ -52,6 +54,7 @@ type CompetitionForm = {
   startDate: string;
   endDate: string;
   location: string;
+  locationMapsUrl: string;
   displayOrder: string;
   competitionType: CompetitionType;
   seasonStatus: SeasonStatus;
@@ -78,6 +81,7 @@ const emptyForm: CompetitionForm = {
   startDate: "",
   endDate: "",
   location: "",
+  locationMapsUrl: "",
   displayOrder: "0",
   competitionType: "league",
   seasonStatus: "active",
@@ -323,7 +327,7 @@ export default function AdminCompetitionsPage() {
     const result = await supabase
       .from("leagues")
       .select(
-        "id, name, season, slug, short_description, description, cover_image_url, edition_number, start_date, end_date, location, display_order, competition_type, season_status, is_active, is_featured, is_published, created_at",
+        "id, name, season, slug, short_description, description, cover_image_url, edition_number, start_date, end_date, location, location_maps_url, display_order, competition_type, season_status, is_active, is_featured, is_published, created_at",
       )
       .order("created_at", { ascending: false });
 
@@ -396,6 +400,7 @@ export default function AdminCompetitionsPage() {
       startDate: startDateValue,
       endDate: endDateValue,
       location: competition.location ?? "",
+      locationMapsUrl: competition.location_maps_url ?? "",
       displayOrder: competition.display_order === null ? "0" : String(competition.display_order),
       competitionType: competition.competition_type,
       seasonStatus: toSeasonStatus(competition.season_status),
@@ -449,6 +454,7 @@ export default function AdminCompetitionsPage() {
       start_date: nullableText(startDateValidation.isoDate),
       end_date: nullableText(endDateValidation.isoDate),
       location: nullableText(form.location),
+      location_maps_url: nullableText(form.locationMapsUrl),
       display_order: nullableNumber(form.displayOrder) ?? 0,
       competition_type: form.competitionType,
       season_status: form.seasonStatus,
@@ -947,13 +953,28 @@ export default function AdminCompetitionsPage() {
             </div>
 
             <label className="grid min-w-0 gap-2 text-sm font-black">
-              Location
+              สถานที่แข่งขัน
               <input
                 className="w-full min-w-0 max-w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                 onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))}
                 value={form.location}
               />
             </label>
+
+            <div className="grid min-w-0 gap-2 text-sm font-black">
+              <label className="grid min-w-0 gap-2">
+                Google Maps URL
+                <input
+                  className="w-full min-w-0 max-w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
+                  onChange={(event) => setForm((current) => ({ ...current, locationMapsUrl: event.target.value }))}
+                  placeholder="https://maps.app.goo.gl/..."
+                  type="url"
+                  value={form.locationMapsUrl}
+                />
+              </label>
+              <p className="text-xs font-semibold leading-5 text-slate-500">วางลิงก์แชร์จาก Google Maps เพื่อให้ผู้ชมเปิดตำแหน่งที่ถูกต้อง</p>
+              {normalizeMapsUrl(form.locationMapsUrl) ? <a className="inline-flex min-h-11 w-fit items-center rounded-md border border-[#d8ad45]/45 px-3 py-2 text-sm font-black text-[#8a6418] hover:bg-[#fff7e6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8a6418]" href={normalizeMapsUrl(form.locationMapsUrl)!} rel="noopener noreferrer" target="_blank">ทดสอบเปิดแผนที่</a> : null}
+            </div>
 
             <label className="grid min-w-0 gap-2 text-sm font-black">
               Display Order

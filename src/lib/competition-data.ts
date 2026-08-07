@@ -21,7 +21,7 @@ export type PublicCompetitionDetailData = {
 };
 
 export const competitionColumns =
-  "id, name, season, slug, short_description, description, cover_image_url, edition_number, start_date, end_date, location, display_order, competition_type, season_status, is_active, is_featured, is_published, created_at";
+  "id, name, season, slug, short_description, description, cover_image_url, edition_number, start_date, end_date, location, location_maps_url, display_order, competition_type, season_status, is_active, is_featured, is_published, created_at";
 export const standingsColumns =
   "team_id, league_id, team_name, short_name, logo_url, is_ksw, played, won, drawn, lost, goals_for, goals_against, goal_difference, points";
 export const matchColumns =
