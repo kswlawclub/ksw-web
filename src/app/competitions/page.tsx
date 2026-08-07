@@ -1,12 +1,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { Activity, Archive, ArrowRight, BookOpen, CalendarDays, CircleDot, MapPin, Radio, TableProperties, Trophy, Users } from "lucide-react";
+import { Activity, Archive, ArrowRight, BookOpen, CalendarDays, CircleDot, ExternalLink, Map as MapIcon, MapPin, Radio, TableProperties, Trophy, Users } from "lucide-react";
 import { loadChronicleGroups } from "@/lib/chronicle-loader";
 import type { ChronicleGroup, ChronicleViewModel } from "@/lib/chronicle-view-model";
 import { loadPublishedCompetitions, Row, text } from "@/lib/competition-data";
 import { calculateStandardLeagueStandings } from "@/lib/league-template/standings";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getVenueMapsUrl } from "@/lib/venue-maps";
 import {
   getCompetitionTypeEnglishLabel,
   isCupCompetition,
@@ -48,6 +49,25 @@ function dateLabel(competition: Row) {
 
   if (startDate && endDate && startDate !== endDate) return `${startDate} - ${endDate}`;
   return startDate || endDate;
+}
+
+function VenueMapsAction({ venueName }: { venueName: string }) {
+  const mapsUrl = getVenueMapsUrl({ venueName });
+  if (!mapsUrl) return null;
+
+  return (
+    <a
+      aria-label={`เปิด Google Maps สำหรับ ${venueName}`}
+      className="inline-flex min-h-11 w-fit items-center gap-2 rounded-md border border-[#d8ad45]/45 bg-[#061426] px-3 py-2 text-sm font-black text-[#f4d58a] transition-colors hover:bg-[#0b2745] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8a6418]"
+      href={mapsUrl}
+      rel="noopener noreferrer"
+      target="_blank"
+    >
+      <MapIcon aria-hidden="true" className="size-4 shrink-0" />
+      <span>เปิด Google Maps</span>
+      <ExternalLink aria-hidden="true" className="size-3.5 shrink-0" />
+    </a>
+  );
 }
 
 function sortDateValue(competition: Row) {
@@ -291,7 +311,7 @@ function CompetitionVisual({ competition, className = "" }: { competition: Row; 
   );
 }
 
-function CompetitionCard({ competition, horizontal = false }: { competition: Row; horizontal?: boolean }) {
+function CompetitionCard({ competition, horizontal = false, showVenueMaps = false }: { competition: Row; horizontal?: boolean; showVenueMaps?: boolean }) {
   const slug = text(competition, ["slug"], "");
   const competitionType = normalizeCompetitionType(text(competition, ["competition_type"], ""));
   const description = text(
@@ -299,11 +319,12 @@ function CompetitionCard({ competition, horizontal = false }: { competition: Row
     ["short_description"],
     slug ? "กำลังจัดเตรียมรายละเอียดการแข่งขัน" : "กำลังจัดเตรียมรายละเอียดการแข่งขัน",
   );
+  const venueName = text(competition, ["location"], "");
   const metadata = [
     text(competition, ["season"], ""),
     text(competition, ["edition_number"], "") ? `Edition ${text(competition, ["edition_number"], "")}` : "",
     dateLabel(competition),
-    text(competition, ["location"], ""),
+    showVenueMaps ? "" : venueName,
   ].filter(Boolean);
   const completed = text(competition, ["season_status"], "active").toLowerCase() === "completed";
   const champion = text(competition, ["champion_name"], "");
@@ -321,6 +342,7 @@ function CompetitionCard({ competition, horizontal = false }: { competition: Row
         <div>
           <h2 className="break-words text-xl font-black leading-tight text-[#061426]">{text(competition, ["name"], "Competition")}</h2>
           {metadata.length ? <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold text-slate-500"><CalendarDays aria-hidden="true" className="size-3.5 shrink-0 text-[#8a6418]" />{metadata.join(" • ")}</p> : null}
+          {showVenueMaps && venueName ? <div className="mt-3 grid gap-2"><p className="flex min-w-0 items-start gap-2 text-sm font-bold text-slate-600"><MapPin aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-[#8a6418]" /><span className="break-words">{venueName}</span></p><VenueMapsAction venueName={venueName} /></div> : null}
           <p className="mt-3 text-sm leading-6 text-slate-600">{description}</p>
           {completed && division1Champion && division2Champion ? <div className="mt-4 grid gap-2 border-l-2 border-emerald-800/45 pl-3 text-sm"><p className="font-black text-emerald-900">แชมป์ Division 1: <span className="font-bold">{division1Champion}</span></p><p className="font-black text-emerald-900">แชมป์ Division 2: <span className="font-bold">{division2Champion}</span></p></div> : null}
           {completed && champion ? <p className="mt-4 flex items-center gap-2 text-sm font-black text-[#8a6418]"><Trophy aria-hidden="true" className="size-4 shrink-0" />แชมป์: {champion}</p> : null}
@@ -328,9 +350,7 @@ function CompetitionCard({ competition, horizontal = false }: { competition: Row
           {completed && competitionType === "league" && (standardTeamCount || standardFixtureCount) ? <p className="mt-2 text-xs font-bold text-slate-500">{standardTeamCount ? `${standardTeamCount} ทีม` : ""}{standardTeamCount && standardFixtureCount ? " · " : ""}{standardFixtureCount ? `${standardFixtureCount} นัด` : ""}</p> : null}
         </div>
         {slug ? (
-          <span className="mt-5 inline-flex items-center justify-between gap-3 border-t border-slate-100 pt-4 text-sm font-black text-[#061426]">
-            <span>{completed ? "ดูผลการแข่งขัน" : "ดูรายละเอียดการแข่งขัน"}</span><ArrowRight aria-hidden="true" className="size-4 shrink-0 text-[#8a6418] transition-transform group-hover:translate-x-1" />
-          </span>
+          showVenueMaps ? <Link className="mt-5 inline-flex min-h-11 w-fit items-center gap-3 border-t border-slate-100 pt-4 text-sm font-black text-[#061426] hover:text-[#8a6418] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8a6418]" href={`/competitions/${slug}`}><span>{completed ? "ดูผลการแข่งขัน" : "ดูรายละเอียดการแข่งขัน"}</span><ArrowRight aria-hidden="true" className="size-4 shrink-0 text-[#8a6418] transition-transform group-hover:translate-x-1" /></Link> : <span className="mt-5 inline-flex items-center justify-between gap-3 border-t border-slate-100 pt-4 text-sm font-black text-[#061426]"><span>{completed ? "ดูผลการแข่งขัน" : "ดูรายละเอียดการแข่งขัน"}</span><ArrowRight aria-hidden="true" className="size-4 shrink-0 text-[#8a6418] transition-transform group-hover:translate-x-1" /></span>
         ) : (
           <p className="mt-5 border-t border-slate-100 pt-4 text-sm font-black text-slate-500">
             กำลังจัดเตรียมรายละเอียดการแข่งขัน
@@ -340,7 +360,7 @@ function CompetitionCard({ competition, horizontal = false }: { competition: Row
     </>
   );
 
-  if (slug) {
+  if (slug && !showVenueMaps) {
     return (
       <Link
         className={`group min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-900/5 transition-all hover:border-[#d8ad45]/55 hover:shadow-md hover:shadow-slate-900/10 ${horizontal ? "grid lg:grid-cols-[22rem_minmax(0,1fr)]" : "flex flex-col"}`}
@@ -362,6 +382,7 @@ function CurrentCompetitionFeature({ items }: { items: Row[] }) {
   if (!items.length) return null;
   const [featured, ...secondary] = items;
   const slug = text(featured, ["slug"], "");
+  const venueName = text(featured, ["location"], "");
   const description = text(featured, ["short_description"], "กำลังจัดเตรียมรายละเอียดการแข่งขัน");
   const metadata = [
     { icon: CalendarDays, value: [text(featured, ["season"], ""), dateLabel(featured)].filter(Boolean).join(" · ") },
@@ -377,11 +398,12 @@ function CurrentCompetitionFeature({ items }: { items: Row[] }) {
         <div className="flex min-w-0 flex-col p-5 sm:p-6">
           <h3 className="break-words text-3xl font-black leading-tight text-[#061426]">{text(featured, ["name"], "Competition")}</h3>
           {metadata.length ? <div className="mt-4 grid gap-2 text-sm font-bold text-slate-600">{metadata.map(({ icon: Icon, value }) => <p className="flex min-w-0 items-start gap-2" key={value}><Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-[#8a6418]" /><span className="break-words">{value}</span></p>)}</div> : null}
+          {venueName ? <div className="mt-3"><VenueMapsAction venueName={venueName} /></div> : null}
           <p className="mt-5 text-sm leading-6 text-slate-700">{description}</p>
           {slug ? <Link className="mt-6 inline-flex min-h-11 w-fit items-center gap-2 border-t border-slate-200 pt-4 text-sm font-black text-[#061426] hover:text-[#8a6418]" href={`/competitions/${slug}`}><span>ดูรายละเอียดการแข่งขัน</span><ArrowRight aria-hidden="true" className="size-4 shrink-0 text-[#8a6418] transition-transform group-hover:translate-x-1" /></Link> : <p className="mt-6 border-t border-slate-200 pt-4 text-sm font-black text-slate-500">กำลังจัดเตรียมรายละเอียดการแข่งขัน</p>}
         </div>
       </article>
-      {secondary.length ? <div className="mt-4 grid gap-4">{secondary.map((competition) => <CompetitionCard competition={competition} horizontal key={text(competition, ["id", "slug", "name"])} />)}</div> : null}
+      {secondary.length ? <div className="mt-4 grid gap-4">{secondary.map((competition) => <CompetitionCard competition={competition} horizontal key={text(competition, ["id", "slug", "name"])} showVenueMaps />)}</div> : null}
     </section>
   );
 }
