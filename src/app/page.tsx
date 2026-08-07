@@ -554,37 +554,36 @@ export default async function Home() {
         <div aria-hidden="true" className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-[#d8ad45]/70 to-transparent" />
         <div className="relative mx-auto grid w-full max-w-7xl items-center gap-9 px-4 py-11 sm:px-6 sm:py-14 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)] lg:gap-12 lg:px-10 lg:py-16">
           <div className="min-w-0 lg:max-w-2xl">
-            <p className="mb-5 text-xs font-black uppercase text-[#d8ad45] sm:text-sm">
-              KHLONG SAM WA LAWYERS CLUB
+            <p className="mb-4 flex items-center gap-3 text-xs font-black uppercase tracking-[0.16em] text-[#d8ad45] sm:text-sm">
+              <span aria-hidden="true" className="h-px w-8 shrink-0 bg-[#d8ad45]" />
+              <span>KHLONG SAM WA LAWYERS CLUB</span>
             </p>
-            <h1 className="max-w-4xl text-5xl font-black leading-none text-white sm:text-6xl lg:text-7xl">
+            <h1 className="max-w-4xl text-5xl font-black leading-[0.94] text-white sm:text-6xl lg:text-7xl">
               KSW L.C.
             </h1>
-            <p className="mt-5 max-w-xl text-lg font-black uppercase leading-7 text-[#f4d58a] sm:text-xl sm:leading-8">
+            <p className="mt-4 max-w-[34rem] text-lg font-black uppercase leading-7 text-[#f4d58a] sm:text-xl sm:leading-8">
               WHERE LAWYERS PLAY BEYOND THE COURTROOM
             </p>
-            <p className="mt-5 max-w-xl text-base leading-7 text-slate-200 sm:text-lg sm:leading-8">
+            <p className="mt-5 max-w-[34rem] text-base leading-7 text-slate-200 sm:text-lg sm:leading-8">
               ชุมชนฟุตบอลนักกฎหมายที่รวมการแข่งขัน มิตรภาพ และเครือข่ายวิชาชีพไว้ในสนามเดียวกัน
             </p>
-            <div className="mt-6 inline-flex max-w-full items-center rounded-full border border-[#d8ad45]/35 bg-[#d8ad45]/10 px-4 py-2 text-[10px] font-black uppercase text-[#f4d58a] shadow-sm shadow-black/20 sm:text-xs">
-              {competitionTypeLabel(competitionType)} • {competitionStatusLabel(competitionStatus)}
-              {isPrimaryCompetitionComingSoon ? " • COMING SOON" : ""}
-            </div>
-            {isPrimaryCompetitionComingSoon ? (
-              <p className="mt-2 text-xs font-black uppercase tracking-[0.16em] text-slate-300">
-                {startsInLabel(primaryCompetitionStartsInDays)}
+            <div className="mt-6 max-w-[34rem] border-l-2 border-[#d8ad45]/70 pl-4">
+              <span className="inline-flex max-w-full rounded-full border border-[#d8ad45]/35 bg-[#d8ad45]/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-[#f4d58a] shadow-sm shadow-black/20 sm:text-xs">
+                {competitionStatusLabel(competitionStatus)} · {competitionTypeLabel(competitionType)}
+              </span>
+              <p className="mt-2 text-sm font-bold leading-6 text-slate-200">
+                {competitionName} · {allParticipants.length} ทีม · {isPrimaryCompetitionComingSoon ? startsInLabel(primaryCompetitionStartsInDays) : featuredPhase}
               </p>
-            ) : null}
-            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm font-bold text-slate-300"><span className="min-w-0">{competitionName} · {allParticipants.length} ทีม · {isPrimaryCompetitionComingSoon ? startsInLabel(primaryCompetitionStartsInDays) : featuredPhase}</span></div>
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+            </div>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <Link
-                className="inline-flex min-h-12 items-center justify-center rounded-md border border-[#f4d58a]/60 bg-[#d8ad45] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-black/25 transition-colors hover:bg-[#f4d58a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4d58a]"
+                className="inline-flex min-h-12 items-center justify-center rounded-md border border-[#f4d58a]/60 bg-[#d8ad45] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/20 transition duration-200 hover:-translate-y-0.5 hover:bg-[#f4d58a] hover:shadow-xl hover:shadow-[#d8ad45]/25 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4d58a]"
                 href={heroPrimaryHref}
               >
                 {heroPrimaryLabel}
               </Link>
               <Link
-                className="inline-flex min-h-12 items-center justify-center rounded-md border border-[#d8ad45]/45 bg-white/[0.04] px-5 py-3 text-sm font-black text-[#f4d58a] transition-colors hover:bg-white/[0.1] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4d58a]"
+                className="inline-flex min-h-12 items-center justify-center rounded-md border border-[#d8ad45]/45 bg-white/[0.04] px-5 py-3 text-sm font-black text-[#f4d58a] transition duration-200 hover:-translate-y-0.5 hover:bg-white/[0.1] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4d58a]"
                 href="/partners"
               >
                 Partner With KSW
