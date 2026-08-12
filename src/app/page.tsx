@@ -618,20 +618,20 @@ export default async function Home() {
       {currentCompetition ? (
         <section className="order-2 bg-slate-100">
           <div className="mx-auto w-full max-w-7xl px-4 pt-8 sm:px-6 lg:px-10">
-            <div className="overflow-hidden rounded-xl border border-[#d8ad45]/40 bg-white shadow-xl shadow-slate-900/10">
-              <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-[#061426] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#f4d58a]">ตอนนี้ที่ KSW</span>
-                    <span className="rounded-full border border-[#d8ad45]/45 bg-[#fff8e3] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#061426]">
+            <div className="overflow-hidden rounded-xl border border-[#d8ad45]/40 bg-white shadow-lg shadow-slate-900/10">
+              <div className="grid gap-4 p-4 sm:p-5 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:gap-6">
+                <div className="flex flex-wrap items-center gap-1.5 lg:max-w-[11rem]">
+                    <span className="rounded-full border border-[#061426]/10 bg-[#061426] px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-[#f4d58a]">ตอนนี้ที่ KSW</span>
+                    <span className="rounded-full border border-[#d8ad45]/45 bg-[#fff8e3] px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-[#061426]">
                       {competitionStatusLabel(competitionStatus)}
                     </span>
-                    {featuredCouncil ? <span className="rounded-full border border-emerald-800/20 bg-emerald-50 px-3 py-1 text-[10px] font-black text-emerald-900">2 Divisions{isCompetitionCompleted && featuredChampions.length === 2 ? " · 2 Champions" : ""}</span> : null}
-                  </div>
-                  <h2 className="mt-3 break-words text-2xl font-black text-[#061426] sm:text-3xl">{competitionName}</h2>
-                  <p className="mt-2 text-sm font-bold text-slate-600">{competitionTypeLabel(competitionType)} · {allParticipants.length} ทีม · {featuredStatus}{featuredMatches[0] ? ` · ${formatMatchDateLong(fixtureDateValue(featuredMatches[0]))}${text(featuredMatches[0], ["venue"], "") ? ` · สนาม ${text(featuredMatches[0], ["venue"], "")}` : ""}` : ""}</p>
+                    {featuredCouncil ? <span className="rounded-full border border-emerald-800/20 bg-emerald-50 px-2.5 py-1 text-[9px] font-black text-emerald-900">2 Divisions{isCompetitionCompleted && featuredChampions.length === 2 ? " · 2 Champions" : ""}</span> : null}
                 </div>
-                <Link className="inline-flex min-h-11 items-center justify-center rounded-md bg-[#061426] px-5 py-3 text-sm font-black text-[#f4d58a] shadow-lg shadow-slate-900/10 transition-colors hover:bg-[#0b2745]" href={competitionHref}>
+                <div className="min-w-0 lg:border-l lg:border-slate-200 lg:pl-6">
+                  <h2 className="break-words text-2xl font-black leading-tight text-[#061426] sm:text-3xl">{competitionName}</h2>
+                  <p className="mt-1.5 max-w-4xl text-sm font-bold leading-6 text-slate-500">{competitionTypeLabel(competitionType)} · {allParticipants.length} ทีม · {featuredStatus}{featuredMatches[0] ? ` · ${formatMatchDateLong(fixtureDateValue(featuredMatches[0]))}${text(featuredMatches[0], ["venue"], "") ? ` · สนาม ${text(featuredMatches[0], ["venue"], "")}` : ""}` : ""}</p>
+                </div>
+                <Link className="inline-flex min-h-11 w-full items-center justify-center rounded-md border border-[#d8ad45]/35 bg-[#061426] px-5 py-3 text-sm font-black text-[#f4d58a] shadow-sm shadow-slate-900/15 transition-colors hover:bg-[#0b2745] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8a6418] lg:w-auto lg:whitespace-nowrap" href={competitionHref}>
                   ดูรายการแข่งขัน
                 </Link>
               </div>
