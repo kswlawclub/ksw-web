@@ -617,7 +617,7 @@ export default async function Home() {
 
       {currentCompetition ? (
         <section className="order-2 bg-slate-100">
-          <div className="mx-auto w-full max-w-7xl px-4 pt-8 sm:px-6 lg:px-10">
+          <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10">
             <div className="overflow-hidden rounded-xl border border-[#d8ad45]/40 bg-white shadow-lg shadow-slate-900/10">
               <div className="grid gap-4 p-4 sm:p-5 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:gap-6">
                 <div className="flex flex-wrap items-center gap-1.5 lg:max-w-[11rem]">
