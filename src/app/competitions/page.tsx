@@ -434,7 +434,7 @@ function ChronicleCard({ entry }: { entry: ChronicleViewModel }) {
   ].filter(Boolean);
   const content = (
     <>
-      <div className="relative aspect-[16/10] overflow-hidden bg-[#061426] lg:aspect-auto">
+      <div className="relative aspect-[16/10] shrink-0 overflow-hidden bg-[#061426]">
         {entry.coverImageUrl ? (
           <Image
             alt=""
@@ -453,14 +453,14 @@ function ChronicleCard({ entry }: { entry: ChronicleViewModel }) {
           <span className="text-xs font-black text-[#f4d58a]">{entry.yearLabel}</span>
         </div>
       </div>
-      <div className="flex min-w-0 flex-col p-5 sm:p-6">
+      <div className="flex min-w-0 flex-1 flex-col p-5 sm:p-6">
         <div className="flex flex-wrap items-center gap-2 text-[11px] font-black text-slate-500">
           <span className="inline-flex items-center gap-1.5"><Archive aria-hidden="true" className="size-3.5 shrink-0 text-[#8a6418]" />จบการแข่งขัน</span>
           {entry.warning ? <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800">ผลสรุปกำลังจัดเตรียม</span> : null}
         </div>
-        <h3 className="mt-3 break-words text-2xl font-black leading-tight text-[#061426]">{entry.name}</h3>
-        {metadata.length ? <p className="mt-2 text-sm font-bold text-slate-500">{metadata.join(" • ")}</p> : null}
-        {entry.excerpt ? <p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-600">{entry.excerpt}</p> : null}
+        <h3 className="mt-3 line-clamp-2 break-words text-2xl font-black leading-tight text-[#061426]">{entry.name}</h3>
+        <p className="mt-2 min-h-12 text-sm font-bold leading-6 text-slate-500">{metadata.join(" • ")}</p>
+        {entry.excerpt ? <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">{entry.excerpt}</p> : null}
         {entry.templateKey === "council_two_division" ? (
           <div className="mt-5 grid gap-2 border-l-2 border-emerald-800/35 pl-3 text-sm">
             <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-800"><Trophy aria-hidden="true" className="size-3.5 shrink-0" />แชมป์การแข่งขัน</p>
@@ -475,7 +475,7 @@ function ChronicleCard({ entry }: { entry: ChronicleViewModel }) {
           </div>
         ) : null}
         {entry.finalResult ? <p className="mt-4 text-sm font-bold text-slate-600">รอบชิงชนะเลิศ: {entry.finalResult}</p> : null}
-        <div className="mt-5 flex items-center justify-between gap-3 border-t border-slate-100 pt-4 text-sm font-black text-[#061426]">
+        <div className="mt-auto flex items-center justify-between gap-3 border-t border-slate-100 pt-4 text-sm font-black text-[#061426]">
         <span>{entry.warning ? "ดูรายละเอียดการแข่งขัน" : "ดูบันทึกการแข่งขัน"}</span>
         <ArrowRight aria-hidden="true" className="size-4 shrink-0 text-[#8a6418] transition-transform group-hover:translate-x-1" />
         </div>
@@ -483,7 +483,7 @@ function ChronicleCard({ entry }: { entry: ChronicleViewModel }) {
     </>
   );
 
-  const className = `group grid min-w-0 overflow-hidden rounded-2xl border bg-white shadow-sm shadow-slate-900/5 transition-all ${accent} hover:border-[#d8ad45]/55 hover:bg-[#fffdf7] hover:shadow-md hover:shadow-slate-900/10 lg:grid-cols-[22rem_minmax(0,1fr)]`;
+  const className = `group flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border bg-white shadow-sm shadow-slate-900/5 transition-all ${accent} hover:border-[#d8ad45]/55 hover:bg-[#fffdf7] hover:shadow-md hover:shadow-slate-900/10`;
   if (!entry.slug) return <article className={className}>{content}</article>;
   return <Link className={className} href={`/competitions/${entry.slug}`}>{content}</Link>;
 }
@@ -519,8 +519,8 @@ function ChronicleSection({ groups }: { groups: ChronicleGroup[] }) {
               </div>
               <div className={`h-px min-w-0 flex-1 ${group.year === null ? "bg-slate-200" : "bg-[#d8ad45]/45"}`} />
             </div>
-            <div className="grid gap-4 lg:grid-cols-2">
-              {group.entries.map((entry) => <div className={group.entries.length === 1 ? "lg:col-span-2" : ""} key={entry.competitionId}><ChronicleCard entry={entry} /></div>)}
+            <div className="grid auto-rows-fr gap-4 lg:grid-cols-2">
+              {group.entries.map((entry) => <div className={`h-full ${group.entries.length === 1 ? "lg:col-span-2" : ""}`} key={entry.competitionId}><ChronicleCard entry={entry} /></div>)}
             </div>
           </div>
         ))}
