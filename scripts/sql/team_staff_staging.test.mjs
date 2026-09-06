@@ -5,7 +5,6 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { staticTeamStaff } from "../../src/lib/public-team-members.ts";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const read = (path) => readFileSync(resolve(root, path), "utf8");
@@ -123,10 +122,14 @@ test("six fixed UUIDs are identical in migration/verifier and separate from ordi
   }
 });
 
-test("retained Public fallback IDs/names/photo paths match the staging manifest and assets exist", () => {
-  assert.equal(staticTeamStaff.length, 6);
-  assert.deepEqual(staticTeamStaff, manifest(migration));
-  for (const staff of staticTeamStaff) assert.ok(existsSync(resolve(root, `public${staff.photo_url}`)));
+test("staged DB photo paths still have assets after the Public static fallback is removed", () => {
+  const staff = manifest(migration);
+  assert.equal(staff.length, 6);
+  assert.deepEqual(staff.map((member) => member.nickname), ["เฟี๊ยต", "เหงี่ยม", "พาสต้า", "โก้", "หม่อมโจอี้", "เด่น"]);
+  for (const [index, member] of staff.entries()) {
+    assert.equal(member.photo_url, `/images/staff/staff-0${index + 1}.png`);
+    assert.ok(existsSync(resolve(root, `public${member.photo_url}`)));
+  }
 });
 
 test("actual INSERT sets extraordinary/staff, inactive, lineup off and all unsupplied fields NULL", () => {

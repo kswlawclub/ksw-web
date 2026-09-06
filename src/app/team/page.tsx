@@ -1,24 +1,13 @@
 import Link from "next/link";
 import { FacebookIcon } from "@/components/facebook-icon";
 import { clubRoleLabel, getMemberDisplayName } from "@/lib/club-members";
-import { groupPublicTeamMembers, staticTeamStaff, type PublicTeamMember, type PublicTeamProfile } from "@/lib/public-team-members";
+import { groupPublicTeamMembers, shuffleTeamMembers, type PublicTeamMember, type PublicTeamProfile } from "@/lib/public-team-members";
 import { getSupabase } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const facebookUrl = "https://web.facebook.com/KlongSamWaLawyers";
-
-function shuffle<T>(items: T[]) {
-  const shuffled = [...items];
-
-  for (let index = shuffled.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(Math.random() * (index + 1));
-    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
-  }
-
-  return shuffled;
-}
 
 function MemberGrid({ profiles, compact = false, showRole = false }: {
   profiles: PublicTeamProfile[];
@@ -29,7 +18,8 @@ function MemberGrid({ profiles, compact = false, showRole = false }: {
     <div className={`grid grid-cols-2 gap-x-4 gap-y-7 sm:gap-x-5 ${compact ? "sm:grid-cols-3 lg:grid-cols-6" : "md:grid-cols-3 lg:grid-cols-4"}`}>
       {profiles.map((member) => {
         const displayName = getMemberDisplayName(member);
-        const isStaticPortrait = staticTeamStaff.some((staff) => staff.photo_url === member.photo_url);
+        // Keep the original asset crop, without a static person/fallback data source.
+        const isStaticPortrait = /^\/images\/staff\/staff-0[1-6]\.png$/.test(member.photo_url ?? "");
         return (
           <article className="flex min-w-0 flex-col items-center justify-start px-2 py-2 text-center" key={member.id}>
             <div className="mx-auto size-[130px] shrink-0 overflow-hidden rounded-full border-2 border-[#d8ad45] shadow-lg shadow-slate-900/15">
@@ -83,7 +73,8 @@ async function getClubMembers() {
 
 export default async function TeamPage() {
   const groups = groupPublicTeamMembers(await getClubMembers());
-  const members = shuffle(groups.ordinary);
+  const members = shuffleTeamMembers(groups.ordinary);
+  const extraordinaryMembers = shuffleTeamMembers(groups.extraordinary);
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#061426] text-slate-100">
@@ -158,8 +149,8 @@ export default async function TeamPage() {
           <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">KSW Community</p>
           <h2 className="mt-3 text-3xl font-black text-[#061426]">สมาชิกวิสามัญ</h2>
           <div className="mt-7">
-            {groups.extraordinary.length ? (
-              <MemberGrid compact profiles={groups.extraordinary} />
+            {extraordinaryMembers.length ? (
+              <MemberGrid compact profiles={extraordinaryMembers} />
             ) : (
               <p className="text-sm font-bold leading-6 text-[#061426]">ข้อมูลสมาชิกวิสามัญจะอัปเดตเร็ว ๆ นี้</p>
             )}
