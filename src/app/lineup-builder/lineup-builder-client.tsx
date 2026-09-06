@@ -2,6 +2,10 @@
 
 import { type CSSProperties, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { getMemberDisplayName, getMemberNickname, type MembershipType } from "@/lib/club-members";
+import { Info } from "lucide-react";
+import Image from "next/image";
+import { useLineupMemberRating } from "@/components/lineup-member-rating";
+import type { MemberFootballRating } from "@/lib/member-football-rating";
 
 export type LineupMember = {
   id: string;
@@ -32,6 +36,7 @@ type MarkerCoordinate = Pick<PositionSlot, "x" | "y">;
 type LineupBuilderProps = {
   members: LineupMember[];
   opponents: OpponentTeam[];
+  ratings?: Record<string, MemberFootballRating>;
 };
 
 type FormationResource = {
@@ -761,7 +766,8 @@ function initials(value: string) {
     .toUpperCase();
 }
 
-export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) {
+export function LineupBuilderClient({ members, opponents, ratings = {} }: LineupBuilderProps) {
+  const ratingUI = useLineupMemberRating();
   const [formation, setFormation] = useState<Formation>("4-3-3");
   const [opponentId, setOpponentId] = useState("");
   const [selectedPlayers, setSelectedPlayers] = useState<Record<number, string>>({});
@@ -1031,15 +1037,17 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
               const isCurrent = selectedId === member.id;
 
               return (
+                <div key={member.id} className="flex min-w-0 gap-1"
+                  onPointerEnter={(event) => ratingUI.pointerPreview(event, member, ratings[member.id])} onPointerLeave={ratingUI.scheduleClose}
+                  onFocus={(event) => ratingUI.focusPreview(event, member, ratings[member.id])} onBlur={ratingUI.scheduleClose}>
                 <button
-                  className={`flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm font-black transition-colors ${
+                  className={`flex min-h-11 min-w-0 flex-1 items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm font-black transition-colors focus-visible:outline-2 focus-visible:outline-[#f4d58a] ${
                     isCurrent
                       ? "border-[#d8ad45]/60 bg-[#d8ad45]/12"
                       : "border-white/10 bg-white/[0.04] hover:border-[#d8ad45]/40 hover:bg-white/[0.08]"
                   } disabled:cursor-not-allowed disabled:opacity-35`}
                   disabled={disabled}
-                  key={member.id}
-                  onClick={() => selectPlayer(positionIndex, member.id)}
+                  onClick={() => { ratingUI.dismiss(); selectPlayer(positionIndex, member.id); }}
                   style={{ color: optionAgeGroup.textColor }}
                   type="button"
                 >
@@ -1049,6 +1057,10 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                     {disabled ? "Picked" : isCurrent ? "Current" : optionAgeGroup.label}
                   </span>
                 </button>
+                {ratings[member.id] ? <button type="button" aria-label={`ดู Football Rating ${getMemberDisplayName(member)}`} aria-haspopup="dialog"
+                  className="inline-flex size-11 shrink-0 items-center justify-center rounded-md border border-white/20 text-[#f4d58a] hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-[#f4d58a] [@media(hover:hover)_and_(pointer:fine)]:hidden [@media(any-pointer:coarse)]:inline-flex"
+                  onClick={(event) => { event.stopPropagation(); ratingUI.info(member, ratings[member.id], event.currentTarget); }}><Info aria-hidden="true" className="size-5" /></button> : null}
+                </div>
               );
             })
           )}
@@ -1362,7 +1374,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                     <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-300">vs</span>
                     <div className="flex size-12 items-center justify-center overflow-hidden rounded-full border border-white/15 bg-white text-xs font-black text-[#061426]">
                       {opponent.logo_url ? (
-                        <img alt={opponent.name} className="h-full w-full object-contain p-1.5" src={opponent.logo_url} />
+                        <Image unoptimized loading="eager" width={48} height={48} alt={opponent.name} className="h-full w-full object-contain p-1.5" src={opponent.logo_url} />
                       ) : (
                         <span>{initials(opponent.short_name || opponent.name)}</span>
                       )}
@@ -1447,8 +1459,16 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                       } ${movePositionsMode ? "lineup-marker-movable" : "cursor-pointer"} ${
                         draggingPosition === index ? "lineup-marker-dragging" : ""
                       } ${recentlyChangedPosition === index ? "lineup-marker-bounce" : ""}`}
-                      onClick={() => openPositionPicker(index)}
-                      onPointerDown={(event) => startMarkerDrag(index, event)}
+                      onPointerEnter={(event) => { if (member && !movePositionsMode) ratingUI.pointerPreview(event, member, ratings[member.id]); }}
+                      onPointerLeave={ratingUI.scheduleClose}
+                      onFocus={(event) => { if (member && !movePositionsMode) ratingUI.focusPreview(event, member, ratings[member.id]); }}
+                      onBlur={ratingUI.scheduleClose}
+                      onClick={(event) => {
+                        if (member && !movePositionsMode && ratingUI.isTouchClick(event)) {
+                          ratingUI.actions(member, ratings[member.id], event.currentTarget, { change: () => openPositionPicker(index), clear: () => clearPosition(index) });
+                        } else { ratingUI.dismiss(); openPositionPicker(index); }
+                      }}
+                      onPointerDown={(event) => { if (movePositionsMode) ratingUI.dismiss(); startMarkerDrag(index, event); }}
                       onAnimationEnd={() => {
                         if (recentlyChangedPosition === index) {
                           setRecentlyChangedPosition(null);
@@ -1469,7 +1489,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                         }
                       >
                         {member?.photo_url ? (
-                          <img
+                          <Image unoptimized loading="eager" width={64} height={64}
                             alt={getMemberDisplayName(member)}
                             className="h-full w-full object-cover object-center"
                             src={member.photo_url}
@@ -1543,6 +1563,8 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
           </div>
         </div>
       ) : null}
+
+      {ratingUI.overlay}
 
       <style jsx>{`
         .lineup-premium-pitch {

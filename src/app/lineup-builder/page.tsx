@@ -1,4 +1,5 @@
 import { getSupabase } from "@/lib/supabase";
+import { getPublicMemberFootballRatings } from "@/lib/public-member-football-ratings";
 import { LineupBuilderClient, type LineupMember, type OpponentTeam } from "./lineup-builder-client";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +9,7 @@ async function getLineupData() {
   const supabase = getSupabase();
 
   if (!supabase) {
-    return { members: [], opponents: [] };
+    return { members: [], opponents: [], ratings: {} };
   }
 
   const [membersResult, teamsResult] = await Promise.all([
@@ -43,11 +44,12 @@ async function getLineupData() {
     })
     .map(({ id, name, short_name, logo_url }) => ({ id, name, short_name, logo_url }));
 
-  return { members, opponents };
+  const ratings = await getPublicMemberFootballRatings(supabase, members.map((member) => member.id));
+  return { members, opponents, ratings };
 }
 
 export default async function LineupBuilderPage() {
-  const { members, opponents } = await getLineupData();
+  const { members, opponents, ratings } = await getLineupData();
 
-  return <LineupBuilderClient members={members} opponents={opponents} />;
+  return <LineupBuilderClient members={members} opponents={opponents} ratings={ratings} />;
 }
