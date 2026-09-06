@@ -4,14 +4,17 @@ import { FacebookIcon } from "@/components/facebook-icon";
 import { clubRoleLabel, getCurrentMemberCounts, getMemberDisplayName } from "@/lib/club-members";
 import { groupPublicTeamMembers, shuffleTeamMembers, type PublicTeamMember, type PublicTeamProfile } from "@/lib/public-team-members";
 import { getSupabase } from "@/lib/supabase";
+import { PublicMemberRating } from "@/components/public-member-rating";
+import { footballRatingColumns, mapFootballRatings, type MemberFootballRating } from "@/lib/member-football-rating";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const facebookUrl = "https://web.facebook.com/KlongSamWaLawyers";
 
-function MemberGrid({ profiles, showRole = false }: {
+function MemberGrid({ profiles, ratings, showRole = false }: {
   profiles: PublicTeamProfile[];
+  ratings: Record<string, MemberFootballRating>;
   showRole?: boolean;
 }) {
   return (
@@ -20,8 +23,7 @@ function MemberGrid({ profiles, showRole = false }: {
         const displayName = getMemberDisplayName(member);
         // Keep the original asset crop, without a static person/fallback data source.
         const isStaticPortrait = /^\/images\/staff\/staff-0[1-6]\.png$/.test(member.photo_url ?? "");
-        return (
-          <article className="flex min-w-0 flex-col items-center justify-start px-2 py-2 text-center" key={member.id}>
+        const portrait = (
             <div className="mx-auto size-[130px] shrink-0 overflow-hidden rounded-full border-2 border-[#d8ad45] shadow-lg shadow-slate-900/15">
               {member.photo_url ? (
                 <img
@@ -41,6 +43,10 @@ function MemberGrid({ profiles, showRole = false }: {
                 <div className="flex h-full w-full items-center justify-center bg-[#f8f3e7] text-xl font-black text-[#061426]">KSW</div>
               )}
             </div>
+        );
+        return (
+          <article className="flex min-w-0 flex-col items-center justify-start px-2 py-2 text-center" key={member.id}>
+            {ratings[member.id] ? <PublicMemberRating name={displayName} photoUrl={member.photo_url} rating={ratings[member.id]}>{portrait}</PublicMemberRating> : portrait}
             <h3 className="mt-4 min-h-10 max-w-full break-words text-sm font-black leading-5 text-[#061426] sm:text-base">{displayName}</h3>
             {showRole ? <p className="mt-1 text-sm font-semibold text-slate-600">{clubRoleLabel(member.club_role)}</p> : null}
           </article>
@@ -50,10 +56,11 @@ function MemberGrid({ profiles, showRole = false }: {
   );
 }
 
-function MembershipSection({ title, count, profiles, emptyState, muted = false }: {
+function MembershipSection({ title, count, profiles, ratings, emptyState, muted = false }: {
   title: string;
   count: number;
   profiles: PublicTeamProfile[];
+  ratings: Record<string, MemberFootballRating>;
   emptyState: ReactNode;
   muted?: boolean;
 }) {
@@ -64,7 +71,7 @@ function MembershipSection({ title, count, profiles, emptyState, muted = false }
           <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">KSW Community</p>
           <h2 className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-3xl font-black text-[#061426]">{title}<span className="text-base font-bold text-slate-600">{count} คน</span></h2>
         </div>
-        {profiles.length ? <MemberGrid profiles={profiles} /> : emptyState}
+        {profiles.length ? <MemberGrid profiles={profiles} ratings={ratings} /> : emptyState}
       </div>
     </section>
   );
@@ -97,6 +104,8 @@ export default async function TeamPage() {
   const counts = getCurrentMemberCounts(clubMembers);
   const members = shuffleTeamMembers(groups.ordinary);
   const extraordinaryMembers = shuffleTeamMembers(groups.extraordinary);
+  const memberIds = [...groups.ordinary, ...groups.extraordinary, ...groups.coaching].map((member) => member.id);
+  const ratings = await getPublicRatings(memberIds);
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#061426] text-slate-100">
@@ -158,6 +167,7 @@ export default async function TeamPage() {
         title="สมาชิกสามัญ"
         count={counts.ordinary}
         profiles={members}
+        ratings={ratings}
         emptyState={
           <div className="rounded-lg border border-[#d8ad45]/25 bg-[#fffaf0] p-6 text-sm font-bold leading-6 text-[#061426]">
             Team member profiles will be updated soon.
@@ -168,6 +178,7 @@ export default async function TeamPage() {
         title="สมาชิกวิสามัญ"
         count={counts.extraordinary}
         profiles={extraordinaryMembers}
+        ratings={ratings}
         muted
         emptyState={<p className="text-sm font-bold leading-6 text-[#061426]">ข้อมูลสมาชิกวิสามัญจะอัปเดตเร็ว ๆ นี้</p>}
       />
@@ -180,7 +191,7 @@ export default async function TeamPage() {
           <h2 className="mt-3 text-3xl font-black text-[#061426]">Coaching Staff</h2>
 
           {groups.coaching.length ? (
-            <div className="mt-7"><MemberGrid profiles={groups.coaching} showRole /></div>
+            <div className="mt-7"><MemberGrid profiles={groups.coaching} ratings={ratings} showRole /></div>
           ) : (
           <article className="relative mt-7 overflow-hidden rounded-2xl border border-[#d8ad45]/35 bg-[#061426] px-5 py-10 text-white shadow-2xl shadow-slate-900/15 sm:px-8 sm:py-12">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.24),transparent_32%),linear-gradient(135deg,#061426,#0b2745_62%,#071b31)]" />
@@ -221,4 +232,23 @@ export default async function TeamPage() {
       </section>
     </main>
   );
+}
+
+async function getPublicRatings(memberIds: string[]): Promise<Record<string, MemberFootballRating>> {
+  if (!memberIds.length) return {};
+  const supabase = getSupabase();
+  if (!supabase) return {};
+  try {
+    const ratings: Record<string, MemberFootballRating> = {};
+    for (let index = 0; index < memberIds.length; index += 200) {
+      const batch = memberIds.slice(index, index + 200);
+      const result = await supabase.from("club_member_football_ratings").select(footballRatingColumns).in("member_id", batch);
+      if (result.error) { console.error("public football ratings query failed"); return {}; }
+      Object.assign(ratings, mapFootballRatings(result.data ?? [], batch));
+    }
+    return ratings;
+  } catch {
+    console.error("public football ratings unavailable");
+    return {};
+  }
 }

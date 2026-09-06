@@ -187,6 +187,8 @@ function adminPresentationHarness(seed) {
     "lucide-react": icons,
     "@/lib/club-members": members,
     "./actions": backend.actions,
+    "./rating-actions": { listMemberFootballRatings: async () => ({ ok: true, ratings: {} }) },
+    "@/components/admin-member-rating-modal": { AdminMemberRatingModal: () => null },
   });
   function render() {
     cursor = 0;

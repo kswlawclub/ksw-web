@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { Pencil, UserCheck, UserMinus } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { AdminMemberRatingModal } from "@/components/admin-member-rating-modal";
+import type { MemberFootballRating } from "@/lib/member-football-rating";
+import { listMemberFootballRatings } from "./rating-actions";
 import {
   clubRoles, clubRoleLabel, defaultMemberClassification, getMemberDisplayName,
   getMemberListView, memberStatusTabs, memberDeactivationMessage, membershipTypes, membershipTypeLabel,
@@ -288,6 +291,9 @@ export default function AdminMembersPage() {
   const [filters, setFilters] = useState<MemberFilters>({ membershipType: "all", clubRole: "all" });
   const [statusTab, setStatusTab] = useState<MemberStatusTab>("active");
   const [changingStatusId, setChangingStatusId] = useState<string | null>(null);
+  const [ratings, setRatings] = useState<Record<string, MemberFootballRating>>({});
+  const [ratingMember, setRatingMember] = useState<ClubMember | null>(null);
+  const [ratingError, setRatingError] = useState("");
   const mutationInFlight = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
   const firstFieldRef = useRef<HTMLInputElement>(null);
@@ -324,6 +330,14 @@ export default function AdminMembersPage() {
       );
     } else {
       setMembers(result.members ?? []);
+      try {
+        const ratingResult = await listMemberFootballRatings((result.members ?? []).map((member) => member.id));
+        setRatings(ratingResult.ok ? ratingResult.ratings : {});
+        setRatingError(ratingResult.ok ? "" : ratingResult.error);
+      } catch {
+        setRatings({});
+        setRatingError("โหลด Rating ไม่สำเร็จ กรุณาลองใหม่");
+      }
     }
 
     setLoading(false);
@@ -907,6 +921,7 @@ export default function AdminMembersPage() {
           </div>
 
           <div aria-labelledby={`member-tab-${statusTab}`} id="member-list-panel" role="tabpanel" tabIndex={0} className="min-w-0 focus-visible:outline-2 focus-visible:outline-[#d8ad45]">
+          {ratingError ? <div role="alert" className="flex flex-wrap items-center gap-3 p-5 text-sm text-red-700"><p>{ratingError}</p><button type="button" disabled={loading} onClick={() => void loadData()} className="min-h-11 rounded-md border border-slate-300 px-3 font-bold focus-visible:outline-2 focus-visible:outline-[#d8ad45] disabled:opacity-50">โหลด Rating ใหม่</button></div> : null}
           {loading ? (
             <p className="p-5 text-sm font-bold text-slate-600">Loading members...</p>
           ) : sortedMembers.length ? (
@@ -939,7 +954,7 @@ export default function AdminMembersPage() {
                   {sortedMembers.map((member) => (
                     <tr className="border-b border-slate-100 last:border-b-0" key={member.id}>
                       <td className="px-4 py-3">
-                        <div className="flex size-14 items-center justify-center overflow-hidden rounded-full border border-[#d8ad45]/60 bg-[#f8f3e7]">
+                        <button type="button" aria-label={`Football Rating ${getMemberDisplayName(member)}`} aria-haspopup="dialog" disabled={Boolean(ratingError)} onClick={() => setRatingMember(member)} className="flex size-14 items-center justify-center overflow-hidden rounded-full border border-[#d8ad45]/60 bg-[#f8f3e7] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9b1c1f] disabled:opacity-50">
                           {member.photo_url ? (
                             <img
                               alt={getMemberDisplayName(member)}
@@ -949,7 +964,7 @@ export default function AdminMembersPage() {
                           ) : (
                             <span className="text-xs font-black text-[#061426]">KSW</span>
                           )}
-                        </div>
+                        </button>
                       </td>
                       <td className="min-w-[220px] whitespace-nowrap px-4 py-3 font-black">
                         {fullName(member)}
@@ -1032,6 +1047,12 @@ export default function AdminMembersPage() {
           </div>
         </div>
       </section>
+      {ratingMember ? <AdminMemberRatingModal key={ratingMember.id} member={ratingMember} initialRating={ratings[ratingMember.id] ?? null} onClose={() => setRatingMember(null)} onSaved={(rating) => setRatings((current) => {
+        const next = { ...current };
+        if (rating) next[ratingMember.id] = rating;
+        else delete next[ratingMember.id];
+        return next;
+      })} /> : null}
     </main>
   );
 }

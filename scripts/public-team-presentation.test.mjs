@@ -8,6 +8,7 @@ import * as jsxRuntime from "react/jsx-runtime";
 import ts from "typescript";
 import * as grouping from "../src/lib/public-team-members.ts";
 import * as memberPresentation from "../src/lib/club-members.ts";
+import { ratingContract, publicRating, fixtureId, ratingRow } from "./lib/football-rating-test-support.mjs";
 
 const source = readFileSync(new URL("../src/app/team/page.tsx", import.meta.url), "utf8");
 const { outputText } = ts.transpileModule(source, { compilerOptions: {
@@ -18,11 +19,23 @@ const migration = readFileSync(new URL("../supabase/migrations/202609060002_stag
 const staffManifest = JSON.parse(migration.match(/staff_manifest CONSTANT jsonb := \$staff\$([\s\S]*?)\$staff\$::jsonb;/)[1]);
 const staffRows = staffManifest.map((staff) => row(staff.id, { ...staff, membership_type: "extraordinary", club_role: "staff" }));
 
-async function renderPage(rows, { available = true, queryError = false, random = Math.random } = {}) {
+async function renderPage(rows, { available = true, queryError = false, random = Math.random, ratings = [], ratingError = false, ratingThrows = false } = {}) {
   const calls = [];
   const shuffledGroups = [];
   const snapshot = structuredClone(rows);
   const client = { from(table) {
+    if (table === "club_member_football_ratings") {
+      calls.push(["ratingFrom", table]);
+      return { select(columns) {
+        assert.equal(columns, ratingContract.footballRatingColumns);
+        return { in(column, ids) {
+          assert.equal(column, "member_id");
+          calls.push(["ratingBatch", ids]);
+          if (ratingThrows) throw new Error("Simulated network failure");
+          return Promise.resolve({ data: ratings, error: ratingError ? { message: "Read failed" } : null });
+        } };
+      } };
+    }
     assert.equal(table, "club_members");
     calls.push(["from", table]);
     const query = {
@@ -45,6 +58,8 @@ async function renderPage(rows, { available = true, queryError = false, random =
       return grouping.shuffleTeamMembers(members, random);
     } },
     "@/lib/supabase": { getSupabase: () => available ? client : null },
+    "@/lib/member-football-rating": ratingContract,
+    "@/components/public-member-rating": publicRating,
   };
   const loaded = { exports: {} };
   new Function("require", "module", "exports", outputText)((name) => {
@@ -256,4 +271,30 @@ test("query failure keeps people hidden instead of replacing them with static re
   assert.equal(names(result.ordinary).length, 0);
   assert.equal(names(result.extraordinary).length, 0);
   assert.deepEqual(names(result.coaching), ["Coming Soon"]);
+});
+
+test("ratings map to rendered IDs without changing membership counts/grouping or inventing profiles", async () => {
+  const rows = [row(fixtureId(), { nickname: "Player" }), row(fixtureId(2), { nickname: "Goalie", membership_type: "extraordinary" }), row(fixtureId(3), { nickname: "Coach", club_role: "coach" }), row(fixtureId(4), { nickname: "Inactive", is_active: false }), row(fixtureId(5), { nickname: "NoRating" })];
+  const ratings = [ratingRow(), ratingRow("goalkeeper", fixtureId(2)), ratingRow("player", fixtureId(3)), ratingRow("player", fixtureId(4)), ratingRow("player", fixtureId(99))];
+  const result = await renderPage(rows, { ratings, random: () => 0.99 });
+  assert.deepEqual(names(result.ordinary), ["ทนายPlayer", "ทนายNoRating"]);
+  assert.deepEqual(names(result.extraordinary), ["Goalie"]);
+  assert.deepEqual(names(result.coaching), ["ทนายCoach"]);
+  assert.match(result.html, /สมาชิกปัจจุบัน 4 คน/);
+  assert.equal((result.html.match(/popover="auto"/g) ?? []).length, 3);
+  assert.doesNotMatch(result.html, /Inactive|Football Rating ทนายNoRating/);
+  assert.match(result.extraordinary, /Goalkeeper/);
+  assert.equal(result.calls.filter(([name]) => name === "ratingFrom").length, 1);
+  assert.deepEqual(result.calls.find(([name]) => name === "ratingBatch")[1], [fixtureId(), fixtureId(5), fixtureId(2), fixtureId(3)]);
+});
+
+test("rating failure falls back to identical normal member presentation, not an empty team", async (context) => {
+  context.mock.method(console, "error", () => {});
+  const rows = [row(fixtureId())];
+  const normal = await renderPage(rows, { random: () => 0 });
+  for (const failure of [{ ratingError: true }, { ratingThrows: true }]) {
+    const failed = await renderPage(rows, { ...failure, ratings: [ratingRow()], random: () => 0 });
+    assert.equal(failed.html, normal.html);
+    assert.doesNotMatch(failed.html, /OVR|popover="auto"/);
+  }
 });
