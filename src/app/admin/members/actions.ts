@@ -1,41 +1,10 @@
 "use server";
 
 import sharp from "sharp";
+import { revalidatePath } from "next/cache";
 import { requireAdminSession } from "@/lib/admin-server-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-
-type MemberPayload = {
-  first_name: string | null;
-  last_name: string | null;
-  nickname: string;
-  birth_day: number | null;
-  birth_month: number | null;
-  birth_year_be: number | null;
-  shirt_number: number | null;
-  lawyer_license_no: string | null;
-  phone: string | null;
-  photo_url: string | null;
-  is_active: boolean;
-  lineup_enabled: boolean;
-};
-
-type ClubMember = {
-  id: string;
-  first_name: string | null;
-  last_name: string | null;
-  nickname: string;
-  birth_day: number | null;
-  birth_month: number | null;
-  birth_year_be: number | null;
-  shirt_number: number | null;
-  lawyer_license_no: string | null;
-  phone: string | null;
-  photo_url: string | null;
-  is_active: boolean;
-  lineup_enabled: boolean;
-  created_at: string;
-  updated_at: string | null;
-};
+import { getMemberActivePatch, isMemberId, parseMemberPayload, type ClubMember, type MemberPayload } from "@/lib/club-members";
 
 type ActionResult = {
   ok: boolean;
@@ -74,12 +43,10 @@ function getAdminClient() {
   return { supabase, error: "" };
 }
 
-function validatePayload(payload: MemberPayload) {
-  if (!payload.nickname.trim()) {
-    return "Nickname is required.";
+function revalidateMemberViews() {
+  for (const path of ["/admin/members", "/admin/members/registration", "/team", "/lineup-builder"]) {
+    revalidatePath(path);
   }
-
-  return "";
 }
 
 function safeSlug(value: string) {
@@ -124,7 +91,7 @@ export async function listMembers(): Promise<ListResult> {
   const result = await supabase
     .from("club_members")
     .select(
-      "id, first_name, last_name, nickname, birth_day, birth_month, birth_year_be, shirt_number, lawyer_license_no, phone, photo_url, is_active, lineup_enabled, created_at, updated_at",
+      "id, first_name, last_name, nickname, birth_day, birth_month, birth_year_be, shirt_number, lawyer_license_no, phone, photo_url, membership_type, club_role, is_active, lineup_enabled, created_at, updated_at",
     )
     .order("created_at", { ascending: false });
 
@@ -139,10 +106,10 @@ export async function listMembers(): Promise<ListResult> {
 export async function createMember(payload: MemberPayload): Promise<ActionResult> {
   await requireAdminSession();
 
-  const validationError = validatePayload(payload);
+  const validation = parseMemberPayload(payload);
 
-  if (validationError) {
-    return { ok: false, error: validationError };
+  if (!validation.ok) {
+    return validation;
   }
 
   const { supabase, error } = getAdminClient();
@@ -151,23 +118,25 @@ export async function createMember(payload: MemberPayload): Promise<ActionResult
     return { ok: false, error };
   }
 
-  const result = await supabase.from("club_members").insert(payload);
+  const result = await supabase.from("club_members").insert(validation.payload);
 
   if (result.error) {
     console.error("admin club member insert failed", result.error);
     return { ok: false, error: result.error.message };
   }
 
+  revalidateMemberViews();
   return { ok: true };
 }
 
 export async function updateMember(id: string, payload: MemberPayload): Promise<ActionResult> {
   await requireAdminSession();
 
-  const validationError = validatePayload(payload);
+  if (!isMemberId(id)) return { ok: false, error: "Invalid member ID." };
+  const validation = parseMemberPayload(payload);
 
-  if (validationError) {
-    return { ok: false, error: validationError };
+  if (!validation.ok) {
+    return validation;
   }
 
   const { supabase, error } = getAdminClient();
@@ -176,32 +145,38 @@ export async function updateMember(id: string, payload: MemberPayload): Promise<
     return { ok: false, error };
   }
 
-  const result = await supabase.from("club_members").update(payload).eq("id", id);
+  const result = await supabase.from("club_members").update(validation.payload).eq("id", id).select("id").maybeSingle();
 
   if (result.error) {
     console.error("admin club member update failed", result.error);
     return { ok: false, error: result.error.message };
   }
 
+  if (!result.data) return { ok: false, error: "Member not found. Refresh the list and try again." };
+  revalidateMemberViews();
   return { ok: true };
 }
 
-export async function deleteMemberById(id: string): Promise<ActionResult> {
+export async function setMemberActive(id: string, isActive: boolean): Promise<ActionResult> {
   await requireAdminSession();
 
+  const patch = getMemberActivePatch(isActive);
+  if (!isMemberId(id) || !patch) return { ok: false, error: "Invalid member status change." };
   const { supabase, error } = getAdminClient();
 
   if (!supabase) {
     return { ok: false, error };
   }
 
-  const result = await supabase.from("club_members").delete().eq("id", id);
+  const result = await supabase.from("club_members").update(patch).eq("id", id).select("id").maybeSingle();
 
   if (result.error) {
-    console.error("admin club member delete failed", result.error);
+    console.error("admin club member status update failed", result.error);
     return { ok: false, error: result.error.message };
   }
 
+  if (!result.data) return { ok: false, error: "Member not found. Refresh the list and try again." };
+  revalidateMemberViews();
   return { ok: true };
 }
 

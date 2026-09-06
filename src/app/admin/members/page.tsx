@@ -1,39 +1,29 @@
 "use client";
 
 import Link from "next/link";
+import { Pencil, UserCheck, UserMinus } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
+  clubRoles, clubRoleLabel, defaultMemberClassification, getMemberDisplayName,
+  matchesMemberFilters, memberDeactivationMessage, membershipTypes, membershipTypeLabel,
+  type ClubMember, type ClubRole, type MemberFilters, type MembershipType,
+} from "@/lib/club-members";
+import {
   createMember,
-  deleteMemberById,
+  setMemberActive,
   listMembers,
   removeMemberPhoto,
   updateMember,
   uploadMemberPhoto,
 } from "./actions";
 
-type ClubMember = {
-  id: string;
-  first_name: string | null;
-  last_name: string | null;
-  nickname: string;
-  birth_day: number | null;
-  birth_month: number | null;
-  birth_year_be: number | null;
-  shirt_number: number | null;
-  lawyer_license_no: string | null;
-  phone: string | null;
-  photo_url: string | null;
-  is_active: boolean;
-  lineup_enabled: boolean;
-  created_at: string;
-  updated_at: string | null;
-};
-
 type MemberForm = {
   id: string;
   firstName: string;
   lastName: string;
   nickname: string;
+  membershipType: MembershipType;
+  clubRole: ClubRole;
   birthDay: string;
   birthMonth: string;
   birthYearBe: string;
@@ -52,6 +42,8 @@ const emptyForm: MemberForm = {
   firstName: "",
   lastName: "",
   nickname: "",
+  membershipType: defaultMemberClassification.membership_type,
+  clubRole: defaultMemberClassification.club_role,
   birthDay: "",
   birthMonth: "",
   birthYearBe: "",
@@ -90,16 +82,6 @@ const sortOptions: { label: string; value: SortOption }[] = [
   { label: "Shirt No.", value: "shirtNo" },
   { label: "Recently Added", value: "recent" },
 ];
-
-function publicMemberName(nickname: string) {
-  const value = nickname.trim();
-
-  if (!value) {
-    return "ทนาย";
-  }
-
-  return value.startsWith("ทนาย") ? value : `ทนาย${value}`;
-}
 
 function currentBuddhistYear() {
   return new Date().getFullYear() + 543;
@@ -296,11 +278,16 @@ export default function AdminMembersPage() {
   const [removingPhoto, setRemovingPhoto] = useState(false);
   const [members, setMembers] = useState<ClubMember[]>([]);
   const [form, setForm] = useState<MemberForm>(emptyForm);
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState("");
+  const [photoSelection, setPhotoSelection] = useState<{ file: File; previewUrl: string } | null>(null);
+  const photoFile = photoSelection?.file ?? null;
+  const photoPreview = photoSelection?.previewUrl ?? "";
+  const photoPreviewUrlRef = useRef<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("youngest");
+  const [filters, setFilters] = useState<MemberFilters>({ membershipType: "all", clubRole: "all", activeStatus: "all" });
+  const [changingStatusId, setChangingStatusId] = useState<string | null>(null);
+  const mutationInFlight = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
   const firstFieldRef = useRef<HTMLInputElement>(null);
 
@@ -308,19 +295,18 @@ export default function AdminMembersPage() {
     void loadData();
   }, []);
 
-  useEffect(() => {
-    if (!photoFile) {
-      setPhotoPreview("");
-      return;
-    }
+  useEffect(() => () => {
+    if (photoPreviewUrlRef.current) URL.revokeObjectURL(photoPreviewUrlRef.current);
+    photoPreviewUrlRef.current = null;
+  }, []);
 
-    const previewUrl = URL.createObjectURL(photoFile);
-    setPhotoPreview(previewUrl);
-
-    return () => {
-      URL.revokeObjectURL(previewUrl);
-    };
-  }, [photoFile]);
+  function selectPhotoFile(file: File | null) {
+    const selection = file ? { file, previewUrl: URL.createObjectURL(file) } : null;
+    // Revoke here as well as on unmount, including selections batched before a render.
+    if (photoPreviewUrlRef.current) URL.revokeObjectURL(photoPreviewUrlRef.current);
+    photoPreviewUrlRef.current = selection?.previewUrl ?? null;
+    setPhotoSelection(selection);
+  }
 
   async function loadData() {
     setLoading(true);
@@ -344,7 +330,7 @@ export default function AdminMembersPage() {
 
   function resetForm() {
     setForm(emptyForm);
-    setPhotoFile(null);
+    selectPhotoFile(null);
     setMessage("");
     setError("");
   }
@@ -362,6 +348,8 @@ export default function AdminMembersPage() {
       firstName: member.first_name ?? "",
       lastName: member.last_name ?? "",
       nickname: member.nickname,
+      membershipType: member.membership_type,
+      clubRole: member.club_role,
       birthDay: member.birth_day ? String(member.birth_day) : "",
       birthMonth: member.birth_month ? String(member.birth_month) : "",
       birthYearBe: member.birth_year_be ? String(member.birth_year_be) : "",
@@ -372,7 +360,7 @@ export default function AdminMembersPage() {
       isActive: member.is_active,
       lineupEnabled: member.lineup_enabled,
     });
-    setPhotoFile(null);
+    selectPhotoFile(null);
     setMessage("");
     setError("");
     scrollToEditForm();
@@ -380,6 +368,10 @@ export default function AdminMembersPage() {
 
   async function saveMember(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (mutationInFlight.current) return;
+    const existing = members.find((member) => member.id === form.id);
+    if (existing?.is_active && !form.isActive && !window.confirm(memberDeactivationMessage(existing))) return;
+    mutationInFlight.current = true;
     setSaving(true);
     setMessage("");
     setError("");
@@ -433,6 +425,8 @@ export default function AdminMembersPage() {
         first_name: form.firstName.trim() || null,
         last_name: form.lastName.trim() || null,
         nickname: form.nickname.trim(),
+        membership_type: form.membershipType,
+        club_role: form.clubRole,
         birth_day: numberOrNull(form.birthDay),
         birth_month: numberOrNull(form.birthMonth),
         birth_year_be: numberOrNull(form.birthYearBe),
@@ -453,32 +447,40 @@ export default function AdminMembersPage() {
 
       setMessage(form.id ? "Member updated." : "Member added.");
       setForm(emptyForm);
-      setPhotoFile(null);
+      selectPhotoFile(null);
       await loadData();
     } catch (saveError) {
       console.error("admin member save failed", saveError);
       setError("Could not save member. Please check the photo upload and try again.");
     } finally {
+      mutationInFlight.current = false;
       setSaving(false);
     }
   }
 
-  async function deleteMember(member: ClubMember) {
-    const confirmed = window.confirm(`Delete ${member.nickname}?`);
-
-    if (!confirmed) {
-      return;
+  async function changeMemberStatus(member: ClubMember) {
+    if (mutationInFlight.current) return;
+    if (member.is_active && !window.confirm(memberDeactivationMessage(member))) return;
+    mutationInFlight.current = true;
+    setChangingStatusId(member.id);
+    setError("");
+    setMessage("");
+    try {
+      const isActive = !member.is_active;
+      const result = await setMemberActive(member.id, isActive);
+      if (!result.ok) {
+        setError(result.error ?? "Could not change member status.");
+        return;
+      }
+      setForm((current) => current.id === member.id ? { ...current, isActive } : current);
+      setMessage(isActive ? "Member reactivated." : "Member deactivated. Record and photo preserved.");
+      await loadData();
+    } catch {
+      setError("Could not change member status. Please try again.");
+    } finally {
+      mutationInFlight.current = false;
+      setChangingStatusId(null);
     }
-
-    const result = await deleteMemberById(member.id);
-
-    if (!result.ok) {
-      setError(result.error ?? "Could not delete member.");
-      return;
-    }
-
-    setMessage("Member deleted.");
-    await loadData();
   }
 
   async function removeCurrentPhoto() {
@@ -506,7 +508,7 @@ export default function AdminMembersPage() {
       }
 
       setForm((current) => ({ ...current, photoUrl: "" }));
-      setPhotoFile(null);
+      selectPhotoFile(null);
       setMessage("Photo removed.");
       await loadData();
     } catch (removeError) {
@@ -518,8 +520,8 @@ export default function AdminMembersPage() {
   }
 
   const sortedMembers = useMemo(
-    () => [...members].sort((a, b) => compareMembers(a, b, sortBy)),
-    [members, sortBy],
+    () => members.filter((member) => matchesMemberFilters(member, filters)).sort((a, b) => compareMembers(a, b, sortBy)),
+    [members, sortBy, filters],
   );
 
   return (
@@ -559,13 +561,38 @@ export default function AdminMembersPage() {
               <h2 className="text-2xl font-black">{form.id ? "Edit Member" : "Add Member"}</h2>
             </div>
             {form.id ? (
-              <button className="text-sm font-black text-[#9b1c1f]" onClick={resetForm} type="button">
+              <button className="text-sm font-black text-[#9b1c1f]" disabled={saving || changingStatusId !== null} onClick={resetForm} type="button">
                 Cancel
               </button>
             ) : null}
           </div>
 
-          <div className="grid gap-4">
+          <fieldset className="grid min-w-0 gap-4" disabled={saving || changingStatusId !== null || removingPhoto}>
+            <div className="grid gap-3 sm:grid-cols-2" aria-describedby="member-classification-help">
+              <label className="grid gap-2 text-sm font-black">
+                ประเภทสมาชิก
+                <select
+                  className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3 py-2 focus-visible:outline-2 focus-visible:outline-[#d8ad45]"
+                  onChange={(event) => setForm((current) => ({ ...current, membershipType: event.target.value as MembershipType }))}
+                  value={form.membershipType}
+                >
+                  {membershipTypes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </label>
+              <label className="grid gap-2 text-sm font-black">
+                บทบาทในสโมสร
+                <select
+                  className="min-h-11 w-full min-w-0 rounded-md border border-slate-200 px-3 py-2 focus-visible:outline-2 focus-visible:outline-[#d8ad45]"
+                  onChange={(event) => setForm((current) => ({ ...current, clubRole: event.target.value as ClubRole }))}
+                  value={form.clubRole}
+                >
+                  {clubRoles.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </label>
+            </div>
+            <p className="text-xs leading-5 text-slate-500" id="member-classification-help">
+              สามัญ = ทนายความ · วิสามัญ = ผู้ร่วมกิจกรรม/สนับสนุนที่ไม่ใช่ทนายความ ทั้งสองประเภทมีบทบาทเป็นโค้ชหรือทีมงานได้
+            </p>
             <label className="grid gap-2 text-sm font-black">
               First Name
               <input
@@ -603,7 +630,7 @@ export default function AdminMembersPage() {
                 Public Display
               </p>
               <p className="mt-1 text-base font-black text-[#061426]">
-                {publicMemberName(form.nickname)}
+                {getMemberDisplayName({ nickname: form.nickname, membership_type: form.membershipType })}
               </p>
             </div>
 
@@ -688,7 +715,7 @@ export default function AdminMembersPage() {
             </label>
 
             <label className="grid gap-2 text-sm font-black">
-              Lawyer License No.
+              Lawyer License No. (optional)
               <input
                 className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#d8ad45] focus:ring-2 focus:ring-[#d8ad45]/20"
                 onChange={(event) => setForm((current) => ({ ...current, lawyerLicenseNo: event.target.value }))}
@@ -717,24 +744,24 @@ export default function AdminMembersPage() {
                   const file = event.target.files?.[0] ?? null;
 
                   if (!file) {
-                    setPhotoFile(null);
+                    selectPhotoFile(null);
                     return;
                   }
 
                   if (!allowedPhotoTypes.includes(file.type)) {
                     setError("Photo must be a png, jpg, jpeg, or webp image.");
-                    setPhotoFile(null);
+                    selectPhotoFile(null);
                     return;
                   }
 
                   if (file.size > maxOriginalSize) {
                     setError("Photo file must be 5MB or smaller before processing.");
-                    setPhotoFile(null);
+                    selectPhotoFile(null);
                     return;
                   }
 
                   setError("");
-                  setPhotoFile(file);
+                  selectPhotoFile(file);
                 }}
                 type="file"
               />
@@ -788,12 +815,12 @@ export default function AdminMembersPage() {
             </label>
 
             {error ? (
-              <p className="rounded-md border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-3 py-2 text-sm font-bold text-[#9b1c1f]">
+              <p role="alert" className="rounded-md border border-[#9b1c1f]/25 bg-[#9b1c1f]/10 px-3 py-2 text-sm font-bold text-[#9b1c1f]">
                 {error}
               </p>
             ) : null}
             {message ? (
-              <p className="rounded-md border border-emerald-700/20 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">
+              <p role="status" className="rounded-md border border-emerald-700/20 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">
                 {message}
               </p>
             ) : null}
@@ -805,7 +832,7 @@ export default function AdminMembersPage() {
             >
               {saving ? "Saving..." : form.id ? "Update Member" : "Add Member"}
             </button>
-          </div>
+          </fieldset>
         </form>
 
         <div className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
@@ -813,7 +840,7 @@ export default function AdminMembersPage() {
             <div>
               <div className="mb-3 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
               <h2 className="text-2xl font-black">Member List</h2>
-              <p className="mt-1 text-sm font-bold text-slate-500">{members.length} members</p>
+              <p className="mt-1 text-sm font-bold text-slate-500">{sortedMembers.length} / {members.length} members</p>
             </div>
             <label className="grid gap-2 text-sm font-black text-[#061426] sm:min-w-[220px]">
               Sort By
@@ -831,9 +858,32 @@ export default function AdminMembersPage() {
             </label>
           </div>
 
+          <div className="grid gap-3 border-b border-slate-200 p-5 sm:grid-cols-3">
+            <label className="grid gap-2 text-sm font-bold">
+              ประเภทสมาชิก
+              <select className="min-h-11 min-w-0 rounded-md border border-slate-200 px-3 py-2 focus-visible:outline-2 focus-visible:outline-[#d8ad45]" value={filters.membershipType} onChange={(event) => setFilters((current) => ({ ...current, membershipType: event.target.value as MemberFilters["membershipType"] }))}>
+                <option value="all">ทุกประเภท</option>
+                {membershipTypes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label>
+            <label className="grid gap-2 text-sm font-bold">
+              บทบาทในสโมสร
+              <select className="min-h-11 min-w-0 rounded-md border border-slate-200 px-3 py-2 focus-visible:outline-2 focus-visible:outline-[#d8ad45]" value={filters.clubRole} onChange={(event) => setFilters((current) => ({ ...current, clubRole: event.target.value as MemberFilters["clubRole"] }))}>
+                <option value="all">ทุกบทบาท</option>
+                {clubRoles.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label>
+            <label className="grid gap-2 text-sm font-bold">
+              สถานะสมาชิก
+              <select className="min-h-11 min-w-0 rounded-md border border-slate-200 px-3 py-2 focus-visible:outline-2 focus-visible:outline-[#d8ad45]" value={filters.activeStatus} onChange={(event) => setFilters((current) => ({ ...current, activeStatus: event.target.value as MemberFilters["activeStatus"] }))}>
+                <option value="all">ทุกสถานะ</option><option value="active">Active</option><option value="inactive">Inactive</option>
+              </select>
+            </label>
+          </div>
+
           {loading ? (
             <p className="p-5 text-sm font-bold text-slate-600">Loading members...</p>
-          ) : members.length ? (
+          ) : sortedMembers.length ? (
             <div className="w-full overflow-x-auto">
               <table className="w-full min-w-[1560px] border-collapse text-left text-sm">
                 <thead className="bg-[#061426] text-xs uppercase tracking-[0.14em] text-[#f4d58a]">
@@ -866,7 +916,7 @@ export default function AdminMembersPage() {
                         <div className="flex size-14 items-center justify-center overflow-hidden rounded-full border border-[#d8ad45]/60 bg-[#f8f3e7]">
                           {member.photo_url ? (
                             <img
-                              alt={publicMemberName(member.nickname)}
+                              alt={getMemberDisplayName(member)}
                               className="h-full w-full object-cover object-center"
                               src={member.photo_url}
                             />
@@ -880,7 +930,11 @@ export default function AdminMembersPage() {
                       </td>
                       <td className="px-4 py-3 font-black">{member.nickname}</td>
                       <td className="px-4 py-3 font-black text-[#061426]">
-                        {publicMemberName(member.nickname)}
+                        {getMemberDisplayName(member)}
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <span className="whitespace-nowrap rounded-md bg-amber-50 px-2 py-1 text-xs font-bold text-amber-900">{membershipTypeLabel(member.membership_type)}</span>
+                          <span className="whitespace-nowrap rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">{clubRoleLabel(member.club_role)}</span>
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-slate-600">
                         {birthDateDisplay(member.birth_year_be, member.birth_month, member.birth_day)}
@@ -921,18 +975,21 @@ export default function AdminMembersPage() {
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-2">
                           <button
-                            className="rounded-md border border-[#d8ad45]/50 px-3 py-2 text-xs font-black text-[#061426] hover:bg-[#fff8e3]"
+                            className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-[#d8ad45]/50 px-3 py-2 text-xs font-black text-[#061426] hover:bg-[#fff8e3] focus-visible:outline-2 focus-visible:outline-[#d8ad45] disabled:opacity-50"
+                            disabled={saving || changingStatusId !== null || removingPhoto}
                             onClick={() => editMember(member)}
                             type="button"
                           >
-                            Edit
+                            <Pencil aria-hidden="true" className="size-4" />Edit
                           </button>
                           <button
-                            className="rounded-md border border-[#9b1c1f]/35 px-3 py-2 text-xs font-black text-[#9b1c1f] hover:bg-[#9b1c1f]/10"
-                            onClick={() => void deleteMember(member)}
+                            className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-slate-300 px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-[#d8ad45] disabled:opacity-50"
+                            disabled={saving || changingStatusId !== null || removingPhoto || loading}
+                            onClick={() => void changeMemberStatus(member)}
                             type="button"
                           >
-                            Delete
+                            {member.is_active ? <UserMinus aria-hidden="true" className="size-4" /> : <UserCheck aria-hidden="true" className="size-4" />}
+                            {changingStatusId === member.id ? "Saving..." : member.is_active ? "Deactivate" : "Reactivate"}
                           </button>
                         </div>
                       </td>
@@ -943,7 +1000,7 @@ export default function AdminMembersPage() {
             </div>
           ) : (
             <p className="p-5 text-sm font-bold text-slate-600">
-              No members found. Add the first club member after running the Supabase SQL.
+              No members match the selected filters.
             </p>
           )}
         </div>

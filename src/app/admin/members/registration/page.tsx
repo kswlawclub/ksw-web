@@ -2,22 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { clubRoleLabel, getMemberDisplayName, membershipTypeLabel, type ClubMember } from "@/lib/club-members";
 import { listMembers } from "../actions";
-
-type ClubMember = {
-  id: string;
-  first_name: string | null;
-  last_name: string | null;
-  nickname: string;
-  birth_day: number | null;
-  birth_month: number | null;
-  birth_year_be: number | null;
-  shirt_number: number | null;
-  lawyer_license_no: string | null;
-  phone: string | null;
-  is_active: boolean;
-  created_at: string;
-};
 
 type SortOption = "youngest" | "oldest" | "birthDate" | "nickname" | "shirtNo" | "recent";
 type ExportColumnKey =
@@ -36,7 +22,9 @@ type ExportColumnKey =
   | "nickname"
   | "publicDisplay"
   | "phone"
-  | "status";
+  | "status"
+  | "membershipType"
+  | "clubRole";
 
 type ExportColumn = {
   key: ExportColumnKey;
@@ -105,16 +93,6 @@ function displayAge(member: Pick<ClubMember, "birth_year_be">) {
 
 function shirtNumberDisplay(value: number | null) {
   return value ? `#${value}` : "-";
-}
-
-function publicMemberName(nickname: string) {
-  const value = nickname.trim();
-
-  if (!value) {
-    return "ทนาย";
-  }
-
-  return value.startsWith("ทนาย") ? value : `ทนาย${value}`;
 }
 
 function fullName(member: Pick<ClubMember, "first_name" | "last_name">) {
@@ -207,7 +185,7 @@ export default function MemberRegistrationPage() {
         setMembers([]);
         setError(result.error ?? "Could not load members.");
       } else {
-        setMembers((result.members ?? []) as ClubMember[]);
+        setMembers(result.members ?? []);
       }
 
       setLoading(false);
@@ -251,9 +229,11 @@ export default function MemberRegistrationPage() {
       { key: "displayAge", label: "Display Age", value: (member) => displayAge(member) },
       { key: "shirtNo", label: "Shirt No.", value: (member) => member.shirt_number ?? "-" },
       { key: "nickname", label: "Nickname", value: (member) => member.nickname },
-      { key: "publicDisplay", label: "Public Display", value: (member) => publicMemberName(member.nickname) },
+      { key: "publicDisplay", label: "Public Display", value: (member) => getMemberDisplayName(member) },
       { key: "phone", label: "Phone", value: (member) => member.phone ?? "-" },
       { key: "status", label: "Status", value: (member) => (member.is_active ? "Active" : "Inactive") },
+      { key: "membershipType", label: "ประเภทสมาชิก", value: (member) => member.membership_type },
+      { key: "clubRole", label: "บทบาทในสโมสร", value: (member) => member.club_role },
     ],
     [],
   );
@@ -459,6 +439,8 @@ export default function MemberRegistrationPage() {
                       Shirt No.
                     </th>
                     <th className="px-4 py-3">Nickname</th>
+                    <th className="px-4 py-3">ประเภทสมาชิก</th>
+                    <th className="px-4 py-3">บทบาทในสโมสร</th>
                     <th className="px-4 py-3">Phone</th>
                     <th className="px-4 py-3">Status</th>
                   </tr>
@@ -481,7 +463,12 @@ export default function MemberRegistrationPage() {
                       <td className="min-w-[100px] border-l border-slate-200 px-4 py-3 text-center font-bold">
                         {shirtNumberDisplay(member.shirt_number)}
                       </td>
-                      <td className="px-4 py-3">{member.nickname}</td>
+                      <td className="px-4 py-3">
+                        {member.nickname}
+                        <p className="mt-1 text-xs text-slate-500">{getMemberDisplayName(member)}</p>
+                      </td>
+                      <td className="px-4 py-3"><span className="whitespace-nowrap rounded-md bg-amber-50 px-2 py-1 text-xs font-bold text-amber-900">{membershipTypeLabel(member.membership_type)}</span></td>
+                      <td className="px-4 py-3"><span className="whitespace-nowrap rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">{clubRoleLabel(member.club_role)}</span></td>
                       <td className="px-4 py-3">{member.phone ?? "-"}</td>
                       <td className="px-4 py-3">
                         <span

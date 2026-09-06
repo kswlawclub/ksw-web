@@ -1,10 +1,12 @@
 "use client";
 
 import { type CSSProperties, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { getMemberDisplayName, getMemberNickname, type MembershipType } from "@/lib/club-members";
 
 export type LineupMember = {
   id: string;
   nickname: string;
+  membership_type: MembershipType;
   photo_url: string | null;
   shirt_number: number | null;
   birth_year_be: number | null;
@@ -641,18 +643,8 @@ function formationPositions(formationName: Formation) {
   });
 }
 
-function formatPublicLawyerName(nickname: string) {
-  const value = nickname.trim();
-
-  if (!value) {
-    return "ทนาย";
-  }
-
-  return value.startsWith("ทนาย") ? value : `ทนาย${value}`;
-}
-
 function formatDropdownNickname(nickname: string) {
-  return nickname.trim().replace(/^ทนาย\s*/, "") || "Player";
+  return getMemberNickname(nickname) || "Player";
 }
 
 function currentBuddhistYear() {
@@ -811,8 +803,6 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
       return;
     }
 
-    setMobileRoleGuideExpanded(false);
-
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setActivePickerPosition(null);
@@ -928,6 +918,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
       return;
     }
 
+    if (activePickerPosition !== positionIndex) setMobileRoleGuideExpanded(false);
     setActivePickerPosition(positionIndex);
   }
 
@@ -1479,13 +1470,13 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                       >
                         {member?.photo_url ? (
                           <img
-                            alt={formatPublicLawyerName(member.nickname)}
+                            alt={getMemberDisplayName(member)}
                             className="h-full w-full object-cover object-center"
                             src={member.photo_url}
                           />
                         ) : member ? (
                           <span className="text-xs font-black text-[#f4d58a] sm:text-sm">
-                            {initials(formatPublicLawyerName(member.nickname))}
+                            {initials(getMemberDisplayName(member))}
                           </span>
                         ) : (
                           <span className="text-xs font-black text-white/85">{position.label}</span>
@@ -1521,7 +1512,7 @@ export function LineupBuilderClient({ members, opponents }: LineupBuilderProps) 
                           {member.shirt_number ? (
                             <span className="block text-[#f4d58a]">#{member.shirt_number}</span>
                           ) : null}
-                          <span className="line-clamp-2">{formatPublicLawyerName(member.nickname)}</span>
+                          <span className="line-clamp-2">{getMemberDisplayName(member)}</span>
                           <span className="mt-1 inline-flex rounded-full border border-[#d8ad45]/25 bg-white/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-white sm:text-[10px]">
                             Age {age ?? "-"}
                           </span>
