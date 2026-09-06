@@ -5,6 +5,10 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import ts from "typescript";
+import * as React from "react";
+import * as jsxRuntime from "react/jsx-runtime";
+import { renderToStaticMarkup } from "react-dom/server";
+import * as icons from "lucide-react";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const read = (path) => readFileSync(resolve(root, path), "utf8");
@@ -164,6 +168,124 @@ function actionHarness(seed = [staged], options = {}) {
   return { actions, rows, calls, refreshed };
 }
 
+// Render the real page and dispatch its callbacks with local state and in-memory actions only.
+function adminPresentationHarness(seed) {
+  const backend = actionHarness(seed);
+  const states = [];
+  let cursor = 0;
+  const page = loadModule(adminPath, {
+    "react/jsx-runtime": jsxRuntime,
+    react: { ...React,
+      useState(initial) {
+        const index = cursor++;
+        if (!Object.hasOwn(states, index)) states[index] = index === 0 ? false : Array.isArray(initial) ? structuredClone(seed) : initial;
+        return [states[index], (value) => { states[index] = typeof value === "function" ? value(states[index]) : value; }];
+      },
+      useEffect() {}, useMemo: (derive) => derive(), useRef: (current) => ({ current }),
+    },
+    "next/link": ({ children, ...props }) => React.createElement("a", props, children),
+    "lucide-react": icons,
+    "@/lib/club-members": members,
+    "./actions": backend.actions,
+  });
+  function render() {
+    cursor = 0;
+    const tree = page.default();
+    const nodes = [];
+    function visit(node) {
+      if (Array.isArray(node)) node.forEach(visit);
+      else if (React.isValidElement(node)) { nodes.push(node); visit(node.props.children); }
+    }
+    visit(tree);
+    return { html: renderToStaticMarkup(tree), nodes };
+  }
+  return { ...backend, render };
+}
+
+test("Admin defaults to current members; tabs separate rows/counts and filters keep base totals", () => {
+  const current = { ...staged, id: "current", nickname: "current-only", is_active: true, membership_type: "ordinary", club_role: "coach" };
+  const harness = adminPresentationHarness([staged, current]);
+  let rendered = harness.render();
+  assert.match(rendered.html, /สมาชิกปัจจุบัน 1 คน/);
+  assert.match(rendered.html, /aria-selected="true"[^>]*id="member-tab-active"/);
+  assert.equal(rendered.nodes.filter((node) => node.type === "tr").length, 2);
+  assert.ok(rendered.nodes.some((node) => node.key === current.id));
+  assert.ok(!rendered.nodes.some((node) => node.key === staged.id));
+  rendered.nodes.find((node) => node.props.role === "tab" && node.props.id === "member-tab-inactive").props.onClick();
+  rendered = harness.render();
+  assert.match(rendered.html, /รายชื่อที่ไม่ใช้งาน 1 รายการ/);
+  assert.ok(rendered.nodes.some((node) => node.key === staged.id));
+  assert.ok(!rendered.nodes.some((node) => node.key === current.id));
+  const typeSelect = rendered.nodes.find((node) => node.type === "select" && node.props.children?.[0]?.props?.children === "ทุกประเภท");
+  typeSelect.props.onChange({ target: { value: "ordinary" } });
+  rendered = harness.render();
+  assert.match(rendered.html, /แสดง 0 จาก 1 รายการ/);
+  assert.match(rendered.html, /ไม่พบรายชื่อที่ไม่ใช้งาน/);
+  assert.equal(rendered.nodes.filter((node) => node.props.role === "tab").length, 2);
+  assert.equal(harness.calls.length, 0);
+});
+
+test("Admin lifecycle callback reloads rows, moves records between tabs and updates public counts", async () => {
+  const original = { ...staged, is_active: true, lineup_enabled: true };
+  const harness = adminPresentationHarness([original]);
+  const previousWindow = globalThis.window;
+  let confirmations = 0;
+  globalThis.window = { confirm: () => { confirmations++; return true; } };
+  try {
+    let rendered = harness.render();
+    rendered.nodes.find((node) => node.type === "button" && String(node.props.onClick).includes("changeMemberStatus")).props.onClick();
+    await new Promise((resolve) => setImmediate(resolve));
+    rendered = harness.render();
+    assert.equal(confirmations, 1);
+    assert.match(rendered.html, /สมาชิกปัจจุบัน 0 คน/);
+    assert.equal(rendered.nodes.some((node) => node.key === staged.id), false);
+    assert.deepEqual(harness.rows, [{ ...original, is_active: false }]);
+    assert.equal(members.getCurrentMemberCounts(harness.rows).total, 0);
+    rendered.nodes.find((node) => node.props.id === "member-tab-inactive").props.onClick();
+    rendered = harness.render();
+    assert.match(rendered.html, /รายชื่อที่ไม่ใช้งาน 1 รายการ/);
+    rendered.nodes.find((node) => node.type === "button" && String(node.props.onClick).includes("changeMemberStatus")).props.onClick();
+    await new Promise((resolve) => setImmediate(resolve));
+    rendered = harness.render();
+    assert.match(rendered.html, /รายชื่อที่ไม่ใช้งาน 0 รายการ/);
+    assert.deepEqual(harness.rows, [original]);
+    assert.equal(members.getCurrentMemberCounts(harness.rows).total, 1);
+    assert.equal(confirmations, 1);
+    assert.ok(harness.refreshed.includes("/team"));
+    assert.equal(harness.calls.filter(([name]) => name === "order").length, 2);
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+  }
+});
+
+test("Admin status tabs support arrow/Home/End navigation with connected panel and focus", () => {
+  const harness = adminPresentationHarness([staged]);
+  const previousDocument = globalThis.document;
+  let focused;
+  globalThis.document = { getElementById: (id) => ({ focus: () => { focused = id; } }) };
+  try {
+    for (const [key, expected] of [["ArrowRight", "inactive"], ["ArrowRight", "active"], ["ArrowLeft", "inactive"], ["Home", "active"], ["End", "inactive"]]) {
+      let prevented = false;
+      const before = harness.render();
+      const selected = before.nodes.find((node) => node.props.role === "tab" && node.props["aria-selected"]);
+      selected.props.onKeyDown({ key, preventDefault: () => { prevented = true; } });
+      assert.equal(prevented, true);
+      assert.equal(focused, `member-tab-${expected}`);
+      const after = harness.render();
+      const tab = after.nodes.find((node) => node.props.role === "tab" && node.props["aria-selected"]);
+      const panel = after.nodes.find((node) => node.props.role === "tabpanel");
+      assert.equal(tab.props.id, focused);
+      assert.equal(tab.props.tabIndex, 0);
+      assert.equal(tab.props["aria-controls"], panel.props.id);
+      assert.equal(panel.props["aria-labelledby"], focused);
+    }
+  } finally {
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+  }
+});
+
 test("real list action selects classification, includes inactive Staff and keeps original order contract", async () => {
   const { actions, rows, calls } = actionHarness();
   const result = await actions.listMembers();
@@ -243,8 +365,10 @@ test("write errors do not refresh or report success", async () => {
 test("UI defaults and edit mappings preserve separate type/role/active/lineup values", () => {
   const source = read(adminPath);
   for (const entry of ["membershipType: defaultMemberClassification.membership_type", "clubRole: defaultMemberClassification.club_role", "membershipType: member.membership_type", "clubRole: member.club_role", "isActive: member.is_active", "lineupEnabled: member.lineup_enabled", "membership_type: form.membershipType", "club_role: form.clubRole"]) assert.ok(source.includes(entry));
-  assert.match(source, /activeStatus: "all"/);
-  assert.match(source, /matchesMemberFilters\(member, filters\).*sort\(\(a, b\) => compareMembers\(a, b, sortBy\)\)/);
+  assert.match(source, /useState<MemberStatusTab>\("active"\)/);
+  assert.doesNotMatch(source, /activeStatus|สถานะสมาชิก|members\.length\} members/);
+  assert.match(source, /getMemberListView\(members, statusTab, filters\)/);
+  assert.match(source, /\[\.\.\.listView\.rows\]\.sort\(\(a, b\) => compareMembers\(a, b, sortBy\)\)/);
   assert.match(source, /member\.is_active \? "Active" : "Inactive"/);
   assert.match(source, /member\.is_active \? "Deactivate" : "Reactivate"/);
   assert.match(source, /existing\?\.is_active && !form\.isActive && !window\.confirm\(memberDeactivationMessage\(existing\)\)/);

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { FacebookIcon } from "@/components/facebook-icon";
-import { clubRoleLabel, getMemberDisplayName } from "@/lib/club-members";
+import { clubRoleLabel, getCurrentMemberCounts, getMemberDisplayName } from "@/lib/club-members";
 import { groupPublicTeamMembers, shuffleTeamMembers, type PublicTeamMember, type PublicTeamProfile } from "@/lib/public-team-members";
 import { getSupabase } from "@/lib/supabase";
 
@@ -50,8 +50,9 @@ function MemberGrid({ profiles, showRole = false }: {
   );
 }
 
-function MembershipSection({ title, profiles, emptyState, muted = false }: {
+function MembershipSection({ title, count, profiles, emptyState, muted = false }: {
   title: string;
+  count: number;
   profiles: PublicTeamProfile[];
   emptyState: ReactNode;
   muted?: boolean;
@@ -61,7 +62,7 @@ function MembershipSection({ title, profiles, emptyState, muted = false }: {
       <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
         <div className="mb-7">
           <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">KSW Community</p>
-          <h2 className="mt-3 text-3xl font-black text-[#061426]">{title}</h2>
+          <h2 className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-3xl font-black text-[#061426]">{title}<span className="text-base font-bold text-slate-600">{count} คน</span></h2>
         </div>
         {profiles.length ? <MemberGrid profiles={profiles} /> : emptyState}
       </div>
@@ -91,7 +92,9 @@ async function getClubMembers() {
 }
 
 export default async function TeamPage() {
-  const groups = groupPublicTeamMembers(await getClubMembers());
+  const clubMembers = await getClubMembers();
+  const groups = groupPublicTeamMembers(clubMembers);
+  const counts = getCurrentMemberCounts(clubMembers);
   const members = shuffleTeamMembers(groups.ordinary);
   const extraordinaryMembers = shuffleTeamMembers(groups.extraordinary);
 
@@ -119,6 +122,12 @@ export default async function TeamPage() {
             สมาชิกชมรมทนายความคลองสามวา ผู้ร่วมสร้างมิตรภาพ เครือข่าย
             และชีวิตฟุตบอลของ KSW L.C.
           </p>
+          <div className="mt-6 border-l-2 border-[#d8ad45] pl-4">
+            <p className="text-lg font-bold text-white">สมาชิกปัจจุบัน {counts.total} คน</p>
+            <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm text-[#f4d58a]">
+              <span>สมาชิกสามัญ {counts.ordinary}</span><span>สมาชิกวิสามัญ {counts.extraordinary}</span>
+            </p>
+          </div>
           <div className="mt-7 flex flex-col gap-3 sm:flex-row">
             <Link
               className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-[#d8ad45] to-[#f4d58a] px-5 py-3 text-sm font-black text-[#061426] shadow-lg shadow-[#d8ad45]/15 transition-transform hover:scale-[1.02]"
@@ -147,6 +156,7 @@ export default async function TeamPage() {
 
       <MembershipSection
         title="สมาชิกสามัญ"
+        count={counts.ordinary}
         profiles={members}
         emptyState={
           <div className="rounded-lg border border-[#d8ad45]/25 bg-[#fffaf0] p-6 text-sm font-bold leading-6 text-[#061426]">
@@ -156,6 +166,7 @@ export default async function TeamPage() {
       />
       <MembershipSection
         title="สมาชิกวิสามัญ"
+        count={counts.extraordinary}
         profiles={extraordinaryMembers}
         muted
         emptyState={<p className="text-sm font-bold leading-6 text-[#061426]">ข้อมูลสมาชิกวิสามัญจะอัปเดตเร็ว ๆ นี้</p>}

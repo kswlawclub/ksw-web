@@ -5,8 +5,8 @@ import { Pencil, UserCheck, UserMinus } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   clubRoles, clubRoleLabel, defaultMemberClassification, getMemberDisplayName,
-  matchesMemberFilters, memberDeactivationMessage, membershipTypes, membershipTypeLabel,
-  type ClubMember, type ClubRole, type MemberFilters, type MembershipType,
+  getMemberListView, memberStatusTabs, memberDeactivationMessage, membershipTypes, membershipTypeLabel,
+  type ClubMember, type ClubRole, type MemberFilters, type MembershipType, type MemberStatusTab,
 } from "@/lib/club-members";
 import {
   createMember,
@@ -285,7 +285,8 @@ export default function AdminMembersPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("youngest");
-  const [filters, setFilters] = useState<MemberFilters>({ membershipType: "all", clubRole: "all", activeStatus: "all" });
+  const [filters, setFilters] = useState<MemberFilters>({ membershipType: "all", clubRole: "all" });
+  const [statusTab, setStatusTab] = useState<MemberStatusTab>("active");
   const [changingStatusId, setChangingStatusId] = useState<string | null>(null);
   const mutationInFlight = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
@@ -519,9 +520,10 @@ export default function AdminMembersPage() {
     }
   }
 
+  const listView = useMemo(() => getMemberListView(members, statusTab, filters), [members, statusTab, filters]);
   const sortedMembers = useMemo(
-    () => members.filter((member) => matchesMemberFilters(member, filters)).sort((a, b) => compareMembers(a, b, sortBy)),
-    [members, sortBy, filters],
+    () => [...listView.rows].sort((a, b) => compareMembers(a, b, sortBy)),
+    [listView, sortBy],
   );
 
   return (
@@ -839,8 +841,8 @@ export default function AdminMembersPage() {
           <div className="flex flex-col gap-4 border-b border-slate-200 p-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <div className="mb-3 h-0.5 w-12 rounded-full bg-[#d8ad45]" />
-              <h2 className="text-2xl font-black">Member List</h2>
-              <p className="mt-1 text-sm font-bold text-slate-500">{sortedMembers.length} / {members.length} members</p>
+              <h2 className="text-2xl font-black">รายชื่อ KSW</h2>
+              <p aria-live="polite" className="mt-1 text-sm font-bold text-slate-500">{loading ? "กำลังโหลดรายชื่อ..." : listView.summary}</p>
             </div>
             <label className="grid gap-2 text-sm font-black text-[#061426] sm:min-w-[220px]">
               Sort By
@@ -858,7 +860,36 @@ export default function AdminMembersPage() {
             </label>
           </div>
 
-          <div className="grid gap-3 border-b border-slate-200 p-5 sm:grid-cols-3">
+          <div aria-label="สถานะรายชื่อ KSW" className="grid grid-cols-2 gap-2 border-b border-slate-200 p-4 sm:p-5" role="tablist">
+            {memberStatusTabs.map((tab, index) => (
+              <button
+                aria-controls="member-list-panel"
+                aria-selected={statusTab === tab.value}
+                className={`inline-flex min-h-11 min-w-0 flex-wrap items-center justify-center gap-2 rounded-md border px-3 py-3 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d8ad45] ${statusTab === tab.value ? "border-[#061426] bg-[#061426] text-[#f4d58a]" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+                id={`member-tab-${tab.value}`}
+                key={tab.value}
+                onClick={() => setStatusTab(tab.value)}
+                onKeyDown={(event) => {
+                  const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? memberStatusTabs.length - 1
+                    : event.key === "ArrowRight" ? (index + 1) % memberStatusTabs.length
+                    : event.key === "ArrowLeft" ? (index + memberStatusTabs.length - 1) % memberStatusTabs.length : null;
+                  if (nextIndex === null) return;
+                  event.preventDefault();
+                  const next = memberStatusTabs[nextIndex];
+                  setStatusTab(next.value);
+                  document.getElementById(`member-tab-${next.value}`)?.focus();
+                }}
+                role="tab"
+                tabIndex={statusTab === tab.value ? 0 : -1}
+                type="button"
+              >
+                <span>{tab.label}</span>
+                <span className="rounded-full bg-slate-500/15 px-2 py-0.5 text-xs tabular-nums">{loading ? "..." : listView.counts[tab.value]}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="grid gap-3 border-b border-slate-200 p-5 sm:grid-cols-2">
             <label className="grid gap-2 text-sm font-bold">
               ประเภทสมาชิก
               <select className="min-h-11 min-w-0 rounded-md border border-slate-200 px-3 py-2 focus-visible:outline-2 focus-visible:outline-[#d8ad45]" value={filters.membershipType} onChange={(event) => setFilters((current) => ({ ...current, membershipType: event.target.value as MemberFilters["membershipType"] }))}>
@@ -873,14 +904,9 @@ export default function AdminMembersPage() {
                 {clubRoles.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </label>
-            <label className="grid gap-2 text-sm font-bold">
-              สถานะสมาชิก
-              <select className="min-h-11 min-w-0 rounded-md border border-slate-200 px-3 py-2 focus-visible:outline-2 focus-visible:outline-[#d8ad45]" value={filters.activeStatus} onChange={(event) => setFilters((current) => ({ ...current, activeStatus: event.target.value as MemberFilters["activeStatus"] }))}>
-                <option value="all">ทุกสถานะ</option><option value="active">Active</option><option value="inactive">Inactive</option>
-              </select>
-            </label>
           </div>
 
+          <div aria-labelledby={`member-tab-${statusTab}`} id="member-list-panel" role="tabpanel" tabIndex={0} className="min-w-0 focus-visible:outline-2 focus-visible:outline-[#d8ad45]">
           {loading ? (
             <p className="p-5 text-sm font-bold text-slate-600">Loading members...</p>
           ) : sortedMembers.length ? (
@@ -1000,9 +1026,10 @@ export default function AdminMembersPage() {
             </div>
           ) : (
             <p className="p-5 text-sm font-bold text-slate-600">
-              No members match the selected filters.
+              {statusTab === "active" ? "ไม่พบสมาชิกปัจจุบันตามตัวกรองที่เลือก" : "ไม่พบรายชื่อที่ไม่ใช้งานตามตัวกรองที่เลือก"}
             </p>
           )}
+          </div>
         </div>
       </section>
     </main>

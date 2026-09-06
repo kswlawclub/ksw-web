@@ -70,13 +70,52 @@ export function getMemberDisplayName(member: Pick<MemberPayload, "nickname" | "m
 export type MemberFilters = {
   membershipType: MembershipType | "all";
   clubRole: ClubRole | "all";
-  activeStatus: "all" | "active" | "inactive";
 };
 
-export function matchesMemberFilters(member: MemberPayload, filters: MemberFilters) {
+export function matchesMemberFilters(member: Pick<MemberPayload, "membership_type" | "club_role">, filters: MemberFilters) {
   return (filters.membershipType === "all" || member.membership_type === filters.membershipType)
-    && (filters.clubRole === "all" || member.club_role === filters.clubRole)
-    && (filters.activeStatus === "all" || member.is_active === (filters.activeStatus === "active"));
+    && (filters.clubRole === "all" || member.club_role === filters.clubRole);
+}
+
+export const memberStatusTabs = [
+  { value: "active", label: "สมาชิกปัจจุบัน", unit: "คน" },
+  { value: "inactive", label: "รายชื่อที่ไม่ใช้งาน", unit: "รายการ" },
+] as const;
+export type MemberStatusTab = (typeof memberStatusTabs)[number]["value"];
+
+export function partitionMembersByStatus<T extends Pick<ClubMember, "id" | "is_active">>(members: readonly T[]) {
+  const active = new Map<string, T>();
+  const inactive = new Map<string, T>();
+  for (const member of members) {
+    if (member.is_active === true && !active.has(member.id)) active.set(member.id, member);
+    if (member.is_active === false && !inactive.has(member.id)) inactive.set(member.id, member);
+  }
+  // Active query rows take precedence if a duplicate ID appears in a supplied snapshot.
+  return { active: [...active.values()], inactive: [...inactive.values()].filter((member) => !active.has(member.id)) };
+}
+
+export function getCurrentMemberCounts(members: readonly Pick<ClubMember, "id" | "is_active" | "membership_type">[]) {
+  const { active } = partitionMembersByStatus(members);
+  return {
+    total: active.length,
+    ordinary: active.filter((member) => member.membership_type === "ordinary").length,
+    extraordinary: active.filter((member) => member.membership_type === "extraordinary").length,
+  };
+}
+
+export function getMemberListView<T extends Pick<ClubMember, "id" | "is_active" | "membership_type" | "club_role">>(
+  members: readonly T[], tab: MemberStatusTab, filters: MemberFilters,
+) {
+  const partitions = partitionMembersByStatus(members);
+  const baseCount = partitions[tab].length;
+  const rows = partitions[tab].filter((member) => matchesMemberFilters(member, filters));
+  const { label, unit } = memberStatusTabs.find((option) => option.value === tab)!;
+  const isFiltered = filters.membershipType !== "all" || filters.clubRole !== "all";
+  return {
+    rows, baseCount,
+    counts: { active: partitions.active.length, inactive: partitions.inactive.length },
+    summary: isFiltered ? `แสดง ${rows.length} จาก ${baseCount} ${unit}` : `${label} ${baseCount} ${unit}`,
+  };
 }
 
 export function memberDeactivationMessage(member: Pick<MemberPayload, "nickname" | "membership_type">) {

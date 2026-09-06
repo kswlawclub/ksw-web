@@ -81,6 +81,39 @@ test("all six inactive staged Staff are absent, with no static-name/photo fallba
   }
   assert.match(result.extraordinary, /ข้อมูลสมาชิกวิสามัญจะอัปเดตเร็ว ๆ นี้/);
   assert.match(result.coaching, /Coming Soon/);
+  assert.match(result.html, /สมาชิกปัจจุบัน 0 คน/);
+});
+
+test("hero and section counts use unique active IDs by type including separately displayed coaches", async () => {
+  const ordinaryCoach = row("ordinary-coach", { club_role: "coach" });
+  const result = await renderPage([
+    row("ordinary"), ordinaryCoach, ordinaryCoach,
+    row("extraordinary", { membership_type: "extraordinary" }),
+    row("extraordinary-coach", { membership_type: "extraordinary", club_role: "assistant_coach" }),
+    row("inactive-coach", { club_role: "coach", is_active: false }),
+    ...staffRows.map((staff) => ({ ...staff, is_active: false })),
+  ]);
+  assert.match(result.html, /สมาชิกปัจจุบัน 4 คน/);
+  assert.match(result.html, /สมาชิกสามัญ 2<\/span>/);
+  assert.match(result.html, /สมาชิกวิสามัญ 2<\/span>/);
+  for (const section of [result.ordinary, result.extraordinary]) {
+    assert.match(section, /<h2[^>]*>[^<]+<span[^>]*>2 คน<\/span><\/h2>/);
+    assert.equal(names(section).length, 1);
+  }
+  assert.equal(names(result.coaching).length, 2);
+  assert.equal(new Set([...names(result.ordinary), ...names(result.extraordinary), ...names(result.coaching)]).size, 4);
+});
+
+test("fresh public render after status changes updates counts without changing SELECT or grouping", async () => {
+  const member = row("coach", { club_role: "coach" });
+  assert.match((await renderPage([member])).html, /สมาชิกปัจจุบัน 1 คน/);
+  const inactive = await renderPage([{ ...member, is_active: false }]);
+  assert.match(inactive.html, /สมาชิกปัจจุบัน 0 คน/);
+  assert.deepEqual(names(inactive.ordinary), []);
+  assert.match(inactive.coaching, /Coming Soon/);
+  const reactivated = await renderPage([member]);
+  assert.match(reactivated.html, /สมาชิกปัจจุบัน 1 คน/);
+  assert.deepEqual(names(reactivated.coaching), ["ทนายcoach"]);
 });
 
 test("partial activation displays only active DB Staff and other extraordinary members", async () => {
@@ -112,8 +145,8 @@ test("coaches appear only in the final section, using membership-aware names and
   assert.match(result.coaching, /ผู้ช่วยโค้ช/);
   assert.doesNotMatch(result.coaching, /Coming Soon|INACTIVE/);
   assert.doesNotMatch(result.ordinary + result.extraordinary, /ทนายเอ|>บี</);
-  assert.match(result.ordinary, />สมาชิกสามัญ<\/h2>/);
-  assert.match(result.extraordinary, />สมาชิกวิสามัญ<\/h2>/);
+  assert.match(result.ordinary, />สมาชิกสามัญ<span[^>]*>1 คน<\/span><\/h2>/);
+  assert.match(result.extraordinary, />สมาชิกวิสามัญ<span[^>]*>1 คน<\/span><\/h2>/);
   assert.match(result.coaching, />Coaching Staff<\/h2>/);
 });
 

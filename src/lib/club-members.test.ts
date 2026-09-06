@@ -5,6 +5,7 @@ const {
   clubRoles, membershipTypes, defaultMemberClassification, getMemberDisplayName,
   getMemberNickname, isClubRole, isMembershipType, parseMemberPayload,
   getMemberActivePatch, matchesMemberFilters, memberDeactivationMessage,
+  partitionMembersByStatus, getCurrentMemberCounts, getMemberListView,
 } = await import(new URL("./club-members.ts", import.meta.url).href);
 
 const base = { nickname: "โก้", ...defaultMemberClassification, is_active: true, lineup_enabled: false };
@@ -63,10 +64,69 @@ test("lifecycle patch changes only is_active, regardless of type, role or lineup
   assert.match(memberDeactivationMessage(base), /ไม่ลบสมาชิก รูป/);
 });
 
-test("filters include inactive staged Staff by default and do not reorder members", () => {
+test("classification filters are independent of status and do not reorder records", () => {
   const rows = [base, { ...base, membership_type: "extraordinary", club_role: "staff", is_active: false }, { ...base, club_role: "coach" }];
-  const all = { membershipType: "all", clubRole: "all", activeStatus: "all" };
+  const all = { membershipType: "all", clubRole: "all" };
   assert.deepEqual(rows.filter((member) => matchesMemberFilters(member, all)), rows);
-  assert.deepEqual(rows.filter((member) => matchesMemberFilters(member, { membershipType: "extraordinary", clubRole: "staff", activeStatus: "inactive" })), [rows[1]]);
-  assert.deepEqual(rows.filter((member) => matchesMemberFilters(member, { ...all, activeStatus: "active" })), [rows[0], rows[2]]);
+  assert.deepEqual(rows.filter((member) => matchesMemberFilters(member, { membershipType: "extraordinary", clubRole: "staff" })), [rows[1]]);
+});
+
+const directory = [
+  { ...base, id: "ordinary" },
+  { ...base, id: "ordinary-coach", club_role: "coach" },
+  { ...base, id: "extraordinary", membership_type: "extraordinary", club_role: "staff" },
+  { ...base, id: "extraordinary-coach", membership_type: "extraordinary", club_role: "assistant_coach" },
+  { ...base, id: "inactive", is_active: false },
+  { ...base, id: "inactive-coach", is_active: false, club_role: "coach" },
+  { ...base, id: "inactive-staff", is_active: false, membership_type: "extraordinary", club_role: "staff" },
+];
+const noFilters = { membershipType: "all", clubRole: "all" };
+
+test("only unique active IDs count as members, including coaches once by membership type", () => {
+  assert.deepEqual(getCurrentMemberCounts([...directory, ...directory]), { total: 4, ordinary: 2, extraordinary: 2 });
+  assert.deepEqual(getCurrentMemberCounts([]), { total: 0, ordinary: 0, extraordinary: 0 });
+  for (const is_active of [false, null, undefined, "true", 1]) {
+    assert.equal(getCurrentMemberCounts([{ ...base, id: "invalid", is_active }]).total, 0);
+  }
+});
+
+test("status partition preserves source order, has no duplicate IDs, and never mutates records", () => {
+  const input = [...directory, ...directory, { ...directory[0], is_active: false }];
+  const original = structuredClone(input);
+  const partitions = partitionMembersByStatus(input);
+  assert.deepEqual(partitions.active.map((row: { id: string }) => row.id), directory.slice(0, 4).map((row) => row.id));
+  assert.deepEqual(partitions.inactive.map((row: { id: string }) => row.id), directory.slice(4).map((row) => row.id));
+  assert.equal(new Set([...partitions.active, ...partitions.inactive].map((row) => row.id)).size, 7);
+  assert.deepEqual(input, original);
+});
+
+test("active/inactive tabs have separate base totals and correct people/records wording", () => {
+  const active = getMemberListView(directory, "active", noFilters);
+  const inactive = getMemberListView(directory, "inactive", noFilters);
+  assert.deepEqual(active.counts, { active: 4, inactive: 3 });
+  assert.deepEqual(inactive.counts, active.counts);
+  assert.equal(active.summary, "สมาชิกปัจจุบัน 4 คน");
+  assert.equal(inactive.summary, "รายชื่อที่ไม่ใช้งาน 3 รายการ");
+  assert.ok(active.rows.every((row: { is_active: boolean }) => row.is_active));
+  assert.ok(inactive.rows.every((row: { is_active: boolean }) => !row.is_active));
+});
+
+test("classification filters affect visible counts, never base/tab counts", () => {
+  const filters = { membershipType: "extraordinary", clubRole: "staff" };
+  for (const tab of ["active", "inactive"]) {
+    const view = getMemberListView(directory, tab, filters);
+    assert.deepEqual(view.counts, { active: 4, inactive: 3 });
+    assert.equal(view.summary, tab === "active" ? "แสดง 1 จาก 4 คน" : "แสดง 1 จาก 3 รายการ");
+  }
+  assert.equal(getMemberListView(directory, "inactive", { ...filters, clubRole: "assistant_coach" }).summary, "แสดง 0 จาก 3 รายการ");
+});
+
+test("deactivate/reactivate recomputes tab and public counts without changing independent state", () => {
+  const original = structuredClone(directory);
+  const deactivated = directory.map((row) => row.id === "ordinary-coach" ? { ...row, ...getMemberActivePatch(false) } : row);
+  assert.deepEqual(getMemberListView(deactivated, "active", noFilters).counts, { active: 3, inactive: 4 });
+  assert.deepEqual(getCurrentMemberCounts(deactivated), { total: 3, ordinary: 1, extraordinary: 2 });
+  const restored = deactivated.map((row) => row.id === "ordinary-coach" ? { ...row, ...getMemberActivePatch(true) } : row);
+  assert.deepEqual(restored, original);
+  assert.deepEqual(getCurrentMemberCounts(restored), { total: 4, ordinary: 2, extraordinary: 2 });
 });
