@@ -6,7 +6,7 @@ import * as jsx from "react/jsx-runtime";
 import * as icons from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 import * as members from "../src/lib/club-members.ts";
-import { fixtureId, loadRatingModule, ratingContract as rating, ratingDiagnostics } from "./lib/football-rating-test-support.mjs";
+import { fixtureId, loadRatingModule, ratingContract as rating, ratingDiagnostics, ratingRow, ratingSaveState } from "./lib/football-rating-test-support.mjs";
 
 const uatValues = { pace: "84", shooting: "78", passing: "82", dribbling: "80", defending: "72", physical: "84" };
 const uatInput = () => rating.footballRatingFormInput(fixtureId(), { rating_type: "player", values: uatValues });
@@ -65,10 +65,11 @@ function actionHarness({ failure, overall = 80 } = {}) {
 
 // A hook adapter exercises the existing JSX's onChange/onSubmit closures without
 // a browser, action transport or copies of the production event-handler logic.
-function modalHarness(actions, { callbackFailure = false } = {}) {
+function modalHarness(actions, { callbackFailure = false, initialRating = null } = {}) {
   const states = [];
   const refs = [];
   const saved = [];
+  const closed = [];
   let stateCursor = 0;
   let refCursor = 0;
   const modal = loadRatingModule("src/components/admin-member-rating-modal.tsx", {
@@ -94,14 +95,15 @@ function modalHarness(actions, { callbackFailure = false } = {}) {
     "@/lib/club-members": members,
     "@/lib/member-football-rating": rating,
     "@/lib/member-football-rating-diagnostics": ratingDiagnostics,
+    "@/lib/member-football-rating-save-state": ratingSaveState,
   });
   function render() {
     stateCursor = 0;
     refCursor = 0;
     return modal.AdminMemberRatingModal({
       member: { id: fixtureId(), nickname: "Fixture", membership_type: "ordinary", club_role: "member", photo_url: null },
-      initialRating: null,
-      onClose() {},
+      initialRating,
+      onClose() { closed.push(true); },
       onSaved(value) {
         if (callbackFailure) throw new Error("PRIVATE fixture callback error");
         saved.push(value);
@@ -116,8 +118,8 @@ function modalHarness(actions, { callbackFailure = false } = {}) {
     }
     return visit(render());
   }
-  function fill(values = uatValues) {
-    for (const { field, label } of rating.footballStats.player) {
+  function fill(values = uatValues, type = "player") {
+    for (const { field, label } of rating.footballStats[type]) {
       const [input] = elements((node) => node.type === "input" && node.props["aria-label"]?.startsWith(`${label} `));
       input.props.onChange({ target: { value: values[field] } });
     }
@@ -128,7 +130,15 @@ function modalHarness(actions, { callbackFailure = false } = {}) {
     await form.props.onSubmit({ preventDefault() { prevented = true; } });
     assert.equal(prevented, true);
   }
-  return { fill, submit, saved, elements };
+  const button = (label) => elements((node) => node.type === "button" && content(node) === label)[0];
+  const status = () => content(elements((node) => node.props.role === "status")[0]);
+  return { fill, submit, saved, closed, elements, button, status };
+}
+
+function content(node) {
+  if (Array.isArray(node)) return node.map(content).join("");
+  if (React.isValidElement(node)) return content(node.props.children);
+  return typeof node === "string" || typeof node === "number" ? String(node) : "";
 }
 
 test("UAT Player values pass real modal handlers, action, SDK JSON body and DB return contract", async () => {
@@ -150,7 +160,7 @@ test("UAT Player values pass real modal handlers, action, SDK JSON body and DB r
   assert.deepEqual(modal.saved, [{ ...payload, overall: 80 }]);
   assert.deepEqual(JSON.parse(JSON.stringify(modal.saved[0])), modal.saved[0]);
   assert.equal(modal.elements((node) => node.props.role === "alert").length, 0);
-  assert.match(modal.elements((node) => node.props.role === "status")[0].props.children, /OVR 80/);
+  assert.match(modal.status(), /บันทึกเรียบร้อยแล้ว.*OVR 80/);
 });
 
 test("successful save accepts the returned DB overall rather than recomputing the preview", async () => {
@@ -261,4 +271,139 @@ test("duplicate submissions still perform only one write and update the parent o
   await second;
   assert.equal(h.requests.length, 1);
   assert.equal(modal.saved.length, 1);
+});
+
+test("normalized saved snapshot derives clean/dirty, rejects partial values and uses DB overall for both types", () => {
+  for (const type of ["player", "goalkeeper"]) {
+    const saved = { ...ratingRow(type), overall: 61 };
+    const form = rating.createFootballRatingForm(saved);
+    const snapshot = structuredClone({ saved, form });
+    const derive = (values) => ratingSaveState.deriveFootballRatingSaveState(saved.member_id, { ...form, values: { ...form.values, ...values } }, saved);
+    assert.equal(derive({}).kind, "saved");
+    assert.equal(derive({}).canSave, false);
+    assert.equal(derive({}).overall, 61);
+    for (const { field } of rating.footballStats[type]) {
+      for (const normalized of ["60", "060", "60.0", " 60 ", "6e1"]) {
+        assert.equal(derive({ [field]: normalized }).dirty, false);
+      }
+      assert.equal(derive({ [field]: "61" }).dirty, true);
+      assert.equal(derive({ [field]: "61" }).canSave, true);
+      for (const invalid of ["", "bad", "0", "100", "1.5"]) {
+        assert.equal(derive({ [field]: invalid }).dirty, true);
+        assert.equal(derive({ [field]: invalid }).canSave, false);
+      }
+    }
+    const opposite = rating.createFootballRatingForm(null, type === "player" ? "goalkeeper" : "player");
+    const changed = ratingSaveState.deriveFootballRatingSaveState(saved.member_id, opposite, saved);
+    assert.equal(changed.dirty, true);
+    assert.equal(changed.canSave, false);
+    assert.deepEqual({ saved, form }, snapshot);
+  }
+});
+
+test("existing Rating opens saved with disabled submit, editing then reverting restores clean without any write", async () => {
+  const h = actionHarness();
+  const initialRating = { ...rating.parseFootballRatingInput(uatInput()).payload, overall: 80 };
+  const modal = modalHarness(h.actions, { initialRating });
+  assert.equal(modal.status(), "บันทึกแล้วOVR 80");
+  assert.ok(modal.button("บันทึกแล้ว").props.disabled);
+  await modal.submit();
+  assert.equal(h.requests.length, 0);
+  modal.fill({ ...uatValues, pace: "85" });
+  assert.equal(modal.status(), "มีการแก้ไขที่ยังไม่บันทึก");
+  assert.equal(modal.button("บันทึกการเปลี่ยนแปลง").props.disabled, false);
+  modal.fill();
+  assert.ok(modal.button("บันทึกแล้ว").props.disabled);
+  modal.elements((node) => node.type === "input" && node.props.value === "goalkeeper")[0].props.onChange();
+  assert.equal(modal.status(), "มีการแก้ไขที่ยังไม่บันทึก");
+  assert.ok(modal.button("บันทึกการเปลี่ยนแปลง").props.disabled);
+});
+
+test("new Rating validates before save, adopts returned snapshot/overall, stays open and becomes dirty again on edit", async () => {
+  const h = actionHarness({ overall: 81 });
+  const modal = modalHarness(h.actions);
+  assert.equal(modal.status(), "ยังไม่ได้ตั้งค่าความสามารถ");
+  assert.ok(modal.button("บันทึก Rating").props.disabled);
+  modal.fill({ ...uatValues, pace: "" });
+  assert.ok(modal.button("บันทึก Rating").props.disabled);
+  modal.fill();
+  assert.equal(modal.status(), "พร้อมบันทึก Rating");
+  await modal.submit();
+  assert.equal(modal.status(), "บันทึกเรียบร้อยแล้วOVR 81");
+  assert.ok(modal.button("บันทึกแล้ว").props.disabled);
+  assert.equal(modal.elements((node) => node.type === "output")[0].props.children, 81);
+  assert.equal(modal.closed.length, 0);
+  await modal.submit();
+  assert.equal(h.requests.length, 1);
+  modal.fill({ ...uatValues, pace: "85" });
+  assert.equal(modal.status(), "มีการแก้ไขที่ยังไม่บันทึก");
+  modal.fill();
+  assert.equal(modal.status(), "บันทึกแล้วOVR 81");
+});
+
+test("clear keeps its existing confirmation, resets the snapshot and form, and leaves member lifecycle untouched", async () => {
+  const calls = [];
+  const modal = modalHarness({ clearMemberFootballRating: async (id) => { calls.push(id); return { ok: true, rating: null }; } }, { initialRating: ratingRow("goalkeeper") });
+  modal.button("Clear Rating").props.onClick();
+  assert.equal(calls.length, 0);
+  modal.button("ยืนยันล้าง Rating").props.onClick();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(calls, [fixtureId()]);
+  assert.deepEqual(modal.saved, [null]);
+  assert.equal(modal.status(), "ล้าง Rating เรียบร้อยแล้ว");
+  assert.equal(modal.button("Clear Rating"), undefined);
+  assert.ok(modal.button("บันทึก Rating").props.disabled);
+  assert.equal(modal.elements((node) => node.type === "output")[0].props.children, "–");
+  assert.deepEqual(modal.elements((node) => node.props.type === "number").map((node) => node.props.value), ["", "", "", "", "", ""]);
+  modal.fill();
+  assert.equal(modal.status(), "พร้อมบันทึก Rating");
+});
+
+test("every close path confirms normalized unsaved changes; cancel preserves input, clean and cleared close immediately", async (t) => {
+  const previous = globalThis.window;
+  const prompts = [];
+  let accept = false;
+  globalThis.window = { confirm: (message) => { prompts.push(message); return accept; } };
+  t.after(() => { if (previous === undefined) delete globalThis.window; else globalThis.window = previous; });
+  const paths = [
+    (modal) => modal.elements((node) => node.props["aria-label"] === "ปิด Football Rating")[0].props.onClick(),
+    (modal) => modal.button("Cancel").props.onClick(),
+    (modal) => modal.elements((node) => node.type === "dialog")[0].props.onCancel({ preventDefault() {} }),
+    (modal) => { const target = { getBoundingClientRect: () => ({ left: 10, top: 10, right: 100, bottom: 100 }) }; modal.elements((node) => node.type === "dialog")[0].props.onClick({ target, currentTarget: target, clientX: 0, clientY: 0 }); },
+  ];
+  for (const close of paths) {
+    const modal = modalHarness({}, { initialRating: ratingRow() });
+    modal.fill();
+    accept = false;
+    close(modal);
+    assert.equal(modal.closed.length, 0);
+    assert.equal(modal.elements((node) => node.props.type === "number")[0].props.value, "84");
+    accept = true;
+    close(modal);
+    assert.equal(modal.closed.length, 1);
+    const count = prompts.length;
+    for (const initialRating of [null, ratingRow()]) {
+      const clean = modalHarness({}, { initialRating });
+      close(clean);
+      assert.equal(clean.closed.length, 1);
+      assert.equal(prompts.length, count);
+    }
+  }
+  assert.ok(prompts.every((message) => message === "มีการแก้ไขที่ยังไม่ได้บันทึก ต้องการออกโดยไม่บันทึกหรือไม่?"));
+});
+
+test("error replaces prior success, retains edits and diagnostic code; new edit clears the old error", async () => {
+  let fail = false;
+  const modal = modalHarness({ saveMemberFootballRating: async (input) => fail ? ratingDiagnostics.footballRatingFailure("RATING_DB_WRITE") : { ok: true, rating: { ...rating.parseFootballRatingInput(input).payload, overall: 80 } } });
+  modal.fill();
+  await modal.submit();
+  modal.fill({ ...uatValues, pace: "85" });
+  fail = true;
+  await modal.submit();
+  assert.equal(modal.status(), "");
+  assert.match(content(modal.elements((node) => node.props.role === "alert")[0]), /RATING_DB_WRITE/);
+  assert.equal(modal.button("บันทึกการเปลี่ยนแปลง").props.disabled, false);
+  modal.fill();
+  assert.equal(modal.status(), "บันทึกแล้วOVR 80");
+  assert.equal(modal.elements((node) => node.props.role === "alert").length, 0);
 });

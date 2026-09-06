@@ -33,7 +33,7 @@ export async function saveMemberFootballRating(input){
   if(window.qa.ratingFailure==="RATING_TRANSPORT")throw new Error("PRIVATE fixture action exception");
   if(window.qa.ratingFailure)return {...footballRatingFailure(window.qa.ratingFailure),error:"PRIVATE fixture DB error"};
   const parsed=parseFootballRatingInput(input);if(!parsed.ok)return footballRatingFailure("RATING_VALIDATION");
-  const rating={...parsed.payload,overall:footballOverallPreview(parsed.payload.rating_type,parsed.payload)};ratings.set(rating.member_id,rating);return {ok:true,rating};
+  const rating={...parsed.payload,overall:window.qa.dbOverall??footballOverallPreview(parsed.payload.rating_type,parsed.payload)};ratings.set(rating.member_id,rating);return {ok:true,rating};
 }
 export async function clearMemberFootballRating(id){window.qa.writes.push(["clear",id]);await new Promise(r=>setTimeout(r,180));ratings.delete(id);return {ok:true,rating:null};}
 const forbidden=()=>{throw Error("Member mutation forbidden in browser QA");};
@@ -121,27 +121,91 @@ try {
     assert.deepEqual(errors, [], "Public hydration/runtime errors");
 
     await page.goto(`${base}/admin`);
+    const confirmations = [];
+    let discardChanges = false;
+    page.on("dialog", async (prompt) => {
+      confirmations.push(prompt.message());
+      assert.equal(prompt.message(), "มีการแก้ไขที่ยังไม่ได้บันทึก ต้องการออกโดยไม่บันทึกหรือไม่?");
+      if (discardChanges) await prompt.accept(); else await prompt.dismiss();
+    });
     const adminTrigger = page.getByRole("button", { name: /^Football Rating/ }).first();
     await adminTrigger.click();
     const modal = page.getByRole("dialog", { name: "KSW Football Rating" });
     await modal.waitFor({ state: "visible" });
     assert.equal(await modal.getByRole("spinbutton").count(), 6);
     assert.equal(await modal.getByRole("spinbutton").first().inputValue(), "60");
+    const saveButton = modal.locator('button[type="submit"]');
+    const status = modal.locator('[role="status"]');
+    assert.equal(await saveButton.textContent(), "บันทึกแล้ว");
+    assert.ok(await saveButton.isDisabled());
+    assert.match(await status.textContent(), /บันทึกแล้ว.*OVR 73/);
     await assertFits(page, modal);
     await page.screenshot({ path: join(temp, `admin-${width}.png`) });
+    await page.keyboard.press("Escape");
+    assert.equal(await page.locator("dialog[open]").count(), 0);
+    assert.equal(confirmations.length, 0, "Clean close does not prompt");
+    assert.ok(await adminTrigger.evaluate((element) => element === document.activeElement));
+    await adminTrigger.click();
+    await modal.getByRole("spinbutton").first().fill("61");
+    assert.equal(await status.textContent(), "มีการแก้ไขที่ยังไม่บันทึก");
+    assert.equal(await saveButton.textContent(), "บันทึกการเปลี่ยนแปลง");
+    assert.equal(await saveButton.isDisabled(), false);
+    const closePaths = [
+      () => modal.getByRole("button", { name: "ปิด Football Rating" }).click(),
+      () => modal.getByRole("button", { name: "Cancel", exact: true }).click(),
+      () => page.mouse.click(2, 2),
+      () => page.keyboard.press("Escape"),
+    ];
+    for (const close of closePaths) {
+      const count = confirmations.length;
+      await close();
+      assert.equal(confirmations.length, count + 1);
+      assert.ok(await modal.isVisible(), "Declining discard preserves the open modal");
+      assert.equal(await modal.getByRole("spinbutton").first().inputValue(), "61");
+      await page.keyboard.press("Tab");
+      assert.ok(await modal.evaluate((element) => element.contains(document.activeElement)));
+    }
+    await status.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: join(temp, `admin-unsaved-${width}.png`) });
+    await modal.getByRole("spinbutton").first().fill("60");
+    assert.match(await status.textContent(), /บันทึกแล้ว.*OVR 73/);
+    assert.ok(await saveButton.isDisabled());
+    assert.equal(await page.evaluate(() => window.qa.writes.length), 0);
     await modal.getByRole("radio", { name: "Goalkeeper" }).check();
     assert.deepEqual(await modal.getByRole("spinbutton").evaluateAll((inputs) => inputs.map((input) => input.value)), ["", "", "", "", "", ""]);
-    assert.ok(await modal.getByRole("button", { name: "Save Rating" }).isDisabled());
+    assert.equal(await status.textContent(), "มีการแก้ไขที่ยังไม่บันทึก");
+    assert.ok(await saveButton.isDisabled());
     for (const input of await modal.getByRole("spinbutton").all()) await input.fill("81");
     assert.equal(await modal.getByLabel("Overall preview").textContent(), "81");
-    await modal.getByRole("button", { name: "Save Rating" }).click();
+    await page.evaluate(() => { window.qa.dbOverall = 82; });
+    await saveButton.click();
     assert.ok(await modal.getByRole("button", { name: "กำลังบันทึก..." }).isDisabled());
-    await modal.getByRole("status").filter({ hasText: "OVR 81" }).waitFor();
+    const beforeBusyClose = confirmations.length;
+    await page.keyboard.press("Escape");
+    assert.ok(await modal.isVisible());
+    assert.equal(confirmations.length, beforeBusyClose);
+    await status.filter({ hasText: "บันทึกเรียบร้อยแล้ว" }).waitFor();
+    assert.match(await status.textContent(), /OVR 82/);
+    assert.equal(await modal.getByLabel("Overall preview").textContent(), "82", "DB overall is the saved authority");
+    assert.equal(await saveButton.textContent(), "บันทึกแล้ว");
+    assert.ok(await saveButton.isDisabled());
     assert.equal(await page.evaluate(() => window.qa.writes.length), 1);
+    await status.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: join(temp, `admin-saved-${width}.png`) });
+    await modal.getByRole("spinbutton").first().fill("82");
+    assert.equal(await status.textContent(), "มีการแก้ไขที่ยังไม่บันทึก");
+    await modal.getByRole("spinbutton").first().fill("81");
+    assert.match(await status.textContent(), /บันทึกแล้ว.*OVR 82/);
+    assert.ok(await saveButton.isDisabled());
     await modal.getByRole("button", { name: "Clear Rating", exact: true }).click();
     assert.equal(await page.evaluate(() => window.qa.writes.length), 1);
+    await modal.getByRole("button", { name: "ยกเลิก", exact: true }).click();
+    assert.equal(await page.evaluate(() => window.qa.writes.length), 1);
+    await modal.getByRole("button", { name: "Clear Rating", exact: true }).click();
     await modal.getByRole("button", { name: "ยืนยันล้าง Rating" }).click();
-    await modal.getByRole("status").filter({ hasText: "ล้าง Rating แล้ว" }).waitFor();
+    await status.filter({ hasText: "ล้าง Rating เรียบร้อยแล้ว" }).waitFor();
+    assert.doesNotMatch(await status.textContent(), /OVR|มีการแก้ไข|บันทึกแล้ว/);
+    assert.ok(await saveButton.isDisabled());
     assert.equal(await modal.getByRole("button", { name: "Clear Rating", exact: true }).count(), 0);
     assert.ok(await page.evaluate(() => window.qa.assertUnchanged()));
     await page.keyboard.press("Escape");
@@ -162,9 +226,11 @@ try {
     assert.ok(await modal.getByRole("radio", { name: "Player", exact: true }).isChecked());
     assert.deepEqual(await modal.getByRole("spinbutton").evaluateAll((inputs) => inputs.map((input) => input.value)), ["", "", "", "", "", ""]);
     for (const input of await modal.getByRole("spinbutton").all()) await input.fill("80");
+    assert.equal(await status.textContent(), "พร้อมบันทึก Rating");
+    assert.equal(await saveButton.textContent(), "บันทึก Rating");
     for (const code of ["RATING_VALIDATION", "RATING_AUTH", "RATING_CLIENT_INIT", "RATING_DB_WRITE", "RATING_READBACK", "RATING_REVALIDATE", "RATING_SERVER", "RATING_TRANSPORT"]) {
       await page.evaluate((value) => { window.qa.ratingFailure = value; }, code);
-      await modal.getByRole("button", { name: "Save Rating" }).click();
+      await saveButton.click();
       const alert = modal.getByRole("alert");
       await alert.filter({ hasText: `[รหัส: ${code}]` }).waitFor();
       assert.match(await alert.textContent(), new RegExp(`^บันทึกไม่สำเร็จ \\[รหัส: ${code}\\]`));
@@ -175,9 +241,12 @@ try {
     }
     await page.screenshot({ path: join(temp, `admin-diagnostic-${width}.png`) });
     assert.ok(await page.evaluate(() => window.qa.assertUnchanged()));
+    discardChanges = true;
     await page.keyboard.press("Escape");
+    assert.equal(await page.locator("dialog[open]").count(), 0);
+    assert.ok(await adminTrigger.evaluate((element) => element === document.activeElement));
     assert.deepEqual(errors, [], "Admin runtime errors");
-    console.log(`PASS ${width}px: badge-free identical portrait geometry, hover/focus/tap, dismiss, hydration, modal/type/save/clear, inactive, focus, safe diagnostic codes, no overflow`);
+    console.log(`PASS ${width}px: Public regression, saved/dirty/revert/new/clear, DB overall, busy/discard/clean close, focus, diagnostic codes, no overflow`);
     await context.close();
   }
   console.log(`Screenshots: ${temp}`);

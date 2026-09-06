@@ -21,6 +21,7 @@ export function loadRatingModule(path, imports = {}) {
 
 export const ratingContract = loadRatingModule("src/lib/member-football-rating.ts", { "./club-members": members });
 export const ratingDiagnostics = loadRatingModule("src/lib/member-football-rating-diagnostics.ts");
+export const ratingSaveState = loadRatingModule("src/lib/member-football-rating-save-state.ts", { "./member-football-rating": ratingContract });
 export const card = loadRatingModule("src/components/member-football-card.tsx", {
   "react/jsx-runtime": jsx, "@/lib/member-football-rating": ratingContract,
   "next/image": ({ unoptimized, ...props }) => { assert.equal(unoptimized, true); return React.createElement("img", props); },
