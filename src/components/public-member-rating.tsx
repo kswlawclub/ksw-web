@@ -74,7 +74,6 @@ export function PublicMemberRating({ children, name, photoUrl, rating }: {
         onFocus={() => { if (!suppressFocus.current) show(); }} onBlur={scheduleClose}
         onClick={() => { suppressFocus.current = false; pinned.current = true; show(); }}>
         {children}
-        <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md border border-[#d8ad45] bg-[#061426] px-2 py-1 text-[11px] font-black text-[#f4d58a]">OVR {rating.overall}</span>
       </button>
       <div ref={panel} id={id} popover="auto" role="dialog" aria-label={`Football Rating ${name}`}
         className="fixed m-0 max-h-[calc(100dvh-24px)] w-[calc(100vw-24px)] max-w-sm overflow-y-auto rounded-lg border border-[#d8ad45]/60 bg-[#061426] p-5 text-white shadow-2xl"

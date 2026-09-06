@@ -95,10 +95,14 @@ try {
     await page.waitForFunction(() => window.qa?.ready);
     const trigger = page.getByRole("button", { name: /ดู Football Rating/ }).first();
     await trigger.scrollIntoViewIfNeeded();
+    await assertRestingMemberGrid(page);
+    await page.screenshot({ path: join(temp, `public-resting-${width}.png`) });
     if (width === 375) await trigger.tap(); else await trigger.hover();
     const popover = page.locator('[popover]:popover-open');
     await popover.waitFor({ state: "visible" });
     assert.equal(await popover.locator("dd").count(), 6);
+    assert.ok(await popover.getByText("OVR", { exact: true }).isVisible());
+    assert.ok(await popover.locator('[data-rating-radar="true"]').isVisible());
     await assertFits(page, popover);
     await page.screenshot({ path: join(temp, `public-${width}.png`) });
     await popover.getByRole("button", { name: "ปิด Football Rating" }).click();
@@ -112,6 +116,7 @@ try {
     await popover.waitFor({ state: "visible" });
     await page.mouse.click(width - 3, 3);
     assert.equal(await page.locator(":popover-open").count(), 0);
+    await assertRestingMemberGrid(page);
     assert.ok(await page.evaluate(() => window.qa.assertUnchanged()));
     assert.deepEqual(errors, [], "Public hydration/runtime errors");
 
@@ -172,13 +177,49 @@ try {
     assert.ok(await page.evaluate(() => window.qa.assertUnchanged()));
     await page.keyboard.press("Escape");
     assert.deepEqual(errors, [], "Admin runtime errors");
-    console.log(`PASS ${width}px: hover/focus/tap, dismiss, hydration, modal/type/save/clear, inactive, focus, safe diagnostic codes, no overflow`);
+    console.log(`PASS ${width}px: badge-free identical portrait geometry, hover/focus/tap, dismiss, hydration, modal/type/save/clear, inactive, focus, safe diagnostic codes, no overflow`);
     await context.close();
   }
   console.log(`Screenshots: ${temp}`);
 } finally {
   await browser?.close();
   await new Promise((accept) => server.close(accept));
+}
+
+async function assertRestingMemberGrid(page) {
+  assert.equal(await page.locator(":popover-open").count(), 0);
+  const cards = await page.locator("main article").evaluateAll((articles) => articles.map((article) => {
+    const trigger = article.querySelector('button[aria-haspopup="dialog"]');
+    const portrait = trigger ? trigger.firstElementChild : article.firstElementChild;
+    const name = article.querySelector(":scope > h3");
+    const rect = portrait.getBoundingClientRect();
+    const style = getComputedStyle(portrait);
+    const resting = article.cloneNode(true);
+    resting.querySelectorAll("[popover]").forEach((panel) => panel.remove());
+    return {
+      rated: Boolean(trigger),
+      text: resting.textContent,
+      triggerChildren: trigger?.children.length,
+      triggerSize: trigger ? [trigger.offsetWidth, trigger.offsetHeight] : null,
+      geometry: {
+        width: rect.width, height: rect.height,
+        border: style.border, radius: style.borderRadius, shadow: style.boxShadow,
+        nameGap: Math.round(name.getBoundingClientRect().top - rect.bottom),
+        nameClass: name.className, cardClass: article.className,
+      },
+    };
+  }));
+  const normal = cards.find((card) => !card.rated);
+  assert.ok(normal, "Fixture includes a member without Rating");
+  assert.ok(cards.some((card) => card.rated), "Fixture includes rated members");
+  for (const card of cards) {
+    assert.doesNotMatch(card.text, /OVR/);
+    assert.deepEqual(card.geometry, normal.geometry);
+    if (card.rated) {
+      assert.equal(card.triggerChildren, 1, "No extra badge/icon/indicator beside the portrait");
+      assert.deepEqual(card.triggerSize, [normal.geometry.width, normal.geometry.height]);
+    }
+  }
 }
 
 async function assertFits(page, element) {

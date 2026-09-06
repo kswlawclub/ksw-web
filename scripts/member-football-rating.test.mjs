@@ -187,3 +187,24 @@ test("Player/GK cards expose all six numbers without depending on SVG; popover u
   for (const marker of ["onPointerEnter", "onFocus", "onClick", "hidePopover", "showPopover", "onToggle", "focus-visible"]) assert.ok(source.includes(marker));
   assert.doesNotMatch(source, /Math.random|animate-|fetch\(/);
 });
+
+test("resting public rating trigger contains only the original portrait, without an OVR badge or replacement indicator", () => {
+  const portrait = createElement("div", { className: "original-portrait" }, "portrait");
+  for (const type of ["player", "goalkeeper"]) {
+    const html = renderToStaticMarkup(createElement(publicRating.PublicMemberRating, {
+      name: "Test member", photoUrl: null, rating: ratingRow(type),
+    }, portrait));
+    const trigger = html.match(/<button\b([^>]*)>([\s\S]*?)<\/button>/);
+    assert.ok(trigger);
+    assert.equal(trigger[2], renderToStaticMarkup(portrait));
+    assert.doesNotMatch(trigger[2], /OVR|<svg|<span/);
+    assert.match(trigger[1], /type="button"/);
+    assert.match(trigger[1], /aria-label="ดู Football Rating Test member"/);
+    assert.match(trigger[1], /aria-expanded="false"/);
+    assert.match(trigger[1], /aria-controls="[^"]+"/);
+    assert.match(trigger[1], /aria-haspopup="dialog"/);
+    assert.match(trigger[1], /focus-visible/);
+    assert.match(html, /popover="auto" role="dialog"/);
+    assert.match(html, /60<\/p><p[^>]*>OVR/);
+  }
+});
