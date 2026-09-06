@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { FacebookIcon } from "@/components/facebook-icon";
 import { clubRoleLabel, getMemberDisplayName } from "@/lib/club-members";
 import { groupPublicTeamMembers, shuffleTeamMembers, type PublicTeamMember, type PublicTeamProfile } from "@/lib/public-team-members";
@@ -9,13 +10,12 @@ export const revalidate = 0;
 
 const facebookUrl = "https://web.facebook.com/KlongSamWaLawyers";
 
-function MemberGrid({ profiles, compact = false, showRole = false }: {
+function MemberGrid({ profiles, showRole = false }: {
   profiles: PublicTeamProfile[];
-  compact?: boolean;
   showRole?: boolean;
 }) {
   return (
-    <div className={`grid grid-cols-2 gap-x-4 gap-y-7 sm:gap-x-5 ${compact ? "sm:grid-cols-3 lg:grid-cols-6" : "md:grid-cols-3 lg:grid-cols-4"}`}>
+    <div className="grid grid-cols-2 gap-x-4 gap-y-7 sm:gap-x-5 md:grid-cols-3 lg:grid-cols-4">
       {profiles.map((member) => {
         const displayName = getMemberDisplayName(member);
         // Keep the original asset crop, without a static person/fallback data source.
@@ -47,6 +47,25 @@ function MemberGrid({ profiles, compact = false, showRole = false }: {
         );
       })}
     </div>
+  );
+}
+
+function MembershipSection({ title, profiles, emptyState, muted = false }: {
+  title: string;
+  profiles: PublicTeamProfile[];
+  emptyState: ReactNode;
+  muted?: boolean;
+}) {
+  return (
+    <section className={muted ? "bg-[#f6f2ea]" : "bg-[#FFFFFF]"}>
+      <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
+        <div className="mb-7">
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">KSW Community</p>
+          <h2 className="mt-3 text-3xl font-black text-[#061426]">{title}</h2>
+        </div>
+        {profiles.length ? <MemberGrid profiles={profiles} /> : emptyState}
+      </div>
+    </section>
   );
 }
 
@@ -126,37 +145,21 @@ export default async function TeamPage() {
         </div>
       </section>
 
-      <section className="bg-[#FFFFFF]">
-        <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
-          <div className="mb-7">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">
-              KSW Community
-            </p>
-            <h2 className="mt-3 text-3xl font-black text-[#061426]">สมาชิกสามัญ</h2>
+      <MembershipSection
+        title="สมาชิกสามัญ"
+        profiles={members}
+        emptyState={
+          <div className="rounded-lg border border-[#d8ad45]/25 bg-[#fffaf0] p-6 text-sm font-bold leading-6 text-[#061426]">
+            Team member profiles will be updated soon.
           </div>
-          {members.length ? (
-            <MemberGrid profiles={members} />
-          ) : (
-            <div className="rounded-lg border border-[#d8ad45]/25 bg-[#fffaf0] p-6 text-sm font-bold leading-6 text-[#061426]">
-              Team member profiles will be updated soon.
-            </div>
-          )}
-        </div>
-      </section>
-
-      <section className="bg-[#f6f2ea]">
-        <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
-          <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">KSW Community</p>
-          <h2 className="mt-3 text-3xl font-black text-[#061426]">สมาชิกวิสามัญ</h2>
-          <div className="mt-7">
-            {extraordinaryMembers.length ? (
-              <MemberGrid compact profiles={extraordinaryMembers} />
-            ) : (
-              <p className="text-sm font-bold leading-6 text-[#061426]">ข้อมูลสมาชิกวิสามัญจะอัปเดตเร็ว ๆ นี้</p>
-            )}
-          </div>
-        </div>
-      </section>
+        }
+      />
+      <MembershipSection
+        title="สมาชิกวิสามัญ"
+        profiles={extraordinaryMembers}
+        muted
+        emptyState={<p className="text-sm font-bold leading-6 text-[#061426]">ข้อมูลสมาชิกวิสามัญจะอัปเดตเร็ว ๆ นี้</p>}
+      />
 
       <section className="bg-[#f6f2ea]">
         <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">

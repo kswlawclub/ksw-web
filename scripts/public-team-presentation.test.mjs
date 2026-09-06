@@ -128,7 +128,7 @@ test("unavailable public client shows empty states without inventing any people"
 test("existing responsive grid/photo crops and links are preserved without a runtime Staff array", async () => {
   const result = await renderPage([row("member", { nickname: "ชื่อยาวสำหรับทดสอบการตัดบรรทัด" }), ...staffRows]);
   assert.match(result.ordinary, /grid-cols-2.*md:grid-cols-3 lg:grid-cols-4/);
-  assert.match(result.extraordinary, /grid-cols-2.*sm:grid-cols-3 lg:grid-cols-6/);
+  assert.match(result.extraordinary, /grid-cols-2.*md:grid-cols-3 lg:grid-cols-4/);
   assert.match(result.ordinary, /size-\[130px\]/);
   assert.match(result.ordinary, /max-w-full break-words/);
   for (const href of ["/", "/gallery", "/partners", "https://web.facebook.com/KlongSamWaLawyers"]) assert.ok(result.html.includes(`href="${href}"`));
@@ -138,6 +138,42 @@ test("existing responsive grid/photo crops and links are preserved without a run
   const helperSource = readFileSync(new URL("../src/lib/public-team-members.ts", import.meta.url), "utf8");
   assert.doesNotMatch(source + helperSource, /staticTeamStaff|usingStaticStaffFallback|static_staff/);
   for (const staff of staffRows) assert.ok(!helperSource.includes(staff.id));
+});
+
+test("ordinary and extraordinary share identical container/header/grid/card geometry", async () => {
+  const classes = (section) => [...section.matchAll(/class="([^"]*)"/g)].map((match) => match[1]);
+  for (const count of [1, 2, 5, 9]) {
+    const members = Array.from({ length: count }, (_, index) => row(`o-${index}`));
+    const supporters = Array.from({ length: count }, (_, index) => row(`e-${index}`, { membership_type: "extraordinary" }));
+    const result = await renderPage([...members, ...supporters]);
+    assert.deepEqual(classes(result.extraordinary), classes(result.ordinary));
+    assert.equal(names(result.ordinary).length, count);
+    assert.equal(names(result.extraordinary).length, count);
+  }
+});
+
+test("a single extraordinary member retains column one of the same mobile/tablet/desktop grid", async () => {
+  const result = await renderPage([
+    ...Array.from({ length: 9 }, (_, index) => row(`o-${index}`)),
+    row("only-extraordinary", { membership_type: "extraordinary" }),
+  ]);
+  const geometry = (section) => ({
+    container: section.match(/^<div class="([^"]*)"/)[1],
+    grid: section.match(/<div class="(grid [^"]*)"/)[1],
+    card: section.match(/<article class="([^"]*)"/)[1],
+    photo: section.match(/<article[^>]*><div class="([^"]*)"/)[1],
+    name: section.match(/<h3 class="([^"]*)"/)[1],
+  });
+  const ordinary = geometry(result.ordinary);
+  const extraordinary = geometry(result.extraordinary);
+  assert.deepEqual(extraordinary, ordinary);
+  assert.equal(extraordinary.container, "mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10");
+  assert.equal(extraordinary.grid, "grid grid-cols-2 gap-x-4 gap-y-7 sm:gap-x-5 md:grid-cols-3 lg:grid-cols-4");
+  assert.doesNotMatch(extraordinary.grid, /justify|place|auto-fit|auto-fill/);
+  assert.doesNotMatch(extraordinary.card, /col-start|col-span|mx-auto|translate/);
+  assert.deepEqual(names(result.extraordinary), ["only-extraordinary"]);
+  assert.equal((source.match(/<MembershipSection\b/g) ?? []).length, 2);
+  assert.doesNotMatch(source, /compact|lg:grid-cols-6/);
 });
 
 test("inactive ordinary/extraordinary/coaches never render, independent of membership and role", async () => {
