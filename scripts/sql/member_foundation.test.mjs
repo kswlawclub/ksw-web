@@ -100,15 +100,16 @@ test("sensitive/unneeded fields are excluded while display age and ordering rema
   assert.ok(allowlist(migration).includes("created_at"));
 });
 
-test("frozen Phase 1 verifier preserves runtime query shapes; Phase 3 Lineup adds only pre-granted membership_type", () => {
+test("frozen Phase 1 verifier preserves query shapes; later phases add only pre-granted public fields", () => {
   for (const [index, tag] of ["team", "lineup"].entries()) {
     const query = publicQuery(publicPaths[index]);
     // Do not rewrite an already-applied Phase 1 SQL artifact for a later query extension.
-    if (tag === "lineup") {
-      assert.ok(query.columns.includes("membership_type"));
-      assert.ok(allowlist(migration).includes("membership_type"));
+    const extensions = tag === "team" ? ["membership_type", "club_role", "is_active"] : ["membership_type"];
+    for (const column of extensions) {
+      assert.ok(query.columns.includes(column));
+      assert.ok(allowlist(migration).includes(column));
     }
-    const phase1Columns = query.columns.filter((column) => tag !== "lineup" || column !== "membership_type");
+    const phase1Columns = query.columns.filter((column) => !extensions.includes(column));
     const expected = `SELECT ${phase1Columns.join(", ")} FROM public.club_members WHERE ${query.filters.map(([name, value]) => `${name} = ${value}`).join(" AND ")} ORDER BY ${query.order} ${query.direction} LIMIT 0`;
     const probe = verifier.match(new RegExp(`\\$${tag}\\$([\\s\\S]*?)\\$${tag}\\$`));
     assert.ok(probe);

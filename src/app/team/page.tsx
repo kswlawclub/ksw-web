@@ -1,23 +1,12 @@
 import Link from "next/link";
 import { FacebookIcon } from "@/components/facebook-icon";
+import { clubRoleLabel, getMemberDisplayName } from "@/lib/club-members";
+import { groupPublicTeamMembers, staticTeamStaff, type PublicTeamMember, type PublicTeamProfile } from "@/lib/public-team-members";
 import { getSupabase } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-type ClubMember = {
-  id: string;
-  nickname: string;
-  photo_url: string | null;
-};
-const teamStaff = [
-  ["เฟี๊ยต", "/images/staff/staff-01.png"],
-  ["เหงี่ยม", "/images/staff/staff-02.png"],
-  ["พาสต้า", "/images/staff/staff-03.png"],
-  ["โก้", "/images/staff/staff-04.png"],
-  ["หม่อมโจอี้", "/images/staff/staff-05.png"],
-  ["เด่น", "/images/staff/staff-06.png"],
-];
 const facebookUrl = "https://web.facebook.com/KlongSamWaLawyers";
 
 function shuffle<T>(items: T[]) {
@@ -31,14 +20,44 @@ function shuffle<T>(items: T[]) {
   return shuffled;
 }
 
-function publicMemberName(nickname: string) {
-  const value = nickname.trim();
-
-  if (!value) {
-    return "ทนาย";
-  }
-
-  return value.startsWith("ทนาย") ? value : `ทนาย${value}`;
+function MemberGrid({ profiles, compact = false, showRole = false }: {
+  profiles: PublicTeamProfile[];
+  compact?: boolean;
+  showRole?: boolean;
+}) {
+  return (
+    <div className={`grid grid-cols-2 gap-x-4 gap-y-7 sm:gap-x-5 ${compact ? "sm:grid-cols-3 lg:grid-cols-6" : "md:grid-cols-3 lg:grid-cols-4"}`}>
+      {profiles.map((member) => {
+        const displayName = getMemberDisplayName(member);
+        const isStaticPortrait = staticTeamStaff.some((staff) => staff.photo_url === member.photo_url);
+        return (
+          <article className="flex min-w-0 flex-col items-center justify-start px-2 py-2 text-center" key={member.id}>
+            <div className="mx-auto size-[130px] shrink-0 overflow-hidden rounded-full border-2 border-[#d8ad45] shadow-lg shadow-slate-900/15">
+              {member.photo_url ? (
+                <img
+                  alt={displayName}
+                  className="block h-full w-full object-cover"
+                  height={130}
+                  loading={isStaticPortrait ? "eager" : "lazy"}
+                  src={member.photo_url}
+                  style={{
+                    objectPosition: isStaticPortrait ? "center 30%" : "center center",
+                    transform: isStaticPortrait ? "scale(1.9)" : undefined,
+                    transformOrigin: "center center",
+                  }}
+                  width={130}
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-[#f8f3e7] text-xl font-black text-[#061426]">KSW</div>
+              )}
+            </div>
+            <h3 className="mt-4 min-h-10 max-w-full break-words text-sm font-black leading-5 text-[#061426] sm:text-base">{displayName}</h3>
+            {showRole ? <p className="mt-1 text-sm font-semibold text-slate-600">{clubRoleLabel(member.club_role)}</p> : null}
+          </article>
+        );
+      })}
+    </div>
+  );
 }
 
 async function getClubMembers() {
@@ -50,7 +69,7 @@ async function getClubMembers() {
 
   const result = await supabase
     .from("club_members")
-    .select("id, nickname, photo_url")
+    .select("id, nickname, photo_url, membership_type, club_role, is_active")
     .eq("is_active", true)
     .order("created_at", { ascending: false });
 
@@ -59,11 +78,12 @@ async function getClubMembers() {
     return [];
   }
 
-  return (result.data ?? []) as ClubMember[];
+  return (result.data ?? []) as PublicTeamMember[];
 }
 
 export default async function TeamPage() {
-  const members = shuffle(await getClubMembers());
+  const groups = groupPublicTeamMembers(await getClubMembers());
+  const members = shuffle(groups.ordinary);
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#061426] text-slate-100">
@@ -121,56 +141,10 @@ export default async function TeamPage() {
             <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">
               KSW Community
             </p>
-            <h2 className="mt-3 text-3xl font-black text-[#061426]">Team Members</h2>
+            <h2 className="mt-3 text-3xl font-black text-[#061426]">สมาชิกสามัญ</h2>
           </div>
           {members.length ? (
-            <div className="grid grid-cols-2 gap-x-4 gap-y-7 sm:gap-x-5 md:grid-cols-3 lg:grid-cols-4">
-              {members.map((member) => {
-                const displayName = publicMemberName(member.nickname);
-
-                return (
-                <article
-                  className="flex flex-col items-center justify-start px-2 py-2 text-center"
-                  key={member.id}
-                >
-                  <div
-                    className="mx-auto shadow-lg shadow-slate-900/15"
-                    style={{
-                      width: "130px",
-                      height: "130px",
-                      borderRadius: "50%",
-                      overflow: "hidden",
-                      border: "2px solid #d8ad45",
-                    }}
-                  >
-                    {member.photo_url ? (
-                      <img
-                        alt={displayName}
-                        className="block"
-                        height={130}
-                        loading="lazy"
-                        src={member.photo_url}
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                          objectPosition: "center center",
-                        }}
-                        width={130}
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-[#f8f3e7] text-xl font-black text-[#061426]">
-                        KSW
-                      </div>
-                    )}
-                  </div>
-                  <h3 className="mt-4 min-h-10 text-sm font-black leading-5 text-[#061426] sm:text-base">
-                    {displayName}
-                  </h3>
-                </article>
-                );
-              })}
-            </div>
+            <MemberGrid profiles={members} />
           ) : (
             <div className="rounded-lg border border-[#d8ad45]/25 bg-[#fffaf0] p-6 text-sm font-bold leading-6 text-[#061426]">
               Team member profiles will be updated soon.
@@ -181,11 +155,28 @@ export default async function TeamPage() {
 
       <section className="bg-[#f6f2ea]">
         <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">KSW Community</p>
+          <h2 className="mt-3 text-3xl font-black text-[#061426]">สมาชิกวิสามัญ</h2>
+          <div className="mt-7">
+            {groups.extraordinary.length ? (
+              <MemberGrid compact profiles={groups.extraordinary} />
+            ) : (
+              <p className="text-sm font-bold leading-6 text-[#061426]">ข้อมูลสมาชิกวิสามัญจะอัปเดตเร็ว ๆ นี้</p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-[#f6f2ea]">
+        <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-10">
           <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9b1c1f]">
             CLUB OPERATIONS
           </p>
           <h2 className="mt-3 text-3xl font-black text-[#061426]">Coaching Staff</h2>
 
+          {groups.coaching.length ? (
+            <div className="mt-7"><MemberGrid profiles={groups.coaching} showRole /></div>
+          ) : (
           <article className="relative mt-7 overflow-hidden rounded-2xl border border-[#d8ad45]/35 bg-[#061426] px-5 py-10 text-white shadow-2xl shadow-slate-900/15 sm:px-8 sm:py-12">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(216,173,69,0.24),transparent_32%),linear-gradient(135deg,#061426,#0b2745_62%,#071b31)]" />
             <div className="absolute -right-16 -top-16 size-56 rounded-full border border-[#d8ad45]/15 sm:size-72" />
@@ -220,49 +211,7 @@ export default async function TeamPage() {
               </p>
             </div>
           </article>
-
-          <div className="mt-12 border-t border-[#d8ad45]/25 pt-8">
-            <h3 className="text-2xl font-black text-[#061426]">Team Staff</h3>
-            <div className="mt-7 grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-3 sm:gap-x-5 lg:grid-cols-6">
-              {teamStaff.map(([name, src]) => (
-                <article
-                  className="flex flex-col items-center justify-start px-2 py-2 text-center"
-                  key={name}
-                >
-                  <div
-                    className="mx-auto shadow-lg shadow-slate-900/15"
-                    style={{
-                      width: "130px",
-                      height: "130px",
-                      borderRadius: "50%",
-                      overflow: "hidden",
-                      border: "2px solid #d8ad45",
-                    }}
-                  >
-                    <img
-                      alt={name}
-                      className="block"
-                      height={130}
-                      loading="eager"
-                      src={src}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                        objectPosition: "center 30%",
-                        transform: "scale(1.9)",
-                        transformOrigin: "center center",
-                      }}
-                      width={130}
-                    />
-                  </div>
-                  <h4 className="mt-4 min-h-10 text-sm font-black leading-5 text-[#061426] sm:text-base">
-                    {name}
-                  </h4>
-                </article>
-              ))}
-            </div>
-          </div>
+          )}
         </div>
       </section>
     </main>
