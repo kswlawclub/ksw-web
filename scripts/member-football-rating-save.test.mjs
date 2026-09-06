@@ -96,6 +96,7 @@ function modalHarness(actions, { callbackFailure = false, initialRating = null }
     "@/lib/member-football-rating": rating,
     "@/lib/member-football-rating-diagnostics": ratingDiagnostics,
     "@/lib/member-football-rating-save-state": ratingSaveState,
+    "@/components/admin-football-rating-guide": { AdminFootballRatingGuide: () => null },
   });
   function render() {
     stateCursor = 0;

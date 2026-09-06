@@ -8,6 +8,7 @@ import { clubRoleLabel, getMemberDisplayName, membershipTypeLabel, type ClubMemb
 import { createFootballRatingForm, footballStats, type MemberFootballRating } from "@/lib/member-football-rating";
 import { footballRatingFailure, type FootballRatingFailureCode } from "@/lib/member-football-rating-diagnostics";
 import { deriveFootballRatingSaveState, unsavedFootballRatingCloseMessage } from "@/lib/member-football-rating-save-state";
+import { AdminFootballRatingGuide } from "@/components/admin-football-rating-guide";
 
 const controlClass = "min-h-11 rounded-md border border-slate-300 px-3 py-2 focus-visible:outline-2 focus-visible:outline-[#9b1c1f] disabled:opacity-50";
 
@@ -103,6 +104,7 @@ export function AdminMemberRatingModal({ member, initialRating, onSaved, onClose
         <fieldset disabled={busy || confirmClear}>
           <legend className="text-sm font-bold">Rating Type</legend>
           <div className="mt-2 grid grid-cols-2 gap-2">{(["player", "goalkeeper"] as const).map((type) => <label key={type} className={`${controlClass} flex cursor-pointer items-center gap-2 text-sm font-bold ${form.rating_type === type ? "border-[#d8ad45] bg-amber-50" : "bg-white"}`}><input type="radio" name="rating-type" value={type} checked={form.rating_type === type} onChange={() => { setForm(createFootballRatingForm(null, type)); setMessage(""); setError(""); }} className="accent-[#061426]" />{type === "player" ? "Player" : "Goalkeeper"}</label>)}</div>
+          <AdminFootballRatingGuide type={form.rating_type} />
           <div className="my-5 flex items-center justify-between gap-3 border-y border-slate-200 py-4"><div><p className="text-xs font-bold text-slate-500">OVERALL</p><p className="mt-1 text-sm text-slate-600">{saveState.kind === "saved" ? "Rating ที่บันทึกไว้" : "ตัวอย่างก่อนบันทึก"}</p></div><output aria-label="Overall preview" className="text-4xl font-black tabular-nums">{saveState.overall ?? "–"}</output></div>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">{footballStats[form.rating_type].map(({ field, label, name: statName }) => <label key={field} className="grid min-w-0 gap-1 text-sm font-black"><span>{label} <span className="font-normal text-slate-500">{statName}</span></span><input aria-label={`${label} ${statName}`} type="number" min={1} max={99} step={1} required inputMode="numeric" className={`${controlClass} w-full min-w-0 bg-slate-50 text-lg tabular-nums`} value={form.values[field] ?? ""} onChange={(event) => { setForm((current) => ({ ...current, values: { ...current.values, [field]: event.target.value } })); setMessage(""); setError(""); }} /></label>)}</div>
         </fieldset>

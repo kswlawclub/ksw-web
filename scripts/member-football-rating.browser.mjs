@@ -136,11 +136,41 @@ try {
     assert.equal(await modal.getByRole("spinbutton").first().inputValue(), "60");
     const saveButton = modal.locator('button[type="submit"]');
     const status = modal.locator('[role="status"]');
+    const guideToggle = modal.getByRole("button", { name: "วิธีให้คะแนน", exact: true });
+    const guide = modal.locator("section[aria-labelledby]");
+    const formSnapshot = async () => ({
+      values: await modal.getByRole("spinbutton").evaluateAll((inputs) => inputs.map((input) => input.value)),
+      type: await modal.locator('input[type="radio"]:checked').inputValue(),
+      overall: await modal.getByLabel("Overall preview").textContent(),
+      status: await status.textContent(), disabled: await saveButton.isDisabled(),
+      writes: await page.evaluate(() => window.qa.writes.length),
+    });
     assert.equal(await saveButton.textContent(), "บันทึกแล้ว");
     assert.ok(await saveButton.isDisabled());
     assert.match(await status.textContent(), /บันทึกแล้ว.*OVR 73/);
     await assertFits(page, modal);
     await page.screenshot({ path: join(temp, `admin-${width}.png`) });
+    assert.equal(await guideToggle.getAttribute("aria-expanded"), "false");
+    assert.equal(await guideToggle.getAttribute("aria-controls"), await guide.getAttribute("id"));
+    assert.equal(await guide.isVisible(), false);
+    const cleanSnapshot = await formSnapshot();
+    await guideToggle.focus();
+    await page.keyboard.press("Enter");
+    assert.ok(await guideToggle.evaluate((element) => element === document.activeElement));
+    assert.equal(await guideToggle.getAttribute("aria-expanded"), "true");
+    assert.ok(await guide.getByRole("heading", { name: "เกณฑ์รายด้าน: Player", exact: true }).isVisible());
+    assert.equal(await guide.locator("dt").count(), 12);
+    assert.deepEqual(await formSnapshot(), cleanSnapshot);
+    await guide.getByRole("heading", { name: "มาตรฐาน KSW Football Rating", exact: true }).scrollIntoViewIfNeeded();
+    await assertFits(page, modal);
+    await page.screenshot({ path: join(temp, `admin-guide-player-${width}.png`) });
+    await guide.getByText("OVR ปัจจุบันคำนวณจากค่าเฉลี่ย 6 ด้านโดยให้น้ำหนักเท่ากัน", { exact: true }).scrollIntoViewIfNeeded();
+    assert.ok(await modal.evaluate((element) => element.scrollTop > 0), "Expanded guide scrolls inside the existing modal");
+    await assertFits(page, modal);
+    await guideToggle.focus();
+    await page.keyboard.press("Space");
+    assert.equal(await guide.isVisible(), false);
+    assert.deepEqual(await formSnapshot(), cleanSnapshot);
     await page.keyboard.press("Escape");
     assert.equal(await page.locator("dialog[open]").count(), 0);
     assert.equal(confirmations.length, 0, "Clean close does not prompt");
@@ -150,6 +180,11 @@ try {
     assert.equal(await status.textContent(), "มีการแก้ไขที่ยังไม่บันทึก");
     assert.equal(await saveButton.textContent(), "บันทึกการเปลี่ยนแปลง");
     assert.equal(await saveButton.isDisabled(), false);
+    const dirtySnapshot = await formSnapshot();
+    await guideToggle.click();
+    assert.deepEqual(await formSnapshot(), dirtySnapshot);
+    await guideToggle.click();
+    assert.deepEqual(await formSnapshot(), dirtySnapshot);
     const closePaths = [
       () => modal.getByRole("button", { name: "ปิด Football Rating" }).click(),
       () => modal.getByRole("button", { name: "Cancel", exact: true }).click(),
@@ -171,7 +206,16 @@ try {
     assert.match(await status.textContent(), /บันทึกแล้ว.*OVR 73/);
     assert.ok(await saveButton.isDisabled());
     assert.equal(await page.evaluate(() => window.qa.writes.length), 0);
+    await guideToggle.click();
     await modal.getByRole("radio", { name: "Goalkeeper" }).check();
+    assert.equal(await guideToggle.getAttribute("aria-expanded"), "true");
+    assert.ok(await guide.getByRole("heading", { name: "เกณฑ์รายด้าน: Goalkeeper", exact: true }).isVisible());
+    assert.equal(await guide.getByRole("heading", { name: "เกณฑ์รายด้าน: Player", exact: true }).count(), 0);
+    assert.deepEqual(await guide.locator("dt > span:first-child").allTextContents(), ["DIV", "HAN", "KIC", "REF", "SPD", "POS"]);
+    await guide.getByRole("heading", { name: "เกณฑ์รายด้าน: Goalkeeper", exact: true }).scrollIntoViewIfNeeded();
+    await assertFits(page, modal);
+    await page.screenshot({ path: join(temp, `admin-guide-gk-${width}.png`) });
+    await guideToggle.click();
     assert.deepEqual(await modal.getByRole("spinbutton").evaluateAll((inputs) => inputs.map((input) => input.value)), ["", "", "", "", "", ""]);
     assert.equal(await status.textContent(), "มีการแก้ไขที่ยังไม่บันทึก");
     assert.ok(await saveButton.isDisabled());
@@ -246,7 +290,7 @@ try {
     assert.equal(await page.locator("dialog[open]").count(), 0);
     assert.ok(await adminTrigger.evaluate((element) => element === document.activeElement));
     assert.deepEqual(errors, [], "Admin runtime errors");
-    console.log(`PASS ${width}px: Public regression, saved/dirty/revert/new/clear, DB overall, busy/discard/clean close, focus, diagnostic codes, no overflow`);
+    console.log(`PASS ${width}px: Guide toggle/type/content/scroll with unchanged form state, Public regression, saved/dirty/revert/new/clear, DB overall, busy/discard/clean close, focus, diagnostic codes, no overflow`);
     await context.close();
   }
   console.log(`Screenshots: ${temp}`);
