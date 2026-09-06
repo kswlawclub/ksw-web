@@ -19,6 +19,7 @@ const loader = generated("ts-loader.cjs", `const ts=require(${JSON.stringify(req
 const fixture = generated("fixture.ts", `
 import { parseMemberPayload } from "@/lib/club-members";
 import { footballOverallPreview, parseFootballRatingInput, mapFootballRatings } from "@/lib/member-football-rating";
+import { footballRatingFailure } from "@/lib/member-football-rating-diagnostics";
 const id=(n)=>"e950da1b-7788-4e80-bcec-"+String(n).padStart(12,"0");
 export const members=Array.from({length:9},(_,i)=>({ ...parseMemberPayload({nickname:i===0?"ทดสอบชื่อสมาชิกยาวเพื่อดูการตัดบรรทัด": "ตัวอย่าง "+i, membership_type:i>3?"extraordinary":"ordinary",club_role:i===7?"coach":"member",is_active:i!==8,lineup_enabled:false,photo_url:"/images/staff/staff-01.png"}).payload,id:id(i+1),created_at:"2026-09-06",updated_at:null }));
 const row=(type,n)=>{const fields=type==="player"?["pace","shooting","passing","dribbling","defending","physical"]:["gk_diving","gk_handling","gk_kicking","gk_reflexes","gk_speed","gk_positioning"];const input={member_id:id(n),rating_type:type,...Object.fromEntries(fields.map((f,i)=>[f,60+i*5]))};const parsed=parseFootballRatingInput(input);return {...parsed.payload,overall:footballOverallPreview(type,parsed.payload)};};
@@ -27,7 +28,13 @@ const snapshot=JSON.stringify(members);
 window.qa={writes:[],members,ratings,assertUnchanged:()=>JSON.stringify(members)===snapshot};
 export const listMembers=async()=>({ok:true,members});
 export const listMemberFootballRatings=async(ids)=>({ok:true,ratings:mapFootballRatings([...ratings.values()],ids)});
-export async function saveMemberFootballRating(input){window.qa.writes.push(["save",input]);await new Promise(r=>setTimeout(r,180));const parsed=parseFootballRatingInput(input);if(!parsed.ok)return parsed;const rating={...parsed.payload,overall:footballOverallPreview(parsed.payload.rating_type,parsed.payload)};ratings.set(rating.member_id,rating);return {ok:true,rating};}
+export async function saveMemberFootballRating(input){
+  window.qa.writes.push(["save",input]);await new Promise(r=>setTimeout(r,180));
+  if(window.qa.ratingFailure==="RATING_TRANSPORT")throw new Error("PRIVATE fixture action exception");
+  if(window.qa.ratingFailure)return {...footballRatingFailure(window.qa.ratingFailure),error:"PRIVATE fixture DB error"};
+  const parsed=parseFootballRatingInput(input);if(!parsed.ok)return footballRatingFailure("RATING_VALIDATION");
+  const rating={...parsed.payload,overall:footballOverallPreview(parsed.payload.rating_type,parsed.payload)};ratings.set(rating.member_id,rating);return {ok:true,rating};
+}
 export async function clearMemberFootballRating(id){window.qa.writes.push(["clear",id]);await new Promise(r=>setTimeout(r,180));ratings.delete(id);return {ok:true,rating:null};}
 const forbidden=()=>{throw Error("Member mutation forbidden in browser QA");};
 export const createMember=forbidden,setMemberActive=forbidden,removeMemberPhoto=forbidden,updateMember=forbidden,uploadMemberPhoto=forbidden;
@@ -149,9 +156,23 @@ try {
     assert.ok(await modal.getByText("ยังไม่ได้ตั้งค่าความสามารถ", { exact: true }).isVisible());
     assert.ok(await modal.getByRole("radio", { name: "Player", exact: true }).isChecked());
     assert.deepEqual(await modal.getByRole("spinbutton").evaluateAll((inputs) => inputs.map((input) => input.value)), ["", "", "", "", "", ""]);
+    for (const input of await modal.getByRole("spinbutton").all()) await input.fill("80");
+    for (const code of ["RATING_VALIDATION", "RATING_AUTH", "RATING_CLIENT_INIT", "RATING_DB_WRITE", "RATING_READBACK", "RATING_REVALIDATE", "RATING_SERVER", "RATING_TRANSPORT"]) {
+      await page.evaluate((value) => { window.qa.ratingFailure = value; }, code);
+      await modal.getByRole("button", { name: "Save Rating" }).click();
+      const alert = modal.getByRole("alert");
+      await alert.filter({ hasText: `[รหัส: ${code}]` }).waitFor();
+      assert.match(await alert.textContent(), new RegExp(`^บันทึกไม่สำเร็จ \\[รหัส: ${code}\\]`));
+      assert.doesNotMatch(await alert.textContent(), /PRIVATE/);
+      assert.equal(await modal.locator('[role="status"]').count(), 0);
+      await alert.scrollIntoViewIfNeeded();
+      await assertFits(page, modal);
+    }
+    await page.screenshot({ path: join(temp, `admin-diagnostic-${width}.png`) });
+    assert.ok(await page.evaluate(() => window.qa.assertUnchanged()));
     await page.keyboard.press("Escape");
     assert.deepEqual(errors, [], "Admin runtime errors");
-    console.log(`PASS ${width}px: hover/focus/tap, dismiss, hydration, modal/type/save/clear, inactive, focus, no overflow`);
+    console.log(`PASS ${width}px: hover/focus/tap, dismiss, hydration, modal/type/save/clear, inactive, focus, safe diagnostic codes, no overflow`);
     await context.close();
   }
   console.log(`Screenshots: ${temp}`);

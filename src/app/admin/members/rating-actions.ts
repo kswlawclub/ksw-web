@@ -5,6 +5,7 @@ import { requireAdminSession } from "@/lib/admin-server-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { isMemberId } from "@/lib/club-members";
 import { footballRatingColumns, mapFootballRatings, parseFootballRatingInput, readFootballRating, type MemberFootballRating } from "@/lib/member-football-rating";
+import { footballRatingFailure, type FootballRatingFailure, type FootballRatingFailureCode } from "@/lib/member-football-rating-diagnostics";
 
 type RatingResult = { ok: true; rating: MemberFootballRating | null } | { ok: false; error: string };
 
@@ -33,20 +34,35 @@ export async function listMemberFootballRatings(memberIds: string[]): Promise<
   return { ok: true, ratings };
 }
 
-export async function saveMemberFootballRating(input: unknown): Promise<RatingResult> {
-  await requireAdminSession();
-  const parsed = parseFootballRatingInput(input);
-  if (!parsed.ok) return parsed;
-  const client = getSupabaseAdmin();
-  if (!client) return { ok: false, error: "ไม่สามารถเชื่อมต่อข้อมูล Rating ได้" };
-  // The FK validates member existence. This action never writes club_members or client overall.
-  const result = await client.from("club_member_football_ratings")
-    .upsert(parsed.payload, { onConflict: "member_id" }).select(footballRatingColumns).single();
-  if (result.error) return { ok: false, error: "บันทึก Rating ไม่สำเร็จ กรุณาตรวจสอบว่ายังมีรายชื่อนี้และลองใหม่" };
-  const rating = readFootballRating(result.data);
-  if (!rating || rating.member_id !== parsed.payload.member_id) return { ok: false, error: "ไม่สามารถยืนยัน Rating ที่บันทึกได้ กรุณาโหลดข้อมูลใหม่" };
-  revalidateRatings();
-  return { ok: true, rating };
+export async function saveMemberFootballRating(input: unknown): Promise<{ ok: true; rating: MemberFootballRating } | FootballRatingFailure> {
+  let boundary: FootballRatingFailureCode = "RATING_AUTH";
+  try {
+    await requireAdminSession();
+    boundary = "RATING_SERVER";
+    const parsed = parseFootballRatingInput(input);
+    if (!parsed.ok) return footballRatingFailure("RATING_VALIDATION");
+
+    boundary = "RATING_CLIENT_INIT";
+    const client = getSupabaseAdmin();
+    if (!client) return footballRatingFailure(boundary);
+
+    boundary = "RATING_DB_WRITE";
+    // The FK validates member existence. This action never writes club_members or client overall.
+    const result = await client.from("club_member_football_ratings")
+      .upsert(parsed.payload, { onConflict: "member_id" }).select(footballRatingColumns).single();
+    boundary = "RATING_READBACK";
+    if (result.error) return footballRatingFailure("RATING_DB_WRITE");
+    const rating = readFootballRating(result.data);
+    if (!rating || rating.member_id !== parsed.payload.member_id) return footballRatingFailure(boundary);
+
+    boundary = "RATING_REVALIDATE";
+    revalidateRatings();
+    return { ok: true, rating };
+  } catch {
+    // Do not log payloads, member IDs, credentials or raw exception/DB details.
+    console.error("member football rating save failed", { code: boundary });
+    return footballRatingFailure(boundary);
+  }
 }
 
 export async function clearMemberFootballRating(memberId: string): Promise<RatingResult> {

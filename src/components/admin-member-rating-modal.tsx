@@ -6,6 +6,7 @@ import { Check, Trash2, X } from "lucide-react";
 import { clearMemberFootballRating, saveMemberFootballRating } from "@/app/admin/members/rating-actions";
 import { clubRoleLabel, getMemberDisplayName, membershipTypeLabel, type ClubMember } from "@/lib/club-members";
 import { createFootballRatingForm, footballOverallPreview, footballRatingFormInput, footballStats, parseFootballRatingInput, type MemberFootballRating } from "@/lib/member-football-rating";
+import { footballRatingFailure, type FootballRatingFailureCode } from "@/lib/member-football-rating-diagnostics";
 
 const controlClass = "min-h-11 rounded-md border border-slate-300 px-3 py-2 focus-visible:outline-2 focus-visible:outline-[#9b1c1f] disabled:opacity-50";
 
@@ -39,6 +40,11 @@ export function AdminMemberRatingModal({ member, initialRating, onSaved, onClose
   }, []);
 
   function close() { if (!busyRef.current) onClose(); }
+  function showSaveFailure(code: unknown) {
+    const failure = footballRatingFailure(code);
+    setMessage("");
+    setError(`บันทึกไม่สำเร็จ [รหัส: ${failure.code}]\n${failure.error}`);
+  }
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (confirmClear || !validation.ok || busyRef.current) return;
@@ -48,16 +54,23 @@ export function AdminMemberRatingModal({ member, initialRating, onSaved, onClose
     if (busyRef.current) return;
     busyRef.current = true;
     setBusy(true); setError(""); setMessage("");
+    let boundary: FootballRatingFailureCode = "RATING_TRANSPORT";
     try {
       const result = clear ? await clearMemberFootballRating(member.id) : await saveMemberFootballRating(input);
-      if (!result.ok) { setError(result.error); return; }
+      if (!result.ok) {
+        if (clear) setError(result.error);
+        else showSaveFailure("code" in result ? result.code : "RATING_SERVER");
+        return;
+      }
+      boundary = "RATING_CLIENT_STATE";
       setSaved(result.rating);
       setForm(createFootballRatingForm(result.rating));
       setConfirmClear(false);
       setMessage(result.rating ? `บันทึกแล้ว · OVR ${result.rating.overall}` : "ล้าง Rating แล้ว ข้อมูลสมาชิกยังคงเดิม");
       onSaved(result.rating);
     } catch {
-      setError("เชื่อมต่อไม่สำเร็จ กรุณาลองใหม่");
+      if (clear) setError("เชื่อมต่อไม่สำเร็จ กรุณาลองใหม่");
+      else showSaveFailure(boundary);
     } finally {
       busyRef.current = false; setBusy(false);
     }
@@ -82,7 +95,7 @@ export function AdminMemberRatingModal({ member, initialRating, onSaved, onClose
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">{footballStats[form.rating_type].map(({ field, label, name: statName }) => <label key={field} className="grid min-w-0 gap-1 text-sm font-black"><span>{label} <span className="font-normal text-slate-500">{statName}</span></span><input aria-label={`${label} ${statName}`} type="number" min={1} max={99} step={1} required inputMode="numeric" className={`${controlClass} w-full min-w-0 bg-slate-50 text-lg tabular-nums`} value={form.values[field] ?? ""} onChange={(event) => { setForm((current) => ({ ...current, values: { ...current.values, [field]: event.target.value } })); setMessage(""); }} /></label>)}</div>
         </fieldset>
         {!validation.ok && !confirmClear ? <p className="mt-3 text-xs text-slate-600">{validation.error}</p> : null}
-        {error ? <p role="alert" className="mt-4 text-sm font-bold text-red-700">{error}</p> : null}
+        {error ? <p role="alert" className="mt-4 break-words whitespace-pre-line text-sm font-bold text-red-700">{error}</p> : null}
         {message ? <p role="status" className="mt-4 text-sm font-bold text-emerald-800">{message}</p> : null}
         {confirmClear ? <div className="mt-5 border-t border-amber-300 pt-4"><p className="text-sm font-bold">ล้างค่าความสามารถฟุตบอลของ{name}?</p><p className="mt-1 text-sm text-slate-600">ลบเฉพาะ Rating ไม่ลบรูปหรือข้อมูลสมาชิก</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={busy} className={`${controlClass} bg-red-700 text-white`} onClick={() => void mutate(true)}>ยืนยันล้าง Rating</button><button type="button" disabled={busy} className={controlClass} onClick={() => setConfirmClear(false)}>ยกเลิก</button></div></div> : <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-200 pt-4">
           <button type="submit" disabled={busy || !validation.ok} className={`${controlClass} inline-flex items-center justify-center gap-2 border-[#061426] bg-[#061426] font-bold text-[#f4d58a]`}><Check aria-hidden="true" className="size-4" />{busy ? "กำลังบันทึก..." : "Save Rating"}</button>

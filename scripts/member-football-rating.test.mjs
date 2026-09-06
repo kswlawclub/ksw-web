@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import * as members from "../src/lib/club-members.ts";
-import { loadRatingModule, ratingContract as rating, card, publicRating, fixtureId, ratingInput, ratingRow } from "./lib/football-rating-test-support.mjs";
+import { loadRatingModule, ratingContract as rating, ratingDiagnostics, card, publicRating, fixtureId, ratingInput, ratingRow } from "./lib/football-rating-test-support.mjs";
 
 test("Player and GK definitions are exact six distinct fields/labels", () => {
   assert.deepEqual(rating.footballStats.player.map(({ label }) => label), ["PAC", "SHO", "PAS", "DRI", "DEF", "PHY"]);
@@ -122,6 +122,7 @@ function actionHarness({ authorized = true, error = false, missing = false } = {
     "@/lib/admin-server-auth": { requireAdminSession: async () => { if (!authorized) throw new Error("Unauthorized"); checked = true; } },
     "@/lib/supabase-admin": { getSupabaseAdmin: () => { assert.ok(checked); return client; } },
     "@/lib/club-members": members, "@/lib/member-football-rating": rating,
+    "@/lib/member-football-rating-diagnostics": ratingDiagnostics,
   });
   return { actions, rows, calls, refreshed };
 }
@@ -145,7 +146,8 @@ test("real actions save Player/GK with DB overall and clear only one rating, nev
 test("every action requires Admin; invalid payload is rejected before DB; write errors do not report success", async () => {
   for (const [name, input] of [["saveMemberFootballRating", ratingInput()], ["clearMemberFootballRating", fixtureId()], ["listMemberFootballRatings", [fixtureId()]]]) {
     const h = actionHarness({ authorized: false });
-    await assert.rejects(h.actions[name](input), /Unauthorized/);
+    if (name === "saveMemberFootballRating") assert.equal((await h.actions[name](input)).code, "RATING_AUTH");
+    else await assert.rejects(h.actions[name](input), /Unauthorized/);
     assert.equal(h.calls.length, 0);
   }
   const invalid = actionHarness();
